@@ -1,4 +1,4 @@
-default: lint format typecheck
+default: lint format types
 
 lint:
     uv run ruff check .
@@ -6,7 +6,7 @@ lint:
 format:
     uv run ruff format .
 
-typecheck:
+types:
     uv run ty check
 
 devcontainer:
