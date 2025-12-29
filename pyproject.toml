@@ -1,0 +1,13 @@
+[project]
+name = "mudd"
+version = "0.1.0"
+description = "Multi User Dungeon (Discord)"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "lefthook>=2.0.13",
+    "ruff>=0.14.10",
+]
