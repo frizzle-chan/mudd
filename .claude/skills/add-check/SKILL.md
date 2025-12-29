@@ -20,7 +20,7 @@ your-check:
 
 ## 2. .github/workflows/ci.yaml
 
-Add a step to the `lint-format` job after the existing checks:
+Add a step to the `verify` job after the existing checks:
 
 ```yaml
 - name: Run YOUR_CHECK

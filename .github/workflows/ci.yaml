@@ -4,10 +4,9 @@ on:
   push:
     branches: [master]
   pull_request:
-    branches: [master]
 
 jobs:
-  lint-format:
+  verify:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
@@ -26,6 +25,9 @@ jobs:
 
       - name: Run format check
         run: uv run ruff format --check .
+
+      - name: Run type check
+        run: uv run ty check
 
   docker-build:
     runs-on: ubuntu-latest
