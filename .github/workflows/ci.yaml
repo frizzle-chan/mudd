@@ -27,6 +27,9 @@ jobs:
       - name: Run format check
         run: uv run ruff format --check .
 
+      - name: Run type check
+        run: uv run ty check
+
   docker-build:
     runs-on: ubuntu-latest
     strategy:
