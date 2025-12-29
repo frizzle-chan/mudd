@@ -1,10 +1,10 @@
 default: lint format
 
 lint:
-    ruff check .
+    uv run ruff check .
 
 format:
-    ruff format .
+    uv run ruff format .
 
 devcontainer:
     gh auth login --with-token < .github-token.txt

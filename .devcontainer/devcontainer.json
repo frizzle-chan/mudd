@@ -35,7 +35,6 @@
 	// Uncomment the next line to run commands after the container is created.
 	"postCreateCommand": {
 		// "cc": "curl -fsSL https://claude.ai/install.sh | bash",
-		"lefthook": "uv run lefthook install",
-		"uv": "uv sync"
+		"uv": "uv sync && uv run lefthook install"
 	}
 }
