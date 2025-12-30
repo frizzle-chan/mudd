@@ -74,7 +74,10 @@ class VisibilityService:
         for location in mud_locations:
             should_see = location.id == current_location_id
 
-            overwrite = discord.PermissionOverwrite(view_channel=should_see)
+            # Use explicit True to grant, None to remove (inherit from category)
+            overwrite = (
+                discord.PermissionOverwrite(view_channel=True) if should_see else None
+            )
 
             try:
                 await location.set_permissions(
@@ -94,7 +97,7 @@ class VisibilityService:
         """
         Move user to a new location. Idempotent.
 
-        Updates Redis first, then syncs Discord permissions.
+        Uses Alter-Ego order: revoke old channel first, then grant new channel.
 
         Returns:
             True if user was moved, False if already in that location.
@@ -108,7 +111,26 @@ class VisibilityService:
             return False
 
         await self.set_user_location(member.id, channel_id)
-        await self.sync_user_to_discord(member, current_location_id=channel_id)
+
+        guild = member.guild
+        new_channel = guild.get_channel(channel_id)
+        old_channel = guild.get_channel(current) if current else None
+
+        # Phase 1: Remove access from old channel FIRST (Alter-Ego order)
+        if old_channel and self.is_mud_location(old_channel):
+            await old_channel.set_permissions(
+                member,
+                overwrite=None,
+                reason="MUDD movement - leaving",
+            )
+
+        # Phase 2: Grant access to new channel
+        if new_channel:
+            await new_channel.set_permissions(
+                member,
+                overwrite=discord.PermissionOverwrite(view_channel=True),
+                reason="MUDD movement - entering",
+            )
 
         logger.info(f"Moved user {member.id} from {current} to {channel_id}")
         return True
