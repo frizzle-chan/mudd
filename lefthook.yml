@@ -2,14 +2,14 @@ pre-commit:
   jobs:
     - name: ruff check
       glob: "*.py"
-      run: ruff check --fix {staged_files}
+      run: uv run ruff check --fix {staged_files}
       stage_fixed: true
 
     - name: ruff format
       glob: "*.py"
-      run: ruff format {staged_files}
+      run: uv run ruff format {staged_files}
       stage_fixed: true
 
     - name: ty check
       glob: "*.py"
-      run: ty check {staged_files}
+      run: uv run ty check {staged_files}
