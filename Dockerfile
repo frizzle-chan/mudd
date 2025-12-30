@@ -51,7 +51,6 @@ RUN apt-get update \
        git \
        just \
        procps \
-       sqlite3 \
        vim \
        zsh \
  && apt-get clean \
