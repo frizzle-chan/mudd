@@ -50,8 +50,6 @@ RUN apt-get update \
        curl \
        git \
        just \
-       procps \
-       sqlite3 \
        vim \
        zsh \
  && apt-get clean \
