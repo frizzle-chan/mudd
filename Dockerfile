@@ -50,6 +50,7 @@ RUN apt-get update \
        curl \
        git \
        just \
+       procps \
        vim \
        zsh \
  && apt-get clean \
