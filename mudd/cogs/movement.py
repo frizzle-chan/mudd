@@ -115,9 +115,7 @@ class Movement(commands.Cog):
                 )
 
                 if old_channel and isinstance(old_channel, discord.TextChannel):
-                    await old_channel.send(
-                        f"**{member.display_name}** moved to {target.name}"
-                    )
+                    await old_channel.send(f"{member.mention} has left")
 
                 await target.send(f"{member.mention} entered")
             else:
