@@ -95,7 +95,7 @@ class Movement(commands.Cog):
         target = find_exit_in_input(destination, valid_exits)
 
         if target is None:
-            exit_list = ", ".join(ch.mention for ch in valid_exits)
+            exit_list = ", ".join(f"#{ch.name}" for ch in valid_exits)
             await interaction.response.send_message(
                 f"You can't go there. Exits: {exit_list}", ephemeral=True
             )
@@ -111,7 +111,7 @@ class Movement(commands.Cog):
 
             if moved:
                 await interaction.response.send_message(
-                    f"You move to {target.mention}.", ephemeral=True
+                    f"You moved! Click {target.mention} to enter.", ephemeral=True
                 )
 
                 if old_channel and isinstance(old_channel, discord.TextChannel):
@@ -119,7 +119,7 @@ class Movement(commands.Cog):
                         f"**{member.display_name}** moved to {target.name}"
                     )
 
-                await target.send(f"**{member.display_name}** entered")
+                await target.send(f"{member.mention} entered")
             else:
                 await interaction.response.send_message(
                     "You're already there.", ephemeral=True
