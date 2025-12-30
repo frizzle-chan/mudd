@@ -20,7 +20,7 @@ just lint      # ruff check
 just format    # ruff format
 just types     # ty check
 
-# Run the bot (requires DISCORD_TOKEN in .env)
+# Run the bot (requires .env with DISCORD_TOKEN, MUDD_WORLD_CATEGORY_ID, MUDD_DEFAULT_CHANNEL_ID)
 python main.py
 ```
 
@@ -35,12 +35,13 @@ Pre-commit hooks (lefthook) auto-run ruff and ty on staged files.
 - Defines slash commands via `@app_commands.command`
 - Gets loaded in `main.py`
 
-**MUD concept**: Channel topics = room descriptions. Movement will hide/show channels via Discord permissions.
+**MUD concept**: Channel topics = room descriptions. Movement hides/shows channels via Discord permissions.
 
 ## Dependencies
 
 - `discord.py` - Discord bot library
 - `python-dotenv` - Environment variable loading
+- `redis` - Redis client for location persistence
 - `ruff` - Linting and formatting
 - `ty` - Type checking (Astral)
 - `uv` - Package management
