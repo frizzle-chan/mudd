@@ -18,6 +18,7 @@ class VisibilityService:
         self.default_channel_id = default_channel_id
         self._startup_complete = asyncio.Event()
         self._startup_lock = asyncio.Lock()
+        self._synced_guilds: set[int] = set()
 
     async def wait_for_startup(self) -> None:
         """Block until startup sync is complete."""
@@ -146,7 +147,7 @@ class VisibilityService:
             Stats dict with counts of users synced/assigned
         """
         async with self._startup_lock:
-            if self._startup_complete.is_set():
+            if guild.id in self._synced_guilds:
                 return {"skipped": 1}
 
             stats = {"synced": 0, "assigned_default": 0, "errors": 0}
@@ -181,8 +182,9 @@ class VisibilityService:
                     logger.error(f"Failed to sync user {member.id}: {e}")
                     stats["errors"] += 1
 
+            self._synced_guilds.add(guild.id)
             self._startup_complete.set()
-            logger.info(f"Startup sync complete: {stats}")
+            logger.info(f"Startup sync complete for {guild.name}: {stats}")
             return stats
 
 
