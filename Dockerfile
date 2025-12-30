@@ -51,6 +51,7 @@ RUN apt-get update \
        git \
        just \
        procps \
+       redis-server \
        sqlite3 \
        vim \
        zsh \
