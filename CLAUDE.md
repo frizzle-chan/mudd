@@ -35,10 +35,6 @@ Pre-commit hooks (lefthook) auto-run ruff and ty on staged files.
 - Defines slash commands via `@app_commands.command`
 - Gets loaded in `main.py`
 
-Current cogs:
-- `ping.py` - `/ping` returns latency
-- `look.py` - `/look` returns channel topic (room description)
-
 **MUD concept**: Channel topics = room descriptions. Movement will hide/show channels via Discord permissions.
 
 ## Dependencies
