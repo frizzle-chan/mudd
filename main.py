@@ -1,4 +1,3 @@
-import asyncio
 import os
 
 import discord
@@ -10,20 +9,20 @@ from mudd.cogs.ping import Ping
 
 load_dotenv()
 
+intents = discord.Intents.default()
+bot = commands.Bot(command_prefix="!", intents=intents)
 
-async def main():
-    intents = discord.Intents.default()
-    bot = commands.Bot(command_prefix="!", intents=intents)
 
-    @bot.event
-    async def on_ready():
-        await bot.tree.sync()
-        print(f"Logged in as {bot.user}")
-
+@bot.event
+async def setup_hook():
     await bot.add_cog(Look(bot))
     await bot.add_cog(Ping(bot))
-    await bot.start(os.environ["DISCORD_TOKEN"])
 
 
-if __name__ == "__main__":
-    asyncio.run(main())
+@bot.event
+async def on_ready():
+    await bot.tree.sync()
+    print(f"Logged in as {bot.user}")
+
+
+bot.run(os.environ["DISCORD_TOKEN"])
