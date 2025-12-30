@@ -5,6 +5,7 @@ import discord
 from discord.ext import commands
 from dotenv import load_dotenv
 
+from mudd.cogs.look import Look
 from mudd.cogs.ping import Ping
 
 load_dotenv()
@@ -19,6 +20,7 @@ async def main():
         await bot.tree.sync()
         print(f"Logged in as {bot.user}")
 
+    await bot.add_cog(Look(bot))
     await bot.add_cog(Ping(bot))
     await bot.start(os.environ["DISCORD_TOKEN"])
 
