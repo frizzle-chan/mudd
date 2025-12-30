@@ -1,5 +1,6 @@
 """Movement commands for MUDD."""
 
+import logging
 import re
 
 import discord
@@ -7,6 +8,8 @@ from discord import Interaction, app_commands
 from discord.ext import commands
 
 from mudd.services.visibility import get_visibility_service
+
+logger = logging.getLogger(__name__)
 
 PLAINTEXT_CHANNEL_PATTERN = re.compile(r"#([\w-]+)")
 
@@ -136,13 +139,18 @@ class Movement(commands.Cog):
         if member.bot:
             return
 
-        service = get_visibility_service()
-        await service.wait_for_startup()
-
-        await service.move_user_to_channel(member, service.default_channel_id)
+        try:
+            service = get_visibility_service()
+            await service.wait_for_startup()
+            await service.move_user_to_channel(member, service.default_channel_id)
+        except Exception as e:
+            logger.error(f"Failed to assign default location to {member.id}: {e}")
 
     @commands.Cog.listener()
     async def on_member_remove(self, member: discord.Member):
         """Clean up Redis when member leaves."""
-        service = get_visibility_service()
-        await service.delete_user_location(member.id)
+        try:
+            service = get_visibility_service()
+            await service.delete_user_location(member.id)
+        except Exception as e:
+            logger.error(f"Failed to clean up location for member {member.id}: {e}")
