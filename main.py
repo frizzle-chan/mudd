@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 from mudd.cogs.look import Look
 from mudd.cogs.movement import Movement
 from mudd.cogs.ping import Ping
+from mudd.services.redis import close_redis
 from mudd.services.visibility import get_visibility_service, init_visibility_service
 
 load_dotenv()
@@ -17,7 +18,15 @@ logger = logging.getLogger(__name__)
 
 intents = discord.Intents.default()
 intents.members = True
-bot = commands.Bot(command_prefix="!", intents=intents)
+
+
+class MuddBot(commands.Bot):
+    async def close(self):
+        await close_redis()
+        await super().close()
+
+
+bot = MuddBot(command_prefix="!", intents=intents)
 
 
 @bot.event
