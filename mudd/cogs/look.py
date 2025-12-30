@@ -10,6 +10,6 @@ class Look(commands.Cog):
     async def look(self, interaction: Interaction):
         topic = getattr(interaction.channel, "topic", None)
         if topic:
-            await interaction.response.send_message(topic)
+            await interaction.response.send_message(topic, ephemeral=True)
         else:
-            await interaction.response.send_message("No topic set")
+            await interaction.response.send_message("No topic set", ephemeral=True)
