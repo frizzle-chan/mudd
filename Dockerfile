@@ -51,6 +51,7 @@ RUN apt-get update \
        git \
        just \
        procps \
+       redis-server \
        vim \
        zsh \
  && apt-get clean \
