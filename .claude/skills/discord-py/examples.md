@@ -413,7 +413,7 @@ async def server_only(ctx):
 @bot.command()
 @commands.cooldown(1, 30, commands.BucketType.user)
 async def limited(ctx):
-    """Once per 30 seconds per user."""
+    """Rate limited to once per 30 seconds per user."""
     await ctx.send('Limited command!')
 
 # For slash commands
@@ -534,7 +534,7 @@ def create_embed(
         title=title,
         description=description,
         color=color,
-        timestamp=datetime.now()
+        timestamp=datetime.utcnow()
     )
 
     if author:

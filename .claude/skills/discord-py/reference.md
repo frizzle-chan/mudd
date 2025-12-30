@@ -476,12 +476,12 @@ async def pick_fruit(interaction: discord.Interaction, fruit: str):
 ### Context Menus
 
 ```python
-# Right-click on user
+# Context menu on user
 @tree.context_menu(name='Get User Info')
 async def user_info(interaction: discord.Interaction, user: discord.Member):
     await interaction.response.send_message(f'{user} joined at {user.joined_at}')
 
-# Right-click on message
+# Context menu on message
 @tree.context_menu(name='Report Message')
 async def report_message(interaction: discord.Interaction, message: discord.Message):
     await interaction.response.send_message(f'Reported message from {message.author}', ephemeral=True)
