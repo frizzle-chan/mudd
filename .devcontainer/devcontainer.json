@@ -22,6 +22,7 @@
                 "GitHub.copilot",
                 "GitHub.copilot-chat",
                 "GitHub.vscode-pull-request-github",
+                "astral-sh.ty",
                 "charliermarsh.ruff",
                 "editorconfig.editorconfig",
                 "ms-python.python"
