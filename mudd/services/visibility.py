@@ -150,6 +150,8 @@ class VisibilityService:
 
         # Phase 1: Remove access from old channel FIRST (Alter-Ego order)
         if old_channel and self.is_mud_location(old_channel):
+            # Type narrowing: is_mud_location ensures this is a TextChannel
+            assert isinstance(old_channel, discord.TextChannel)
             await old_channel.set_permissions(
                 member,
                 overwrite=None,
