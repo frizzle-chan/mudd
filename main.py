@@ -5,6 +5,7 @@ import discord
 from discord.ext import commands
 from dotenv import load_dotenv
 
+from mudd.cogs.analytics import Analytics
 from mudd.cogs.look import Look
 from mudd.cogs.movement import Movement
 from mudd.cogs.ping import Ping
@@ -18,6 +19,7 @@ logger = logging.getLogger(__name__)
 
 intents = discord.Intents.default()
 intents.members = True
+intents.message_content = True
 
 
 class MuddBot(commands.Bot):
@@ -36,6 +38,7 @@ async def setup_hook():
         default_channel_id=int(os.environ["MUDD_DEFAULT_CHANNEL_ID"]),
     )
 
+    await bot.add_cog(Analytics(bot))
     await bot.add_cog(Look(bot))
     await bot.add_cog(Ping(bot))
     await bot.add_cog(Movement(bot))
