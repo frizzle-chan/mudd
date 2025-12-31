@@ -108,18 +108,24 @@ class VisibilityService:
                 await location.set_permissions(
                     member, overwrite=overwrite, reason="MUDD visibility sync"
                 )
-
-                # Also sync paired voice channel if it exists
-                paired_voice = self.get_paired_voice_channel(location)
-                if paired_voice:
-                    await paired_voice.set_permissions(
-                        member, overwrite=overwrite, reason="MUDD visibility sync"
-                    )
             except discord.HTTPException as e:
                 logger.error(
                     f"Failed to set permissions for {member.id} on {location.id}: {e}"
                 )
                 raise
+
+            # Also sync paired voice channel if it exists
+            paired_voice = self.get_paired_voice_channel(location)
+            if paired_voice:
+                try:
+                    await paired_voice.set_permissions(
+                        member, overwrite=overwrite, reason="MUDD visibility sync"
+                    )
+                except discord.HTTPException as e:
+                    logger.error(
+                        f"Failed to set voice channel {paired_voice.id} "
+                        f"permissions for {member.id}: {e}"
+                    )
 
     async def move_user_to_channel(
         self,
@@ -164,11 +170,17 @@ class VisibilityService:
             # Also remove access from paired voice channel if it exists
             paired_voice = self.get_paired_voice_channel(old_channel)
             if paired_voice:
-                await paired_voice.set_permissions(
-                    member,
-                    overwrite=None,
-                    reason="MUDD movement - leaving",
-                )
+                try:
+                    await paired_voice.set_permissions(
+                        member,
+                        overwrite=None,
+                        reason="MUDD movement - leaving",
+                    )
+                except discord.HTTPException as e:
+                    logger.error(
+                        f"Failed to remove voice channel {paired_voice.id} "
+                        f"permissions for {member.id}: {e}"
+                    )
 
         # Phase 2: Grant access to new channel
         if new_channel:
@@ -182,11 +194,17 @@ class VisibilityService:
             if isinstance(new_channel, discord.TextChannel):
                 paired_voice = self.get_paired_voice_channel(new_channel)
                 if paired_voice:
-                    await paired_voice.set_permissions(
-                        member,
-                        overwrite=discord.PermissionOverwrite(view_channel=True),
-                        reason="MUDD movement - entering",
-                    )
+                    try:
+                        await paired_voice.set_permissions(
+                            member,
+                            overwrite=discord.PermissionOverwrite(view_channel=True),
+                            reason="MUDD movement - entering",
+                        )
+                    except discord.HTTPException as e:
+                        logger.error(
+                            f"Failed to grant voice channel {paired_voice.id} "
+                            f"permissions for {member.id}: {e}"
+                        )
 
         logger.info(f"Moved user {member.id} from {current} to {channel_id}")
         return True
