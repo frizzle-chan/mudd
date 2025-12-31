@@ -37,6 +37,30 @@ class VisibilityService:
             ch for ch in guild.text_channels if ch.category_id == self.world_category_id
         ]
 
+    def get_paired_voice_channel(
+        self, text_channel: discord.TextChannel
+    ) -> discord.VoiceChannel | None:
+        """
+        Find a voice channel paired with a text channel.
+
+        A voice channel is considered paired if it has the same name and is in the
+        same category as the text channel.
+
+        Args:
+            text_channel: The text channel to find a paired voice channel for
+
+        Returns:
+            The paired voice channel, or None if no matching voice channel exists
+        """
+        guild = text_channel.guild
+        for voice_channel in guild.voice_channels:
+            if (
+                voice_channel.name == text_channel.name
+                and voice_channel.category_id == text_channel.category_id
+            ):
+                return voice_channel
+        return None
+
     async def get_user_location(self, user_id: int) -> int | None:
         """Get the channel ID of the user's current location, or None if not set."""
         client = await get_redis()
@@ -84,6 +108,13 @@ class VisibilityService:
                 await location.set_permissions(
                     member, overwrite=overwrite, reason="MUDD visibility sync"
                 )
+
+                # Also sync paired voice channel if it exists
+                paired_voice = self.get_paired_voice_channel(location)
+                if paired_voice:
+                    await paired_voice.set_permissions(
+                        member, overwrite=overwrite, reason="MUDD visibility sync"
+                    )
             except discord.HTTPException as e:
                 logger.error(
                     f"Failed to set permissions for {member.id} on {location.id}: {e}"
@@ -125,6 +156,15 @@ class VisibilityService:
                 reason="MUDD movement - leaving",
             )
 
+            # Also remove access from paired voice channel if it exists
+            paired_voice = self.get_paired_voice_channel(old_channel)
+            if paired_voice:
+                await paired_voice.set_permissions(
+                    member,
+                    overwrite=None,
+                    reason="MUDD movement - leaving",
+                )
+
         # Phase 2: Grant access to new channel
         if new_channel:
             await new_channel.set_permissions(
@@ -132,6 +172,16 @@ class VisibilityService:
                 overwrite=discord.PermissionOverwrite(view_channel=True),
                 reason="MUDD movement - entering",
             )
+
+            # Also grant access to paired voice channel if it exists
+            if isinstance(new_channel, discord.TextChannel):
+                paired_voice = self.get_paired_voice_channel(new_channel)
+                if paired_voice:
+                    await paired_voice.set_permissions(
+                        member,
+                        overwrite=discord.PermissionOverwrite(view_channel=True),
+                        reason="MUDD movement - entering",
+                    )
 
         logger.info(f"Moved user {member.id} from {current} to {channel_id}")
         return True
