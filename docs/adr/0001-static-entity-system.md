@@ -12,7 +12,7 @@ MUDD needs interactable objects in rooms to create an engaging game world. Playe
 - Human-editable entity data that developers can version control
 - Runtime storage for fast entity lookups during gameplay
 - Multiple instances of the same entity type across different rooms
-- Natural language verb matching (e.g., "smash", "break", "destroy" all trigger the same action)
+- Natural language verb matching (e.g., "smash", "hit", "strike" all trigger the same action)
 
 ## Decisions
 
@@ -27,7 +27,7 @@ Example recutils format with schema validation:
 %type: Prototype rec Entity
 %mandatory: Id Name
 %allowed: Id Name Prototype Description_short Description_long
-%allowed: On_look On_touch On_destroy On_use On_take
+%allowed: On_look On_touch On_attack On_use On_take
 
 Id: vase
 Name: Fancy Vase
@@ -55,16 +55,19 @@ On_touch: you poke the {name}
 
 A child entity with `Name: Fancy Vase` would render `Description_short` as "a Fancy Vase".
 
+**`On_*` handlers represent actions, not results:**
+Handler names describe what the player *does* (the action), not what happens (the result). For example, `On_attack` is triggered when a player attacks an entity - the handler text describes the outcome, which may or may not result in destruction. This keeps handlers predictable and reusable across entity types.
+
 ### Entity Inheritance Model
 
-In the context of **defining entity behaviors**, facing **repetitive default responses across many entity types** (e.g., "you can't destroy this"), we decided to **use prototypical inheritance via a `prototype` field**, to achieve **DRY definitions where child entities inherit all properties from ancestors**, accepting **the complexity of resolving inheritance chains at load time**.
+In the context of **defining entity behaviors**, facing **repetitive default responses across many entity types** (e.g., "you attack the object, but nothing happens"), we decided to **use prototypical inheritance via a `prototype` field**, to achieve **DRY definitions where child entities inherit all properties from ancestors**, accepting **the complexity of resolving inheritance chains at load time**.
 
 Inheritance chain example:
 ```
 object (base) -> glass_object -> vase
 ```
 
-A `vase` inherits `On_touch` from `object` and `On_destroy` from `glass_object`, only defining its own `Description_long`.
+A `vase` inherits `On_touch` from `object` and `On_attack` from `glass_object`, only defining its own `Description_long`.
 
 **Resolution rules:**
 - Child properties override parent properties (last wins)
@@ -93,25 +96,26 @@ vase_instance_2 = { model: "vase", room: "kitchen", params: {...} }
 
 ### Interaction Verb Matching
 
-In the context of **parsing `/interact <verb> <entity>` commands**, facing **users typing varied natural language verbs** ("smash", "break", "destroy", "wreck"), we decided to **use pre-built word lists mapping synonym groups to action triggers** (e.g., `on_destroy`), to achieve **fast, deterministic verb resolution without external dependencies**, accepting **manual curation of word lists and potential gaps in vocabulary coverage**.
+In the context of **parsing `/interact <verb> <entity>` commands**, facing **users typing varied natural language verbs** ("smash", "hit", "strike", "punch"), we decided to **use pre-built word lists mapping synonym groups to action triggers** (e.g., `on_attack`), to achieve **fast, deterministic verb resolution without external dependencies**, accepting **manual curation of word lists and potential gaps in vocabulary coverage**.
 
-Word list generation: One-time offline task using dictionary filtering (e.g., find all words meaning "destroy").
+Word list generation: One-time offline task using dictionary filtering (e.g., find all words meaning "attack").
 
 **Fallback behavior:** Unrecognized verbs return a generic response: "You can't do that."
 
 **Word list format** (flat files, one per action):
-- Files named by action: `on_destroy.txt`, `on_look.txt`, `on_touch.txt`, etc.
+- Files named by action: `on_attack.txt`, `on_look.txt`, `on_touch.txt`, etc.
 - Each file contains verbs that trigger that action, one word per line
 - Loaded into a dictionary at runtime mapping verb → action
 
-Example `data/verbs/on_destroy.txt`:
+Example `data/verbs/on_attack.txt`:
 ```
+attack
+bash
+hit
+punch
+slash
 smash
-break
-shatter
-destroy
-wreck
-demolish
+strike
 ```
 
 ### Data Loading Workflow
