@@ -223,7 +223,7 @@ Used with `-e` flag in recsel, recdel, recset:
 | `<`, `>`, `<=`, `>=` | Numeric comparison | `Count > 5` |
 | `~` | Regex match | `Name ~ "^Iron"` |
 | `&&` | Logical AND | `Type = "weapon" && Rare = yes` |
-| `\|\|` | Logical OR | `Type = "weapon" \|\| Type = "armor"` |
+| `||` | Logical OR | `Type = "weapon" || Type = "armor"` |
 | `!` | Logical NOT | `! (Count = 0)` |
 | `#field` | Field count (0 if absent) | `#Description` |
 
