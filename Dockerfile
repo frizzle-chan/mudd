@@ -45,9 +45,15 @@ ENV UV_NO_DEV=0 \
 USER root
 
 # install stuff
-RUN echo -e "Types: deb deb-src\nURIs: http://deb.debian.org/debian\nSuites: trixie-backports\nComponents: main\nEnabled: yes\nSigned-By: /usr/share/keyrings/debian-archive-keyring.gpg" \
-      > /etc/apt/sources.list.d/backports.sources \
- && apt-get update \
+RUN cat <<'EOF' > /etc/apt/sources.list.d/backports.sources
+Types: deb deb-src
+URIs: http://deb.debian.org/debian
+Suites: trixie-backports
+Components: main
+Enabled: yes
+Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
+EOF
+RUN apt-get update \
  && apt-get install -y --no-install-recommends \
        curl \
        git \
