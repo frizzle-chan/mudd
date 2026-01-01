@@ -100,20 +100,19 @@ Word list generation: One-time offline task using dictionary filtering (e.g., fi
 
 **Fallback behavior:** Unrecognized verbs return a generic response: "You can't do that with the {entity name}."
 
-**Word list format** (also recutils for consistency):
-```rec
-%rec: VerbMapping
-%key: Verb
-%mandatory: Verb Action
+**Word list format** (flat files, one per action):
+- Files named by action: `on_destroy.txt`, `on_look.txt`, `on_touch.txt`, etc.
+- Each file contains verbs that trigger that action, one word per line
+- Loaded into a dictionary at runtime mapping verb → action
 
-Verb: smash
-Action: destroy
-
-Verb: break
-Action: destroy
-
-Verb: shatter
-Action: destroy
+Example `data/verbs/on_destroy.txt`:
+```
+smash
+break
+shatter
+destroy
+wreck
+demolish
 ```
 
 ### Data Loading Workflow
@@ -127,7 +126,7 @@ python -m mudd.scripts.load_entities --redis-url $REDIS_URL data/entities.rec
 ```
 
 The script:
-- Parses `.rec` files using recutils or custom parser
+- Parses `.rec` files using recutils
 - Resolves prototype inheritance chains
 - Validates entity definitions (unique IDs, valid prototypes, no cycles)
 - Writes resolved entity models to Redis as JSON
