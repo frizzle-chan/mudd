@@ -37,6 +37,8 @@ Pre-commit hooks (lefthook) auto-run ruff and ty on staged files.
 
 **MUD concept**: Channel topics = room descriptions. Movement hides/shows channels via Discord permissions.
 
+**Design docs**: See `DESIGN.md` for Redis schema and data persistence details. **Always update DESIGN.md when modifying the Redis schema.**
+
 ## Dependencies
 
 - `discord.py` - Discord bot library
