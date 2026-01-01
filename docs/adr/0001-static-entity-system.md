@@ -80,7 +80,6 @@ Key schema:
 - `entity:model:{id}` - Entity model definitions (JSON with resolved inheritance)
 - `entity:instance:{room_name}:{instance_id}` - Entity placements in rooms
 - `room:{room_name}:entities` - SET of instance IDs for O(1) room entity listing
-- `entity:verb:{verb}` - Maps verb synonyms to action triggers (HASH)
 
 ### Instance Pattern (Flyweight)
 
@@ -98,7 +97,7 @@ In the context of **parsing `/interact <verb> <entity>` commands**, facing **use
 
 Word list generation: One-time offline task using dictionary filtering (e.g., find all words meaning "destroy").
 
-**Fallback behavior:** Unrecognized verbs return a generic response: "You can't do that with the {entity name}."
+**Fallback behavior:** Unrecognized verbs return a generic response: "You can't do that."
 
 **Word list format** (flat files, one per action):
 - Files named by action: `on_destroy.txt`, `on_look.txt`, `on_touch.txt`, etc.
@@ -148,7 +147,7 @@ In the context of **resolving `/interact` commands**, facing **multiple entities
 Resolution flow:
 1. Normalize user input (lowercase, strip articles like "the", "a", "an")
 2. Attempt exact match against entity names in the room
-3. If no exact match, attempt fuzzy match (substring, prefix, or similarity threshold)
+3. If no exact match, attempt fuzzy match (substring, prefix, or similarity threshold) - this tolerates noise words like prepositions ("at", "on") without explicit stripping
 4. If single match: proceed with interaction
 5. If multiple matches: list matching entities and ask user to be more specific
 6. If no matches: respond with "You don't see that here"
@@ -174,14 +173,14 @@ In the context of **parsing `/interact <input>` commands**, facing **the need to
 - `/interact break it` → verb: `break`, no entity match → "You don't see that here"
 
 **Edge cases:**
-- Single word input (e.g., `/interact vase`): Treated as verb with no target, returns usage hint
+- Single word input (e.g., `/interact vase`): Treated as entity target with implicit "look" action
 - Unknown verb: Falls through to generic "You can't do that" response
 
 ### Look Output Format
 
 In the context of **displaying room contents via `/look`**, facing **the choice between terse name lists and descriptive prose**, we decided to **show each entity's `Description_short` with the `{name}` placeholder hydrated in Discord italics**, to achieve **immersive room descriptions where interactable objects are visually distinct**, accepting **the need for every entity to have a `Description_short` (directly or via inheritance)**.
 
-Format: `Description_short` uses a `{name}` template placeholder. When rendered, the `{name}` is replaced with the entity's `Name` wrapped in Discord markdown italics (`*Name*`).
+Format: `Description_short` uses a `{name}` template placeholder. The core template system replaces `{name}` with the entity's `Name` value. When rendering for `/look` output specifically, the name is wrapped in Discord markdown italics (`*Name*`) for visual distinction.
 
 Example entity definition:
 ```rec
@@ -193,9 +192,9 @@ Description_short: a {name} sits on the mantle
 Example `/look` output:
 > The tavern is warm and inviting.
 >
-> A *Fancy Vase* sits on the mantle. A *Wooden Chair* rests by the fire.
+> a *Fancy Vase* sits on the mantle. a *Wooden Chair* rests by the fire.
 
-Entities without a `Description_short` fall back to: "A *{Name}* is here."
+Entities without a `Description_short` fall back to: "a *{name}* is here."
 
 ## Consequences
 
