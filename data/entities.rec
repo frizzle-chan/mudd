@@ -2,45 +2,45 @@
 %key: Id
 %type: Prototype rec Entity
 %mandatory: Id Name
-%allowed: Id Name Prototype Description_short Description_long
-%allowed: On_look On_touch On_attack On_use On_take
+%allowed: Id Name Prototype DescriptionShort DescriptionLong
+%allowed: OnLook OnTouch OnAttack OnUse OnTake
 
 # Base prototype - all entities inherit from this
 Id: object
 Name: object
-Description_short: a {name}
-On_look: You see nothing special about the {name}.
-On_touch: You touch the {name}. Nothing happens.
-On_attack: You attack the {name}, but it has no effect.
-On_use: You can't use the {name}.
-On_take: You can't take the {name}.
+DescriptionShort: a {name}
+OnLook: You see nothing special about the {name}.
+OnTouch: You touch the {name}. Nothing happens.
+OnAttack: You attack the {name}, but it has no effect.
+OnUse: You can't use the {name}.
+OnTake: You can't take the {name}.
 
 Id: glass_object
 Name: glass object
 Prototype: object
-On_attack: The {name} shatters into a thousand pieces!
+OnAttack: The {name} shatters into a thousand pieces!
 
 Id: furniture
 Name: furniture
 Prototype: object
-Description_short: a {name} sits here
+DescriptionShort: a {name} sits here
 
 # Sample entities
 Id: vase
 Name: Fancy Vase
 Prototype: glass_object
-Description_short: a {name} sits on the mantle
-Description_long: A blue ceramic vase with a flower pattern and gold trim around the rim.
+DescriptionShort: a {name} sits on the mantle
+DescriptionLong: A blue ceramic vase with a flower pattern and gold trim around the rim.
 
 Id: chair
 Name: Wooden Chair
 Prototype: furniture
-Description_short: a {name} rests by the fire
-Description_long: A sturdy oak chair with a worn leather seat.
+DescriptionShort: a {name} rests by the fire
+DescriptionLong: A sturdy oak chair with a worn leather seat.
 
 Id: torch
 Name: Wall Torch
 Prototype: object
-Description_short: a {name} flickers on the wall
-Description_long: A torch mounted to the wall, casting dancing shadows.
-On_take: The {name} is mounted to the wall and won't budge.
+DescriptionShort: a {name} flickers on the wall
+DescriptionLong: A torch mounted to the wall, casting dancing shadows.
+OnTake: The {name} is mounted to the wall and won't budge.

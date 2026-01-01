@@ -26,13 +26,13 @@ Example recutils format with schema validation:
 %key: Id
 %type: Prototype rec Entity
 %mandatory: Id Name
-%allowed: Id Name Prototype Description_short Description_long
-%allowed: On_look On_touch On_attack On_use On_take
+%allowed: Id Name Prototype DescriptionShort DescriptionLong
+%allowed: OnLook OnTouch OnAttack OnUse OnTake
 
 Id: vase
 Name: Fancy Vase
 Prototype: glass_object
-Description_long: A blue ceramic vase
+DescriptionLong: A blue ceramic vase
 + with a flower pattern on it
 + and gold trim around the rim.
 ```
@@ -44,19 +44,22 @@ The `%rec` descriptor enables:
 - `%allowed` - Whitelist of valid field names
 
 **Template interpolation:**
-Text fields (`Description_short`, `Description_long`, `On_*` handlers) support `{name}` placeholder interpolation. At render time, `{name}` is replaced with the entity's `Name` value. This allows reusable descriptions in prototypes.
+Text fields (`DescriptionShort`, `DescriptionLong`, `On*` handlers) support `{name}` placeholder interpolation. At render time, `{name}` is replaced with the entity's `Name` value. This allows reusable descriptions in prototypes.
 
 Example:
 ```rec
 Id: object
-Description_short: a {name}
-On_touch: you poke the {name}
+DescriptionShort: a {name}
+OnTouch: you poke the {name}
 ```
 
-A child entity with `Name: Fancy Vase` would render `Description_short` as "a Fancy Vase".
+A child entity with `Name: Fancy Vase` would render `DescriptionShort` as "a Fancy Vase".
 
-**`On_*` handlers represent actions, not results:**
-Handler names describe what the player *does* (the action), not what happens (the result). For example, `On_attack` is triggered when a player attacks an entity - the handler text describes the outcome, which may or may not result in destruction. This keeps handlers predictable and reusable across entity types.
+**`On*` handlers represent actions, not results:**
+Handler names describe what the player *does* (the action), not what happens (the result). For example, `OnAttack` is triggered when a player attacks an entity - the handler text describes the outcome, which may or may not result in destruction. This keeps handlers predictable and reusable across entity types.
+
+**Field naming convention:**
+All entity fields use PascalCase (e.g., `DescriptionShort`, `OnAttack`). This avoids visual noise from underscores and maintains consistency across the codebase.
 
 ### Entity Inheritance Model
 
@@ -67,11 +70,11 @@ Inheritance chain example:
 object (base) -> glass_object -> vase
 ```
 
-A `vase` inherits `On_touch` from `object` and `On_attack` from `glass_object`, only defining its own `Description_long`.
+A `vase` inherits `OnTouch` from `object` and `OnAttack` from `glass_object`, only defining its own `DescriptionLong`.
 
 **Resolution rules:**
 - Child properties override parent properties (last wins)
-- `On_*` handlers are NOT merged - child completely overrides parent
+- `On*` handlers are NOT merged - child completely overrides parent
 - Circular inheritance is an error detected at load time
 - Maximum inheritance depth: 10 (prevents runaway chains)
 
@@ -96,18 +99,18 @@ vase_instance_2 = { model: "vase", room: "kitchen", params: {...} }
 
 ### Interaction Verb Matching
 
-In the context of **parsing `/interact <verb> <entity>` commands**, facing **users typing varied natural language verbs** ("smash", "hit", "strike", "punch"), we decided to **use pre-built word lists mapping synonym groups to action triggers** (e.g., `on_attack`), to achieve **fast, deterministic verb resolution without external dependencies**, accepting **manual curation of word lists and potential gaps in vocabulary coverage**.
+In the context of **parsing `/interact <verb> <entity>` commands**, facing **users typing varied natural language verbs** ("smash", "hit", "strike", "punch"), we decided to **use pre-built word lists mapping synonym groups to action triggers** (e.g., `OnAttack`), to achieve **fast, deterministic verb resolution without external dependencies**, accepting **manual curation of word lists and potential gaps in vocabulary coverage**.
 
 Word list generation: One-time offline task using dictionary filtering (e.g., find all words meaning "attack").
 
 **Fallback behavior:** Unrecognized verbs return a generic response: "You can't do that."
 
 **Word list format** (flat files, one per action):
-- Files named by action: `on_attack.txt`, `on_look.txt`, `on_touch.txt`, etc.
+- Files named by action: `OnAttack.txt`, `OnLook.txt`, `OnTouch.txt`, etc.
 - Each file contains verbs that trigger that action, one word per line
 - Loaded into a dictionary at runtime mapping verb → action
 
-Example `data/verbs/on_attack.txt`:
+Example `data/verbs/OnAttack.txt`:
 ```
 attack
 bash
@@ -182,15 +185,15 @@ In the context of **parsing `/interact <input>` commands**, facing **the need to
 
 ### Look Output Format
 
-In the context of **displaying room contents via `/look`**, facing **the choice between terse name lists and descriptive prose**, we decided to **show each entity's `Description_short` with the `{name}` placeholder hydrated in Discord italics**, to achieve **immersive room descriptions where interactable objects are visually distinct**, accepting **the need for every entity to have a `Description_short` (directly or via inheritance)**.
+In the context of **displaying room contents via `/look`**, facing **the choice between terse name lists and descriptive prose**, we decided to **show each entity's `DescriptionShort` with the `{name}` placeholder hydrated in Discord italics**, to achieve **immersive room descriptions where interactable objects are visually distinct**, accepting **the need for every entity to have a `DescriptionShort` (directly or via inheritance)**.
 
-Format: `Description_short` uses a `{name}` template placeholder. The core template system replaces `{name}` with the entity's `Name` value. When rendering for `/look` output specifically, the name is wrapped in Discord markdown italics (`*Name*`) for visual distinction.
+Format: `DescriptionShort` uses a `{name}` template placeholder. The core template system replaces `{name}` with the entity's `Name` value. When rendering for `/look` output specifically, the name is wrapped in Discord markdown italics (`*Name*`) for visual distinction.
 
 Example entity definition:
 ```rec
 Id: vase
 Name: Fancy Vase
-Description_short: a {name} sits on the mantle
+DescriptionShort: a {name} sits on the mantle
 ```
 
 Example `/look` output:
@@ -198,7 +201,7 @@ Example `/look` output:
 >
 > a *Fancy Vase* sits on the mantle. a *Wooden Chair* rests by the fire.
 
-Entities without a `Description_short` fall back to: "a *{name}* is here."
+Entities without a `DescriptionShort` fall back to: "a *{name}* is here."
 
 ## Consequences
 

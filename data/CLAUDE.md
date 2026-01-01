@@ -10,11 +10,13 @@ just entities
 
 ## Schema Fields
 
+Field names use PascalCase (e.g., `DescriptionShort`, not `Description_short`).
+
 - `Id` (required) - Unique identifier
 - `Name` (required) - Display name
 - `Prototype` - Parent entity for inheritance
-- `Description_short` - One-line description for `/look`
-- `Description_long` - Detailed description
-- `On_*` - Action handlers (look, touch, attack, use, take)
+- `DescriptionShort` - One-line description for `/look`
+- `DescriptionLong` - Detailed description
+- `On*` - Action handlers: `OnLook`, `OnTouch`, `OnAttack`, `OnUse`, `OnTake`
 
 Text fields support `{name}` interpolation.

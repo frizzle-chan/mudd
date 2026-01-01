@@ -61,7 +61,7 @@ Place schema declarations before records:
 %rec: Entity
 %key: Id
 %mandatory: Id Name
-%allowed: Id Name Prototype Description On_look On_touch
+%allowed: Id Name Prototype Description OnLook OnTouch
 %type: Prototype rec Entity
 %type: Count int
 %type: Active bool
@@ -232,7 +232,10 @@ Used with `-e` flag in recsel, recdel, recset:
 - Use `recfix --check` before loading data to catch schema violations
 - Foreign keys (`%type: Field rec OtherType`) validate references exist
 - Field names start with a letter and contain only `[a-zA-Z0-9_]`; special fields start with `%`
-- Field names are conventionally capitalized (e.g., `Name:`, `Description:`)
 - Empty lines separate records; use `+ ` continuation for multi-line values
 - Comments start with `#` at the beginning of a line
 - For JSON output, pipe through `recsel -p` and parse with a script
+
+## MUDD Naming Convention
+
+In this project, entity fields use **PascalCase** (e.g., `DescriptionShort`, `OnAttack`). This avoids visual noise from underscores. See `data/entities.rec` for examples.
