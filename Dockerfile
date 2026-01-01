@@ -45,7 +45,9 @@ ENV UV_NO_DEV=0 \
 USER root
 
 # install stuff
-RUN apt-get update \
+RUN echo "Types: deb\nURIs: http://deb.debian.org/debian\nSuites: trixie-backports\nComponents: main\nSigned-By: /usr/share/keyrings/debian-archive-keyring.gpg" \
+      > /etc/apt/sources.list.d/backports.sources \
+ && apt-get update \
  && apt-get install -y --no-install-recommends \
        curl \
        git \
@@ -54,6 +56,8 @@ RUN apt-get update \
        redis-server \
        vim \
        zsh \
+ && apt-get install -y --no-install-recommends -t trixie-backports \
+       recutils \
  && apt-get clean \
  && rm -rf /var/lib/apt/lists/* \
  && chsh -s /bin/zsh mudd
