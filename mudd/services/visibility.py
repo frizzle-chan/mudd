@@ -170,6 +170,15 @@ class VisibilityService:
             # Also remove access from paired voice channel if it exists
             paired_voice = self.get_paired_voice_channel(old_channel)
             if paired_voice:
+                # Disconnect user from voice before removing permissions
+                if member.voice and member.voice.channel == paired_voice:
+                    try:
+                        await member.move_to(None)
+                    except discord.HTTPException as e:
+                        logger.warning(
+                            f"Failed to disconnect {member} from voice channel "
+                            f"{paired_voice}: {e}"
+                        )
                 try:
                     await paired_voice.set_permissions(
                         member,
