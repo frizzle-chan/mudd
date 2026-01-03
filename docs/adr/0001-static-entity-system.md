@@ -25,8 +25,9 @@ Example recutils format with schema validation:
 %rec: Entity
 %key: Id
 %type: Prototype rec Entity
+%type: Container rec Entity
 %mandatory: Id Name
-%allowed: Id Name Prototype DescriptionShort DescriptionLong
+%allowed: Id Name Prototype Container DescriptionShort DescriptionLong
 %allowed: OnLook OnTouch OnAttack OnUse OnTake
 
 Id: vase
@@ -40,6 +41,7 @@ DescriptionLong: A blue ceramic vase
 The `%rec` descriptor enables:
 - `%key: Id` - Ensures unique entity IDs
 - `%type: Prototype rec Entity` - Validates prototype references exist
+- `%type: Container rec Entity` - Validates container references exist
 - `%mandatory` - Required fields for all entities
 - `%allowed` - Whitelist of valid field names
 
@@ -202,6 +204,74 @@ Example `/look` output:
 > a *Fancy Vase* sits on the mantle. a *Wooden Chair* rests by the fire.
 
 Entities without a `DescriptionShort` fall back to: "a *{name}* is here."
+
+### Entity Containment
+
+In the context of **modeling nested objects** (e.g., a lamp on a table), facing **the need for entities to exist within other entities**, we decided to **add an optional `Container` field referencing a parent entity**, to achieve **hierarchical entity relationships with automatic child listing**, accepting **single-level nesting only (no containers within containers)**.
+
+**Schema addition:**
+```rec
+%type: Container rec Entity
+%type: ContentsVisible bool
+%allowed: Id Name Prototype Container ContentsVisible DescriptionShort DescriptionLong
+```
+
+**Fields:**
+- `Container` - References the parent entity this item is contained within
+- `ContentsVisible` - Whether children are auto-listed (default: `yes`)
+  - `yes` (table, shelf): Children listed when container appears in room or is examined
+  - `no` (chest, drawer): Children only listed when container is directly examined via `/look`
+
+**Example:**
+```rec
+Id: table
+Name: Wooden Table
+Prototype: furniture
+DescriptionShort: a {name} sits in the corner
+ContentsVisible: yes
+
+Id: lamp
+Name: Brass Lamp
+Prototype: object
+Container: table
+
+Id: chest
+Name: Wooden Chest
+Prototype: furniture
+DescriptionShort: a {name} rests against the wall
+ContentsVisible: no
+
+Id: gold_ring
+Name: Gold Ring
+Prototype: object
+Container: chest
+```
+
+**Room `/look` behavior:**
+- Top-level entities (no `Container`) appear in room descriptions
+- If `ContentsVisible: yes`, children are auto-listed with the container
+- If `ContentsVisible: no`, children are hidden until the container is examined
+
+**Stateless interactions:**
+Containers have no "opened" state. Players can interact with hidden items if they guess correctly - the visibility flag only affects what's shown, not what's accessible.
+
+**Container examination:**
+When examining an entity that has children, auto-append them to the output:
+> You see a sturdy wooden table with worn edges.
+>
+> On the *Wooden Table* you see: a *Brass Lamp*, a *Silver Picture Frame*.
+
+**Interaction targeting:**
+1. Search **all entities in room** (including contained) when resolving targets
+2. If single match → proceed with interaction
+3. If multiple matches → disambiguate with container context: "Be more specific. Did you mean: Brass Lamp (on Wooden Table), Brass Lamp (on Nightstand)?"
+4. Qualified syntax (`/interact look lamp on table`) narrows search to that container's children
+
+**Validation constraints:**
+- `Container` must reference an existing entity (enforced by `%type: Container rec Entity`)
+- Circular containment (A contains B, B contains A) is an error detected at load time
+- Self-containment (A contains A) is an error
+- Multi-level nesting is prohibited: if an entity has a `Container`, it cannot itself be a container
 
 ## Consequences
 

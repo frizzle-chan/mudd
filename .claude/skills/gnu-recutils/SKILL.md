@@ -122,6 +122,28 @@ Name: Beer Mug
 Room: tavern
 ```
 
+### Entity Containment (MUDD)
+
+Entities can be nested using a `Container` field:
+
+```rec
+%rec: Entity
+%key: Id
+%type: Prototype rec Entity
+%type: Container rec Entity
+
+Id: table
+Name: Wooden Table
+Prototype: furniture
+
+Id: lamp
+Name: Brass Lamp
+Prototype: object
+Container: table
+```
+
+The lamp is "on" the table. Recfix validates that Container references exist.
+
 ## Common Operations
 
 ### Query Records
