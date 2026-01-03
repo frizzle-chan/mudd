@@ -100,13 +100,18 @@ class VisibilityService:
             should_see = location.id == current_location_id
 
             # Use explicit True to grant, None to remove (inherit from category)
-            overwrite = (
+            text_overwrite = (
                 discord.PermissionOverwrite(view_channel=True) if should_see else None
+            )
+            voice_overwrite = (
+                discord.PermissionOverwrite(view_channel=True, connect=True, speak=True)
+                if should_see
+                else None
             )
 
             try:
                 await location.set_permissions(
-                    member, overwrite=overwrite, reason="MUDD visibility sync"
+                    member, overwrite=text_overwrite, reason="MUDD visibility sync"
                 )
             except discord.HTTPException as e:
                 logger.error(
@@ -114,12 +119,13 @@ class VisibilityService:
                 )
                 raise
 
-            # Also sync paired voice channel if it exists
+            # Voice channel permissions are best-effort: failures are logged but
+            # don't block text channel ops, since voice is supplementary.
             paired_voice = self.get_paired_voice_channel(location)
             if paired_voice:
                 try:
                     await paired_voice.set_permissions(
-                        member, overwrite=overwrite, reason="MUDD visibility sync"
+                        member, overwrite=voice_overwrite, reason="MUDD visibility sync"
                     )
                 except discord.HTTPException as e:
                     logger.error(
@@ -167,7 +173,8 @@ class VisibilityService:
                 reason="MUDD movement - leaving",
             )
 
-            # Also remove access from paired voice channel if it exists
+            # Voice channel permissions are best-effort: failures are logged but
+            # don't block text channel ops, since voice is supplementary.
             paired_voice = self.get_paired_voice_channel(old_channel)
             if paired_voice:
                 # Disconnect user from voice before removing permissions
@@ -199,14 +206,17 @@ class VisibilityService:
                 reason="MUDD movement - entering",
             )
 
-            # Also grant access to paired voice channel if it exists
+            # Voice channel permissions are best-effort: failures are logged but
+            # don't block text channel ops, since voice is supplementary.
             if isinstance(new_channel, discord.TextChannel):
                 paired_voice = self.get_paired_voice_channel(new_channel)
                 if paired_voice:
                     try:
                         await paired_voice.set_permissions(
                             member,
-                            overwrite=discord.PermissionOverwrite(view_channel=True),
+                            overwrite=discord.PermissionOverwrite(
+                                view_channel=True, connect=True, speak=True
+                            ),
                             reason="MUDD movement - entering",
                         )
                     except discord.HTTPException as e:
