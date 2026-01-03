@@ -37,6 +37,30 @@ class VisibilityService:
             ch for ch in guild.text_channels if ch.category_id == self.world_category_id
         ]
 
+    def get_paired_voice_channel(
+        self, text_channel: discord.TextChannel
+    ) -> discord.VoiceChannel | None:
+        """
+        Find a voice channel paired with a text channel.
+
+        A voice channel is considered paired if it has the same name and is in the
+        same category as the text channel.
+
+        Args:
+            text_channel: The text channel to find a paired voice channel for
+
+        Returns:
+            The paired voice channel, or None if no matching voice channel exists
+        """
+        guild = text_channel.guild
+        for voice_channel in guild.voice_channels:
+            if (
+                voice_channel.name == text_channel.name
+                and voice_channel.category_id == text_channel.category_id
+            ):
+                return voice_channel
+        return None
+
     async def get_user_location(self, user_id: int) -> int | None:
         """Get the channel ID of the user's current location, or None if not set."""
         client = await get_redis()
@@ -76,19 +100,38 @@ class VisibilityService:
             should_see = location.id == current_location_id
 
             # Use explicit True to grant, None to remove (inherit from category)
-            overwrite = (
+            text_overwrite = (
                 discord.PermissionOverwrite(view_channel=True) if should_see else None
+            )
+            voice_overwrite = (
+                discord.PermissionOverwrite(view_channel=True, connect=True, speak=True)
+                if should_see
+                else None
             )
 
             try:
                 await location.set_permissions(
-                    member, overwrite=overwrite, reason="MUDD visibility sync"
+                    member, overwrite=text_overwrite, reason="MUDD visibility sync"
                 )
             except discord.HTTPException as e:
                 logger.error(
                     f"Failed to set permissions for {member.id} on {location.id}: {e}"
                 )
                 raise
+
+            # Voice channel permissions are best-effort: failures are logged but
+            # don't block text channel ops, since voice is supplementary.
+            paired_voice = self.get_paired_voice_channel(location)
+            if paired_voice:
+                try:
+                    await paired_voice.set_permissions(
+                        member, overwrite=voice_overwrite, reason="MUDD visibility sync"
+                    )
+                except discord.HTTPException as e:
+                    logger.error(
+                        f"Failed to set voice channel {paired_voice.id} "
+                        f"permissions for {member.id}: {e}"
+                    )
 
     async def move_user_to_channel(
         self,
@@ -118,12 +161,42 @@ class VisibilityService:
         old_channel = guild.get_channel(current) if current else None
 
         # Phase 1: Remove access from old channel FIRST (Alter-Ego order)
-        if old_channel and self.is_mud_location(old_channel):
+        # Type guard: explicitly check TextChannel to satisfy type checker
+        if (
+            old_channel
+            and self.is_mud_location(old_channel)
+            and isinstance(old_channel, discord.TextChannel)
+        ):
             await old_channel.set_permissions(
                 member,
                 overwrite=None,
                 reason="MUDD movement - leaving",
             )
+
+            # Voice channel permissions are best-effort: failures are logged but
+            # don't block text channel ops, since voice is supplementary.
+            paired_voice = self.get_paired_voice_channel(old_channel)
+            if paired_voice:
+                # Disconnect user from voice before removing permissions
+                if member.voice and member.voice.channel == paired_voice:
+                    try:
+                        await member.move_to(None)
+                    except discord.HTTPException as e:
+                        logger.warning(
+                            f"Failed to disconnect {member} from voice channel "
+                            f"{paired_voice}: {e}"
+                        )
+                try:
+                    await paired_voice.set_permissions(
+                        member,
+                        overwrite=None,
+                        reason="MUDD movement - leaving",
+                    )
+                except discord.HTTPException as e:
+                    logger.error(
+                        f"Failed to remove voice channel {paired_voice.id} "
+                        f"permissions for {member.id}: {e}"
+                    )
 
         # Phase 2: Grant access to new channel
         if new_channel:
@@ -132,6 +205,25 @@ class VisibilityService:
                 overwrite=discord.PermissionOverwrite(view_channel=True),
                 reason="MUDD movement - entering",
             )
+
+            # Voice channel permissions are best-effort: failures are logged but
+            # don't block text channel ops, since voice is supplementary.
+            if isinstance(new_channel, discord.TextChannel):
+                paired_voice = self.get_paired_voice_channel(new_channel)
+                if paired_voice:
+                    try:
+                        await paired_voice.set_permissions(
+                            member,
+                            overwrite=discord.PermissionOverwrite(
+                                view_channel=True, connect=True, speak=True
+                            ),
+                            reason="MUDD movement - entering",
+                        )
+                    except discord.HTTPException as e:
+                        logger.error(
+                            f"Failed to grant voice channel {paired_voice.id} "
+                            f"permissions for {member.id}: {e}"
+                        )
 
         logger.info(f"Moved user {member.id} from {current} to {channel_id}")
         return True
