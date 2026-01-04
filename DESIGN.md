@@ -35,10 +35,11 @@ Stores entity placements in rooms using the flyweight pattern.
 | Column | Type | Constraints | Description |
 |--------|------|-------------|-------------|
 | `id` | SERIAL | PRIMARY KEY | Auto-incrementing instance ID |
-| `model_id` | TEXT | NOT NULL, FOREIGN KEY → entity_models(id) | Reference to entity model |
+| `model_id` | TEXT | NOT NULL, REFERENCES entity_models(id) | Reference to entity model |
 | `room_name` | TEXT | NOT NULL | Logical room name (e.g., "tavern", "foyer") |
 | `params` | JSONB | NULL | Instance-specific parameters (optional overrides) |
 | `created_at` | TIMESTAMP | DEFAULT NOW() | When the instance was placed |
+| `updated_at` | TIMESTAMP | DEFAULT NOW() | When the instance was last updated |
 
 ### Indexes
 

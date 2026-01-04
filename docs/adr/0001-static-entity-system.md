@@ -96,6 +96,7 @@ Table schema:
   - `room_name` (TEXT NOT NULL) - Logical room name
   - `params` (JSONB) - Instance-specific parameters
   - `created_at` (TIMESTAMP DEFAULT NOW())
+  - `updated_at` (TIMESTAMP DEFAULT NOW())
 - Indexes:
   - `idx_entity_instances_room` on `entity_instances(room_name)` for O(1) room entity listing
   - `idx_entity_instances_model` on `entity_instances(model_id)` for model lookups
