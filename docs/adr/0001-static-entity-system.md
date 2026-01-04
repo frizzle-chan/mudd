@@ -18,7 +18,7 @@ MUDD needs interactable objects in rooms to create an engaging game world. Playe
 
 ### Entity Definition Format
 
-In the context of **authoring entity definitions**, facing **the need for human-readable, version-controllable data files**, we decided to **use GNU recutils `.rec` format**, to achieve **plain-text entity definitions that are readable without tooling and easy to edit**, accepting **an additional conversion step to load data into Redis**.
+In the context of **authoring entity definitions**, facing **the need for human-readable, version-controllable data files**, we decided to **use GNU recutils `.rec` format**, to achieve **plain-text entity definitions that are readable without tooling and easy to edit**, accepting **an additional conversion step to load data into PostgreSQL**.
 
 Example recutils format with schema validation:
 ```rec
