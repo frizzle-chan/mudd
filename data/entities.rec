@@ -1,0 +1,67 @@
+%rec: Entity
+%key: Id
+%type: Prototype rec Entity
+%type: Container rec Entity
+%type: ContentsVisible bool
+%mandatory: Id Name
+%allowed: Id Name Prototype Container ContentsVisible DescriptionShort DescriptionLong
+%allowed: OnLook OnTouch OnAttack OnUse OnTake
+
+# Base prototype - all entities inherit from this
+Id: object
+Name: object
+DescriptionShort: a {name}
+OnLook: You see nothing special about the {name}.
+OnTouch: You touch the {name}. Nothing happens.
+OnAttack: You attack the {name}, but it has no effect.
+OnUse: You can't use the {name}.
+OnTake: You can't take the {name}.
+
+# Furniture prototype
+Id: furniture
+Name: furniture
+Prototype: object
+DescriptionShort: a {name} sits here
+
+Id: glass_object
+Name: Glass Object
+Prototype: object
+OnAttack: You suppress the intrusive thought to smash the {name}
+
+Id: foyer_table
+Name: Wooden Table
+Prototype: furniture
+DescriptionShort: a {name} sits in the middle of the room
+DescriptionLong: A sturdy oak table with worn edges.
+ContentsVisible: yes
+
+Id: foyer_flower_vase
+Name: Flower Vase
+Prototype: glass_object
+Container: foyer_table
+DescriptionShort: a teal {name} with yellow roses in it
+DescriptionLong: a teal ceramic vase with gold trim around the lip. A couple yellow roses sit inside.
+
+Id: foyer_plaque
+Name: Inscribed Plaque
+Prototype: object
+Container: foyer_table
+DescriptionShort: a {name}
+DescriptionLong: a wooden plaque with a shiny brass plate with a message inscribed on it.
+OnLook: The plaque reads "Welcome to my mansion! You can usually find us in the office down the hall. -Frizzle"
+
+# Example: Closed container (contents hidden until examined)
+Id: foyer_chest
+Name: Wooden Chest
+Prototype: furniture
+DescriptionShort: a dusty {name} rests against the wall
+DescriptionLong: An old wooden chest with tarnished brass hinges.
+ContentsVisible: no
+
+Id: foyer_gold_ring
+Name: Gold Ring
+Prototype: object
+Container: foyer_chest
+DescriptionShort: a {name}
+DescriptionLong: A simple gold band, worn smooth by age.
+

@@ -12,7 +12,7 @@ MUDD needs interactable objects in rooms to create an engaging game world. Playe
 - Human-editable entity data that developers can version control
 - Runtime storage for fast entity lookups during gameplay
 - Multiple instances of the same entity type across different rooms
-- Natural language verb matching (e.g., "smash", "break", "destroy" all trigger the same action)
+- Natural language verb matching (e.g., "smash", "hit", "strike" all trigger the same action)
 
 ## Decisions
 
@@ -25,14 +25,15 @@ Example recutils format with schema validation:
 %rec: Entity
 %key: Id
 %type: Prototype rec Entity
+%type: Container rec Entity
 %mandatory: Id Name
-%allowed: Id Name Prototype Description_short Description_long
-%allowed: On_look On_touch On_destroy On_use On_take
+%allowed: Id Name Prototype Container DescriptionShort DescriptionLong
+%allowed: OnLook OnTouch OnAttack OnUse OnTake
 
 Id: vase
 Name: Fancy Vase
 Prototype: glass_object
-Description_long: A blue ceramic vase
+DescriptionLong: A blue ceramic vase
 + with a flower pattern on it
 + and gold trim around the rim.
 ```
@@ -40,35 +41,42 @@ Description_long: A blue ceramic vase
 The `%rec` descriptor enables:
 - `%key: Id` - Ensures unique entity IDs
 - `%type: Prototype rec Entity` - Validates prototype references exist
+- `%type: Container rec Entity` - Validates container references exist
 - `%mandatory` - Required fields for all entities
 - `%allowed` - Whitelist of valid field names
 
 **Template interpolation:**
-Text fields (`Description_short`, `Description_long`, `On_*` handlers) support `{name}` placeholder interpolation. At render time, `{name}` is replaced with the entity's `Name` value. This allows reusable descriptions in prototypes.
+Text fields (`DescriptionShort`, `DescriptionLong`, `On*` handlers) support `{name}` placeholder interpolation. At render time, `{name}` is replaced with the entity's `Name` value. This allows reusable descriptions in prototypes.
 
 Example:
 ```rec
 Id: object
-Description_short: a {name}
-On_touch: you poke the {name}
+DescriptionShort: a {name}
+OnTouch: you poke the {name}
 ```
 
-A child entity with `Name: Fancy Vase` would render `Description_short` as "a Fancy Vase".
+A child entity with `Name: Fancy Vase` would render `DescriptionShort` as "a Fancy Vase".
+
+**`On*` handlers represent actions, not results:**
+Handler names describe what the player *does* (the action), not what happens (the result). For example, `OnAttack` is triggered when a player attacks an entity - the handler text describes the outcome, which may or may not result in destruction. This keeps handlers predictable and reusable across entity types.
+
+**Field naming convention:**
+All entity fields use PascalCase (e.g., `DescriptionShort`, `OnAttack`). This avoids visual noise from underscores and maintains consistency across the codebase.
 
 ### Entity Inheritance Model
 
-In the context of **defining entity behaviors**, facing **repetitive default responses across many entity types** (e.g., "you can't destroy this"), we decided to **use prototypical inheritance via a `prototype` field**, to achieve **DRY definitions where child entities inherit all properties from ancestors**, accepting **the complexity of resolving inheritance chains at load time**.
+In the context of **defining entity behaviors**, facing **repetitive default responses across many entity types** (e.g., "you attack the object, but nothing happens"), we decided to **use prototypical inheritance via a `prototype` field**, to achieve **DRY definitions where child entities inherit all properties from ancestors**, accepting **the complexity of resolving inheritance chains at load time**.
 
 Inheritance chain example:
 ```
 object (base) -> glass_object -> vase
 ```
 
-A `vase` inherits `On_touch` from `object` and `On_destroy` from `glass_object`, only defining its own `Description_long`.
+A `vase` inherits `OnTouch` from `object` and `OnAttack` from `glass_object`, only defining its own `DescriptionLong`.
 
 **Resolution rules:**
 - Child properties override parent properties (last wins)
-- `On_*` handlers are NOT merged - child completely overrides parent
+- `On*` handlers are NOT merged - child completely overrides parent
 - Circular inheritance is an error detected at load time
 - Maximum inheritance depth: 10 (prevents runaway chains)
 
@@ -93,25 +101,26 @@ vase_instance_2 = { model: "vase", room: "kitchen", params: {...} }
 
 ### Interaction Verb Matching
 
-In the context of **parsing `/interact <verb> <entity>` commands**, facing **users typing varied natural language verbs** ("smash", "break", "destroy", "wreck"), we decided to **use pre-built word lists mapping synonym groups to action triggers** (e.g., `on_destroy`), to achieve **fast, deterministic verb resolution without external dependencies**, accepting **manual curation of word lists and potential gaps in vocabulary coverage**.
+In the context of **parsing `/interact <verb> <entity>` commands**, facing **users typing varied natural language verbs** ("smash", "hit", "strike", "punch"), we decided to **use pre-built word lists mapping synonym groups to action triggers** (e.g., `OnAttack`), to achieve **fast, deterministic verb resolution without external dependencies**, accepting **manual curation of word lists and potential gaps in vocabulary coverage**.
 
-Word list generation: One-time offline task using dictionary filtering (e.g., find all words meaning "destroy").
+Word list generation: One-time offline task using dictionary filtering (e.g., find all words meaning "attack").
 
 **Fallback behavior:** Unrecognized verbs return a generic response: "You can't do that."
 
 **Word list format** (flat files, one per action):
-- Files named by action: `on_destroy.txt`, `on_look.txt`, `on_touch.txt`, etc.
+- Files named by action: `OnAttack.txt`, `OnLook.txt`, `OnTouch.txt`, etc.
 - Each file contains verbs that trigger that action, one word per line
 - Loaded into a dictionary at runtime mapping verb → action
 
-Example `data/verbs/on_destroy.txt`:
+Example `data/verbs/OnAttack.txt`:
 ```
+attack
+bash
+hit
+punch
+slash
 smash
-break
-shatter
-destroy
-wreck
-demolish
+strike
 ```
 
 ### Data Loading Workflow
@@ -178,15 +187,15 @@ In the context of **parsing `/interact <input>` commands**, facing **the need to
 
 ### Look Output Format
 
-In the context of **displaying room contents via `/look`**, facing **the choice between terse name lists and descriptive prose**, we decided to **show each entity's `Description_short` with the `{name}` placeholder hydrated in Discord italics**, to achieve **immersive room descriptions where interactable objects are visually distinct**, accepting **the need for every entity to have a `Description_short` (directly or via inheritance)**.
+In the context of **displaying room contents via `/look`**, facing **the choice between terse name lists and descriptive prose**, we decided to **show each entity's `DescriptionShort` with the `{name}` placeholder hydrated in Discord italics**, to achieve **immersive room descriptions where interactable objects are visually distinct**, accepting **the need for every entity to have a `DescriptionShort` (directly or via inheritance)**.
 
-Format: `Description_short` uses a `{name}` template placeholder. The core template system replaces `{name}` with the entity's `Name` value. When rendering for `/look` output specifically, the name is wrapped in Discord markdown italics (`*Name*`) for visual distinction.
+Format: `DescriptionShort` uses a `{name}` template placeholder. The core template system replaces `{name}` with the entity's `Name` value. When rendering for `/look` output specifically, the name is wrapped in Discord markdown italics (`*Name*`) for visual distinction.
 
 Example entity definition:
 ```rec
 Id: vase
 Name: Fancy Vase
-Description_short: a {name} sits on the mantle
+DescriptionShort: a {name} sits on the mantle
 ```
 
 Example `/look` output:
@@ -194,7 +203,75 @@ Example `/look` output:
 >
 > a *Fancy Vase* sits on the mantle. a *Wooden Chair* rests by the fire.
 
-Entities without a `Description_short` fall back to: "a *{name}* is here."
+Entities without a `DescriptionShort` fall back to: "a *{name}* is here."
+
+### Entity Containment
+
+In the context of **modeling nested objects** (e.g., a lamp on a table), facing **the need for entities to exist within other entities**, we decided to **add an optional `Container` field referencing a parent entity**, to achieve **hierarchical entity relationships with automatic child listing**, accepting **single-level nesting only (no containers within containers)**.
+
+**Schema addition:**
+```rec
+%type: Container rec Entity
+%type: ContentsVisible bool
+%allowed: Id Name Prototype Container ContentsVisible DescriptionShort DescriptionLong
+```
+
+**Fields:**
+- `Container` - References the parent entity this item is contained within
+- `ContentsVisible` - Whether children are auto-listed (default: `yes`)
+  - `yes` (table, shelf): Children listed when container appears in room or is examined
+  - `no` (chest, drawer): Children only listed when container is directly examined via `/look`
+
+**Example:**
+```rec
+Id: table
+Name: Wooden Table
+Prototype: furniture
+DescriptionShort: a {name} sits in the corner
+ContentsVisible: yes
+
+Id: lamp
+Name: Brass Lamp
+Prototype: object
+Container: table
+
+Id: chest
+Name: Wooden Chest
+Prototype: furniture
+DescriptionShort: a {name} rests against the wall
+ContentsVisible: no
+
+Id: gold_ring
+Name: Gold Ring
+Prototype: object
+Container: chest
+```
+
+**Room `/look` behavior:**
+- Top-level entities (no `Container`) appear in room descriptions
+- If `ContentsVisible: yes`, children are auto-listed with the container
+- If `ContentsVisible: no`, children are hidden until the container is examined
+
+**Stateless interactions:**
+Containers have no "opened" state. Players can interact with hidden items if they guess correctly - the visibility flag only affects what's shown, not what's accessible.
+
+**Container examination:**
+When examining an entity that has children, auto-append them to the output:
+> You see a sturdy wooden table with worn edges.
+>
+> On the *Wooden Table* you see: a *Brass Lamp*, a *Silver Picture Frame*.
+
+**Interaction targeting:**
+1. Search **all entities in room** (including contained) when resolving targets
+2. If single match → proceed with interaction
+3. If multiple matches → disambiguate with container context: "Be more specific. Did you mean: Brass Lamp (on Wooden Table), Brass Lamp (on Nightstand)?"
+4. Qualified syntax (`/interact look lamp on table`) narrows search to that container's children
+
+**Validation constraints:**
+- `Container` must reference an existing entity (enforced by `%type: Container rec Entity`)
+- Circular containment (A contains B, B contains A) is an error detected at load time
+- Self-containment (A contains A) is an error
+- Multi-level nesting is prohibited: if an entity has a `Container`, it cannot itself be a container
 
 ## Consequences
 
