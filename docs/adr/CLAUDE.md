@@ -34,4 +34,4 @@ Each decision should follow this format:
 
 Example:
 
-> In the context of **runtime entity access**, facing **the need for fast lookups during gameplay**, we decided to **store entity data in Redis**, to achieve **low-latency access**, accepting **Redis as a runtime dependency**.
+> In the context of **runtime entity access**, facing **the need for fast lookups during gameplay**, we decided to **store entity data in Valkey**, to achieve **low-latency access**, accepting **Valkey as a runtime dependency**.

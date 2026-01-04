@@ -5,7 +5,7 @@ import logging
 
 import discord
 
-from mudd.services.redis import get_redis
+from mudd.services.valkey import get_valkey
 
 logger = logging.getLogger(__name__)
 
@@ -63,18 +63,18 @@ class VisibilityService:
 
     async def get_user_location(self, user_id: int) -> int | None:
         """Get the channel ID of the user's current location, or None if not set."""
-        client = await get_redis()
+        client = await get_valkey()
         location = await client.get(f"user:{user_id}:location")
         return int(location) if location else None
 
     async def set_user_location(self, user_id: int, channel_id: int) -> None:
-        """Set the user's current location in Redis."""
-        client = await get_redis()
+        """Set the user's current location in Valkey."""
+        client = await get_valkey()
         await client.set(f"user:{user_id}:location", str(channel_id))
 
     async def delete_user_location(self, user_id: int) -> None:
-        """Remove user's location assignment from Redis."""
-        client = await get_redis()
+        """Remove user's location assignment from Valkey."""
+        client = await get_valkey()
         await client.delete(f"user:{user_id}:location")
 
     async def sync_user_to_discord(
@@ -83,12 +83,12 @@ class VisibilityService:
         current_location_id: int | None = None,
     ) -> None:
         """
-        Ensure Discord permissions match the user's Redis state.
+        Ensure Discord permissions match the user's Valkey state.
 
         Args:
             member: The guild member to sync
-            current_location_id: The user's current location (from Redis).
-                               If None, will fetch from Redis.
+            current_location_id: The user's current location (from Valkey).
+                               If None, will fetch from Valkey.
         """
         if current_location_id is None:
             current_location_id = await self.get_user_location(member.id)
@@ -147,7 +147,7 @@ class VisibilityService:
             True if user was moved, False if already in that location.
 
         Raises:
-            redis.RedisError: If Redis operation fails
+            glide.RequestError: If Valkey operation fails
             discord.HTTPException: If Discord API call fails
         """
         current = await self.get_user_location(member.id)
@@ -232,8 +232,8 @@ class VisibilityService:
         """
         Synchronize all users at bot startup.
 
-        - Users with existing Redis entries: sync Discord to match
-        - Users without Redis entries: assign to default channel
+        - Users with existing Valkey entries: sync Discord to match
+        - Users without Valkey entries: assign to default channel
 
         Returns:
             Stats dict with counts of users synced/assigned

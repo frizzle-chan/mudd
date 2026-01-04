@@ -59,11 +59,11 @@ RUN apt-get update \
        git \
        just \
        procps \
-       redis-server \
        vim \
        zsh \
  && apt-get install -y --no-install-recommends -t trixie-backports \
        recutils \
+       valkey \
  && apt-get clean \
  && rm -rf /var/lib/apt/lists/* \
  && chsh -s /bin/zsh mudd

@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 from mudd.cogs.look import Look
 from mudd.cogs.movement import Movement
 from mudd.cogs.ping import Ping
-from mudd.services.redis import close_redis
+from mudd.services.valkey import close_valkey
 from mudd.services.visibility import get_visibility_service, init_visibility_service
 
 load_dotenv()
@@ -22,7 +22,7 @@ intents.members = True
 
 class MuddBot(commands.Bot):
     async def close(self):
-        await close_redis()
+        await close_valkey()
         await super().close()
 
 

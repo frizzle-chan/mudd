@@ -2,9 +2,9 @@
 
 Technical design documentation for MUDD.
 
-## Redis Schema
+## Valkey Schema
 
-Redis is the source of truth for user locations. Discord channel permissions are derived from Redis state during:
+Valkey is the source of truth for user locations. Discord channel permissions are derived from Valkey state during:
 - Bot startup (syncs all users)
 - Movement commands
 - User join/leave events

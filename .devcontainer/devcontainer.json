@@ -38,5 +38,5 @@
         // "cc": "curl -fsSL https://claude.ai/install.sh | bash",
         "uv": "uv sync && uv run lefthook install"
     },
-    "postStartCommand": "redis-server --daemonize yes"
+    "postStartCommand": "valkey-server --daemonize yes"
 }

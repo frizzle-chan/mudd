@@ -18,7 +18,7 @@ MUDD needs interactable objects in rooms to create an engaging game world. Playe
 
 ### Entity Definition Format
 
-In the context of **authoring entity definitions**, facing **the need for human-readable, version-controllable data files**, we decided to **use GNU recutils `.rec` format**, to achieve **plain-text entity definitions that are readable without tooling and easy to edit**, accepting **an additional conversion step to load data into Redis**.
+In the context of **authoring entity definitions**, facing **the need for human-readable, version-controllable data files**, we decided to **use GNU recutils `.rec` format**, to achieve **plain-text entity definitions that are readable without tooling and easy to edit**, accepting **an additional conversion step to load data into Valkey**.
 
 Example recutils format with schema validation:
 ```rec
@@ -82,7 +82,7 @@ A `vase` inherits `OnTouch` from `object` and `OnAttack` from `glass_object`, on
 
 ### Storage & Persistence
 
-In the context of **runtime entity access**, facing **the need for fast lookups during `/look` and `/interact` commands**, we decided to **store entity models and instances in Redis**, to achieve **low-latency access consistent with existing user location storage**, accepting **Redis as a runtime dependency and the need for a data loading script**.
+In the context of **runtime entity access**, facing **the need for fast lookups during `/look` and `/interact` commands**, we decided to **store entity models and instances in Valkey**, to achieve **low-latency access consistent with existing user location storage**, accepting **Valkey as a runtime dependency and the need for a data loading script**.
 
 Key schema:
 - `entity:model:{id}` - Entity model definitions (JSON with resolved inheritance)
@@ -125,19 +125,19 @@ strike
 
 ### Data Loading Workflow
 
-In the context of **syncing entity definitions to Redis**, facing **the need to populate Redis before the bot can serve entity data**, we decided to **use a manual CLI script run by developers before deploy**, to achieve **explicit control over data loading and fast bot startup times**, accepting **the risk of forgetting to run the script before deploy**.
+In the context of **syncing entity definitions to Valkey**, facing **the need to populate Valkey before the bot can serve entity data**, we decided to **use a manual CLI script run by developers before deploy**, to achieve **explicit control over data loading and fast bot startup times**, accepting **the risk of forgetting to run the script before deploy**.
 
 Usage:
 ```bash
-# Load entities into Redis
-python -m mudd.scripts.load_entities --redis-url $REDIS_URL data/entities.rec
+# Load entities into Valkey
+python -m mudd.scripts.load_entities --valkey-url $VALKEY_URL data/entities.rec
 ```
 
 The script:
 - Parses `.rec` files using recutils
 - Resolves prototype inheritance chains
 - Validates entity definitions (unique IDs, valid prototypes, no cycles)
-- Writes resolved entity models to Redis as JSON
+- Writes resolved entity models to Valkey as JSON
 
 ### Room Identification
 
@@ -279,16 +279,16 @@ When examining an entity that has children, auto-append them to the output:
 
 - Entity definitions are human-readable and version-controllable
 - Prototypical inheritance eliminates boilerplate responses
-- Redis provides sub-millisecond entity lookups
+- Valkey provides sub-millisecond entity lookups
 - Flyweight pattern scales to many entity instances efficiently
 - Word lists provide predictable, debuggable verb matching
 
 ### Negative
 
-- Requires a data pipeline: `.rec` files -> Python loader (using `recsel` or parsing) -> Redis
+- Requires a data pipeline: `.rec` files -> Python loader (using `recsel` or parsing) -> Valkey
 - Inheritance resolution adds complexity to the loading process
 - Word lists need manual curation and may miss edge cases
-- Redis becomes a harder dependency (already present for locations)
+- Valkey becomes a harder dependency (already present for locations)
 
 ### Future Considerations
 
