@@ -57,9 +57,11 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends \
        curl \
        git \
+       jq \
        just \
        procps \
        redis-server \
+       ripgrep \
        vim \
        zsh \
  && apt-get install -y --no-install-recommends -t trixie-backports \
