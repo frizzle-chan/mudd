@@ -9,11 +9,20 @@ RUN groupadd --gid 1000 mudd \
  && mkdir -p /app \
  && chown mudd:mudd /app
 
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends locales \
+ && sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen \
+ && locale-gen \
+ && apt-get clean \
+ && rm -rf /var/lib/apt/lists/*
+
 USER mudd
 
 WORKDIR /app
 
-ENV UV_NO_DEV=1 \
+ENV LANG=en_US.UTF-8 \
+    LC_ALL=en_US.UTF-8 \
+    UV_NO_DEV=1 \
     UV_COMPILE_BYTECODE=1 \
     UV_CACHE_DIR=/home/mudd/.cache/uv/ \
     PYTHONFAULTHANDLER=1 \
