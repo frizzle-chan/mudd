@@ -47,3 +47,13 @@ Pre-commit hooks (lefthook) auto-run ruff and ty on staged files.
 - `ruff` - Linting and formatting
 - `ty` - Type checking (Astral)
 - `uv` - Package management
+
+## Devcontainer Setup
+
+If you encounter permission issues pushing to GitHub, run:
+
+```bash
+just devcontainer
+```
+
+This authenticates the GitHub CLI using the token in `.github-token.txt`.
