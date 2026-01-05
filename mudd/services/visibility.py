@@ -5,7 +5,7 @@ import logging
 
 import discord
 
-from mudd.services.redis import get_redis
+from mudd.services.database import get_pool
 
 logger = logging.getLogger(__name__)
 
@@ -19,10 +19,36 @@ class VisibilityService:
         self._startup_complete = asyncio.Event()
         self._startup_lock = asyncio.Lock()
         self._synced_guilds: set[int] = set()
+        # Room name caches (built at startup)
+        self._room_to_channel: dict[str, int] = {}
+        self._channel_to_room: dict[int, str] = {}
 
     async def wait_for_startup(self) -> None:
         """Block until startup sync is complete."""
         await self._startup_complete.wait()
+
+    def _build_room_cache(self, guild: discord.Guild) -> None:
+        """Build the room name <-> channel ID caches from Discord channel names."""
+        self._room_to_channel.clear()
+        self._channel_to_room.clear()
+        for channel in guild.text_channels:
+            if channel.category_id == self.world_category_id:
+                room_name = channel.name
+                self._room_to_channel[room_name] = channel.id
+                self._channel_to_room[channel.id] = room_name
+        logger.info(f"Built room cache with {len(self._room_to_channel)} rooms")
+
+    def get_channel_for_room(self, room_name: str) -> int | None:
+        """Get channel ID for a room name."""
+        return self._room_to_channel.get(room_name)
+
+    def get_room_for_channel(self, channel_id: int) -> str | None:
+        """Get room name for a channel ID."""
+        return self._channel_to_room.get(channel_id)
+
+    def get_default_room(self) -> str | None:
+        """Get the default room name."""
+        return self.get_room_for_channel(self.default_channel_id)
 
     def is_mud_location(self, channel: discord.abc.GuildChannel) -> bool:
         """Check if a channel is a MUD location (in the world category)."""
@@ -62,20 +88,56 @@ class VisibilityService:
         return None
 
     async def get_user_location(self, user_id: int) -> int | None:
-        """Get the channel ID of the user's current location, or None if not set."""
-        client = await get_redis()
-        location = await client.get(f"user:{user_id}:location")
-        return int(location) if location else None
+        """
+        Get the channel ID of the user's current location, or None if not set.
+
+        Queries the database for the user's room name, then resolves to channel ID.
+        """
+        pool = await get_pool()
+        row = await pool.fetchrow(
+            "SELECT current_location FROM users WHERE id = $1",
+            user_id,
+        )
+        if row and row["current_location"]:
+            return self.get_channel_for_room(row["current_location"])
+        return None
+
+    async def get_user_room(self, user_id: int) -> str | None:
+        """Get the room name of the user's current location, or None if not set."""
+        pool = await get_pool()
+        row = await pool.fetchrow(
+            "SELECT current_location FROM users WHERE id = $1",
+            user_id,
+        )
+        return row["current_location"] if row else None
 
     async def set_user_location(self, user_id: int, channel_id: int) -> None:
-        """Set the user's current location in Redis."""
-        client = await get_redis()
-        await client.set(f"user:{user_id}:location", str(channel_id))
+        """
+        Set the user's current location in the database.
+
+        Converts channel ID to room name before storing.
+        """
+        room_name = self.get_room_for_channel(channel_id)
+        if room_name is None:
+            logger.warning(f"Cannot find room for channel {channel_id}")
+            return
+
+        pool = await get_pool()
+        await pool.execute(
+            """
+            INSERT INTO users (id, current_location)
+            VALUES ($1, $2)
+            ON CONFLICT (id)
+            DO UPDATE SET current_location = EXCLUDED.current_location
+            """,
+            user_id,
+            room_name,
+        )
 
     async def delete_user_location(self, user_id: int) -> None:
-        """Remove user's location assignment from Redis."""
-        client = await get_redis()
-        await client.delete(f"user:{user_id}:location")
+        """Remove user's location assignment from the database."""
+        pool = await get_pool()
+        await pool.execute("DELETE FROM users WHERE id = $1", user_id)
 
     async def sync_user_to_discord(
         self,
@@ -83,12 +145,12 @@ class VisibilityService:
         current_location_id: int | None = None,
     ) -> None:
         """
-        Ensure Discord permissions match the user's Redis state.
+        Ensure Discord permissions match the user's database state.
 
         Args:
             member: The guild member to sync
-            current_location_id: The user's current location (from Redis).
-                               If None, will fetch from Redis.
+            current_location_id: The user's current location channel ID.
+                               If None, will fetch from database.
         """
         if current_location_id is None:
             current_location_id = await self.get_user_location(member.id)
@@ -147,7 +209,7 @@ class VisibilityService:
             True if user was moved, False if already in that location.
 
         Raises:
-            redis.RedisError: If Redis operation fails
+            asyncpg.PostgresError: If database operation fails
             discord.HTTPException: If Discord API call fails
         """
         current = await self.get_user_location(member.id)
@@ -232,8 +294,8 @@ class VisibilityService:
         """
         Synchronize all users at bot startup.
 
-        - Users with existing Redis entries: sync Discord to match
-        - Users without Redis entries: assign to default channel
+        - Users with existing database entries: sync Discord to match
+        - Users without database entries: assign to default channel
 
         Returns:
             Stats dict with counts of users synced/assigned
@@ -241,6 +303,9 @@ class VisibilityService:
         async with self._startup_lock:
             if guild.id in self._synced_guilds:
                 return {"skipped": 1}
+
+            # Build room cache before syncing users
+            self._build_room_cache(guild)
 
             stats = {"synced": 0, "assigned_default": 0, "errors": 0}
 

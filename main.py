@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 from mudd.cogs.look import Look
 from mudd.cogs.movement import Movement
 from mudd.cogs.ping import Ping
-from mudd.services.redis import close_redis
+from mudd.services.database import close_pool, init_database
 from mudd.services.visibility import get_visibility_service, init_visibility_service
 
 load_dotenv()
@@ -22,7 +22,7 @@ intents.members = True
 
 class MuddBot(commands.Bot):
     async def close(self):
-        await close_redis()
+        await close_pool()
         await super().close()
 
 
@@ -31,6 +31,9 @@ bot = MuddBot(command_prefix="!", intents=intents)
 
 @bot.event
 async def setup_hook():
+    # Initialize database and run migrations
+    await init_database()
+
     init_visibility_service(
         world_category_id=int(os.environ["MUDD_WORLD_CATEGORY_ID"]),
         default_channel_id=int(os.environ["MUDD_DEFAULT_CHANNEL_ID"]),

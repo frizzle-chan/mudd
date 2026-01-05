@@ -1,0 +1,34 @@
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      target: devcontainer
+    volumes:
+      - ..:/workspaces/mudd:cached
+    command: sleep infinity
+    environment:
+      - DATABASE_URL=postgresql://mudd:mudd@db:5432/mudd
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: mudd
+      POSTGRES_PASSWORD: mudd
+      POSTGRES_DB: mudd
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "mudd", "-d", "mudd"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    ports:
+      - "5432:5432"
+
+volumes:
+  postgres-data:
