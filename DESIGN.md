@@ -45,7 +45,7 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 | `on_use` | TEXT | Handler response for use action (NULL = inherit from prototype) |
 | `on_take` | TEXT | Handler response for take action (NULL = inherit from prototype) |
 | `container_id` | TEXT (FK to entities.id) | Reference to containing entity |
-| `contents_visible` | BOOLEAN | Whether child entities are visible (NULL = inherit, TRUE = show in room, FALSE = show when examined) |
+| `contents_visible` | BOOLEAN | Whether child entities are visible (NULL = inherit from prototype, TRUE = show in room, FALSE = show when examined) |
 
 **Constraints:**
 - Self-reference prevention: `id != prototype_id`
@@ -74,7 +74,7 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 The `resolve_entity(target_id TEXT)` function resolves entity properties by walking up the prototype chain:
 - Returns merged properties where child values override parent values
 - First non-NULL value wins for each property
-- Supports up to 10 levels of inheritance depth
+- Supports up to 10 levels of inheritance depth (prevents infinite loops from circular references)
 - Used to materialize the final entity state including inherited properties
 
 ## Room Abstraction
