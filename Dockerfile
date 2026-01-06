@@ -10,7 +10,7 @@ RUN groupadd --gid 1000 mudd \
  && chown mudd:mudd /app
 
 RUN apt-get update \
- && apt-get install -y --no-install-recommends locales libpq5 \
+ && apt-get install -y --no-install-recommends locales \
  && sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen \
  && locale-gen \
  && apt-get clean \
@@ -68,6 +68,7 @@ RUN apt-get update \
        git \
        jq \
        just \
+       libpq5 \
        postgresql-client \
        procps \
        ripgrep \
