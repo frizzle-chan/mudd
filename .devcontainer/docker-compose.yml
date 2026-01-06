@@ -8,6 +8,7 @@ services:
     command: sleep infinity
     volumes:
       - ..:/app:cached     
+    network_mode: service:db
     environment:
       - DATABASE_URL=postgresql://mudd:mudd@db:5432/mudd
 
