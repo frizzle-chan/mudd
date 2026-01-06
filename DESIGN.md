@@ -35,8 +35,8 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 | Column | Type | Description |
 |--------|------|-------------|
 | `id` | TEXT (PK) | Unique entity identifier |
-| `name` | TEXT | Display name for the entity |
-| `prototype_id` | TEXT (FK) | Reference to parent entity for prototypical inheritance |
+| `name` | TEXT NOT NULL | Display name for the entity |
+| `prototype_id` | TEXT (FK to entities.id) | Reference to parent entity for prototypical inheritance |
 | `description_short` | TEXT | Brief description with {name} template support |
 | `description_long` | TEXT | Detailed description with {name} template support |
 | `on_look` | TEXT | Handler response for look action (NULL = inherit from prototype) |
@@ -44,7 +44,7 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 | `on_attack` | TEXT | Handler response for attack action (NULL = inherit from prototype) |
 | `on_use` | TEXT | Handler response for use action (NULL = inherit from prototype) |
 | `on_take` | TEXT | Handler response for take action (NULL = inherit from prototype) |
-| `container_id` | TEXT (FK) | Reference to containing entity |
+| `container_id` | TEXT (FK to entities.id) | Reference to containing entity |
 | `contents_visible` | BOOLEAN | Whether child entities are visible (NULL = inherit, TRUE = show in room, FALSE = show when examined) |
 
 **Constraints:**
@@ -61,9 +61,9 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 | Column | Type | Description |
 |--------|------|-------------|
 | `id` | UUID (PK) | Auto-generated unique instance identifier |
-| `entity_id` | TEXT (FK) | Reference to entity definition |
-| `room` | TEXT | Logical room name where instance exists |
-| `created_at` | TIMESTAMPTZ | Instance creation timestamp |
+| `entity_id` | TEXT NOT NULL (FK to entities.id) | Reference to entity definition |
+| `room` | TEXT NOT NULL | Logical room name where instance exists |
+| `created_at` | TIMESTAMPTZ NOT NULL | Instance creation timestamp |
 
 **Indexes:**
 - Primary key on `id`
