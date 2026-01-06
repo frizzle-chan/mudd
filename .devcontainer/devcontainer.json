@@ -2,7 +2,7 @@
     "name": "mudd",
     "dockerComposeFile": "docker-compose.yml",
     "service": "app",
-    "workspaceFolder": "/workspaces/mudd",
+    "workspaceFolder": "/app",
     "remoteUser": "mudd",
     "containerEnv": {
         "CLAUDE_CONFIG_DIR": "${containerWorkspaceFolder}/.claude-user",
@@ -24,6 +24,6 @@
         }
     },
     "postCreateCommand": {
-        "uv": "uv sync && uv run lefthook install"
+        "uv": "rm -rf .venv && uv sync && uv run lefthook install"
     }
 }
