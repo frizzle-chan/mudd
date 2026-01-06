@@ -13,7 +13,7 @@ services:
       - DATABASE_URL=postgresql://mudd:mudd@db:5432/mudd
 
   db:
-    image: postgres:17
+    image: docker.io/library/postgres:17
     restart: unless-stopped
     volumes:
       - postgres-data:/var/lib/postgresql/data

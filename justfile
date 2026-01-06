@@ -1,5 +1,8 @@
 default: lint format types entities
 
+test:
+    uv run pytest
+
 lint:
     uv run ruff check .
 

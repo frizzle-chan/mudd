@@ -1,4 +1,4 @@
-FROM python:3.14-trixie AS production
+FROM docker.io/library/python:3.14-trixie AS production
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 LABEL org.opencontainers.image.source=https://github.com/frizzle-chan/mudd
 
