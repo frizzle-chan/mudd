@@ -17,9 +17,8 @@ class VisibilityService:
         self.world_category_id = world_category_id
         self.default_channel_id = default_channel_id
         self._startup_complete = asyncio.Event()
-        self._startup_lock = asyncio.Lock()
-        self._synced_guilds: set[int] = set()
-        # Room name caches (built at startup)
+        self._sync_lock = asyncio.Lock()
+        # Room name caches (rebuilt on each sync)
         self._room_to_channel: dict[str, int] = {}
         self._channel_to_room: dict[int, str] = {}
 
@@ -290,20 +289,20 @@ class VisibilityService:
         logger.info(f"Moved user {member.id} from {current} to {channel_id}")
         return True
 
-    async def startup_sync(self, guild: discord.Guild) -> dict[str, int]:
+    async def sync_guild(self, guild: discord.Guild) -> dict[str, int]:
         """
-        Synchronize all users at bot startup.
+        Synchronize all users' Discord permissions to match database state.
 
         - Users with existing database entries: sync Discord to match
         - Users without database entries: assign to default channel
 
+        This method can be called from any context: startup, periodic sync,
+        or in response to Discord events.
+
         Returns:
             Stats dict with counts of users synced/assigned
         """
-        async with self._startup_lock:
-            if guild.id in self._synced_guilds:
-                return {"skipped": 1}
-
+        async with self._sync_lock:
             # Build room cache before syncing users
             self._build_room_cache(guild)
 
@@ -339,10 +338,12 @@ class VisibilityService:
                     logger.error(f"Failed to sync user {member.id}: {e}")
                     stats["errors"] += 1
 
-            self._synced_guilds.add(guild.id)
-            self._startup_complete.set()
-            logger.info(f"Startup sync complete for {guild.name}: {stats}")
+            logger.info(f"Guild sync complete for {guild.name}: {stats}")
             return stats
+
+    def mark_startup_complete(self) -> None:
+        """Signal that initial startup sync is complete."""
+        self._startup_complete.set()
 
 
 _service: VisibilityService | None = None
