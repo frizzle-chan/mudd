@@ -17,9 +17,7 @@ class VisibilityService:
         self.world_category_id = world_category_id
         self.default_channel_id = default_channel_id
         self._startup_complete = asyncio.Event()
-        self._startup_lock = asyncio.Lock()
-        self._synced_guilds: set[int] = set()
-        # Room name caches (built at startup)
+        # Room name caches (rebuilt on each sync)
         self._room_to_channel: dict[str, int] = {}
         self._channel_to_room: dict[int, str] = {}
 
@@ -29,13 +27,17 @@ class VisibilityService:
 
     def _build_room_cache(self, guild: discord.Guild) -> None:
         """Build the room name <-> channel ID caches from Discord channel names."""
-        self._room_to_channel.clear()
-        self._channel_to_room.clear()
+        # Build new dicts first, then swap atomically to avoid race conditions
+        # with concurrent reads (reference assignment is atomic in Python)
+        room_to_channel: dict[str, int] = {}
+        channel_to_room: dict[int, str] = {}
         for channel in guild.text_channels:
             if channel.category_id == self.world_category_id:
                 room_name = channel.name
-                self._room_to_channel[room_name] = channel.id
-                self._channel_to_room[channel.id] = room_name
+                room_to_channel[room_name] = channel.id
+                channel_to_room[channel.id] = room_name
+        self._room_to_channel = room_to_channel
+        self._channel_to_room = channel_to_room
         logger.info(f"Built room cache with {len(self._room_to_channel)} rooms")
 
     def get_channel_for_room(self, room_name: str) -> int | None:
@@ -290,59 +292,61 @@ class VisibilityService:
         logger.info(f"Moved user {member.id} from {current} to {channel_id}")
         return True
 
-    async def startup_sync(self, guild: discord.Guild) -> dict[str, int]:
+    async def sync_guild(self, guild: discord.Guild) -> dict[str, int]:
         """
-        Synchronize all users at bot startup.
+        Synchronize all users' Discord permissions to match database state.
 
         - Users with existing database entries: sync Discord to match
         - Users without database entries: assign to default channel
 
+        This method can be called from any context: startup, periodic sync,
+        or in response to Discord events.
+
         Returns:
             Stats dict with counts of users synced/assigned
         """
-        async with self._startup_lock:
-            if guild.id in self._synced_guilds:
-                return {"skipped": 1}
+        # Build room cache before syncing users
+        self._build_room_cache(guild)
 
-            # Build room cache before syncing users
-            self._build_room_cache(guild)
+        stats = {"synced": 0, "assigned_default": 0, "errors": 0}
 
-            stats = {"synced": 0, "assigned_default": 0, "errors": 0}
+        for member in guild.members:
+            if member.bot:
+                continue
 
-            for member in guild.members:
-                if member.bot:
-                    continue
+            try:
+                location_id = await self.get_user_location(member.id)
 
-                try:
-                    location_id = await self.get_user_location(member.id)
-
-                    if location_id is None:
+                if location_id is None:
+                    await self.set_user_location(member.id, self.default_channel_id)
+                    await self.sync_user_to_discord(
+                        member, current_location_id=self.default_channel_id
+                    )
+                    stats["assigned_default"] += 1
+                else:
+                    location = guild.get_channel(location_id)
+                    if location is None or not self.is_mud_location(location):
                         await self.set_user_location(member.id, self.default_channel_id)
                         await self.sync_user_to_discord(
                             member, current_location_id=self.default_channel_id
                         )
                         stats["assigned_default"] += 1
                     else:
-                        location = guild.get_channel(location_id)
-                        if location is None or not self.is_mud_location(location):
-                            await self.set_user_location(
-                                member.id, self.default_channel_id
-                            )
-                            location_id = self.default_channel_id
-
                         await self.sync_user_to_discord(
                             member, current_location_id=location_id
                         )
                         stats["synced"] += 1
 
-                except Exception as e:
-                    logger.error(f"Failed to sync user {member.id}: {e}")
-                    stats["errors"] += 1
+            except Exception as e:
+                logger.error(f"Failed to sync user {member.id}: {e}")
+                stats["errors"] += 1
 
-            self._synced_guilds.add(guild.id)
-            self._startup_complete.set()
-            logger.info(f"Startup sync complete for {guild.name}: {stats}")
-            return stats
+        logger.info(f"Guild sync complete for {guild.name}: {stats}")
+        return stats
+
+    def mark_startup_complete(self) -> None:
+        """Signal that initial startup sync is complete."""
+        self._startup_complete.set()
 
 
 _service: VisibilityService | None = None

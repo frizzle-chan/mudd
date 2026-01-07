@@ -8,8 +8,9 @@ from dotenv import load_dotenv
 from mudd.cogs.look import Look
 from mudd.cogs.movement import Movement
 from mudd.cogs.ping import Ping
+from mudd.cogs.sync import Sync
 from mudd.services.database import close_pool, init_database
-from mudd.services.visibility import get_visibility_service, init_visibility_service
+from mudd.services.visibility import init_visibility_service
 
 load_dotenv()
 
@@ -42,18 +43,13 @@ async def setup_hook():
     await bot.add_cog(Look(bot))
     await bot.add_cog(Ping(bot))
     await bot.add_cog(Movement(bot))
+    await bot.add_cog(Sync(bot))
 
 
 @bot.event
 async def on_ready():
     await bot.tree.sync()
     logger.info(f"Logged in as {bot.user}")
-
-    service = get_visibility_service()
-    for guild in bot.guilds:
-        logger.info(f"Starting visibility sync for guild: {guild.name}")
-        stats = await service.startup_sync(guild)
-        logger.info(f"Sync complete for {guild.name}: {stats}")
 
 
 bot.run(os.environ["DISCORD_TOKEN"])
