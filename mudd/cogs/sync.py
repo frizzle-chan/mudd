@@ -14,6 +14,7 @@ class Sync(commands.Cog):
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
+        self._first_run = True
         self.periodic_sync.start()
 
     def cog_unload(self):
@@ -32,10 +33,13 @@ class Sync(commands.Cog):
             except Exception as e:
                 logger.error(f"Periodic sync failed for guild {guild.name}: {e}")
 
+        # Mark startup complete after first successful sync
+        if self._first_run:
+            service.mark_startup_complete()
+            self._first_run = False
+
     @periodic_sync.before_loop
     async def before_periodic_sync(self):
-        """Wait for bot and initial startup sync to be ready."""
+        """Wait for bot to be ready before starting sync."""
         await self.bot.wait_until_ready()
-        service = get_visibility_service()
-        await service.wait_for_startup()
-        logger.info("Periodic sync task initialized, first run in 15 minutes")
+        logger.info("Periodic sync task starting")
