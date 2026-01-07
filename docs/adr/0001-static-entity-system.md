@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed
+Accepted
 
 ## Context
 
@@ -18,7 +18,7 @@ MUDD needs interactable objects in rooms to create an engaging game world. Playe
 
 ### Entity Definition Format
 
-In the context of **authoring entity definitions**, facing **the need for human-readable, version-controllable data files**, we decided to **use GNU recutils `.rec` format**, to achieve **plain-text entity definitions that are readable without tooling and easy to edit**, accepting **an additional conversion step to load data into Redis**.
+In the context of **authoring entity definitions**, facing **the need for human-readable, version-controllable data files**, we decided to **use GNU recutils `.rec` format**, to achieve **plain-text entity definitions that are readable without tooling and easy to edit**, accepting **an additional conversion step to load data into PostgreSQL**.
 
 Example recutils format with schema validation:
 ```rec
@@ -65,7 +65,7 @@ All entity fields use PascalCase (e.g., `DescriptionShort`, `OnAttack`). This av
 
 ### Entity Inheritance Model
 
-In the context of **defining entity behaviors**, facing **repetitive default responses across many entity types** (e.g., "you attack the object, but nothing happens"), we decided to **use prototypical inheritance via a `prototype` field**, to achieve **DRY definitions where child entities inherit all properties from ancestors**, accepting **the complexity of resolving inheritance chains at load time**.
+In the context of **defining entity behaviors**, facing **repetitive default responses across many entity types** (e.g., "you attack the object, but nothing happens"), we decided to **use prototypical inheritance via a `prototype` field**, to achieve **DRY definitions where child entities inherit all properties from ancestors**, accepting **the complexity of resolving inheritance chains at query time**.
 
 Inheritance chain example:
 ```
@@ -75,28 +75,95 @@ object (base) -> glass_object -> vase
 A `vase` inherits `OnTouch` from `object` and `OnAttack` from `glass_object`, only defining its own `DescriptionLong`.
 
 **Resolution rules:**
-- Child properties override parent properties (last wins)
+- Child properties override parent properties (first non-NULL wins)
 - `On*` handlers are NOT merged - child completely overrides parent
 - Circular inheritance is an error detected at load time
 - Maximum inheritance depth: 10 (prevents runaway chains)
+- Inheritance is resolved at **query time** via recursive CTEs, not materialized
 
 ### Storage & Persistence
 
-In the context of **runtime entity access**, facing **the need for fast lookups during `/look` and `/interact` commands**, we decided to **store entity models and instances in Redis**, to achieve **low-latency access consistent with existing user location storage**, accepting **Redis as a runtime dependency and the need for a data loading script**.
+In the context of **runtime entity access**, facing **the need for fast lookups during `/look` and `/interact` commands**, we decided to **store entity models and instances in PostgreSQL**, to achieve **ACID-compliant storage with powerful querying capabilities**, accepting **PostgreSQL as a runtime dependency**.
 
-Key schema:
-- `entity:model:{id}` - Entity model definitions (JSON with resolved inheritance)
-- `entity:instance:{room_name}:{instance_id}` - Entity placements in rooms
-- `room:{room_name}:entities` - SET of instance IDs for O(1) room entity listing
+**Schema:**
+
+```sql
+-- Enable fuzzy matching for entity name search
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
+CREATE TABLE entities (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    prototype_id TEXT REFERENCES entities(id),
+
+    -- Descriptions (support {name} template interpolation at render time)
+    description_short TEXT,
+    description_long TEXT,
+
+    -- Handlers: NULL means "inherit from prototype"
+    on_look TEXT,
+    on_touch TEXT,
+    on_attack TEXT,
+    on_use TEXT,
+    on_take TEXT,
+
+    -- Containment (for nested objects like "lamp on table")
+    container_id TEXT REFERENCES entities(id),
+    contents_visible BOOLEAN,
+
+    CHECK (id != prototype_id),
+    CHECK (id != container_id)
+);
+
+CREATE TABLE entity_instances (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    entity_id TEXT NOT NULL REFERENCES entities(id),
+    room TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX idx_entity_instances_room ON entity_instances(room);
+CREATE INDEX idx_entities_name_trgm ON entities USING gin(name gin_trgm_ops);
+CREATE INDEX idx_entities_prototype ON entities(prototype_id);
+```
+
+**Inheritance resolution function:**
+
+```sql
+CREATE OR REPLACE FUNCTION resolve_entity(target_id TEXT)
+RETURNS TABLE (
+    id TEXT, name TEXT, description_short TEXT, description_long TEXT,
+    on_look TEXT, on_touch TEXT, on_attack TEXT, on_use TEXT, on_take TEXT,
+    contents_visible BOOLEAN
+) AS $$
+WITH RECURSIVE inheritance_chain AS (
+    SELECT e.*, 0 AS depth FROM entities e WHERE e.id = target_id
+    UNION ALL
+    SELECT e.*, ic.depth + 1
+    FROM entities e JOIN inheritance_chain ic ON e.id = ic.prototype_id
+    WHERE ic.depth < 10
+)
+SELECT target_id,
+    (SELECT name FROM inheritance_chain WHERE name IS NOT NULL ORDER BY depth LIMIT 1),
+    (SELECT description_short FROM inheritance_chain WHERE description_short IS NOT NULL ORDER BY depth LIMIT 1),
+    (SELECT description_long FROM inheritance_chain WHERE description_long IS NOT NULL ORDER BY depth LIMIT 1),
+    (SELECT on_look FROM inheritance_chain WHERE on_look IS NOT NULL ORDER BY depth LIMIT 1),
+    (SELECT on_touch FROM inheritance_chain WHERE on_touch IS NOT NULL ORDER BY depth LIMIT 1),
+    (SELECT on_attack FROM inheritance_chain WHERE on_attack IS NOT NULL ORDER BY depth LIMIT 1),
+    (SELECT on_use FROM inheritance_chain WHERE on_use IS NOT NULL ORDER BY depth LIMIT 1),
+    (SELECT on_take FROM inheritance_chain WHERE on_take IS NOT NULL ORDER BY depth LIMIT 1),
+    (SELECT contents_visible FROM inheritance_chain WHERE contents_visible IS NOT NULL ORDER BY depth LIMIT 1);
+$$ LANGUAGE sql STABLE;
+```
 
 ### Instance Pattern (Flyweight)
 
 In the context of **placing entities in rooms**, facing **multiple instances of the same entity type needing different per-instance state**, we decided to **use the flyweight pattern separating models from instances**, to achieve **memory efficiency and clean separation of definition vs. placement**, accepting **indirection when accessing entity properties**.
 
 ```
-vase_model = { all properties from entity definition }
-vase_instance_1 = { model: "vase", room: "tavern", params: {...} }
-vase_instance_2 = { model: "vase", room: "kitchen", params: {...} }
+vase (entity definition in entities table)
+vase_instance_1 = { entity_id: "vase", room: "tavern" }
+vase_instance_2 = { entity_id: "vase", room: "kitchen" }
 ```
 
 ### Interaction Verb Matching
@@ -125,29 +192,23 @@ strike
 
 ### Data Loading Workflow
 
-In the context of **syncing entity definitions to Redis**, facing **the need to populate Redis before the bot can serve entity data**, we decided to **use a manual CLI script run by developers before deploy**, to achieve **explicit control over data loading and fast bot startup times**, accepting **the risk of forgetting to run the script before deploy**.
+In the context of **syncing entity definitions to PostgreSQL**, facing **the need to populate the database before the bot can serve entity data**, we decided to **use a manual CLI script run by developers before deploy**, to achieve **explicit control over data loading and fast bot startup times**, accepting **the risk of forgetting to run the script before deploy**.
 
 Usage:
 ```bash
-# Load entities into Redis
-python -m mudd.scripts.load_entities --redis-url $REDIS_URL data/entities.rec
+python -m mudd.scripts.load_entities data/entities.rec
 ```
 
 The script:
 - Parses `.rec` files using recutils
-- Resolves prototype inheritance chains
 - Validates entity definitions (unique IDs, valid prototypes, no cycles)
-- Writes resolved entity models to Redis as JSON
+- Inserts entities into PostgreSQL (prototype references require proper ordering)
 
 ### Room Identification
 
 In the context of **keying entity instances to rooms**, facing **the choice between Discord channel IDs and logical room names**, we decided to **use logical room names** (e.g., "tavern", "armory"), to achieve **readable data files and portability across Discord servers**, accepting **the need for a channel-to-room mapping layer**.
 
-Key schema uses room names:
-- `entity:instance:{room_name}:{instance_id}` - Entity placements
-- `room:{room_name}:entities` - SET of instance IDs
-
-The channel-to-room mapping is maintained as an in-memory cache, populated at bot startup from channel configuration. This cache translates the user's current Discord channel to a room name for entity lookups.
+The `entity_instances.room` column stores logical room names. The channel-to-room mapping is maintained as an in-memory cache, populated at bot startup from Discord channel names.
 
 ### Entity Disambiguation
 
@@ -156,10 +217,20 @@ In the context of **resolving `/interact` commands**, facing **multiple entities
 Resolution flow:
 1. Normalize user input (lowercase, strip articles like "the", "a", "an")
 2. Attempt exact match against entity names in the room
-3. If no exact match, attempt fuzzy match (substring, prefix, or similarity threshold) - this tolerates noise words like prepositions ("at", "on") without explicit stripping
+3. If no exact match, attempt fuzzy match using `pg_trgm` similarity
 4. If single match: proceed with interaction
 5. If multiple matches: list matching entities and ask user to be more specific
 6. If no matches: respond with "You don't see that here"
+
+**Fuzzy matching query:**
+```sql
+SELECT r.*, ei.id AS instance_id, similarity(r.name, 'book') AS match_score
+FROM entity_instances ei
+CROSS JOIN LATERAL resolve_entity(ei.entity_id) r
+WHERE ei.room = 'tavern'
+  AND r.name % 'book'
+ORDER BY match_score DESC;
+```
 
 Example disambiguation response:
 > User: /interact look vase
@@ -207,50 +278,30 @@ Entities without a `DescriptionShort` fall back to: "a *{name}* is here."
 
 ### Entity Containment
 
-In the context of **modeling nested objects** (e.g., a lamp on a table), facing **the need for entities to exist within other entities**, we decided to **add an optional `Container` field referencing a parent entity**, to achieve **hierarchical entity relationships with automatic child listing**, accepting **single-level nesting only (no containers within containers)**.
-
-**Schema addition:**
-```rec
-%type: Container rec Entity
-%type: ContentsVisible bool
-%allowed: Id Name Prototype Container ContentsVisible DescriptionShort DescriptionLong
-```
+In the context of **modeling nested objects** (e.g., a lamp on a table), facing **the need for entities to exist within other entities**, we decided to **add an optional `container_id` field referencing a parent entity**, to achieve **hierarchical entity relationships with automatic child listing**, accepting **single-level nesting only (no containers within containers)**.
 
 **Fields:**
-- `Container` - References the parent entity this item is contained within
-- `ContentsVisible` - Whether children are auto-listed (default: `yes`)
-  - `yes` (table, shelf): Children listed when container appears in room or is examined
-  - `no` (chest, drawer): Children only listed when container is directly examined via `/look`
+- `container_id` - References the parent entity this item is contained within
+- `contents_visible` - Whether children are auto-listed (default: `TRUE`)
+  - `TRUE` (table, shelf): Children listed when container appears in room or is examined
+  - `FALSE` (chest, drawer): Children only listed when container is directly examined via `/look`
 
 **Example:**
-```rec
-Id: table
-Name: Wooden Table
-Prototype: furniture
-DescriptionShort: a {name} sits in the corner
-ContentsVisible: yes
+```sql
+INSERT INTO entities (id, name, prototype_id, description_short, contents_visible) VALUES
+('table', 'Wooden Table', 'furniture', 'a {name} sits in the corner', TRUE),
+('lamp', 'Brass Lamp', 'object', NULL, NULL),
+('chest', 'Wooden Chest', 'furniture', 'a {name} rests against the wall', FALSE),
+('gold_ring', 'Gold Ring', 'object', 'a {name}', NULL);
 
-Id: lamp
-Name: Brass Lamp
-Prototype: object
-Container: table
-
-Id: chest
-Name: Wooden Chest
-Prototype: furniture
-DescriptionShort: a {name} rests against the wall
-ContentsVisible: no
-
-Id: gold_ring
-Name: Gold Ring
-Prototype: object
-Container: chest
+UPDATE entities SET container_id = 'table' WHERE id = 'lamp';
+UPDATE entities SET container_id = 'chest' WHERE id = 'gold_ring';
 ```
 
 **Room `/look` behavior:**
-- Top-level entities (no `Container`) appear in room descriptions
-- If `ContentsVisible: yes`, children are auto-listed with the container
-- If `ContentsVisible: no`, children are hidden until the container is examined
+- Top-level entities (no `container_id`) appear in room descriptions
+- If `contents_visible = TRUE`, children are auto-listed with the container
+- If `contents_visible = FALSE`, children are hidden until the container is examined
 
 **Stateless interactions:**
 Containers have no "opened" state. Players can interact with hidden items if they guess correctly - the visibility flag only affects what's shown, not what's accessible.
@@ -268,10 +319,10 @@ When examining an entity that has children, auto-append them to the output:
 4. Qualified syntax (`/interact look lamp on table`) narrows search to that container's children
 
 **Validation constraints:**
-- `Container` must reference an existing entity (enforced by `%type: Container rec Entity`)
+- `container_id` must reference an existing entity (enforced by foreign key)
 - Circular containment (A contains B, B contains A) is an error detected at load time
-- Self-containment (A contains A) is an error
-- Multi-level nesting is prohibited: if an entity has a `Container`, it cannot itself be a container
+- Self-containment (A contains A) is prevented by CHECK constraint
+- Multi-level nesting is prohibited: if an entity has a `container_id`, it cannot itself be a container
 
 ## Consequences
 
@@ -279,20 +330,22 @@ When examining an entity that has children, auto-append them to the output:
 
 - Entity definitions are human-readable and version-controllable
 - Prototypical inheritance eliminates boilerplate responses
-- Redis provides sub-millisecond entity lookups
+- PostgreSQL with query-time inheritance provides debuggable entity lookups
+- Explicit columns make it easy to inspect entities in the database
+- `pg_trgm` enables fuzzy entity name matching with typo tolerance
 - Flyweight pattern scales to many entity instances efficiently
 - Word lists provide predictable, debuggable verb matching
 
 ### Negative
 
-- Requires a data pipeline: `.rec` files -> Python loader (using `recsel` or parsing) -> Redis
-- Inheritance resolution adds complexity to the loading process
+- Requires a data pipeline: `.rec` files → Python loader → PostgreSQL
+- Query-time inheritance adds complexity vs. materialized properties
 - Word lists need manual curation and may miss edge cases
-- Redis becomes a harder dependency (already present for locations)
+- PostgreSQL is a heavier operational dependency but provides ACID guarantees
 
 ### Future Considerations
 
 - Vector database for semantic verb matching (deferred - word lists sufficient for MVP)
 - Stateful entities with mutable properties (out of scope for static entity system)
 - Admin commands for runtime entity placement via "architect" role
-
+- Player inventory support via `owner_id` column on `entity_instances`
