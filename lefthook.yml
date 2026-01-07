@@ -17,3 +17,7 @@ pre-commit:
     - name: squawk check
       glob: "migrations/*.sql"
       run: uv run squawk {staged_files}
+
+    - name: verb duplicates check
+      glob: "data/verbs/*.txt"
+      run: just verbs

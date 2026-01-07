@@ -1,0 +1,15 @@
+activate
+apply
+close
+employ
+engage
+flip
+operate
+press
+pull
+push
+run
+start
+trigger
+turn
+use

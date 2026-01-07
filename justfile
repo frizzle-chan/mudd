@@ -1,4 +1,4 @@
-default: lint format types entities squawk
+default: lint format types entities verbs squawk
 
 test:
     uv run pytest
@@ -14,6 +14,25 @@ types:
 
 entities:
     recfix --check data/entities.rec
+
+verbs:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # Check for duplicates (filter empty lines, normalize case)
+    all_verbs=$(cat data/verbs/*.txt | grep -v '^$' | tr '[:upper:]' '[:lower:]' | sort)
+    unique_verbs=$(echo "$all_verbs" | uniq)
+    if [ "$all_verbs" != "$unique_verbs" ]; then
+        echo "Duplicate verbs found:"
+        echo "$all_verbs" | uniq -d
+        exit 1
+    fi
+    # Check each file is sorted
+    for file in data/verbs/*.txt; do
+        if ! diff -q <(grep -v '^$' "$file") <(grep -v '^$' "$file" | sort) > /dev/null 2>&1; then
+            echo "File not sorted: $file"
+            exit 1
+        fi
+    done
 
 squawk:
     uv run squawk migrations/*.sql
