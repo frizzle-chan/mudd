@@ -7,8 +7,7 @@ services:
       target: devcontainer
     command: sleep infinity
     volumes:
-      - ..:/app:cached     
-    network_mode: service:db
+      - ..:/app:cached
     environment:
       - DATABASE_URL=postgresql://mudd:mudd@db:5432/mudd
 

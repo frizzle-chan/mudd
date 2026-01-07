@@ -5,8 +5,8 @@ import pytest_asyncio
 
 from mudd.services.migrations import run_migrations
 
-TEST_DB_URL = "postgresql://mudd:mudd@localhost/mudd_test"
-ADMIN_DB_URL = "postgresql://mudd:mudd@localhost/postgres"
+TEST_DB_URL = "postgresql://mudd:mudd@db/mudd_test"
+ADMIN_DB_URL = "postgresql://mudd:mudd@db/postgres"
 
 
 @pytest_asyncio.fixture(scope="module", loop_scope="module")

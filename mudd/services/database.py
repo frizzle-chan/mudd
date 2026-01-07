@@ -16,7 +16,7 @@ async def get_pool() -> asyncpg.Pool:
     if _pool is None:
         database_url = os.environ.get(
             "DATABASE_URL",
-            "postgresql://mudd:mudd@localhost:5432/mudd",
+            "postgresql://mudd:mudd@db:5432/mudd",
         )
         _pool = await asyncpg.create_pool(
             database_url,
