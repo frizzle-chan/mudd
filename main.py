@@ -9,7 +9,8 @@ from mudd.cogs.look import Look
 from mudd.cogs.movement import Movement
 from mudd.cogs.ping import Ping
 from mudd.cogs.sync import Sync
-from mudd.services.database import close_pool, init_database
+from mudd.services.database import close_pool, get_pool, init_database
+from mudd.services.verb_loader import sync_verbs
 from mudd.services.visibility import init_visibility_service
 
 load_dotenv()
@@ -34,6 +35,14 @@ bot = MuddBot(command_prefix="!", intents=intents)
 async def setup_hook():
     # Initialize database and run migrations
     await init_database()
+
+    # Sync verb word lists to database
+    pool = await get_pool()
+    try:
+        await sync_verbs(pool)
+    except Exception:
+        logger.exception("Failed to sync verbs - bot may not recognize verb commands")
+        raise
 
     init_visibility_service(
         world_category_id=int(os.environ["MUDD_WORLD_CATEGORY_ID"]),
