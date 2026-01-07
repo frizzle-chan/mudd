@@ -28,13 +28,17 @@ class VisibilityService:
 
     def _build_room_cache(self, guild: discord.Guild) -> None:
         """Build the room name <-> channel ID caches from Discord channel names."""
-        self._room_to_channel.clear()
-        self._channel_to_room.clear()
+        # Build new dicts first, then swap atomically to avoid race conditions
+        # with concurrent reads (reference assignment is atomic in Python)
+        room_to_channel: dict[str, int] = {}
+        channel_to_room: dict[int, str] = {}
         for channel in guild.text_channels:
             if channel.category_id == self.world_category_id:
                 room_name = channel.name
-                self._room_to_channel[room_name] = channel.id
-                self._channel_to_room[channel.id] = room_name
+                room_to_channel[room_name] = channel.id
+                channel_to_room[channel.id] = room_name
+        self._room_to_channel = room_to_channel
+        self._channel_to_room = channel_to_room
         logger.info(f"Built room cache with {len(self._room_to_channel)} rooms")
 
     def get_channel_for_room(self, room_name: str) -> int | None:
