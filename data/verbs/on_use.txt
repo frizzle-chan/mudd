@@ -1,0 +1,10 @@
+activate
+apply
+employ
+engage
+operate
+pull
+push
+trigger
+turn
+use

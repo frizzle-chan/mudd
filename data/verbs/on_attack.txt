@@ -1,0 +1,16 @@
+attack
+bash
+beat
+break
+crush
+destroy
+fight
+hit
+kick
+punch
+shatter
+slash
+smash
+strike
+swing
+whack
