@@ -120,7 +120,7 @@ Migrations are raw SQL files in the `/migrations` directory:
 ## Visibility Sync
 
 The `sync_guild()` method ensures Discord channel permissions match database state. It runs:
-- **On startup**: Once per guild in `on_ready()`, followed by `mark_startup_complete()`
+- **On startup**: Once per guild via the `Sync` cog's first task iteration, followed by `mark_startup_complete()`
 - **Periodically**: Every 15 minutes via the `Sync` cog's background task
 - **Future**: Can be triggered by Discord events (channel changes, role updates, etc.)
 
