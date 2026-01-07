@@ -10,7 +10,7 @@ RUN groupadd --gid 1000 mudd \
  && chown mudd:mudd /app
 
 RUN apt-get update \
- && apt-get install -y --no-install-recommends locales \
+ && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends locales \
  && sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen \
  && locale-gen \
  && apt-get clean \
@@ -63,7 +63,7 @@ Enabled: yes
 Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
 EOF
 RUN apt-get update \
- && apt-get install -y --no-install-recommends \
+ && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
        curl \
        git \
        jq \
@@ -74,7 +74,7 @@ RUN apt-get update \
        ripgrep \
        vim \
        zsh \
- && apt-get install -y --no-install-recommends -t trixie-backports \
+ && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends -t trixie-backports \
        recutils \
  && apt-get clean \
  && rm -rf /var/lib/apt/lists/* \
