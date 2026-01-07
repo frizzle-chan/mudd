@@ -5,32 +5,51 @@ from pathlib import Path
 
 import asyncpg
 
+from mudd.services.verb_action import VerbAction
+
 logger = logging.getLogger(__name__)
 
 VERBS_DIR = Path(__file__).parent.parent.parent / "data" / "verbs"
 
+# Valid action names from VerbAction enum
+VALID_ACTIONS = {action.value for action in VerbAction}
 
-def load_verb_files() -> dict[str, list[str]]:
+
+def load_verb_files() -> dict[VerbAction, list[str]]:
     """Load all verb files from data/verbs/ directory.
 
     Returns:
-        Dict mapping action name (e.g., 'on_attack') to list of verbs.
-    """
-    verb_files: dict[str, list[str]] = {}
+        Dict mapping VerbAction to list of verbs.
 
+    Raises:
+        FileNotFoundError: If verbs directory does not exist.
+    """
     if not VERBS_DIR.exists():
-        logger.warning(f"Verbs directory not found: {VERBS_DIR}")
-        return verb_files
+        raise FileNotFoundError(f"Verbs directory not found: {VERBS_DIR}")
+
+    verb_files: dict[VerbAction, list[str]] = {}
 
     for file in VERBS_DIR.glob("*.txt"):
-        action = file.stem  # e.g., 'on_attack' from 'on_attack.txt'
-        verbs = [
-            line.strip().lower()
-            for line in file.read_text().splitlines()
-            if line.strip()
-        ]
+        action_name = file.stem  # e.g., 'on_attack' from 'on_attack.txt'
+
+        # Validate action name against enum
+        if action_name not in VALID_ACTIONS:
+            logger.warning(f"Skipping invalid action file: {file.name}")
+            continue
+
+        try:
+            verbs = [
+                line.strip().lower()
+                for line in file.read_text().splitlines()
+                if line.strip()
+            ]
+        except OSError as e:
+            logger.error(f"Failed to read verb file {file.name}: {e}")
+            raise
+
+        action = VerbAction(action_name)
         verb_files[action] = verbs
-        logger.debug(f"Loaded {len(verbs)} verbs for action '{action}'")
+        logger.debug(f"Loaded {len(verbs)} verbs for action '{action_name}'")
 
     return verb_files
 
@@ -42,6 +61,9 @@ async def sync_verbs(pool: asyncpg.Pool) -> int:
 
     Returns:
         Number of verbs synced.
+
+    Raises:
+        FileNotFoundError: If verbs directory does not exist.
     """
     verb_files = load_verb_files()
 
@@ -68,7 +90,7 @@ async def sync_verbs(pool: asyncpg.Pool) -> int:
                     """INSERT INTO verbs (verb, action) VALUES ($1, $2::verb_action)
                        ON CONFLICT (verb) DO UPDATE SET action = $2::verb_action""",
                     verb,
-                    action,
+                    action.value,
                 )
 
     total_verbs = sum(len(verbs) for verbs in verb_files.values())

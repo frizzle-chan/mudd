@@ -38,7 +38,11 @@ async def setup_hook():
 
     # Sync verb word lists to database
     pool = await get_pool()
-    await sync_verbs(pool)
+    try:
+        await sync_verbs(pool)
+    except Exception:
+        logger.exception("Failed to sync verbs - bot may not recognize verb commands")
+        raise
 
     init_visibility_service(
         world_category_id=int(os.environ["MUDD_WORLD_CATEGORY_ID"]),

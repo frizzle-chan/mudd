@@ -81,6 +81,24 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 - Partial index on `room` (WHERE room IS NOT NULL) for room-based queries
 - Partial index on `owner_id` (WHERE owner_id IS NOT NULL) for inventory queries
 
+### Verbs Table
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `verb` | TEXT (PK) | The verb word (e.g., 'smash', 'look') |
+| `action` | verb_action NOT NULL | The action handler type to invoke |
+
+**Verb Action Enum:** `on_look`, `on_touch`, `on_attack`, `on_use`, `on_take`
+
+**Indexes:**
+- Primary key on `verb`
+- GIN index on `verb` using pg_trgm for fuzzy matching (typo tolerance)
+
+**Data Source:**
+- Verbs are loaded from `data/verbs/*.txt` files on bot startup
+- Each file contains one verb per line, mapped to the action matching the filename
+- Full sync on startup: verbs not in files are removed from the database
+
 ### Entity Inheritance
 
 The `resolve_entity(target_id TEXT)` function resolves entity properties by walking up the prototype chain:

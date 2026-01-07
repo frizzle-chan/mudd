@@ -2,15 +2,17 @@
 
 Tests:
 1. sync_verbs loads verbs from files into database
-2. match_verb returns correct action for exact match
-3. match_verb returns correct action for fuzzy match (typo)
+2. match_verb returns correct VerbAction for exact match
+3. match_verb returns correct VerbAction for fuzzy match (typo)
 4. match_verb returns None when no match found
 5. sync_verbs removes verbs no longer in files
+6. Edge cases: special characters, long input
 """
 
 import pytest
 import pytest_asyncio
 
+from mudd.services.verb_action import VerbAction
 from mudd.services.verb_loader import sync_verbs
 from mudd.services.verb_matcher import match_verb
 
@@ -76,40 +78,40 @@ class TestMatchVerb:
     """Test verb matching with exact and fuzzy matching."""
 
     async def test_exact_match_look(self, verbs_db):
-        """Exact match for 'look' returns 'on_look'."""
+        """Exact match for 'look' returns VerbAction.ON_LOOK."""
         action = await match_verb(verbs_db, "look")
-        assert action == "on_look"
+        assert action == VerbAction.ON_LOOK
 
     async def test_exact_match_smash(self, verbs_db):
-        """Exact match for 'smash' returns 'on_attack'."""
+        """Exact match for 'smash' returns VerbAction.ON_ATTACK."""
         action = await match_verb(verbs_db, "smash")
-        assert action == "on_attack"
+        assert action == VerbAction.ON_ATTACK
 
     async def test_exact_match_touch(self, verbs_db):
-        """Exact match for 'touch' returns 'on_touch'."""
+        """Exact match for 'touch' returns VerbAction.ON_TOUCH."""
         action = await match_verb(verbs_db, "touch")
-        assert action == "on_touch"
+        assert action == VerbAction.ON_TOUCH
 
     async def test_exact_match_use(self, verbs_db):
-        """Exact match for 'use' returns 'on_use'."""
+        """Exact match for 'use' returns VerbAction.ON_USE."""
         action = await match_verb(verbs_db, "use")
-        assert action == "on_use"
+        assert action == VerbAction.ON_USE
 
     async def test_exact_match_take(self, verbs_db):
-        """Exact match for 'take' returns 'on_take'."""
+        """Exact match for 'take' returns VerbAction.ON_TAKE."""
         action = await match_verb(verbs_db, "take")
-        assert action == "on_take"
+        assert action == VerbAction.ON_TAKE
 
     async def test_fuzzy_match_typo(self, verbs_db):
-        """Fuzzy match for typo 'smassh' returns 'on_attack'."""
+        """Fuzzy match for typo 'smassh' returns VerbAction.ON_ATTACK."""
         # 'smassh' (double s) has ~0.625 similarity to 'smash', above 0.5 threshold
         action = await match_verb(verbs_db, "smassh")
-        assert action == "on_attack"
+        assert action == VerbAction.ON_ATTACK
 
     async def test_fuzzy_match_examine_typo(self, verbs_db):
-        """Fuzzy match for typo 'examin' returns 'on_look'."""
+        """Fuzzy match for typo 'examin' returns VerbAction.ON_LOOK."""
         action = await match_verb(verbs_db, "examin")
-        assert action == "on_look"
+        assert action == VerbAction.ON_LOOK
 
     async def test_no_match_gibberish(self, verbs_db):
         """No match for gibberish returns None."""
@@ -124,9 +126,46 @@ class TestMatchVerb:
     async def test_case_insensitive(self, verbs_db):
         """Matching is case insensitive."""
         action = await match_verb(verbs_db, "LOOK")
-        assert action == "on_look"
+        assert action == VerbAction.ON_LOOK
 
     async def test_whitespace_trimmed(self, verbs_db):
         """Whitespace is trimmed from input."""
         action = await match_verb(verbs_db, "  look  ")
-        assert action == "on_look"
+        assert action == VerbAction.ON_LOOK
+
+
+class TestMatchVerbEdgeCases:
+    """Test edge cases for verb matching."""
+
+    async def test_special_characters_no_match(self, verbs_db):
+        """Special characters don't cause errors and return None."""
+        # SQL injection attempt - should be safely handled by parameterized query
+        action = await match_verb(verbs_db, "'; DROP TABLE verbs; --")
+        assert action is None
+
+    async def test_special_characters_with_verb(self, verbs_db):
+        """Special characters mixed with valid verb don't match."""
+        action = await match_verb(verbs_db, "look%_")
+        assert action is None
+
+    async def test_very_long_input(self, verbs_db):
+        """Very long input returns None without hanging."""
+        long_input = "a" * 1000
+        action = await match_verb(verbs_db, long_input)
+        assert action is None
+
+    async def test_unicode_input(self, verbs_db):
+        """Unicode characters return None without errors."""
+        action = await match_verb(verbs_db, "look\u00e9")  # looké
+        assert action is None
+
+    async def test_newline_in_input(self, verbs_db):
+        """Newlines in input don't cause issues."""
+        action = await match_verb(verbs_db, "look\nsmash")
+        assert action is None
+
+    async def test_return_type_is_verb_action(self, verbs_db):
+        """Verify return type is VerbAction enum."""
+        action = await match_verb(verbs_db, "look")
+        assert isinstance(action, VerbAction)
+        assert action.value == "on_look"
