@@ -4,7 +4,6 @@ close
 employ
 engage
 flip
-open
 operate
 press
 pull
