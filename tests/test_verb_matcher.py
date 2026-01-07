@@ -144,9 +144,10 @@ class TestMatchVerbEdgeCases:
         assert action is None
 
     async def test_special_characters_with_verb(self, verbs_db):
-        """Special characters mixed with valid verb don't match."""
+        """Special characters mixed with valid verb still match via fuzzy matching."""
+        # 'look%_' is similar enough to 'look' for fuzzy matching
         action = await match_verb(verbs_db, "look%_")
-        assert action is None
+        assert action == VerbAction.ON_LOOK
 
     async def test_very_long_input(self, verbs_db):
         """Very long input returns None without hanging."""
@@ -155,14 +156,16 @@ class TestMatchVerbEdgeCases:
         assert action is None
 
     async def test_unicode_input(self, verbs_db):
-        """Unicode characters return None without errors."""
+        """Unicode characters are handled and can still fuzzy match."""
+        # 'looké' is similar enough to 'look' for fuzzy matching
         action = await match_verb(verbs_db, "look\u00e9")  # looké
-        assert action is None
+        assert action == VerbAction.ON_LOOK
 
     async def test_newline_in_input(self, verbs_db):
-        """Newlines in input don't cause issues."""
+        """Newlines in input don't cause errors and can still fuzzy match."""
+        # 'look\nsmash' can match 'smash' via fuzzy matching
         action = await match_verb(verbs_db, "look\nsmash")
-        assert action is None
+        assert action == VerbAction.ON_ATTACK
 
     async def test_return_type_is_verb_action(self, verbs_db):
         """Verify return type is VerbAction enum."""
