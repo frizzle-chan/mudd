@@ -17,3 +17,7 @@ entities:
 
 devcontainer:
     gh auth login --with-token < .github-token.txt
+
+# Reset dev database (drops and recreates schema)
+resetdb:
+    psql postgresql://mudd:mudd@localhost:5432/mudd -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"

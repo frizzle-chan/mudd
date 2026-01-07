@@ -46,10 +46,16 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 | `on_take` | TEXT | Handler response for take action (NULL = inherit from prototype) |
 | `container_id` | TEXT (FK to entities.id) | Reference to containing entity |
 | `contents_visible` | BOOLEAN | Whether child entities are visible (NULL = inherit from prototype, TRUE = show in room, FALSE = show when examined) |
+| `spawn_mode` | spawn_mode NOT NULL | Take behavior: `none` (can't take), `move` (one-time pickup), `clone` (infinite copies) |
 
 **Constraints:**
 - Self-reference prevention: `id != prototype_id`
 - Self-containment prevention: `id != container_id`
+
+**Spawn Mode Enum:**
+- `none`: Static decoration, cannot be taken (default)
+- `move`: One-time pickup, instance moves from room to inventory
+- `clone`: Infinite source, each take creates a new instance in inventory
 
 **Indexes:**
 - Primary key on `id`
@@ -62,20 +68,27 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 |--------|------|-------------|
 | `id` | UUID (PK) | Auto-generated unique instance identifier |
 | `entity_id` | TEXT NOT NULL (FK to entities.id) | Reference to entity definition |
-| `room` | TEXT NOT NULL | Logical room name where instance exists |
+| `room` | TEXT | Logical room name (NULL when in inventory) |
+| `owner_id` | BIGINT (FK to users.id) | Player who owns this instance (NULL when in room) |
 | `created_at` | TIMESTAMPTZ NOT NULL | Instance creation timestamp |
+
+**Constraints:**
+- Mutual exclusivity: `(room IS NOT NULL AND owner_id IS NULL) OR (room IS NULL AND owner_id IS NOT NULL)`
+- Foreign key cascade: Deleting a user cascades to their inventory items
 
 **Indexes:**
 - Primary key on `id`
-- Index on `room` for room-based queries
+- Partial index on `room` (WHERE room IS NOT NULL) for room-based queries
+- Partial index on `owner_id` (WHERE owner_id IS NOT NULL) for inventory queries
 
 ### Entity Inheritance
 
 The `resolve_entity(target_id TEXT)` function resolves entity properties by walking up the prototype chain:
 - Returns merged properties where child values override parent values
-- First non-NULL value wins for each property
+- First non-NULL value wins for each property (except `spawn_mode` which is always from the entity itself)
 - Supports up to 10 levels of inheritance depth (prevents infinite loops from circular references)
 - Used to materialize the final entity state including inherited properties
+- Returns: `id`, `name`, `description_short`, `description_long`, `on_*` handlers, `contents_visible`, `spawn_mode`
 
 ## Room Abstraction
 

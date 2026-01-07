@@ -1,8 +1,14 @@
 -- Migration: 002_entities
--- Description: Entity system with prototypical inheritance
+-- Description: Entity system with prototypical inheritance and inventory support
 
 -- Enable fuzzy matching for entity name search
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
+-- Spawn mode determines what happens when a player takes an entity
+-- 'none': Static decoration, cannot be taken
+-- 'move': One-time pickup, instance moves to inventory
+-- 'clone': Infinite copies, each take creates new instance in inventory
+CREATE TYPE spawn_mode AS ENUM ('none', 'move', 'clone');
 
 CREATE TABLE entities (
     id TEXT PRIMARY KEY,
@@ -25,6 +31,9 @@ CREATE TABLE entities (
     container_id TEXT REFERENCES entities(id),
     contents_visible BOOLEAN,  -- NULL = inherit; TRUE = show children in room; FALSE = show only when examined
 
+    -- Spawn behavior when taken
+    spawn_mode spawn_mode NOT NULL DEFAULT 'none',
+
     -- Constraints
     CHECK (id != prototype_id),  -- No self-inheritance
     CHECK (id != container_id)   -- No self-containment
@@ -33,12 +42,20 @@ CREATE TABLE entities (
 CREATE TABLE entity_instances (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     entity_id TEXT NOT NULL REFERENCES entities(id),
-    room TEXT NOT NULL,  -- Logical room name (e.g., "tavern"), not Discord channel ID
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    room TEXT,  -- Logical room name (NULL when in inventory)
+    owner_id BIGINT REFERENCES users(id) ON DELETE CASCADE,  -- Player who owns this (NULL when in room)
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+
+    -- Mutual exclusivity: instance is in room XOR in inventory
+    CONSTRAINT chk_location_exclusive CHECK (
+        (room IS NOT NULL AND owner_id IS NULL)
+        OR (room IS NULL AND owner_id IS NOT NULL)
+    )
 );
 
 -- Indexes
-CREATE INDEX idx_entity_instances_room ON entity_instances(room);
+CREATE INDEX idx_entity_instances_room ON entity_instances(room) WHERE room IS NOT NULL;
+CREATE INDEX idx_entity_instances_owner ON entity_instances(owner_id) WHERE owner_id IS NOT NULL;
 CREATE INDEX idx_entities_name_trgm ON entities USING gin(name gin_trgm_ops);
 CREATE INDEX idx_entities_prototype ON entities(prototype_id);
 
@@ -56,7 +73,8 @@ RETURNS TABLE (
     on_attack TEXT,
     on_use TEXT,
     on_take TEXT,
-    contents_visible BOOLEAN
+    contents_visible BOOLEAN,
+    spawn_mode spawn_mode
 ) AS $$
 WITH RECURSIVE inheritance_chain AS (
     -- Base case: the entity itself
@@ -72,6 +90,7 @@ WITH RECURSIVE inheritance_chain AS (
         e.on_use,
         e.on_take,
         e.contents_visible,
+        e.spawn_mode,
         0 AS depth
     FROM entities e
     WHERE e.id = target_id
@@ -91,6 +110,7 @@ WITH RECURSIVE inheritance_chain AS (
         e.on_use,
         e.on_take,
         e.contents_visible,
+        e.spawn_mode,
         ic.depth + 1
     FROM entities e
     JOIN inheritance_chain ic ON e.id = ic.prototype_id
@@ -106,5 +126,7 @@ SELECT
     (SELECT ic.on_attack FROM inheritance_chain ic WHERE ic.on_attack IS NOT NULL ORDER BY ic.depth LIMIT 1),
     (SELECT ic.on_use FROM inheritance_chain ic WHERE ic.on_use IS NOT NULL ORDER BY ic.depth LIMIT 1),
     (SELECT ic.on_take FROM inheritance_chain ic WHERE ic.on_take IS NOT NULL ORDER BY ic.depth LIMIT 1),
-    (SELECT ic.contents_visible FROM inheritance_chain ic WHERE ic.contents_visible IS NOT NULL ORDER BY ic.depth LIMIT 1);
+    (SELECT ic.contents_visible FROM inheritance_chain ic WHERE ic.contents_visible IS NOT NULL ORDER BY ic.depth LIMIT 1),
+    -- spawn_mode is NOT NULL so first in chain always wins (the entity itself)
+    (SELECT ic.spawn_mode FROM inheritance_chain ic ORDER BY ic.depth LIMIT 1);
 $$ LANGUAGE sql STABLE;

@@ -1,11 +1,17 @@
-"""End-to-end tests for ADR 0001 entity system queries.
+"""End-to-end tests for entity system queries.
 
 Tests the PostgreSQL queries defined in docs/adr/0001-static-entity-system.md:
 1. resolve_entity() - Inheritance resolution via recursive CTE
 2. Fuzzy matching - pg_trgm similarity search for entity names
 3. Room instance lookup - Find entities in a room
+
+Tests the inventory system from docs/adr/0002-inventory-system.md:
+4. Mutual exclusivity constraint - room XOR owner_id
+5. Spawn mode - none/move/clone behavior
+6. Owner cascade delete
 """
 
+import asyncpg
 import pytest
 import pytest_asyncio
 
@@ -118,6 +124,39 @@ SAMPLE_ENTITIES = [
         "on_take": None,
         "container_id": "table",
         "contents_visible": None,
+        "spawn_mode": "none",
+    },
+    # Takeable item with move spawn mode
+    {
+        "id": "coin",
+        "name": "Gold Coin",
+        "prototype_id": "object",
+        "description_short": "a shiny {name}",
+        "description_long": "A gold coin with the king's face on it.",
+        "on_look": None,
+        "on_touch": None,
+        "on_attack": None,
+        "on_use": None,
+        "on_take": "You pick up the {name}.",
+        "container_id": None,
+        "contents_visible": None,
+        "spawn_mode": "move",
+    },
+    # Infinite source with clone spawn mode
+    {
+        "id": "scroll",
+        "name": "Magic Scroll",
+        "prototype_id": "object",
+        "description_short": "a {name}",
+        "description_long": "A scroll that produces infinite copies.",
+        "on_look": None,
+        "on_touch": None,
+        "on_attack": None,
+        "on_use": None,
+        "on_take": "You take a copy of the {name}.",
+        "container_id": None,
+        "contents_visible": None,
+        "spawn_mode": "clone",
     },
 ]
 
@@ -128,13 +167,14 @@ async def populated_db(test_db):
     async with test_db.acquire() as conn:
         # Insert entities in order (prototypes first due to FK constraints)
         for entity in SAMPLE_ENTITIES:
+            spawn_mode = entity.get("spawn_mode", "none")
             await conn.execute(
                 """
                 INSERT INTO entities (
                     id, name, prototype_id, description_short, description_long,
                     on_look, on_touch, on_attack, on_use, on_take,
-                    container_id, contents_visible
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+                    container_id, contents_visible, spawn_mode
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
                 """,
                 entity["id"],
                 entity["name"],
@@ -148,6 +188,7 @@ async def populated_db(test_db):
                 entity["on_take"],
                 entity["container_id"],
                 entity["contents_visible"],
+                spawn_mode,
             )
 
         # Create entity instances in a room
@@ -157,7 +198,16 @@ async def populated_db(test_db):
             ('vase', 'tavern'),
             ('table', 'tavern'),
             ('lamp', 'tavern'),
-            ('book', 'tavern')
+            ('book', 'tavern'),
+            ('coin', 'tavern'),
+            ('scroll', 'tavern')
+            """
+        )
+
+        # Create a test user for inventory tests
+        await conn.execute(
+            """
+            INSERT INTO users (id, current_location) VALUES (12345, 'tavern')
             """
         )
 
@@ -302,7 +352,14 @@ class TestRoomLookup:
             )
 
         names = {row["name"] for row in rows}
-        assert names == {"Fancy Vase", "Wooden Table", "Brass Lamp", "Old Book"}
+        assert names == {
+            "Fancy Vase",
+            "Wooden Table",
+            "Brass Lamp",
+            "Old Book",
+            "Gold Coin",
+            "Magic Scroll",
+        }
 
     async def test_empty_room_returns_no_results(self, populated_db):
         """Query on empty room returns no results."""
@@ -353,3 +410,124 @@ class TestContainment:
         ids = {row["id"] for row in rows}
         assert "vase" in ids
         assert "table" in ids
+
+
+class TestInventory:
+    """Test inventory system from ADR 0002."""
+
+    async def test_mutual_exclusivity_both_set_fails(self, populated_db):
+        """Cannot set both room and owner_id."""
+        async with populated_db.acquire() as conn:
+            with pytest.raises(asyncpg.CheckViolationError):
+                await conn.execute(
+                    """
+                    INSERT INTO entity_instances (entity_id, room, owner_id)
+                    VALUES ('coin', 'tavern', 12345)
+                    """
+                )
+
+    async def test_mutual_exclusivity_neither_set_fails(self, populated_db):
+        """Cannot have both room and owner_id NULL."""
+        async with populated_db.acquire() as conn:
+            with pytest.raises(asyncpg.CheckViolationError):
+                await conn.execute(
+                    """
+                    INSERT INTO entity_instances (entity_id, room, owner_id)
+                    VALUES ('coin', NULL, NULL)
+                    """
+                )
+
+    async def test_instance_in_room(self, populated_db):
+        """Instance with room set and owner_id NULL is valid."""
+        async with populated_db.acquire() as conn:
+            # This should work - instance in room
+            result = await conn.fetchrow(
+                """
+                SELECT id, room, owner_id FROM entity_instances
+                WHERE entity_id = 'coin' AND room = 'tavern'
+                """
+            )
+        assert result is not None
+        assert result["room"] == "tavern"
+        assert result["owner_id"] is None
+
+    async def test_instance_in_inventory(self, populated_db):
+        """Instance with owner_id set and room NULL is valid."""
+        async with populated_db.acquire() as conn:
+            # Insert an item in inventory
+            await conn.execute(
+                """
+                INSERT INTO entity_instances (entity_id, room, owner_id)
+                VALUES ('coin', NULL, 12345)
+                """
+            )
+            result = await conn.fetchrow(
+                """
+                SELECT id, room, owner_id FROM entity_instances
+                WHERE entity_id = 'coin' AND owner_id = 12345
+                """
+            )
+        assert result is not None
+        assert result["room"] is None
+        assert result["owner_id"] == 12345
+
+    async def test_owner_cascade_delete(self, populated_db):
+        """Deleting user cascades to their inventory items."""
+        async with populated_db.acquire() as conn:
+            # Create a new user with an inventory item
+            await conn.execute(
+                "INSERT INTO users (id, current_location) VALUES (99999, 'tavern')"
+            )
+            await conn.execute(
+                """
+                INSERT INTO entity_instances (entity_id, room, owner_id)
+                VALUES ('scroll', NULL, 99999)
+                """
+            )
+            # Verify item exists
+            count = await conn.fetchval(
+                "SELECT COUNT(*) FROM entity_instances WHERE owner_id = 99999"
+            )
+            assert count == 1
+
+            # Delete user
+            await conn.execute("DELETE FROM users WHERE id = 99999")
+
+            # Verify item was cascade deleted
+            count = await conn.fetchval(
+                "SELECT COUNT(*) FROM entity_instances WHERE owner_id = 99999"
+            )
+            assert count == 0
+
+
+class TestSpawnMode:
+    """Test spawn_mode field and resolve_entity() inclusion."""
+
+    async def test_resolve_entity_includes_spawn_mode(self, populated_db):
+        """resolve_entity() returns spawn_mode."""
+        async with populated_db.acquire() as conn:
+            row = await conn.fetchrow("SELECT * FROM resolve_entity('coin')")
+
+        assert row["spawn_mode"] == "move"
+
+    async def test_spawn_mode_none(self, populated_db):
+        """Static entities have spawn_mode='none'."""
+        async with populated_db.acquire() as conn:
+            row = await conn.fetchrow("SELECT * FROM resolve_entity('vase')")
+
+        assert row["spawn_mode"] == "none"
+
+    async def test_spawn_mode_clone(self, populated_db):
+        """Infinite source entities have spawn_mode='clone'."""
+        async with populated_db.acquire() as conn:
+            row = await conn.fetchrow("SELECT * FROM resolve_entity('scroll')")
+
+        assert row["spawn_mode"] == "clone"
+
+    async def test_spawn_mode_default(self, populated_db):
+        """Entities without explicit spawn_mode default to 'none'."""
+        async with populated_db.acquire() as conn:
+            # 'object' prototype has no explicit spawn_mode
+            row = await conn.fetchrow("SELECT * FROM resolve_entity('object')")
+
+        assert row["spawn_mode"] == "none"
