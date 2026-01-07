@@ -1,10 +1,16 @@
 activate
 apply
+close
 employ
 engage
+flip
+open
 operate
+press
 pull
 push
+run
+start
 trigger
 turn
 use

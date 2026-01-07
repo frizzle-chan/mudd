@@ -1,9 +1,13 @@
 acquire
+catch
 claim
 collect
+gather
+get
 grab
 grasp
 nab
+obtain
 pick
 seize
 snatch
