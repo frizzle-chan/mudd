@@ -3,8 +3,9 @@
 %type: Prototype rec Entity
 %type: Container rec Entity
 %type: ContentsVisible bool
+%type: SpawnMode enum none move clone
 %mandatory: Id Name
-%allowed: Id Name Prototype Container ContentsVisible DescriptionShort DescriptionLong
+%allowed: Id Name Prototype Container ContentsVisible SpawnMode DescriptionShort DescriptionLong
 %allowed: OnLook OnTouch OnAttack OnUse OnTake
 
 # Base prototype - all entities inherit from this

@@ -11,6 +11,20 @@ on:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: docker.io/library/postgres:18.1
+        env:
+          POSTGRES_USER: mudd
+          POSTGRES_PASSWORD: mudd
+          POSTGRES_DB: mudd
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U mudd -d mudd"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
 
@@ -37,3 +51,11 @@ jobs:
 
       - name: Validate entity definitions
         run: recfix --check data/entities.rec
+
+      - name: Run tests
+        env:
+          DB_HOST: localhost
+        run: uv run pytest
+
+      - name: Run squawk check
+        run: uv run squawk migrations/*.sql

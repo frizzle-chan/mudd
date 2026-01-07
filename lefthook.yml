@@ -13,3 +13,7 @@ pre-commit:
     - name: ty check
       glob: "*.py"
       run: uv run ty check {staged_files}
+    
+    - name: squawk check
+      glob: "migrations/*.sql"
+      run: uv run squawk {staged_files}
