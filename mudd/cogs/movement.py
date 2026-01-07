@@ -148,7 +148,7 @@ class Movement(commands.Cog):
 
     @commands.Cog.listener()
     async def on_member_remove(self, member: discord.Member):
-        """Clean up Redis when member leaves."""
+        """Clean up user location when member leaves."""
         try:
             service = get_visibility_service()
             await service.delete_user_location(member.id)
