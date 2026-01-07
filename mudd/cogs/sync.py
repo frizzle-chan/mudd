@@ -24,17 +24,19 @@ class Sync(commands.Cog):
     async def periodic_sync(self):
         """Sync database state to Discord for all guilds every 15 minutes."""
         service = get_visibility_service()
+        any_success = False
 
         for guild in self.bot.guilds:
             logger.info(f"Starting periodic sync for guild: {guild.name}")
             try:
                 stats = await service.sync_guild(guild)
                 logger.info(f"Periodic sync complete for {guild.name}: {stats}")
+                any_success = True
             except Exception as e:
                 logger.error(f"Periodic sync failed for guild {guild.name}: {e}")
 
-        # Mark startup complete after first successful sync
-        if self._first_run:
+        # Mark startup complete only after at least one successful sync
+        if self._first_run and any_success:
             service.mark_startup_complete()
             self._first_run = False
 

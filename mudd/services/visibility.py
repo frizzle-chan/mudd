@@ -327,12 +327,15 @@ class VisibilityService:
                     location = guild.get_channel(location_id)
                     if location is None or not self.is_mud_location(location):
                         await self.set_user_location(member.id, self.default_channel_id)
-                        location_id = self.default_channel_id
-
-                    await self.sync_user_to_discord(
-                        member, current_location_id=location_id
-                    )
-                    stats["synced"] += 1
+                        await self.sync_user_to_discord(
+                            member, current_location_id=self.default_channel_id
+                        )
+                        stats["assigned_default"] += 1
+                    else:
+                        await self.sync_user_to_discord(
+                            member, current_location_id=location_id
+                        )
+                        stats["synced"] += 1
 
             except Exception as e:
                 logger.error(f"Failed to sync user {member.id}: {e}")
