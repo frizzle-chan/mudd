@@ -37,13 +37,15 @@ Pre-commit hooks (lefthook) auto-run ruff and ty on staged files.
 
 **MUD concept**: Channel topics = room descriptions. Movement hides/shows channels via Discord permissions.
 
-**Design docs**: See `DESIGN.md` for Redis schema and data persistence details. **Always update DESIGN.md when modifying the Redis schema.**
+**Design docs**: See `DESIGN.md` for PostgreSQL schema and data persistence details. **Always update DESIGN.md when modifying the database schema.**
+
+**Docker**: The `.dockerignore` uses an allowlist pattern (starts with `*`, then `!` to include specific paths). **When adding new top-level directories needed at runtime, you must add them to `.dockerignore`.**
 
 ## Dependencies
 
 - `discord.py` - Discord bot library
 - `python-dotenv` - Environment variable loading
-- `redis` - Redis client for location persistence
+- `asyncpg` - PostgreSQL client for data persistence
 - `ruff` - Linting and formatting
 - `ty` - Type checking (Astral)
 - `uv` - Package management
