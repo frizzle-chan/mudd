@@ -1,6 +1,9 @@
 -- Migration: 002_entities
 -- Description: Entity system with prototypical inheritance and inventory support
 
+SET lock_timeout = '1s';
+SET statement_timeout = '5s';
+
 -- Enable fuzzy matching for entity name search
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 

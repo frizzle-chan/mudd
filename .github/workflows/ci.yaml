@@ -13,7 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: docker.io/library/postgres:17
+        image: docker.io/library/postgres:18.1
         env:
           POSTGRES_USER: mudd
           POSTGRES_PASSWORD: mudd
@@ -53,4 +53,9 @@ jobs:
         run: recfix --check data/entities.rec
 
       - name: Run tests
+        env:
+          DB_HOST: localhost
         run: uv run pytest
+
+      - name: Run squawk check
+        run: uv run squawk migrations/*.sql

@@ -1,4 +1,4 @@
-default: lint format types entities
+default: lint format types entities squawk
 
 test:
     uv run pytest
@@ -14,6 +14,9 @@ types:
 
 entities:
     recfix --check data/entities.rec
+
+squawk:
+    uv run squawk migrations/*.sql
 
 devcontainer:
     gh auth login --with-token < .github-token.txt

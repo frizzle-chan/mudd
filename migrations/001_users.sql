@@ -1,6 +1,9 @@
 -- Migration: 001_users
 -- Description: Initial schema for user location tracking
 
+SET lock_timeout = '1s';
+SET statement_timeout = '5s';
+
 CREATE TABLE IF NOT EXISTS users (
     id BIGINT PRIMARY KEY,  -- Discord user snowflake ID
     current_location TEXT,  -- Logical room name (e.g., "office", "tavern")

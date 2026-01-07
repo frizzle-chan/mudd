@@ -1,12 +1,15 @@
 """Pytest fixtures for database testing."""
 
+import os
+
 import asyncpg
 import pytest_asyncio
 
 from mudd.services.migrations import run_migrations
 
-TEST_DB_URL = "postgresql://mudd:mudd@db/mudd_test"
-ADMIN_DB_URL = "postgresql://mudd:mudd@db/postgres"
+DB_HOST = os.environ.get("DB_HOST", "db")
+TEST_DB_URL = f"postgresql://mudd:mudd@{DB_HOST}/mudd_test"
+ADMIN_DB_URL = f"postgresql://mudd:mudd@{DB_HOST}/postgres"
 
 
 @pytest_asyncio.fixture(scope="module", loop_scope="module")

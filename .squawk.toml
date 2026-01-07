@@ -1,0 +1,2 @@
+assume_in_transaction = true
+pg_version = "18.1"
