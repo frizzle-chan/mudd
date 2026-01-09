@@ -41,20 +41,9 @@ verbs:
 squawk:
     uv run squawk migrations/*.sql
 
-# Generate room map in mansion.md and mansion.mmd from mansion.rec
+# Generate room map from mansion.rec
 map:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    mermaid=$(uv run scripts/generate_room_map.py data/worlds/mansion.rec)
-    # Replace content between markers in .md
-    awk -v content="$mermaid" '
-        /<!-- begin map -->/ { print; print content; skip=1; next }
-        /<!-- end map -->/ { skip=0 }
-        !skip { print }
-    ' data/worlds/mansion.md > data/worlds/mansion.md.tmp
-    mv data/worlds/mansion.md.tmp data/worlds/mansion.md
-    # Write raw mermaid (without code fences) to .mmd
-    echo "$mermaid" | sed '1d;$d' > data/worlds/mansion.mmd
+    uv run scripts/generate_room_map.py data/worlds/mansion.rec > data/worlds/mansion.mmd
 
 devcontainer:
     gh auth login --with-token < .github-token.txt

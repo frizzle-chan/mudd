@@ -83,7 +83,6 @@ def bfs_distances(edges: set[tuple[str, str]], start: str) -> dict[str, int]:
 def generate_mermaid(edges: set[tuple[str, str]], entrance: str = "foyer") -> str:
     """Generate Mermaid graph syntax from edges."""
     lines = [
-        "```mermaid",
         "---",
         "config:",
         "    layout: elk",
@@ -133,7 +132,6 @@ def generate_mermaid(edges: set[tuple[str, str]], entrance: str = "foyer") -> st
     for src, dst in sorted(oneway, key=edge_sort_key):
         lines.append(f"    {src} --> {dst}")
 
-    lines.append("```")
     return "\n".join(lines)
 
 
