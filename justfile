@@ -43,7 +43,7 @@ squawk:
 
 # Generate room map from mansion.rec
 map:
-    uv run scripts/generate_room_map.py data/worlds/mansion.rec > data/worlds/mansion.mmd
+    uv run scripts/generate_room_map.py data/worlds/mansion.rec > data/worlds/mansion-map.mmd
 
 devcontainer:
     gh auth login --with-token < .github-token.txt
