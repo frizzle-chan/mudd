@@ -232,15 +232,24 @@ async def sync_zones_and_rooms(
     pool: asyncpg.Pool,
     guild: discord.Guild,
     console_channel_name: str = "console",
-) -> tuple[dict[str, int], str]:
+    seen_orphans: set[tuple[str, str]] | None = None,
+) -> tuple[dict[str, int], str, list[tuple[str, str]]]:
     """
     Sync zones and rooms from rec files to database and Discord.
 
-    Creates missing Discord categories and channels, syncs channel topics,
-    and reports orphan channels to the console channel.
+    Creates missing Discord categories and channels, syncs channel topics.
+    Detects orphan channels (in zone categories but not in rec files).
+
+    Args:
+        pool: Database connection pool
+        guild: Discord guild to sync
+        console_channel_name: Channel name for orphan notifications
+        seen_orphans: Set of previously seen orphans. If provided, only NEW
+            orphans are reported to console. Set is mutated to include new orphans.
 
     Returns:
-        Tuple of (stats dict with counts, default_room string).
+        Tuple of (stats dict, default_room string, orphans list).
+        Orphans are [(channel_name, category_name), ...].
     """
     stats: dict[str, int] = {
         "zones": 0,
@@ -259,7 +268,7 @@ async def sync_zones_and_rooms(
 
     if not zones:
         logger.warning("No zones found in rec files - skipping sync")
-        return stats, ""
+        return stats, "", []
 
     # Discover default room from rec file IsDefault field
     default_room = get_default_room(rooms)
@@ -341,26 +350,34 @@ async def sync_zones_and_rooms(
 
     stats["orphans_found"] = len(orphans)
 
-    # Report orphans to console channel
-    if orphans:
+    # Filter to new orphans only (if tracking)
+    if seen_orphans is None:
+        seen_orphans = set()
+    new_orphans = [o for o in orphans if o not in seen_orphans]
+
+    # Report NEW orphans to console channel
+    if new_orphans:
         console_channel = discord.utils.get(
             guild.text_channels, name=console_channel_name
         )
         if console_channel:
-            orphan_list = "\n".join(f"- #{name} in {cat}" for name, cat in orphans)
+            orphan_list = "\n".join(f"- #{name} in {cat}" for name, cat in new_orphans)
             msg = (
                 f"**Orphan channels detected** (not in .rec files):\n{orphan_list}\n\n"
                 "Consider deleting these channels or adding them to the world file."
             )
             await console_channel.send(msg)
             logger.info(
-                f"Reported {len(orphans)} orphan channels to #{console_channel_name}"
+                f"Reported {len(new_orphans)} new orphan channels "
+                f"to #{console_channel_name}"
             )
         else:
             logger.warning(
                 f"Console channel #{console_channel_name} not found - "
-                f"cannot report {len(orphans)} orphan channels"
+                f"cannot report {len(new_orphans)} orphan channels"
             )
+        # Update seen orphans set
+        seen_orphans.update(new_orphans)
 
     logger.info(
         f"Discord sync complete: {stats['categories_created']} categories, "
@@ -369,4 +386,4 @@ async def sync_zones_and_rooms(
         f"{stats['topics_updated']} topics updated, {stats['orphans_found']} orphans"
     )
 
-    return stats, default_room
+    return stats, default_room, orphans

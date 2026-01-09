@@ -145,20 +145,73 @@ The `resolve_entity(target_id TEXT)` function resolves entity properties by walk
 - Used to materialize the final entity state including inherited properties
 - Returns: `id`, `name`, `description_short`, `description_long`, `on_*` handlers, `contents_visible`, `spawn_mode`
 
+## Sync System
+
+The `Sync` cog owns all synchronization operations. Both startup and periodic syncs execute the same full sync logic.
+
+### Sync Flow
+
+```
+Bot Startup
+    ↓
+setup_hook()
+    ├─ init_database() ─────→ PostgreSQL migrations
+    ├─ sync_verbs()    ─────→ Load verb word lists
+    └─ add_cog(Sync)   ─────→ Start periodic_sync timer
+
+on_ready()
+    └─ tree.sync()     ─────→ Register slash commands
+
+periodic_sync() [FIRST ITERATION]
+    ├─ sync_zones_and_rooms() ─→ Load .rec files
+    │    ├─ Sync to database
+    │    ├─ Create Discord categories/channels
+    │    ├─ Fix channel topics
+    │    └─ Return orphans + default_room
+    │
+    ├─ init_visibility_service(default_room)
+    │
+    ├─ visibility_service.sync_guild()
+    │    ├─ Build room cache
+    │    └─ Sync user permissions
+    │
+    └─ mark_startup_complete() ─→ UNBLOCK COMMANDS
+
+periodic_sync() [EVERY 15 MINUTES]
+    ├─ sync_zones_and_rooms()
+    │    ├─ Recreate deleted channels
+    │    ├─ Fix drifted channel topics
+    │    └─ Report NEW orphans only
+    │
+    └─ visibility_service.sync_guild()
+         ├─ Rebuild room cache
+         └─ Sync user permissions
+```
+
+### Key Behaviors
+
+**Channel recreation**: If a Discord channel is deleted, the next sync recreates it from the room definition in `.rec` files.
+
+**Topic drift correction**: If a channel topic is manually changed, the next sync restores it from the room description.
+
+**Orphan tracking**: Orphan channels (in zone categories but not in `.rec` files) are tracked across syncs. Only NEW orphans trigger a warning to `#console`, preventing spam on restart.
+
+**Command blocking**: Commands call `wait_for_startup()` and block until the first sync completes. This ensures the VisibilityService is initialized before any permission operations.
+
 ## Zone System
 
 Zones map 1:1 with Discord categories. Each zone groups multiple rooms together.
 
 **Zone discovery:**
-- Zones defined in `.rec` files are synced to database on startup
+- Zones defined in `.rec` files are synced to database on startup and every 15 minutes
 - Discord categories are matched by name (lowercase, hyphenated)
 - Missing categories are created automatically with fog-of-war permissions
-- Orphan channels (in zone categories but not in `.rec` files) trigger a warning to `#console`
 
 **Room/Channel sync:**
 - Missing text channels are created from room definitions
 - Channel topics are synced from room descriptions
 - Voice channels are created for rooms with `has_voice: yes`
+- Deleted channels are recreated on next sync
 
 ## Room Abstraction
 
@@ -190,9 +243,12 @@ Migrations are raw SQL files in the `/migrations` directory:
 
 ## Visibility Sync
 
-The `sync_guild()` method ensures Discord channel permissions match database state. It runs:
-- **On startup**: Once per guild via the `Sync` cog's first task iteration, followed by `mark_startup_complete()`
-- **Periodically**: Every 15 minutes via the `Sync` cog's background task
-- **Future**: Can be triggered by Discord events (channel changes, role updates, etc.)
+The `VisibilityService.sync_guild()` method ensures Discord channel permissions match database state:
 
-Commands wait for `wait_for_startup()` before executing to ensure the initial sync completes first.
+1. Rebuilds the room name ↔ channel ID cache from database + Discord
+2. For each non-bot member:
+   - If no location in DB → assign to default room
+   - If location invalid (channel deleted) → assign to default room
+   - Sync permissions: grant `view_channel` for current room, remove for all others
+
+This runs as part of the unified sync flow described above.

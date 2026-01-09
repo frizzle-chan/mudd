@@ -435,6 +435,11 @@ class VisibilityService:
 _service: VisibilityService | None = None
 
 
+def is_visibility_service_initialized() -> bool:
+    """Check if the visibility service has been initialized."""
+    return _service is not None
+
+
 def get_visibility_service() -> VisibilityService:
     """Get the visibility service singleton."""
     if _service is None:

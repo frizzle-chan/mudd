@@ -29,7 +29,7 @@ just lint      # ruff check
 just format    # ruff format
 just types     # ty check
 
-# Run the bot (requires .env with DISCORD_TOKEN, MUDD_WORLD_CATEGORY_ID, MUDD_DEFAULT_CHANNEL_ID)
+# Run the bot (requires .env with DISCORD_TOKEN)
 python main.py
 ```
 
@@ -43,6 +43,11 @@ Pre-commit hooks (lefthook) auto-run ruff and ty on staged files.
 - Inherits from `commands.Cog`
 - Defines slash commands via `@app_commands.command`
 - Gets loaded in `main.py`
+
+**Sync cog** (`mudd/cogs/sync.py`): Owns ALL synchronization:
+- First iteration: Zone/room sync, VisibilityService initialization, permission sync
+- Every 15 minutes: Full zone/room sync (recreates deleted channels, fixes topics) + permission sync
+- Tracks orphan channels and only reports NEW ones to #console
 
 **MUD concept**: Channel topics = room descriptions. Movement hides/shows channels via Discord permissions.
 
