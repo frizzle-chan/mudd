@@ -4,11 +4,11 @@ World definitions in GNU recutils format. See [ADR 0001](../../docs/adr/0001-sta
 
 ## Structure
 
-Each world is a single `.rec` file containing rooms and entities:
+Each world is a single `.rec` file containing zones, rooms, and entities:
 
 ```
 data/worlds/
-└── mansion.rec      # Rooms + entities for the mansion world
+└── mansion.rec      # Zones + rooms + entities for the mansion world
 ```
 
 ## Validation
@@ -19,26 +19,53 @@ just entities
 
 ## File Format
 
-A world file contains two record types: `Room` and `Entity`.
+A world file contains three record types: `Zone`, `Room`, and `Entity`.
+
+### Zone Records
+
+```rec
+%rec: Zone
+%key: Id
+%mandatory: Id Name
+%allowed: Id Name Description
+
+Id: floor-1
+Name: First Floor
+Description: The ground floor of the mansion
+```
+
+- `Id` (required) - Matches Discord category name (lowercase, hyphenated)
+- `Name` (required) - Display name for the zone
+- `Description` (optional) - MUD flavor text for entering the zone
+
+**Zone/Category mapping**: Zone IDs must match Discord category names exactly. The bot will create missing categories automatically.
 
 ### Room Records
 
 ```rec
 %rec: Room
 %key: Id
-%mandatory: Id Name Description
-%allowed: Id Name Description
+%type: Zone rec Zone
+%type: HasVoice bool
+%mandatory: Id Name Description Zone
+%allowed: Id Name Description Zone HasVoice
 
 Id: foyer
 Name: Grand Foyer
+Zone: floor-1
+HasVoice: yes
 Description: A grand foyer with marble floors. To your right is a #hallway.
 ```
 
 - `Id` (required) - Matches Discord channel name
 - `Name` (required) - Display name for the room
-- `Description` (required) - Room description shown to players
+- `Description` (required) - Room description (synced to Discord channel topic)
+- `Zone` (required) - Parent zone ID (must reference a valid Zone)
+- `HasVoice` (optional) - Set to `yes` to create a paired voice channel (default: `no`)
 
 **Room connections**: Embed Discord channel mentions (e.g., `#hallway`) in the description. Discord renders these as clickable links, providing implicit navigation.
+
+**Channel creation**: The bot creates missing text channels and voice channels (if `HasVoice: yes`) automatically on startup.
 
 ### Entity Records
 

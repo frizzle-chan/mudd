@@ -2,15 +2,30 @@
 # Rooms and entities for the mansion Discord server
 
 # ============================================================================
+# Zone record type
+# ============================================================================
+%rec: Zone
+%key: Id
+%mandatory: Id Name
+%allowed: Id Name Description
+
+Id: floor-1
+Name: Floor 1
+Description: The ground floor of the mansion
+
+# ============================================================================
 # Room record type
 # ============================================================================
 %rec: Room
 %key: Id
-%mandatory: Id Name Description
-%allowed: Id Name Description
+%type: Zone rec Zone
+%type: HasVoice bool
+%mandatory: Id Name Description Zone
+%allowed: Id Name Description Zone HasVoice
 
 Id: foyer
 Name: Foyer
+Zone: floor-1
 Description: You are standing in a grand entryway
 +
 + ahead of you is a closed off staircase, the 2nd floor is off limits
@@ -20,12 +35,14 @@ Description: You are standing in a grand entryway
 
 Id: sitting-room
 Name: Sitting Room
+Zone: floor-1
 Description: Lots of comfy chairs and a cozy fireplace
 +
 + to your east is the #foyer
 
 Id: hallway
 Name: Hallway
+Zone: floor-1
 Description: A hallway, if this was a counterstrike make people would call this connector
 +
 + to your north is the #banquet-hall
@@ -34,6 +51,8 @@ Description: A hallway, if this was a counterstrike make people would call this 
 
 Id: office
 Name: Office
+Zone: floor-1
+HasVoice: yes
 Description: An office with a bunch of computer equipment. Lots of paperwork related to working on https://github.com/frizzle-chan/mudd
 +
 + Northern door leads to the #lounge
@@ -41,6 +60,7 @@ Description: An office with a bunch of computer equipment. Lots of paperwork rel
 
 Id: gallery
 Name: Gallery
+Zone: floor-1
 Description: A long room, walls laden with gilt-framed canvases. Impressive art collection!
 +
 + to the west is the #library
@@ -48,6 +68,7 @@ Description: A long room, walls laden with gilt-framed canvases. Impressive art 
 
 Id: library
 Name: Library
+Zone: floor-1
 Description: You are standing in the library. In the middle of the room are some long couches and a coffee table. 3 of the walls are completely covered by tall bookshelves, mostly stuffed with books that look brand new, as if the owner read the first chapter and then never picked the book up again. Some of the shelves are reserved for movies, others for showing off trinkets. In the southern half of the room there is a desk with a record player on it, a chest full of records beside within reach.
 +
 + In the northern corner of the room is the entrance to the #screening-room
@@ -55,12 +76,15 @@ Description: You are standing in the library. In the middle of the room are some
 
 Id: screening-room
 Name: Screening Room
+Zone: floor-1
+HasVoice: yes
 Description: The room is dark, the lit only by the projector screen cast on the western wall. You can make out theater seats resembling giant lay-z-boy chairs. The room smells like popcorn. This is a certified kinography lair. Only the finest kinos are screened in this room.
 +
 + The only door leads back to the #library
 
 Id: banquet-hall
 Name: Banquet Hall
+Zone: floor-1
 Description: You are standing in a vast tiled banquet hall with several round tableclothed tables each flanked with many chairs. Although the austere appearance reminds you of a wedding reception, you get the sense that pizza night is the most frequent event held here.
 +
 + to the east is the #lounge
@@ -69,6 +93,7 @@ Description: You are standing in a vast tiled banquet hall with several round ta
 
 Id: kitchen
 Name: Kitchen
+Zone: floor-1
 Description: An industrial looking kitchen. Reminds you of that TV show The Bear. That show was alright I guess.
 +
 + On the east side of the room you see a walk-in #freezer and a door to the #store-room
@@ -77,18 +102,22 @@ Description: An industrial looking kitchen. Reminds you of that TV show The Bear
 
 Id: freezer
 Name: Freezer
+Zone: floor-1
 Description: You walk into the freezer and shut the door. Wow it's cold in here, I don't know what I expected.
 +
 + The #kitchen is on the other side of the freezer door.
 
 Id: store-room
 Name: Store Room
+Zone: floor-1
 Description: A store room with a bunch of dry goods as well as random stuff like extra chairs, trash bags, etc.
 +
 + door exits back out to the #kitchen
 
 Id: lounge
 Name: Lounge
+Zone: floor-1
+HasVoice: yes
 Description: A dimly lit lounge with comfy chairs and one of those oversized globes with a minibar inside it. On the east side of the room is a windowed fridge you can see is full of white claw and lone star tallboys.
 +
 + There is a door on the south side of the room leading to the #office

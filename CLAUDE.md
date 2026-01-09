@@ -6,6 +6,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 MUDD is a Discord-based MUD (multi-user dungeon) where Discord channels represent physical rooms. Players use slash commands (`/look`, `/move`) to navigate, and channel visibility is controlled via Discord permissions to create "fog of war" - players only see the channel they're currently in.
 
+## Production Considerations
+
+This service is running in production with active users. When planning changes:
+
+- **Backwards compatibility**: Ensure API changes (slash commands, command arguments) don't break existing user workflows
+- **Database migrations**: Schema changes must include migration scripts that preserve existing data
+- **Rollback plan**: Consider how changes can be reverted if issues arise
+- **Downtime**: Minimize or eliminate downtime during deployments
+
 ## Commands
 
 ```bash
