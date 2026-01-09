@@ -57,6 +57,7 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 - Each room has a Zone field referencing its parent zone
 - Room connections are implicit via Discord channel mentions in descriptions (e.g., `#hallway`)
 - Synced to database on bot startup; bot creates missing Discord channels
+- `IsDefault` field in rec files marks the default spawn room (not stored in DB, used at load time only)
 
 ### Schema Migrations Table
 

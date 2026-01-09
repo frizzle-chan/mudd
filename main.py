@@ -45,10 +45,7 @@ async def setup_hook():
         logger.exception("Failed to sync verbs - bot may not recognize verb commands")
         raise
 
-    # Initialize visibility service with default room name
-    # Zone/room sync happens in on_ready since it needs guild access
-    default_room = os.environ["MUDD_DEFAULT_ROOM"]
-    init_visibility_service(default_room=default_room)
+    # Visibility service initialized in on_ready after zone sync discovers default room
 
     await bot.add_cog(Look(bot))
     await bot.add_cog(Ping(bot))
@@ -61,18 +58,29 @@ async def on_ready():
     # Sync zones and rooms from rec files to database and Discord
     # This must happen after bot is ready since we need guild access
     pool = await get_pool()
-    default_room = os.environ["MUDD_DEFAULT_ROOM"]
     console_channel = os.environ.get("MUDD_CONSOLE_CHANNEL", "console")
 
+    # Sync zones/rooms and discover default room from rec files
+    default_room: str | None = None
     for guild in bot.guilds:
         try:
-            stats = await sync_zones_and_rooms(
-                pool, guild, default_room, console_channel
+            stats, discovered_room = await sync_zones_and_rooms(
+                pool, guild, console_channel
             )
             logger.info(f"Zone sync for {guild.name}: {stats}")
+            # Get default room from first successful sync
+            if default_room is None and discovered_room:
+                default_room = discovered_room
         except Exception:
             logger.exception(f"Failed to sync zones for guild {guild.name}")
             raise
+
+    if not default_room:
+        logger.error("No guilds found or no default room defined - cannot start")
+        return
+
+    # Initialize visibility service with discovered default room
+    init_visibility_service(default_room=default_room)
 
     # Build room cache and sync user permissions after zone sync
     # This ensures the visibility service has up-to-date channel mappings

@@ -14,6 +14,8 @@ import pytest
 import pytest_asyncio
 
 from mudd.services.zone_loader import (
+    Room,
+    get_default_room,
     load_rooms_from_rec,
     load_zones_from_rec,
     sync_zones_and_rooms_to_db,
@@ -101,6 +103,22 @@ class TestLoadRoomsFromRec:
         assert office is not None
         assert office.has_voice is True
 
+    def test_is_default_defaults_to_false(self):
+        """is_default defaults to False when not specified."""
+        rooms = load_rooms_from_rec()
+        # office doesn't have IsDefault specified
+        office = next((r for r in rooms if r.id == "office"), None)
+        assert office is not None
+        assert office.is_default is False
+
+    def test_is_default_parsed_correctly(self):
+        """is_default is True when specified as 'yes'."""
+        rooms = load_rooms_from_rec()
+        # foyer has IsDefault: yes
+        foyer = next((r for r in rooms if r.id == "foyer"), None)
+        assert foyer is not None
+        assert foyer.is_default is True
+
     def test_all_expected_rooms_present(self):
         """All rooms from mansion.rec are loaded."""
         rooms = load_rooms_from_rec()
@@ -123,6 +141,46 @@ class TestLoadRoomsFromRec:
 
         missing = expected_rooms - room_ids
         assert expected_rooms.issubset(room_ids), f"Missing rooms: {missing}"
+
+
+class TestGetDefaultRoom:
+    """Test get_default_room function."""
+
+    def test_returns_default_room_id(self):
+        """get_default_room returns the ID of the room marked as default."""
+        rooms = load_rooms_from_rec()
+        default_room = get_default_room(rooms)
+        assert default_room == "foyer"
+
+    def test_raises_if_no_default(self):
+        """get_default_room raises ValueError if no room is marked as default."""
+        rooms = [
+            Room(id="room1", name="Room 1", description="A room", zone_id="zone1"),
+            Room(id="room2", name="Room 2", description="A room", zone_id="zone1"),
+        ]
+        with pytest.raises(ValueError, match="No default room found"):
+            get_default_room(rooms)
+
+    def test_raises_if_multiple_defaults(self):
+        """get_default_room raises ValueError if multiple rooms marked as default."""
+        rooms = [
+            Room(
+                id="room1",
+                name="Room 1",
+                description="A room",
+                zone_id="zone1",
+                is_default=True,
+            ),
+            Room(
+                id="room2",
+                name="Room 2",
+                description="A room",
+                zone_id="zone1",
+                is_default=True,
+            ),
+        ]
+        with pytest.raises(ValueError, match="Multiple default rooms found"):
+            get_default_room(rooms)
 
 
 @pytest.mark.asyncio(loop_scope="module")

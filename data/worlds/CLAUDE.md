@@ -47,13 +47,14 @@ Description: The ground floor of the mansion
 %key: Id
 %type: Zone rec Zone
 %type: HasVoice bool
+%type: IsDefault bool
 %mandatory: Id Name Description Zone
-%allowed: Id Name Description Zone HasVoice
+%allowed: Id Name Description Zone HasVoice IsDefault
 
 Id: foyer
 Name: Grand Foyer
 Zone: floor-1
-HasVoice: yes
+IsDefault: yes
 Description: A grand foyer with marble floors. To your right is a #hallway.
 ```
 
@@ -62,10 +63,13 @@ Description: A grand foyer with marble floors. To your right is a #hallway.
 - `Description` (required) - Room description (synced to Discord channel topic)
 - `Zone` (required) - Parent zone ID (must reference a valid Zone)
 - `HasVoice` (optional) - Set to `yes` to create a paired voice channel (default: `no`)
+- `IsDefault` (optional) - Set to `yes` to make this the default spawn room (exactly one room must be marked)
 
 **Room connections**: Embed Discord channel mentions (e.g., `#hallway`) in the description. Discord renders these as clickable links, providing implicit navigation.
 
 **Channel creation**: The bot creates missing text channels and voice channels (if `HasVoice: yes`) automatically on startup.
+
+**Default room**: Exactly one room across all world files must have `IsDefault: yes`. New players spawn here, and users in deleted rooms are relocated here.
 
 ### Entity Records
 

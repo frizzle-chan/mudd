@@ -20,12 +20,14 @@ Description: The ground floor of the mansion
 %key: Id
 %type: Zone rec Zone
 %type: HasVoice bool
+%type: IsDefault bool
 %mandatory: Id Name Description Zone
-%allowed: Id Name Description Zone HasVoice
+%allowed: Id Name Description Zone HasVoice IsDefault
 
 Id: foyer
 Name: Foyer
 Zone: floor-1
+IsDefault: yes
 Description: You are standing in a grand entryway
 +
 + ahead of you is a closed off staircase, the 2nd floor is off limits

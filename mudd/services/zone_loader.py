@@ -35,6 +35,7 @@ class Room:
     description: str
     zone_id: str
     has_voice: bool = False
+    is_default: bool = False
 
 
 def _load_records_from_rec[T](
@@ -93,12 +94,15 @@ def _parse_room_row(row: dict[str, str]) -> Room:
     """Parse a CSV row into a Room object."""
     has_voice_str = row.get("HasVoice", "").lower()
     has_voice = has_voice_str in ("yes", "true", "1")
+    is_default_str = row.get("IsDefault", "").lower()
+    is_default = is_default_str in ("yes", "true", "1")
     return Room(
         id=row["Id"],
         name=row["Name"],
         description=row["Description"],
         zone_id=row["Zone"],
         has_voice=has_voice,
+        is_default=is_default,
     )
 
 
@@ -110,6 +114,20 @@ def load_zones_from_rec() -> list[Zone]:
 def load_rooms_from_rec() -> list[Room]:
     """Load Room records from rec files using rec2csv."""
     return _load_records_from_rec("Room", _parse_room_row)
+
+
+def get_default_room(rooms: list[Room]) -> str:
+    """Get the default room ID from loaded rooms.
+
+    Raises ValueError if no default or multiple defaults found.
+    """
+    defaults = [r for r in rooms if r.is_default]
+    if len(defaults) == 0:
+        raise ValueError("No default room found. Mark one room with IsDefault: yes")
+    if len(defaults) > 1:
+        ids = [r.id for r in defaults]
+        raise ValueError(f"Multiple default rooms found: {ids}. Only one allowed.")
+    return defaults[0].id
 
 
 async def sync_zones_and_rooms_to_db(
@@ -213,9 +231,8 @@ async def sync_zones_and_rooms_to_db(
 async def sync_zones_and_rooms(
     pool: asyncpg.Pool,
     guild: discord.Guild,
-    default_room: str,
     console_channel_name: str = "console",
-) -> dict[str, int]:
+) -> tuple[dict[str, int], str]:
     """
     Sync zones and rooms from rec files to database and Discord.
 
@@ -223,7 +240,7 @@ async def sync_zones_and_rooms(
     and reports orphan channels to the console channel.
 
     Returns:
-        Stats dict with counts of operations performed.
+        Tuple of (stats dict with counts, default_room string).
     """
     stats: dict[str, int] = {
         "zones": 0,
@@ -242,7 +259,10 @@ async def sync_zones_and_rooms(
 
     if not zones:
         logger.warning("No zones found in rec files - skipping sync")
-        return stats
+        return stats, ""
+
+    # Discover default room from rec file IsDefault field
+    default_room = get_default_room(rooms)
 
     # Sync to database first
     db_stats = await sync_zones_and_rooms_to_db(pool, zones, rooms, default_room)
@@ -349,4 +369,4 @@ async def sync_zones_and_rooms(
         f"{stats['topics_updated']} topics updated, {stats['orphans_found']} orphans"
     )
 
-    return stats
+    return stats, default_room
