@@ -44,3 +44,16 @@ NOT VALID;
 -- Validate the constraint in a separate transaction (non-blocking)
 -- squawk-ignore constraint-missing-not-valid
 ALTER TABLE users VALIDATE CONSTRAINT fk_users_current_room;
+
+-- Add FK from entity_instances.room to rooms.id
+-- ON DELETE CASCADE: deleting a room also deletes entity instances in it
+-- Use NOT VALID to avoid blocking reads/writes during constraint creation
+ALTER TABLE entity_instances
+ADD CONSTRAINT fk_entity_instances_room
+FOREIGN KEY (room) REFERENCES rooms(id)
+ON DELETE CASCADE
+NOT VALID;
+
+-- Validate the constraint in a separate transaction (non-blocking)
+-- squawk-ignore constraint-missing-not-valid
+ALTER TABLE entity_instances VALIDATE CONSTRAINT fk_entity_instances_room;

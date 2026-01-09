@@ -105,13 +105,14 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 |--------|------|-------------|
 | `id` | UUID (PK) | Auto-generated unique instance identifier |
 | `entity_id` | TEXT NOT NULL (FK to entities.id) | Reference to entity definition |
-| `room` | TEXT | Logical room name (NULL when in inventory) |
+| `room` | TEXT (FK to rooms.id) | Logical room name (NULL when in inventory) |
 | `owner_id` | BIGINT (FK to users.id) | Player who owns this instance (NULL when in room) |
 | `created_at` | TIMESTAMPTZ NOT NULL | Instance creation timestamp |
 
 **Constraints:**
 - Mutual exclusivity: `(room IS NOT NULL AND owner_id IS NULL) OR (room IS NULL AND owner_id IS NOT NULL)`
-- Foreign key cascade: Deleting a user cascades to their inventory items
+- FK to users.id with ON DELETE CASCADE (deleting a user cascades to their inventory items)
+- FK to rooms.id with ON DELETE CASCADE (deleting a room cascades to entity instances in it)
 
 **Indexes:**
 - Primary key on `id`
