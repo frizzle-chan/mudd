@@ -1,0 +1,26 @@
+# Mansion
+
+Room connection map for the mansion world.
+
+<!-- begin map -->
+```mermaid
+---
+config:
+    layout: elk
+---
+graph LR
+    foyer@{ shape: stadium, label: "foyer (entrance)" }
+    foyer <--> gallery
+    foyer <--> hallway
+    foyer <--> sitting-room
+    gallery <--> library
+    hallway <--> banquet-hall
+    hallway <--> office
+    banquet-hall <--> kitchen
+    banquet-hall <--> lounge
+    library <--> screening-room
+    office <--> lounge
+    kitchen <--> freezer
+    kitchen <--> store-room
+```
+<!-- end map -->

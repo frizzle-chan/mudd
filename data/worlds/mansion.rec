@@ -1,0 +1,161 @@
+# Mansion World
+# Rooms and entities for the mansion Discord server
+
+# ============================================================================
+# Room record type
+# ============================================================================
+%rec: Room
+%key: Id
+%mandatory: Id Name Description
+%allowed: Id Name Description
+
+Id: foyer
+Name: Foyer
+Description: You are standing in a grand entryway
++
++ ahead of you is a closed off staircase, the 2nd floor is off limits
++ to your west is a #sitting-room
++ to your north-west is the #gallery
++ to your east is a #hallway
+
+Id: sitting-room
+Name: Sitting Room
+Description: Lots of comfy chairs and a cozy fireplace
++
++ to your east is the #foyer
+
+Id: hallway
+Name: Hallway
+Description: A hallway, if this was a counterstrike make people would call this connector
++
++ to your north is the #banquet-hall
++ to your east is the #office
++ to your west is the #foyer
+
+Id: office
+Name: Office
+Description: An office with a bunch of computer equipment. Lots of paperwork related to working on https://github.com/frizzle-chan/mudd
++
++ Northern door leads to the #lounge
++ Western door exits back out to the #hallway
+
+Id: gallery
+Name: Gallery
+Description: A long room, walls laden with gilt-framed canvases. Impressive art collection!
++
++ to the west is the #library
++ to the east is the #foyer
+
+Id: library
+Name: Library
+Description: You are standing in the library. In the middle of the room are some long couches and a coffee table. 3 of the walls are completely covered by tall bookshelves, mostly stuffed with books that look brand new, as if the owner read the first chapter and then never picked the book up again. Some of the shelves are reserved for movies, others for showing off trinkets. In the southern half of the room there is a desk with a record player on it, a chest full of records beside within reach.
++
++ In the northern corner of the room is the entrance to the #screening-room
++ behind you is the #gallery
+
+Id: screening-room
+Name: Screening Room
+Description: The room is dark, the lit only by the projector screen cast on the western wall. You can make out theater seats resembling giant lay-z-boy chairs. The room smells like popcorn. This is a certified kinography lair. Only the finest kinos are screened in this room.
++
++ The only door leads back to the #library
+
+Id: banquet-hall
+Name: Banquet Hall
+Description: You are standing in a vast tiled banquet hall with several round tableclothed tables each flanked with many chairs. Although the austere appearance reminds you of a wedding reception, you get the sense that pizza night is the most frequent event held here.
++
++ to the east is the #lounge
++ the entrance to the #kitchen is in the far north east corner
++ to the south is the #hallway
+
+Id: kitchen
+Name: Kitchen
+Description: An industrial looking kitchen. Reminds you of that TV show The Bear. That show was alright I guess.
++
++ On the east side of the room you see a walk-in #freezer and a door to the #store-room
++
++ to the west is the #banquet-hall
+
+Id: freezer
+Name: Freezer
+Description: You walk into the freezer and shut the door. Wow it's cold in here, I don't know what I expected.
++
++ The #kitchen is on the other side of the freezer door.
+
+Id: store-room
+Name: Store Room
+Description: A store room with a bunch of dry goods as well as random stuff like extra chairs, trash bags, etc.
++
++ door exits back out to the #kitchen
+
+Id: lounge
+Name: Lounge
+Description: A dimly lit lounge with comfy chairs and one of those oversized globes with a minibar inside it. On the east side of the room is a windowed fridge you can see is full of white claw and lone star tallboys.
++
++ There is a door on the south side of the room leading to the #office
++ To the east is the #banquet-hall
+
+# ============================================================================
+# Entity record type
+# ============================================================================
+%rec: Entity
+%key: Id
+%type: Prototype rec Entity
+%type: Container rec Entity
+%type: Room rec Room
+%type: ContentsVisible bool
+%type: SpawnMode enum none move clone
+%mandatory: Id Name
+%allowed: Id Name Prototype Container Room ContentsVisible SpawnMode DescriptionShort DescriptionLong
+%allowed: OnLook OnTouch OnAttack OnUse OnTake
+
+# ----------------------------------------------------------------------------
+# Base prototypes (no Room field - these are templates, not instances)
+# ----------------------------------------------------------------------------
+
+Id: object
+Name: object
+DescriptionShort: a {name}
+OnLook: You see nothing special about the {name}.
+OnTouch: You touch the {name}. Nothing happens.
+OnAttack: You attack the {name}, but it has no effect.
+OnUse: You can't use the {name}.
+OnTake: You can't take the {name}.
+
+Id: furniture
+Name: furniture
+Prototype: object
+DescriptionShort: a {name} sits here
+
+Id: glass_object
+Name: Glass Object
+Prototype: object
+OnAttack: You suppress the intrusive thought to smash the {name}
+
+# ----------------------------------------------------------------------------
+# Foyer entities
+# ----------------------------------------------------------------------------
+
+Id: foyer_table
+Name: Wooden Table
+Prototype: furniture
+Room: foyer
+DescriptionShort: a {name} sits in the middle of the room
+DescriptionLong: A sturdy oak table with worn edges.
+ContentsVisible: yes
+
+Id: foyer_flower_vase
+Name: Flower Vase
+Prototype: glass_object
+Room: foyer
+Container: foyer_table
+DescriptionShort: a teal {name} with yellow roses in it
+DescriptionLong: a teal ceramic vase with gold trim around the lip. A couple yellow roses sit inside.
+
+Id: foyer_plaque
+Name: Inscribed Plaque
+Prototype: object
+Room: foyer
+Container: foyer_table
+DescriptionShort: a {name}
+DescriptionLong: a wooden plaque with a shiny brass plate with a message inscribed on it.
+OnLook: The plaque reads "Welcome to my mansion! You can usually find us in the office down the hall. -Frizzle"

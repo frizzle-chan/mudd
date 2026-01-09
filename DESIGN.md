@@ -99,6 +99,19 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 - Each file contains one verb per line, mapped to the action matching the filename
 - Full sync on startup: verbs not in files are removed from the database
 
+### Rooms Table
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | TEXT (PK) | Logical room name, matches Discord channel name |
+| `name` | TEXT NOT NULL | Display name for the room |
+| `description` | TEXT NOT NULL | Room description (can be synced to Discord channel topic) |
+
+**Data Source:**
+- Rooms are defined in `data/worlds/<world>/*.rec` files
+- Each room file contains a `Room` record and its entities
+- Room connections are implicit via Discord channel mentions in descriptions (e.g., `#hallway`)
+
 ### Entity Inheritance
 
 The `resolve_entity(target_id TEXT)` function resolves entity properties by walking up the prototype chain:
