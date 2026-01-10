@@ -65,9 +65,9 @@ Description: A grand foyer with marble floors. To your right is a #hallway.
 - `HasVoice` (optional) - Set to `yes` to create a paired voice channel (default: `no`)
 - `IsDefault` (optional) - Set to `yes` to make this the default spawn room (exactly one room must be marked)
 
-**Room connections**: Embed Discord channel mentions (e.g., `#hallway`) in the description. Discord renders these as clickable links, providing implicit navigation.
+**Room connections**: Embed Discord channel mentions (e.g., `#hallway`) in the description. The `/move` command parses these mentions to determine valid exits.
 
-**Channel creation**: The bot creates missing text channels and voice channels (if `HasVoice: yes`) automatically on startup.
+**Channel creation**: The bot creates missing text channels and voice channels (if `HasVoice: yes`) automatically during sync.
 
 **Default room**: Exactly one room across all world files must have `IsDefault: yes`. New players spawn here, and users in deleted rooms are relocated here.
 
