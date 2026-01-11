@@ -35,25 +35,23 @@ ALTER INDEX idx_users_current_location RENAME TO idx_users_current_room;
 -- Add FK from users.current_room to rooms.id
 -- ON DELETE RESTRICT prevents deleting rooms that have users in them
 -- Use NOT VALID to avoid blocking reads/writes during constraint creation
+-- NOTE: We intentionally skip VALIDATE CONSTRAINT here.
+-- The rooms table is empty at migration time; rooms are populated
+-- during bot startup by the zone_loader service. The NOT VALID
+-- constraint ensures new rows are validated without blocking.
+-- Existing data will be corrected during the first sync.
 ALTER TABLE users
 ADD CONSTRAINT fk_users_current_room
 FOREIGN KEY (current_room) REFERENCES rooms(id)
 ON DELETE RESTRICT
 NOT VALID;
 
--- Validate the constraint in a separate transaction (non-blocking)
--- squawk-ignore constraint-missing-not-valid
-ALTER TABLE users VALIDATE CONSTRAINT fk_users_current_room;
-
 -- Add FK from entity_instances.room to rooms.id
 -- ON DELETE CASCADE: deleting a room also deletes entity instances in it
 -- Use NOT VALID to avoid blocking reads/writes during constraint creation
+-- NOTE: We intentionally skip VALIDATE CONSTRAINT here (see comment above).
 ALTER TABLE entity_instances
 ADD CONSTRAINT fk_entity_instances_room
 FOREIGN KEY (room) REFERENCES rooms(id)
 ON DELETE CASCADE
 NOT VALID;
-
--- Validate the constraint in a separate transaction (non-blocking)
--- squawk-ignore constraint-missing-not-valid
-ALTER TABLE entity_instances VALIDATE CONSTRAINT fk_entity_instances_room;

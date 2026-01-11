@@ -44,17 +44,19 @@ class VisibilityService:
         for row in room_rows:
             room_to_zone[row["id"]] = row["zone_id"]
 
+        # Precompute zone lookup by id to avoid nested loops
+        zone_id_map = {row["id"]: row for row in zone_rows}
+
         # Match Discord categories to zones by name
         zone_to_category: dict[str, int] = {}
         category_to_zone: dict[int, str] = {}
         for category in guild.categories:
             # Match category name to zone id (both are lowercase, hyphenated)
             category_name = category.name.lower().replace(" ", "-")
-            for zone_row in zone_rows:
-                if zone_row["id"] == category_name:
-                    zone_to_category[zone_row["id"]] = category.id
-                    category_to_zone[category.id] = zone_row["id"]
-                    break
+            zone_row = zone_id_map.get(category_name)
+            if zone_row is not None:
+                zone_to_category[zone_row["id"]] = category.id
+                category_to_zone[category.id] = zone_row["id"]
 
         # Build room caches only for channels in matched categories
         room_to_channel: dict[str, int] = {}
