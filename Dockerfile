@@ -49,7 +49,7 @@ RUN --mount=type=cache,target=/home/mudd/.cache/uv,uid=1000,gid=1000 \
 
 COPY . .
 
-RUN sed -i "s/GIT_COMMIT = \"unknown\"/GIT_COMMIT = \"${GIT_COMMIT}\"/" mudd/version.py
+RUN sed -i "s|GIT_COMMIT = \"unknown\"|GIT_COMMIT = \"${GIT_COMMIT}\"|" mudd/version.py
 
 RUN --mount=type=cache,target=/home/mudd/.cache/uv,uid=1000,gid=1000 \
     uv sync --locked
