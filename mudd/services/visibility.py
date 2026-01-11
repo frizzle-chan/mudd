@@ -3,6 +3,7 @@
 import asyncio
 import logging
 
+import asyncpg
 import discord
 
 from mudd.services.database import get_pool
@@ -420,7 +421,7 @@ class VisibilityService:
                         )
                         stats["synced"] += 1
 
-            except Exception as e:
+            except (asyncpg.PostgresError, discord.HTTPException) as e:
                 logger.error(f"Failed to sync user {member.id}: {e}")
                 stats["errors"] += 1
 
