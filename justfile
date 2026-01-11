@@ -18,6 +18,7 @@ entities:
     for file in data/worlds/*.rec; do
         recfix --check "$file"
     done
+    uv run scripts/validate_world.py
 
 verbs:
     #!/usr/bin/env bash

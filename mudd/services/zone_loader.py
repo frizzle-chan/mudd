@@ -7,6 +7,7 @@ import subprocess
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal, overload
 
 import asyncpg
 import discord
@@ -228,6 +229,153 @@ async def sync_zones_and_rooms_to_db(
     return stats
 
 
+@overload
+def _find_channels_by_name(
+    guild: discord.Guild,
+    channel_name: str,
+    channel_type: Literal["text"],
+) -> list[discord.TextChannel]: ...
+
+
+@overload
+def _find_channels_by_name(
+    guild: discord.Guild,
+    channel_name: str,
+    channel_type: Literal["voice"],
+) -> list[discord.VoiceChannel]: ...
+
+
+def _find_channels_by_name(
+    guild: discord.Guild,
+    channel_name: str,
+    channel_type: Literal["text", "voice"],
+) -> list[discord.TextChannel] | list[discord.VoiceChannel]:
+    """
+    Search entire guild for channels with the given name.
+
+    Args:
+        guild: Discord guild to search
+        channel_name: Name of channel to find
+        channel_type: Type of channel to search for ("text" or "voice")
+
+    Returns:
+        List of matching channels sorted by ID (oldest first).
+    """
+    channels = guild.text_channels if channel_type == "text" else guild.voice_channels
+
+    matches = [ch for ch in channels if ch.name == channel_name]
+    # Sort by ID (ascending) - smaller ID = older channel
+    matches.sort(key=lambda ch: ch.id)
+    return matches  # type: ignore[return-value]
+
+
+async def _sync_channel(
+    guild: discord.Guild,
+    room: Room,
+    category: discord.CategoryChannel,
+    stats: dict[str, int],
+    channel_type: Literal["text", "voice"],
+) -> None:
+    """
+    Sync a single channel (text or voice) for a room.
+
+    Handles finding existing channels anywhere in the guild, deleting
+    duplicates, moving channels to the correct category, and creating
+    new channels when needed.
+
+    Args:
+        guild: Discord guild to sync
+        room: Room data from rec file
+        category: Target category for the channel
+        stats: Stats dictionary to update with operation counts
+        channel_type: Type of channel to sync ("text" or "voice")
+    """
+    matches = _find_channels_by_name(guild, room.id, channel_type)
+    type_label = "text" if channel_type == "text" else "voice"
+    stats_prefix = "" if channel_type == "text" else "voice_"
+
+    if len(matches) == 0:
+        # No channel exists anywhere - create it
+        try:
+            if channel_type == "text":
+                await category.create_text_channel(room.id, topic=room.description)
+            else:
+                await category.create_voice_channel(room.id)
+            stats[f"{stats_prefix}channels_created"] += 1
+            logger.info(f"Created {type_label} channel: {room.id} in {category.name}")
+        except discord.HTTPException as e:
+            logger.error(f"Failed to create {type_label} channel {room.id}: {e}")
+        return
+
+    # Keep oldest channel (first in list, sorted by ID)
+    channel = matches[0]
+
+    # Delete any duplicates (keep oldest, delete newer)
+    for duplicate in matches[1:]:
+        old_category = duplicate.category
+        old_category_name = old_category.name if old_category else "None"
+
+        # For voice channels, move connected users to the kept channel first
+        if (
+            channel_type == "voice"
+            and isinstance(duplicate, discord.VoiceChannel)
+            and isinstance(channel, discord.VoiceChannel)
+        ):
+            for member in duplicate.members:
+                try:
+                    await member.move_to(channel)
+                    logger.info(
+                        f"Moved {member.name} from duplicate voice channel "
+                        f"to kept channel {room.id}"
+                    )
+                except discord.HTTPException as e:
+                    logger.error(f"Failed to move {member.name}: {e}")
+
+        try:
+            await duplicate.delete(
+                reason=f"Duplicate {type_label} channel cleanup during sync"
+            )
+            stats["channels_deleted"] += 1
+            logger.info(
+                f"Deleted duplicate {type_label} channel: {room.id} "
+                f"(ID: {duplicate.id}) from {old_category_name}"
+            )
+        except discord.HTTPException as e:
+            logger.error(
+                f"Failed to delete duplicate {type_label} channel {room.id} "
+                f"(ID: {duplicate.id}): {e}"
+            )
+
+    # Move if in wrong category
+    if channel.category_id != category.id:
+        old_category = channel.category
+        old_category_name = old_category.name if old_category else "None"
+        try:
+            await channel.edit(category=category)
+            stats[f"{stats_prefix}channels_moved"] += 1
+            logger.info(
+                f"Moved {type_label} channel: {room.id} from {old_category_name} "
+                f"to {category.name}"
+            )
+        except discord.HTTPException as e:
+            logger.error(
+                f"Failed to move {type_label} channel {room.id} to {category.name}: {e}"
+            )
+
+    # Sync topic for text channels only
+    if (
+        channel_type == "text"
+        and isinstance(channel, discord.TextChannel)
+        and channel.topic != room.description
+    ):
+        try:
+            await channel.edit(topic=room.description)
+            stats["topics_updated"] += 1
+            logger.debug(f"Updated topic for #{room.id}")
+        except discord.HTTPException as e:
+            logger.error(f"Failed to update topic for {room.id}: {e}")
+
+
 async def sync_zones_and_rooms(
     pool: asyncpg.Pool,
     guild: discord.Guild,
@@ -238,6 +386,7 @@ async def sync_zones_and_rooms(
     Sync zones and rooms from rec files to database and Discord.
 
     Creates missing Discord categories and channels, syncs channel topics.
+    Moves channels that exist in wrong categories to the correct category.
     Detects orphan channels (in zone categories but not in rec files).
 
     Args:
@@ -257,7 +406,10 @@ async def sync_zones_and_rooms(
         "users_relocated": 0,
         "categories_created": 0,
         "channels_created": 0,
+        "channels_moved": 0,
+        "channels_deleted": 0,
         "voice_channels_created": 0,
+        "voice_channels_moved": 0,
         "topics_updated": 0,
         "orphans_found": 0,
     }
@@ -300,7 +452,7 @@ async def sync_zones_and_rooms(
             stats["categories_created"] += 1
             logger.info(f"Created category: {zone.name}")
 
-    # Create missing channels and sync topics
+    # Create/move channels and sync topics
     for room in rooms:
         category = zone_to_category.get(room.zone_id)
         if not category:
@@ -309,31 +461,24 @@ async def sync_zones_and_rooms(
             )
             continue
 
-        # Find existing text channel
-        text_channel = discord.utils.get(category.text_channels, name=room.id)
+        # Sync text channel
+        await _sync_channel(
+            guild=guild,
+            room=room,
+            category=category,
+            stats=stats,
+            channel_type="text",
+        )
 
-        if text_channel is None:
-            # Create text channel
-            text_channel = await category.create_text_channel(
-                room.id,
-                topic=room.description,
-            )
-            stats["channels_created"] += 1
-            logger.info(f"Created channel: #{room.id} in {category.name}")
-        elif text_channel.topic != room.description:
-            # Sync topic
-            await text_channel.edit(topic=room.description)
-            stats["topics_updated"] += 1
-            logger.debug(f"Updated topic for #{room.id}")
-
-        # Handle voice channel
+        # Sync voice channel if room has voice
         if room.has_voice:
-            voice_channel = discord.utils.get(category.voice_channels, name=room.id)
-
-            if voice_channel is None:
-                await category.create_voice_channel(room.id)
-                stats["voice_channels_created"] += 1
-                logger.info(f"Created voice channel: {room.id} in {category.name}")
+            await _sync_channel(
+                guild=guild,
+                room=room,
+                category=category,
+                stats=stats,
+                channel_type="voice",
+            )
 
     # Find orphan channels (in zone categories but not in rec files)
     orphans: list[tuple[str, str]] = []  # (channel_name, category_name)
@@ -381,8 +526,11 @@ async def sync_zones_and_rooms(
 
     logger.info(
         f"Discord sync complete: {stats['categories_created']} categories, "
-        f"{stats['channels_created']} channels, "
-        f"{stats['voice_channels_created']} voice channels, "
+        f"{stats['channels_created']} channels created, "
+        f"{stats['channels_moved']} channels moved, "
+        f"{stats['channels_deleted']} channels deleted, "
+        f"{stats['voice_channels_created']} voice channels created, "
+        f"{stats['voice_channels_moved']} voice channels moved, "
         f"{stats['topics_updated']} topics updated, {stats['orphans_found']} orphans"
     )
 
