@@ -82,7 +82,7 @@ class Movement(commands.Cog):
         choices = [
             app_commands.Choice(name=f"#{exit_ch.name}", value=exit_ch.name)
             for exit_ch in valid_exits
-            if current_lower in exit_ch.name.lower()
+            if exit_ch.name.lower().startswith(current_lower)
         ]
 
         # Discord limits autocomplete to 25 choices
