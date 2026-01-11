@@ -37,11 +37,16 @@ async def close_pool() -> None:
     _pool = None
 
 
-async def init_database() -> None:
-    """Initialize database: create pool and run migrations."""
+async def init_database() -> asyncpg.Pool:
+    """Initialize database: create pool and run migrations.
+
+    Returns:
+        The database connection pool.
+    """
     from mudd.services.migrations import run_migrations
 
     pool = await get_pool()
     applied = await run_migrations(pool)
     if applied > 0:
         logger.info(f"Applied {applied} database migration(s)")
+    return pool

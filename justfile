@@ -13,7 +13,12 @@ types:
     uv run ty check
 
 entities:
-    recfix --check data/entities.rec
+    #!/usr/bin/env bash
+    set -euo pipefail
+    for file in data/worlds/*.rec; do
+        recfix --check "$file"
+    done
+    uv run scripts/validate_world.py
 
 verbs:
     #!/usr/bin/env bash
@@ -36,6 +41,10 @@ verbs:
 
 squawk:
     uv run squawk migrations/*.sql
+
+# Generate room map from mansion.rec
+map:
+    uv run scripts/generate_room_map.py data/worlds/mansion.rec > data/worlds/mansion-map.mmd
 
 devcontainer:
     gh auth login --with-token < .github-token.txt

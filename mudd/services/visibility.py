@@ -13,32 +13,70 @@ logger = logging.getLogger(__name__)
 class VisibilityService:
     """Manages user location assignments and Discord channel visibility."""
 
-    def __init__(self, world_category_id: int, default_channel_id: int):
-        self.world_category_id = world_category_id
-        self.default_channel_id = default_channel_id
+    def __init__(self, default_room: str):
+        self.default_room = default_room
         self._startup_complete = asyncio.Event()
         # Room name caches (rebuilt on each sync)
         self._room_to_channel: dict[str, int] = {}
         self._channel_to_room: dict[int, str] = {}
+        # Zone tracking (rebuilt on each sync)
+        self._zone_to_category: dict[str, int] = {}
+        self._category_to_zone: dict[int, str] = {}
+        self._room_to_zone: dict[str, str] = {}
 
     async def wait_for_startup(self) -> None:
         """Block until startup sync is complete."""
         await self._startup_complete.wait()
 
-    def _build_room_cache(self, guild: discord.Guild) -> None:
-        """Build the room name <-> channel ID caches from Discord channel names."""
-        # Build new dicts first, then swap atomically to avoid race conditions
-        # with concurrent reads (reference assignment is atomic in Python)
+    async def _build_room_cache(self, guild: discord.Guild) -> None:
+        """Build the room name <-> channel ID caches from database and Discord."""
+        pool = await get_pool()
+
+        # Query zones from database
+        zone_rows = await pool.fetch("SELECT id, name FROM zones")
+
+        # Query rooms with zone_id from database
+        room_rows = await pool.fetch("SELECT id, zone_id FROM rooms")
+
+        # Build zone -> room mapping
+        room_to_zone: dict[str, str] = {}
+        for row in room_rows:
+            room_to_zone[row["id"]] = row["zone_id"]
+
+        # Match Discord categories to zones by name
+        zone_to_category: dict[str, int] = {}
+        category_to_zone: dict[int, str] = {}
+        for category in guild.categories:
+            # Match category name to zone id (both are lowercase, hyphenated)
+            category_name = category.name.lower().replace(" ", "-")
+            for zone_row in zone_rows:
+                if zone_row["id"] == category_name:
+                    zone_to_category[zone_row["id"]] = category.id
+                    category_to_zone[category.id] = zone_row["id"]
+                    break
+
+        # Build room caches only for channels in matched categories
         room_to_channel: dict[str, int] = {}
         channel_to_room: dict[int, str] = {}
         for channel in guild.text_channels:
-            if channel.category_id == self.world_category_id:
+            if channel.category_id in category_to_zone:
                 room_name = channel.name
-                room_to_channel[room_name] = channel.id
-                channel_to_room[channel.id] = room_name
+                # Only cache if this room exists in our database
+                if room_name in room_to_zone:
+                    room_to_channel[room_name] = channel.id
+                    channel_to_room[channel.id] = room_name
+
+        # Atomic swap
         self._room_to_channel = room_to_channel
         self._channel_to_room = channel_to_room
-        logger.info(f"Built room cache with {len(self._room_to_channel)} rooms")
+        self._zone_to_category = zone_to_category
+        self._category_to_zone = category_to_zone
+        self._room_to_zone = room_to_zone
+
+        logger.info(
+            f"Built room cache with {len(self._room_to_channel)} rooms "
+            f"across {len(self._zone_to_category)} zones"
+        )
 
     def get_channel_for_room(self, room_name: str) -> int | None:
         """Get channel ID for a room name."""
@@ -48,21 +86,25 @@ class VisibilityService:
         """Get room name for a channel ID."""
         return self._channel_to_room.get(channel_id)
 
-    def get_default_room(self) -> str | None:
+    def get_default_room(self) -> str:
         """Get the default room name."""
-        return self.get_room_for_channel(self.default_channel_id)
+        return self.default_room
+
+    def get_default_channel_id(self) -> int | None:
+        """Get the default room's channel ID."""
+        return self.get_channel_for_room(self.default_room)
 
     def is_mud_location(self, channel: discord.abc.GuildChannel) -> bool:
-        """Check if a channel is a MUD location (in the world category)."""
+        """Check if a channel is a MUD location (in a zone category)."""
         return (
             isinstance(channel, discord.TextChannel)
-            and channel.category_id == self.world_category_id
+            and channel.category_id in self._category_to_zone
         )
 
     def get_mud_locations(self, guild: discord.Guild) -> list[discord.TextChannel]:
         """Get all MUD location channels in a guild."""
         return [
-            ch for ch in guild.text_channels if ch.category_id == self.world_category_id
+            ch for ch in guild.text_channels if ch.category_id in self._category_to_zone
         ]
 
     def get_paired_voice_channel(
@@ -89,6 +131,58 @@ class VisibilityService:
                 return voice_channel
         return None
 
+    async def _set_voice_permissions(
+        self,
+        text_channel: discord.TextChannel,
+        member: discord.Member,
+        overwrite: discord.PermissionOverwrite | None,
+        reason: str,
+        *,
+        disconnect_if_leaving: bool = False,
+    ) -> None:
+        """
+        Set voice channel permissions (best-effort, non-blocking on errors).
+
+        Voice channel permissions are supplementary to text channel permissions.
+        Failures are logged but don't raise exceptions.
+
+        Args:
+            text_channel: The text channel whose paired voice channel to update
+            member: The guild member to set permissions for
+            overwrite: The permission overwrite to apply (None to remove)
+            reason: Audit log reason for the permission change
+            disconnect_if_leaving: If True and overwrite is None, disconnect user
+                                   from voice channel if they're in it
+        """
+        paired_voice = self.get_paired_voice_channel(text_channel)
+        if not paired_voice:
+            return
+
+        # Disconnect user from voice before removing permissions if requested
+        if (
+            disconnect_if_leaving
+            and overwrite is None
+            and member.voice
+            and member.voice.channel == paired_voice
+        ):
+            try:
+                await member.move_to(None)
+            except discord.HTTPException as e:
+                logger.warning(
+                    f"Failed to disconnect {member} from voice channel "
+                    f"{paired_voice}: {e}"
+                )
+
+        try:
+            await paired_voice.set_permissions(
+                member, overwrite=overwrite, reason=reason
+            )
+        except discord.HTTPException as e:
+            logger.error(
+                f"Failed to set voice channel {paired_voice.id} "
+                f"permissions for {member.id}: {e}"
+            )
+
     async def get_user_location(self, user_id: int) -> int | None:
         """
         Get the channel ID of the user's current location, or None if not set.
@@ -97,21 +191,21 @@ class VisibilityService:
         """
         pool = await get_pool()
         row = await pool.fetchrow(
-            "SELECT current_location FROM users WHERE id = $1",
+            "SELECT current_room FROM users WHERE id = $1",
             user_id,
         )
-        if row and row["current_location"]:
-            return self.get_channel_for_room(row["current_location"])
+        if row and row["current_room"]:
+            return self.get_channel_for_room(row["current_room"])
         return None
 
     async def get_user_room(self, user_id: int) -> str | None:
         """Get the room name of the user's current location, or None if not set."""
         pool = await get_pool()
         row = await pool.fetchrow(
-            "SELECT current_location FROM users WHERE id = $1",
+            "SELECT current_room FROM users WHERE id = $1",
             user_id,
         )
-        return row["current_location"] if row else None
+        return row["current_room"] if row else None
 
     async def set_user_location(self, user_id: int, channel_id: int) -> None:
         """
@@ -127,10 +221,28 @@ class VisibilityService:
         pool = await get_pool()
         await pool.execute(
             """
-            INSERT INTO users (id, current_location)
+            INSERT INTO users (id, current_room)
             VALUES ($1, $2)
             ON CONFLICT (id)
-            DO UPDATE SET current_location = EXCLUDED.current_location
+            DO UPDATE SET current_room = EXCLUDED.current_room
+            """,
+            user_id,
+            room_name,
+        )
+
+    async def set_user_room(self, user_id: int, room_name: str) -> None:
+        """
+        Set the user's current location by room name.
+
+        Used for assigning users to rooms before channels exist.
+        """
+        pool = await get_pool()
+        await pool.execute(
+            """
+            INSERT INTO users (id, current_room)
+            VALUES ($1, $2)
+            ON CONFLICT (id)
+            DO UPDATE SET current_room = EXCLUDED.current_room
             """,
             user_id,
             room_name,
@@ -183,19 +295,9 @@ class VisibilityService:
                 )
                 raise
 
-            # Voice channel permissions are best-effort: failures are logged but
-            # don't block text channel ops, since voice is supplementary.
-            paired_voice = self.get_paired_voice_channel(location)
-            if paired_voice:
-                try:
-                    await paired_voice.set_permissions(
-                        member, overwrite=voice_overwrite, reason="MUDD visibility sync"
-                    )
-                except discord.HTTPException as e:
-                    logger.error(
-                        f"Failed to set voice channel {paired_voice.id} "
-                        f"permissions for {member.id}: {e}"
-                    )
+            await self._set_voice_permissions(
+                location, member, voice_overwrite, reason="MUDD visibility sync"
+            )
 
     async def move_user_to_channel(
         self,
@@ -237,30 +339,13 @@ class VisibilityService:
                 reason="MUDD movement - leaving",
             )
 
-            # Voice channel permissions are best-effort: failures are logged but
-            # don't block text channel ops, since voice is supplementary.
-            paired_voice = self.get_paired_voice_channel(old_channel)
-            if paired_voice:
-                # Disconnect user from voice before removing permissions
-                if member.voice and member.voice.channel == paired_voice:
-                    try:
-                        await member.move_to(None)
-                    except discord.HTTPException as e:
-                        logger.warning(
-                            f"Failed to disconnect {member} from voice channel "
-                            f"{paired_voice}: {e}"
-                        )
-                try:
-                    await paired_voice.set_permissions(
-                        member,
-                        overwrite=None,
-                        reason="MUDD movement - leaving",
-                    )
-                except discord.HTTPException as e:
-                    logger.error(
-                        f"Failed to remove voice channel {paired_voice.id} "
-                        f"permissions for {member.id}: {e}"
-                    )
+            await self._set_voice_permissions(
+                old_channel,
+                member,
+                overwrite=None,
+                reason="MUDD movement - leaving",
+                disconnect_if_leaving=True,
+            )
 
         # Phase 2: Grant access to new channel
         if new_channel:
@@ -270,24 +355,15 @@ class VisibilityService:
                 reason="MUDD movement - entering",
             )
 
-            # Voice channel permissions are best-effort: failures are logged but
-            # don't block text channel ops, since voice is supplementary.
             if isinstance(new_channel, discord.TextChannel):
-                paired_voice = self.get_paired_voice_channel(new_channel)
-                if paired_voice:
-                    try:
-                        await paired_voice.set_permissions(
-                            member,
-                            overwrite=discord.PermissionOverwrite(
-                                view_channel=True, connect=True, speak=True
-                            ),
-                            reason="MUDD movement - entering",
-                        )
-                    except discord.HTTPException as e:
-                        logger.error(
-                            f"Failed to grant voice channel {paired_voice.id} "
-                            f"permissions for {member.id}: {e}"
-                        )
+                await self._set_voice_permissions(
+                    new_channel,
+                    member,
+                    overwrite=discord.PermissionOverwrite(
+                        view_channel=True, connect=True, speak=True
+                    ),
+                    reason="MUDD movement - entering",
+                )
 
         logger.info(f"Moved user {member.id} from {current} to {channel_id}")
         return True
@@ -306,7 +382,14 @@ class VisibilityService:
             Stats dict with counts of users synced/assigned
         """
         # Build room cache before syncing users
-        self._build_room_cache(guild)
+        await self._build_room_cache(guild)
+
+        default_channel_id = self.get_default_channel_id()
+        if default_channel_id is None:
+            logger.error(
+                f"Default room '{self.default_room}' not found in any zone category"
+            )
+            return {"synced": 0, "assigned_default": 0, "errors": 0}
 
         stats = {"synced": 0, "assigned_default": 0, "errors": 0}
 
@@ -318,17 +401,17 @@ class VisibilityService:
                 location_id = await self.get_user_location(member.id)
 
                 if location_id is None:
-                    await self.set_user_location(member.id, self.default_channel_id)
+                    await self.set_user_location(member.id, default_channel_id)
                     await self.sync_user_to_discord(
-                        member, current_location_id=self.default_channel_id
+                        member, current_location_id=default_channel_id
                     )
                     stats["assigned_default"] += 1
                 else:
                     location = guild.get_channel(location_id)
                     if location is None or not self.is_mud_location(location):
-                        await self.set_user_location(member.id, self.default_channel_id)
+                        await self.set_user_location(member.id, default_channel_id)
                         await self.sync_user_to_discord(
-                            member, current_location_id=self.default_channel_id
+                            member, current_location_id=default_channel_id
                         )
                         stats["assigned_default"] += 1
                     else:
@@ -352,6 +435,11 @@ class VisibilityService:
 _service: VisibilityService | None = None
 
 
+def is_visibility_service_initialized() -> bool:
+    """Check if the visibility service has been initialized."""
+    return _service is not None
+
+
 def get_visibility_service() -> VisibilityService:
     """Get the visibility service singleton."""
     if _service is None:
@@ -359,10 +447,8 @@ def get_visibility_service() -> VisibilityService:
     return _service
 
 
-def init_visibility_service(
-    world_category_id: int, default_channel_id: int
-) -> VisibilityService:
+def init_visibility_service(default_room: str) -> VisibilityService:
     """Initialize the visibility service singleton."""
     global _service
-    _service = VisibilityService(world_category_id, default_channel_id)
+    _service = VisibilityService(default_room)
     return _service

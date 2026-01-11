@@ -6,6 +6,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 MUDD is a Discord-based MUD (multi-user dungeon) where Discord channels represent physical rooms. Players use slash commands (`/look`, `/move`) to navigate, and channel visibility is controlled via Discord permissions to create "fog of war" - players only see the channel they're currently in.
 
+## Production Considerations
+
+This service is running in production with active users. When planning changes:
+
+- **Backwards compatibility**: Ensure API changes (slash commands, command arguments) don't break existing user workflows
+- **Database migrations**: Schema changes must include migration scripts that preserve existing data
+- **Rollback plan**: Consider how changes can be reverted if issues arise
+- **Downtime**: Minimize or eliminate downtime during deployments
+
 ## Commands
 
 ```bash
@@ -20,7 +29,7 @@ just lint      # ruff check
 just format    # ruff format
 just types     # ty check
 
-# Run the bot (requires .env with DISCORD_TOKEN, MUDD_WORLD_CATEGORY_ID, MUDD_DEFAULT_CHANNEL_ID)
+# Run the bot (requires .env with DISCORD_TOKEN)
 python main.py
 ```
 
@@ -34,6 +43,11 @@ Pre-commit hooks (lefthook) auto-run ruff and ty on staged files.
 - Inherits from `commands.Cog`
 - Defines slash commands via `@app_commands.command`
 - Gets loaded in `main.py`
+
+**Sync cog** (`mudd/cogs/sync.py`): Owns ALL synchronization:
+- First iteration: Zone/room sync, VisibilityService initialization, permission sync
+- Every 15 minutes: Full zone/room sync (recreates deleted channels, fixes topics) + permission sync
+- Tracks orphan channels and only reports NEW ones to #console
 
 **MUD concept**: Channel topics = room descriptions. Movement hides/shows channels via Discord permissions.
 
