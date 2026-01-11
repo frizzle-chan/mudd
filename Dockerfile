@@ -9,8 +9,17 @@ RUN groupadd --gid 1000 mudd \
  && mkdir -p /app \
  && chown mudd:mudd /app
 
+RUN cat <<'EOF' > /etc/apt/sources.list.d/backports.sources
+Types: deb
+URIs: http://deb.debian.org/debian
+Suites: trixie-backports
+Components: main
+Enabled: yes
+Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
+EOF
 RUN apt-get update \
  && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends locales \
+ && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends -t trixie-backports recutils \
  && sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen \
  && locale-gen \
  && apt-get clean \
@@ -54,14 +63,6 @@ ENV UV_NO_DEV=0 \
 USER root
 
 # install stuff
-RUN cat <<'EOF' > /etc/apt/sources.list.d/backports.sources
-Types: deb deb-src
-URIs: http://deb.debian.org/debian
-Suites: trixie-backports
-Components: main
-Enabled: yes
-Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
-EOF
 RUN apt-get update \
  && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
        curl \
@@ -74,8 +75,6 @@ RUN apt-get update \
        ripgrep \
        vim \
        zsh \
- && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends -t trixie-backports \
-       recutils \
  && apt-get clean \
  && rm -rf /var/lib/apt/lists/* \
  && chsh -s /bin/zsh mudd
