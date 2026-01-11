@@ -191,6 +191,21 @@ async def populated_db(test_db):
                 spawn_mode,
             )
 
+        # Create zone and room for FK constraints
+        await conn.execute(
+            """
+            INSERT INTO zones (id, name) VALUES ('test-zone', 'Test Zone')
+            ON CONFLICT (id) DO NOTHING
+            """
+        )
+        await conn.execute(
+            """
+            INSERT INTO rooms (id, name, description, zone_id)
+            VALUES ('tavern', 'Tavern', 'A test tavern', 'test-zone')
+            ON CONFLICT (id) DO NOTHING
+            """
+        )
+
         # Create entity instances in a room
         await conn.execute(
             """
@@ -207,7 +222,7 @@ async def populated_db(test_db):
         # Create a test user for inventory tests
         await conn.execute(
             """
-            INSERT INTO users (id, current_location) VALUES (12345, 'tavern')
+            INSERT INTO users (id, current_room) VALUES (12345, 'tavern')
             """
         )
 
@@ -476,7 +491,7 @@ class TestInventory:
         async with populated_db.acquire() as conn:
             # Create a new user with an inventory item
             await conn.execute(
-                "INSERT INTO users (id, current_location) VALUES (99999, 'tavern')"
+                "INSERT INTO users (id, current_room) VALUES (99999, 'tavern')"
             )
             await conn.execute(
                 """

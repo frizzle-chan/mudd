@@ -50,7 +50,11 @@ jobs:
         run: uv run ty check
 
       - name: Validate entity definitions
-        run: recfix --check data/entities.rec
+        run: |
+          for file in data/worlds/*.rec; do
+            recfix --check "$file"
+          done
+          uv run scripts/validate_world.py
 
       - name: Validate verb word lists
         run: |

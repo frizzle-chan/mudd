@@ -19,7 +19,8 @@
                 "charliermarsh.ruff",
                 "editorconfig.editorconfig",
                 "ms-python.python",
-                "ms-ossdata.vscode-pgsql"
+                "ms-ossdata.vscode-pgsql",
+                "vstirbu.vscode-mermaid-preview"
             ]
         }
     },

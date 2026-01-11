@@ -183,3 +183,5 @@ dump.rdb
 
 # Verb script lock file
 data/verbs/.lock
+
+.claude/skills/gnu-recutils/recutils.txt

@@ -9,9 +9,8 @@ from mudd.cogs.look import Look
 from mudd.cogs.movement import Movement
 from mudd.cogs.ping import Ping
 from mudd.cogs.sync import Sync
-from mudd.services.database import close_pool, get_pool, init_database
+from mudd.services.database import close_pool, init_database
 from mudd.services.verb_loader import sync_verbs
-from mudd.services.visibility import init_visibility_service
 
 load_dotenv()
 
@@ -34,20 +33,17 @@ bot = MuddBot(command_prefix="!", intents=intents)
 @bot.event
 async def setup_hook():
     # Initialize database and run migrations
-    await init_database()
+    pool = await init_database()
 
     # Sync verb word lists to database
-    pool = await get_pool()
     try:
         await sync_verbs(pool)
     except Exception:
         logger.exception("Failed to sync verbs - bot may not recognize verb commands")
         raise
 
-    init_visibility_service(
-        world_category_id=int(os.environ["MUDD_WORLD_CATEGORY_ID"]),
-        default_channel_id=int(os.environ["MUDD_DEFAULT_CHANNEL_ID"]),
-    )
+    # Zone/room sync and visibility service initialization handled by Sync cog
+    # on first periodic_sync iteration (after bot is ready)
 
     await bot.add_cog(Look(bot))
     await bot.add_cog(Ping(bot))
@@ -57,6 +53,8 @@ async def setup_hook():
 
 @bot.event
 async def on_ready():
+    # Sync cog handles zone/room sync and visibility service initialization
+    # on first periodic_sync iteration. This just syncs slash commands.
     await bot.tree.sync()
     logger.info(f"Logged in as {bot.user}")
 

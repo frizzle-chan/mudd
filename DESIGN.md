@@ -14,13 +14,50 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 | Column | Type | Description |
 |--------|------|-------------|
 | `id` | BIGINT (PK) | Discord user snowflake ID |
-| `current_location` | TEXT | Logical room name (e.g., "tavern") |
+| `current_room` | TEXT (FK to rooms.id) | Logical room name (e.g., "foyer") |
 | `created_at` | TIMESTAMPTZ | When the record was created |
 | `updated_at` | TIMESTAMPTZ | When the record was last modified |
 
 **Indexes:**
 - Primary key on `id`
-- Index on `current_location` for room-based queries
+- Index on `current_room` for room-based queries
+
+**Constraints:**
+- FK to rooms.id with ON DELETE RESTRICT (prevents deleting rooms with users in them)
+
+### Zones Table
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | TEXT (PK) | Zone identifier, matches Discord category name (lowercase, hyphenated) |
+| `name` | TEXT NOT NULL | Display name for the zone |
+| `description` | TEXT | MUD flavor text for entering the zone |
+
+**Data Source:**
+- Zones are defined in `data/worlds/*.rec` files as `Zone` records
+- Zone IDs match Discord category names for auto-discovery
+- Synced to database on bot startup
+
+### Rooms Table
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | TEXT (PK) | Logical room name, matches Discord channel name |
+| `name` | TEXT NOT NULL | Display name for the room |
+| `description` | TEXT NOT NULL | Room description (synced to Discord channel topic) |
+| `zone_id` | TEXT NOT NULL (FK to zones.id) | Parent zone for this room |
+| `has_voice` | BOOLEAN NOT NULL DEFAULT FALSE | Whether to create a paired voice channel |
+
+**Indexes:**
+- Primary key on `id`
+- Index on `zone_id` for zone-based queries
+
+**Data Source:**
+- Rooms are defined in `data/worlds/*.rec` files as `Room` records
+- Each room has a Zone field referencing its parent zone
+- Room connections are implicit via Discord channel mentions in descriptions (e.g., `#hallway`)
+- Synced to database on bot startup; bot creates missing Discord channels
+- `IsDefault` field in rec files marks the default spawn room (not stored in DB, used at load time only)
 
 ### Schema Migrations Table
 
@@ -68,13 +105,14 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 |--------|------|-------------|
 | `id` | UUID (PK) | Auto-generated unique instance identifier |
 | `entity_id` | TEXT NOT NULL (FK to entities.id) | Reference to entity definition |
-| `room` | TEXT | Logical room name (NULL when in inventory) |
+| `room` | TEXT (FK to rooms.id) | Logical room name (NULL when in inventory) |
 | `owner_id` | BIGINT (FK to users.id) | Player who owns this instance (NULL when in room) |
 | `created_at` | TIMESTAMPTZ NOT NULL | Instance creation timestamp |
 
 **Constraints:**
 - Mutual exclusivity: `(room IS NOT NULL AND owner_id IS NULL) OR (room IS NULL AND owner_id IS NOT NULL)`
-- Foreign key cascade: Deleting a user cascades to their inventory items
+- FK to users.id with ON DELETE CASCADE (deleting a user cascades to their inventory items)
+- FK to rooms.id with ON DELETE CASCADE (deleting a room cascades to entity instances in it)
 
 **Indexes:**
 - Primary key on `id`
@@ -108,16 +146,85 @@ The `resolve_entity(target_id TEXT)` function resolves entity properties by walk
 - Used to materialize the final entity state including inherited properties
 - Returns: `id`, `name`, `description_short`, `description_long`, `on_*` handlers, `contents_visible`, `spawn_mode`
 
+## Sync System
+
+The `Sync` cog owns all synchronization operations. Both startup and periodic syncs execute the same full sync logic.
+
+### Sync Flow
+
+```
+Bot Startup
+    ↓
+setup_hook()
+    ├─ init_database() ─────→ PostgreSQL migrations
+    ├─ sync_verbs()    ─────→ Load verb word lists
+    └─ add_cog(Sync)   ─────→ Start periodic_sync timer
+
+on_ready()
+    └─ tree.sync()     ─────→ Register slash commands
+
+periodic_sync() [FIRST ITERATION]
+    ├─ sync_zones_and_rooms() ─→ Load .rec files
+    │    ├─ Sync to database
+    │    ├─ Create Discord categories/channels
+    │    ├─ Fix channel topics
+    │    └─ Return orphans + default_room
+    │
+    ├─ init_visibility_service(default_room)
+    │
+    ├─ visibility_service.sync_guild()
+    │    ├─ Build room cache
+    │    └─ Sync user permissions
+    │
+    └─ mark_startup_complete() ─→ UNBLOCK COMMANDS
+
+periodic_sync() [EVERY 15 MINUTES]
+    ├─ sync_zones_and_rooms()
+    │    ├─ Recreate deleted channels
+    │    ├─ Fix drifted channel topics
+    │    └─ Report NEW orphans only
+    │
+    └─ visibility_service.sync_guild()
+         ├─ Rebuild room cache
+         └─ Sync user permissions
+```
+
+### Key Behaviors
+
+**Channel recreation**: If a Discord channel is deleted, the next sync recreates it from the room definition in `.rec` files.
+
+**Topic drift correction**: If a channel topic is manually changed, the next sync restores it from the room description.
+
+**Orphan tracking**: Orphan channels (in zone categories but not in `.rec` files) are tracked across syncs. Only NEW orphans trigger a warning to `#console`, preventing spam on restart.
+
+**Command blocking**: Commands call `wait_for_startup()` and block until the first sync completes. This ensures the VisibilityService is initialized before any permission operations.
+
+## Zone System
+
+Zones map 1:1 with Discord categories. Each zone groups multiple rooms together.
+
+**Zone discovery:**
+- Zones defined in `.rec` files are synced to database on startup and every 15 minutes
+- Discord categories are matched by name (lowercase, hyphenated)
+- Missing categories are created automatically with fog-of-war permissions
+
+**Room/Channel sync:**
+- Missing text channels are created from room definitions
+- Channel topics are synced from room descriptions
+- Voice channels are created for rooms with `has_voice: yes`
+- Deleted channels are recreated on next sync
+
 ## Room Abstraction
 
-User locations are stored as logical room names (e.g., "tavern", "office") rather than Discord channel IDs. This provides:
+User locations are stored as logical room names (e.g., "foyer", "office") rather than Discord channel IDs. This provides:
 - Readable database values
 - Portability across Discord servers
 - Alignment with entity system design
 
 **Room name resolution:**
 - At startup, build an in-memory cache mapping room names to channel IDs
-- Room names are derived from Discord channel names in the world category
+- Room names are derived from Discord channel names in zone categories
+- Only channels that exist in the rooms database are cached
 - Channel ID lookups are O(1) via the cache
 
 ## Migration System
@@ -137,9 +244,12 @@ Migrations are raw SQL files in the `/migrations` directory:
 
 ## Visibility Sync
 
-The `sync_guild()` method ensures Discord channel permissions match database state. It runs:
-- **On startup**: Once per guild via the `Sync` cog's first task iteration, followed by `mark_startup_complete()`
-- **Periodically**: Every 15 minutes via the `Sync` cog's background task
-- **Future**: Can be triggered by Discord events (channel changes, role updates, etc.)
+The `VisibilityService.sync_guild()` method ensures Discord channel permissions match database state:
 
-Commands wait for `wait_for_startup()` before executing to ensure the initial sync completes first.
+1. Rebuilds the room name ↔ channel ID cache from database + Discord
+2. For each non-bot member:
+   - If no location in DB → assign to default room
+   - If location invalid (channel deleted) → assign to default room
+   - Sync permissions: grant `view_channel` for current room, remove for all others
+
+This runs as part of the unified sync flow described above.

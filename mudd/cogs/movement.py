@@ -142,7 +142,14 @@ class Movement(commands.Cog):
         try:
             service = get_visibility_service()
             await service.wait_for_startup()
-            await service.move_user_to_channel(member, service.default_channel_id)
+            default_channel_id = service.get_default_channel_id()
+            if default_channel_id:
+                await service.move_user_to_channel(member, default_channel_id)
+            else:
+                logger.error(
+                    f"Cannot assign default location to {member.id}: "
+                    f"default room '{service.default_room}' not found"
+                )
         except Exception as e:
             logger.error(f"Failed to assign default location to {member.id}: {e}")
 
