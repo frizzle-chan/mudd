@@ -2,6 +2,8 @@ FROM docker.io/library/python:3.14-trixie AS production
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 LABEL org.opencontainers.image.source=https://github.com/frizzle-chan/mudd
 
+ARG GIT_COMMIT=unknown
+
 COPY --from=ghcr.io/astral-sh/uv:0.9.18 /uv /uvx /bin/
 
 RUN groupadd --gid 1000 mudd \
@@ -46,6 +48,8 @@ RUN --mount=type=cache,target=/home/mudd/.cache/uv,uid=1000,gid=1000 \
     uv sync --locked --no-install-project
 
 COPY . .
+
+RUN sed -i "s/GIT_COMMIT = \"unknown\"/GIT_COMMIT = \"${GIT_COMMIT}\"/" mudd/version.py
 
 RUN --mount=type=cache,target=/home/mudd/.cache/uv,uid=1000,gid=1000 \
     uv sync --locked
