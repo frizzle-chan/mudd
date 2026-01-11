@@ -386,10 +386,10 @@ class VisibilityService:
 
         default_channel_id = self.get_default_channel_id()
         if default_channel_id is None:
-            logger.error(
-                f"Default room '{self.default_room}' not found in any zone category"
+            raise RuntimeError(
+                f"Default room '{self.default_room}' not found in any zone category. "
+                f"Ensure the room exists in Discord."
             )
-            return {"synced": 0, "assigned_default": 0, "errors": 0}
 
         stats = {"synced": 0, "assigned_default": 0, "errors": 0}
 
