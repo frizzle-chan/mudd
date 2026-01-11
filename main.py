@@ -10,6 +10,7 @@ from mudd.cogs.movement import Movement
 from mudd.cogs.ping import Ping
 from mudd.cogs.sync import Sync
 from mudd.services.database import close_pool, init_database
+from mudd.services.entity_loader import sync_entities
 from mudd.services.verb_loader import sync_verbs
 
 load_dotenv()
@@ -40,6 +41,13 @@ async def setup_hook():
         await sync_verbs(pool)
     except Exception:
         logger.exception("Failed to sync verbs - bot may not recognize verb commands")
+        raise
+
+    # Sync entity definitions to database
+    try:
+        await sync_entities(pool)
+    except Exception:
+        logger.exception("Failed to sync entities - bot may not recognize entities")
         raise
 
     # Zone/room sync and visibility service initialization handled by Sync cog

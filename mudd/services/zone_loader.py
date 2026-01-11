@@ -39,6 +39,26 @@ class Room:
     is_default: bool = False
 
 
+@dataclass
+class Entity:
+    """Entity data from rec file."""
+
+    id: str
+    name: str
+    prototype_id: str | None = None
+    container_id: str | None = None
+    room: str | None = None
+    contents_visible: bool | None = None
+    spawn_mode: str = "none"
+    description_short: str | None = None
+    description_long: str | None = None
+    on_look: str | None = None
+    on_touch: str | None = None
+    on_attack: str | None = None
+    on_use: str | None = None
+    on_take: str | None = None
+
+
 def _load_records_from_rec[T](
     record_type: str,
     row_parser: Callable[[dict[str, str]], T],
@@ -115,6 +135,42 @@ def load_zones_from_rec() -> list[Zone]:
 def load_rooms_from_rec() -> list[Room]:
     """Load Room records from rec files using rec2csv."""
     return _load_records_from_rec("Room", _parse_room_row)
+
+
+def _parse_entity_row(row: dict[str, str]) -> Entity:
+    """Parse a CSV row into an Entity object."""
+    # Parse boolean with None support
+    contents_visible_str = row.get("ContentsVisible", "").lower()
+    contents_visible: bool | None = None
+    if contents_visible_str in ("yes", "true", "1"):
+        contents_visible = True
+    elif contents_visible_str in ("no", "false", "0"):
+        contents_visible = False
+
+    # Parse spawn_mode with default
+    spawn_mode = row.get("SpawnMode", "none").lower()
+
+    return Entity(
+        id=row["Id"],
+        name=row["Name"],
+        prototype_id=row.get("Prototype") or None,
+        container_id=row.get("Container") or None,
+        room=row.get("Room") or None,
+        contents_visible=contents_visible,
+        spawn_mode=spawn_mode,
+        description_short=row.get("DescriptionShort") or None,
+        description_long=row.get("DescriptionLong") or None,
+        on_look=row.get("OnLook") or None,
+        on_touch=row.get("OnTouch") or None,
+        on_attack=row.get("OnAttack") or None,
+        on_use=row.get("OnUse") or None,
+        on_take=row.get("OnTake") or None,
+    )
+
+
+def load_entities_from_rec() -> list[Entity]:
+    """Load Entity records from rec files using rec2csv."""
+    return _load_records_from_rec("Entity", _parse_entity_row)
 
 
 def get_default_room(rooms: list[Room]) -> str:
