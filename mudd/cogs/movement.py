@@ -64,8 +64,31 @@ class Movement(commands.Cog):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
 
+    async def destination_autocomplete(
+        self, interaction: Interaction, current: str
+    ) -> list[app_commands.Choice[str]]:
+        """Autocomplete callback for the destination parameter."""
+        if not interaction.guild:
+            return []
+
+        channel = interaction.channel
+        topic = getattr(channel, "topic", None)
+        valid_exits = extract_exits_from_topic(topic, interaction.guild)
+
+        # Filter exits based on current input (case-insensitive)
+        current_lower = current.lower()
+        choices = [
+            app_commands.Choice(name=f"#{exit_ch.name}", value=exit_ch.name)
+            for exit_ch in valid_exits
+            if current_lower in exit_ch.name.lower()
+        ]
+
+        # Discord limits autocomplete to 25 choices
+        return choices[:25]
+
     @app_commands.command(name="move", description="Move to another location")
     @app_commands.describe(destination="Where you want to go")
+    @app_commands.autocomplete(destination=destination_autocomplete)
     async def move(self, interaction: Interaction, destination: str):
         """Move to a different location."""
         service = get_visibility_service()
