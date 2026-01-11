@@ -304,6 +304,7 @@ async def _sync_channel(
             stats[f"{stats_prefix}channels_created"] += 1
             logger.info(f"Created {type_label} channel: {room.id} in {category.name}")
         except discord.HTTPException as e:
+            stats[f"{stats_prefix}channels_failed"] += 1
             logger.error(f"Failed to create {type_label} channel {room.id}: {e}")
         return
 
@@ -406,9 +407,11 @@ async def sync_zones_and_rooms(
         "users_relocated": 0,
         "categories_created": 0,
         "channels_created": 0,
+        "channels_failed": 0,
         "channels_moved": 0,
         "channels_deleted": 0,
         "voice_channels_created": 0,
+        "voice_channels_failed": 0,
         "voice_channels_moved": 0,
         "topics_updated": 0,
         "orphans_found": 0,
