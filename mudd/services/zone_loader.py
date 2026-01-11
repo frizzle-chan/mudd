@@ -429,16 +429,22 @@ async def sync_zones_and_rooms(
     db_stats = await sync_zones_and_rooms_to_db(pool, zones, rooms, default_room)
     stats.update(db_stats)
 
-    zone_ids = {z.id for z in zones}
     room_ids = {r.id for r in rooms}
 
+    # Build lookup from normalized zone name to zone id
+    zone_name_to_id: dict[str, str] = {}
+    for zone in zones:
+        normalized = zone.name.lower().replace(" ", "-")
+        zone_name_to_id[normalized] = zone.id
+
     # Discord sync: create categories and channels
-    # Build zone -> category mapping
+    # Build zone -> category mapping by matching normalized names
     zone_to_category: dict[str, discord.CategoryChannel] = {}
     for category in guild.categories:
-        category_name = category.name.lower().replace(" ", "-")
-        if category_name in zone_ids:
-            zone_to_category[category_name] = category
+        category_normalized = category.name.lower().replace(" ", "-")
+        if category_normalized in zone_name_to_id:
+            zone_id = zone_name_to_id[category_normalized]
+            zone_to_category[zone_id] = category
 
     # Create missing categories
     for zone in zones:
