@@ -72,10 +72,8 @@ class Movement(commands.Cog):
             return []
 
         channel = interaction.channel
-        if not isinstance(channel, discord.TextChannel):
-            return []
-
-        valid_exits = extract_exits_from_topic(channel.topic, interaction.guild)
+        topic = getattr(channel, "topic", None)
+        valid_exits = extract_exits_from_topic(topic, interaction.guild)
 
         # Filter exits based on current input (case-insensitive)
         current_lower = current.lower()
