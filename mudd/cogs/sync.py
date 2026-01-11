@@ -132,8 +132,8 @@ class Sync(commands.Cog):
                 perm_stats = await service.sync_guild(guild)
                 logger.info(f"Permission sync for {guild.name}: {perm_stats}")
 
-            except Exception as e:
-                logger.error(f"Periodic sync failed for {guild.name}: {e}")
+            except Exception:
+                logger.exception(f"Periodic sync failed for {guild.name}")
 
     @periodic_sync.before_loop
     async def before_periodic_sync(self):
