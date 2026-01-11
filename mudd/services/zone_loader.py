@@ -380,8 +380,8 @@ async def sync_zones_and_rooms(
     pool: asyncpg.Pool,
     guild: discord.Guild,
     console_channel_name: str = "console",
-    seen_orphans: set[tuple[str, str]] | None = None,
-) -> tuple[dict[str, int], str, list[tuple[str, str]]]:
+    seen_orphans: set[tuple[int, str, str]] | None = None,
+) -> tuple[dict[str, int], str, list[tuple[int, str, str]]]:
     """
     Sync zones and rooms from rec files to database and Discord.
 
@@ -398,7 +398,7 @@ async def sync_zones_and_rooms(
 
     Returns:
         Tuple of (stats dict, default_room string, orphans list).
-        Orphans are [(channel_name, category_name), ...].
+        Orphans are [(guild_id, channel_name, category_name), ...].
     """
     stats: dict[str, int] = {
         "zones": 0,
@@ -481,7 +481,7 @@ async def sync_zones_and_rooms(
             )
 
     # Find orphan channels (in zone categories but not in rec files)
-    orphans: list[tuple[str, str]] = []  # (channel_name, category_name)
+    orphans: list[tuple[int, str, str]] = []  # (guild_id, channel_name, category_name)
     for zone in zones:
         category = zone_to_category.get(zone.id)
         if not category:
@@ -491,7 +491,7 @@ async def sync_zones_and_rooms(
             # Skip channels that match a known room (text or voice)
             if channel.name in room_ids:
                 continue
-            orphans.append((channel.name, category.name))
+            orphans.append((guild.id, channel.name, category.name))
 
     stats["orphans_found"] = len(orphans)
 
@@ -506,7 +506,9 @@ async def sync_zones_and_rooms(
             guild.text_channels, name=console_channel_name
         )
         if console_channel:
-            orphan_list = "\n".join(f"- #{name} in {cat}" for name, cat in new_orphans)
+            orphan_list = "\n".join(
+                f"- #{name} in {cat}" for _, name, cat in new_orphans
+            )
             msg = (
                 f"**Orphan channels detected** (not in .rec files):\n{orphan_list}\n\n"
                 "Consider deleting these channels or adding them to the world file."

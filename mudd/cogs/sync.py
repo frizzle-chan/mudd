@@ -33,7 +33,7 @@ class Sync(commands.Cog):
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
-        self._seen_orphans: set[tuple[str, str]] = set()
+        self._seen_orphans: set[tuple[int, str, str]] = set()
         self._console_channel = os.environ.get("MUDD_CONSOLE_CHANNEL", "console")
         self.periodic_sync.start()
 
