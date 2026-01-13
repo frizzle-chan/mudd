@@ -3,7 +3,7 @@
 from pathlib import Path
 
 GITHUB_REPO = "frizzle-chan/mudd"
-_COMMIT_FILE = Path("/app/.commit_sha")
+_COMMIT_FILE = Path(__file__).parent.parent / ".commit_sha"
 
 
 def get_git_commit() -> str:
