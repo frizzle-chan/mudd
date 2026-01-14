@@ -25,70 +25,70 @@ from mudd.services.zone_loader import (
 class TestLoadEntitiesFromRec:
     """Test parsing entities from rec files."""
 
-    def test_loads_entities(self):
+    def test_loads_entities(self, world_file):
         """Entities are parsed from mansion.rec."""
-        entities = load_entities_from_rec()
+        entities = load_entities_from_rec(world_file)
         assert len(entities) > 0
 
-    def test_entity_has_required_fields(self):
+    def test_entity_has_required_fields(self, world_file):
         """Each entity has id and name."""
-        entities = load_entities_from_rec()
+        entities = load_entities_from_rec(world_file)
         for entity in entities:
             assert entity.id, f"Entity must have id: {entity}"
             assert entity.name, f"Entity must have name: {entity}"
 
-    def test_base_object_entity_exists(self):
+    def test_base_object_entity_exists(self, world_file):
         """The base 'object' prototype from mansion.rec is loaded."""
-        entities = load_entities_from_rec()
+        entities = load_entities_from_rec(world_file)
         entity_ids = {e.id for e in entities}
         assert "object" in entity_ids
 
-    def test_foyer_table_entity_exists(self):
+    def test_foyer_table_entity_exists(self, world_file):
         """The foyer_table instance from mansion.rec is loaded."""
-        entities = load_entities_from_rec()
+        entities = load_entities_from_rec(world_file)
         entity_ids = {e.id for e in entities}
         assert "foyer_table" in entity_ids
 
-    def test_prototype_reference_parsed(self):
+    def test_prototype_reference_parsed(self, world_file):
         """Prototype field is correctly parsed."""
-        entities = load_entities_from_rec()
+        entities = load_entities_from_rec(world_file)
         foyer_table = next((e for e in entities if e.id == "foyer_table"), None)
         assert foyer_table is not None
         assert foyer_table.prototype_id == "furniture"
 
-    def test_container_reference_parsed(self):
+    def test_container_reference_parsed(self, world_file):
         """Container field is correctly parsed."""
-        entities = load_entities_from_rec()
+        entities = load_entities_from_rec(world_file)
         foyer_flower_vase = next(
             (e for e in entities if e.id == "foyer_flower_vase"), None
         )
         assert foyer_flower_vase is not None
         assert foyer_flower_vase.container_id == "foyer_table"
 
-    def test_room_reference_parsed(self):
+    def test_room_reference_parsed(self, world_file):
         """Room field is correctly parsed."""
-        entities = load_entities_from_rec()
+        entities = load_entities_from_rec(world_file)
         foyer_table = next((e for e in entities if e.id == "foyer_table"), None)
         assert foyer_table is not None
         assert foyer_table.room == "foyer"
 
-    def test_contents_visible_parsed(self):
+    def test_contents_visible_parsed(self, world_file):
         """ContentsVisible field is correctly parsed as boolean."""
-        entities = load_entities_from_rec()
+        entities = load_entities_from_rec(world_file)
         foyer_table = next((e for e in entities if e.id == "foyer_table"), None)
         assert foyer_table is not None
         assert foyer_table.contents_visible is True
 
-    def test_prototype_has_no_room(self):
+    def test_prototype_has_no_room(self, world_file):
         """Prototypes (base entities) have no room field."""
-        entities = load_entities_from_rec()
+        entities = load_entities_from_rec(world_file)
         obj = next((e for e in entities if e.id == "object"), None)
         assert obj is not None
         assert obj.room is None
 
-    def test_spawn_mode_defaults_to_none(self):
+    def test_spawn_mode_defaults_to_none(self, world_file):
         """spawn_mode defaults to 'none' when not specified."""
-        entities = load_entities_from_rec()
+        entities = load_entities_from_rec(world_file)
         foyer_table = next((e for e in entities if e.id == "foyer_table"), None)
         assert foyer_table is not None
         assert foyer_table.spawn_mode == "none"
@@ -97,10 +97,10 @@ class TestLoadEntitiesFromRec:
 class TestValidateEntities:
     """Test entity validation logic."""
 
-    def test_valid_entities_pass_validation(self):
+    def test_valid_entities_pass_validation(self, world_file):
         """Valid entity set passes validation."""
-        entities = load_entities_from_rec()
-        rooms = load_rooms_from_rec()
+        entities = load_entities_from_rec(world_file)
+        rooms = load_rooms_from_rec(world_file)
         room_ids = {r.id for r in rooms}
 
         # Should not raise
@@ -264,9 +264,9 @@ class TestSyncEntities:
     """Test syncing entities to database."""
 
     @pytest_asyncio.fixture(scope="class", loop_scope="module")
-    async def synced_db(self, test_db):
+    async def synced_db(self, test_db, world_file):
         """Sync entities to test database."""
-        await sync_entities(test_db)
+        await sync_entities(test_db, world_file)
         yield test_db
 
     async def test_entities_loaded_to_database(self, synced_db):
@@ -306,10 +306,10 @@ class TestSyncEntities:
             # foyer_table inherits on_touch from object prototype chain
             assert resolved["on_touch"] is not None
 
-    async def test_sync_returns_count(self, test_db):
+    async def test_sync_returns_count(self, test_db, world_file):
         """sync_entities returns the number of entities synced."""
-        count = await sync_entities(test_db)
-        entities = load_entities_from_rec()
+        count = await sync_entities(test_db, world_file)
+        entities = load_entities_from_rec(world_file)
         assert count == len(entities)
 
 
@@ -317,7 +317,7 @@ class TestSyncEntities:
 class TestSyncRemovesStaleEntities:
     """Test that sync removes entities not in files."""
 
-    async def test_removes_stale_entities(self, test_db):
+    async def test_removes_stale_entities(self, test_db, world_file):
         """Entities not in rec files are removed on sync."""
         async with test_db.acquire() as conn:
             # Insert a fake entity that should be deleted
@@ -336,7 +336,7 @@ class TestSyncRemovesStaleEntities:
             assert count == 1
 
         # Run the sync function - it should delete the fake entity
-        await sync_entities(test_db)
+        await sync_entities(test_db, world_file)
 
         async with test_db.acquire() as conn:
             # Verify fake entity is gone

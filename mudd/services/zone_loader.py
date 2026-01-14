@@ -14,9 +14,6 @@ import discord
 
 logger = logging.getLogger(__name__)
 
-# Directory containing world .rec files (zones, rooms, entities)
-WORLDS_DIR = Path(__file__).parent.parent.parent / "data" / "worlds"
-
 # Valid spawn modes matching PostgreSQL enum
 SpawnMode = Literal["none", "move", "clone"]
 
@@ -63,42 +60,38 @@ class Entity:
 
 
 def _load_records_from_rec[T](
+    world_file: Path,
     record_type: str,
     row_parser: Callable[[dict[str, str]], T],
 ) -> list[T]:
     """
-    Load records of a given type from rec files using rec2csv.
+    Load records of a given type from a world rec file using rec2csv.
 
     Args:
+        world_file: Path to the world .rec file
         record_type: The recutils record type (e.g., "Zone", "Room")
         row_parser: Function to convert a CSV row dict to a domain object
 
     Returns:
         List of parsed records
     """
-    rec_files = list(WORLDS_DIR.glob("*.rec"))
-    if not rec_files:
-        logger.warning(f"No .rec files found in {WORLDS_DIR}")
-        return []
-
     records: list[T] = []
-    for rec_file in rec_files:
-        try:
-            result = subprocess.run(
-                ["rec2csv", "-t", record_type, str(rec_file)],
-                capture_output=True,
-                text=True,
-                check=True,
-            )
-            if result.stdout.strip():
-                reader = csv.DictReader(io.StringIO(result.stdout))
-                records.extend(row_parser(row) for row in reader)
-        except subprocess.CalledProcessError as e:
-            # Real errors: file not found, parse errors, etc.
-            logger.error(f"Failed to parse {record_type} from {rec_file}: {e.stderr}")
-            raise
+    try:
+        result = subprocess.run(
+            ["rec2csv", "-t", record_type, str(world_file)],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        if result.stdout.strip():
+            reader = csv.DictReader(io.StringIO(result.stdout))
+            records.extend(row_parser(row) for row in reader)
+    except subprocess.CalledProcessError as e:
+        # Real errors: file not found, parse errors, etc.
+        logger.error(f"Failed to parse {record_type} from {world_file}: {e.stderr}")
+        raise
 
-    logger.debug(f"Loaded {len(records)} {record_type.lower()}s from rec files")
+    logger.debug(f"Loaded {len(records)} {record_type.lower()}s from {world_file}")
     return records
 
 
@@ -127,14 +120,14 @@ def _parse_room_row(row: dict[str, str]) -> Room:
     )
 
 
-def load_zones_from_rec() -> list[Zone]:
-    """Load Zone records from rec files using rec2csv."""
-    return _load_records_from_rec("Zone", _parse_zone_row)
+def load_zones_from_rec(world_file: Path) -> list[Zone]:
+    """Load Zone records from a world rec file using rec2csv."""
+    return _load_records_from_rec(world_file, "Zone", _parse_zone_row)
 
 
-def load_rooms_from_rec() -> list[Room]:
-    """Load Room records from rec files using rec2csv."""
-    return _load_records_from_rec("Room", _parse_room_row)
+def load_rooms_from_rec(world_file: Path) -> list[Room]:
+    """Load Room records from a world rec file using rec2csv."""
+    return _load_records_from_rec(world_file, "Room", _parse_room_row)
 
 
 def _parse_entity_row(row: dict[str, str]) -> Entity:
@@ -174,9 +167,9 @@ def _parse_entity_row(row: dict[str, str]) -> Entity:
     )
 
 
-def load_entities_from_rec() -> list[Entity]:
-    """Load Entity records from rec files using rec2csv."""
-    return _load_records_from_rec("Entity", _parse_entity_row)
+def load_entities_from_rec(world_file: Path) -> list[Entity]:
+    """Load Entity records from a world rec file using rec2csv."""
+    return _load_records_from_rec(world_file, "Entity", _parse_entity_row)
 
 
 def get_default_room(rooms: list[Room]) -> str:
@@ -442,11 +435,12 @@ async def _sync_channel(
 async def sync_zones_and_rooms(
     pool: asyncpg.Pool,
     guild: discord.Guild,
+    world_file: Path,
     console_channel_name: str = "console",
     seen_orphans: set[tuple[int, str, str]] | None = None,
 ) -> tuple[dict[str, int], str, list[tuple[int, str, str]]]:
     """
-    Sync zones and rooms from rec files to database and Discord.
+    Sync zones and rooms from a world rec file to database and Discord.
 
     Creates missing Discord categories and channels, syncs channel topics.
     Moves channels that exist in wrong categories to the correct category.
@@ -455,6 +449,7 @@ async def sync_zones_and_rooms(
     Args:
         pool: Database connection pool
         guild: Discord guild to sync
+        world_file: Path to the world .rec file
         console_channel_name: Channel name for orphan notifications
         seen_orphans: Set of previously seen orphans. If provided, only NEW
             orphans are reported to console. Set is mutated to include new orphans.
@@ -479,9 +474,9 @@ async def sync_zones_and_rooms(
         "orphans_found": 0,
     }
 
-    # Load data from rec files
-    zones = load_zones_from_rec()
-    rooms = load_rooms_from_rec()
+    # Load data from world file
+    zones = load_zones_from_rec(world_file)
+    rooms = load_rooms_from_rec(world_file)
 
     if not zones:
         logger.warning("No zones found in rec files - skipping sync")

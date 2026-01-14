@@ -1,5 +1,7 @@
+import argparse
 import logging
 import os
+from pathlib import Path
 
 import discord
 from discord.ext import commands
@@ -18,17 +20,40 @@ load_dotenv()
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Default world file for backwards compatibility
+DEFAULT_WORLD = Path(__file__).parent / "data" / "worlds" / "mansion.rec"
+
+
+def parse_args() -> argparse.Namespace:
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser(description="MUDD Discord Bot")
+    parser.add_argument(
+        "--world",
+        type=Path,
+        default=DEFAULT_WORLD,
+        help="Path to world .rec file (default: data/worlds/mansion.rec)",
+    )
+    return parser.parse_args()
+
+
 intents = discord.Intents.default()
 intents.members = True
 
 
 class MuddBot(commands.Bot):
+    """MUDD Discord bot with world file configuration."""
+
+    def __init__(self, world_file: Path, **kwargs):
+        super().__init__(**kwargs)
+        self.world_file = world_file
+
     async def close(self):
         await close_pool()
         await super().close()
 
 
-bot = MuddBot(command_prefix="!", intents=intents)
+args = parse_args()
+bot = MuddBot(world_file=args.world, command_prefix="!", intents=intents)
 
 
 @bot.event
@@ -45,7 +70,7 @@ async def setup_hook():
 
     # Sync entity definitions to database
     try:
-        await sync_entities(pool)
+        await sync_entities(pool, bot.world_file)
     except Exception:
         logger.exception("Failed to sync entities - bot may not recognize entities")
         raise
@@ -64,7 +89,7 @@ async def on_ready():
     # Sync cog handles zone/room sync and visibility service initialization
     # on first periodic_sync iteration. This just syncs slash commands.
     await bot.tree.sync()
-    logger.info(f"Logged in as {bot.user}")
+    logger.info(f"Logged in as {bot.user} (world: {bot.world_file})")
 
 
 bot.run(os.environ["DISCORD_TOKEN"])

@@ -25,27 +25,27 @@ from mudd.services.zone_loader import (
 class TestLoadZonesFromRec:
     """Test parsing zones from rec files."""
 
-    def test_loads_zones(self):
+    def test_loads_zones(self, world_file):
         """Zones are parsed from mansion.rec."""
-        zones = load_zones_from_rec()
+        zones = load_zones_from_rec(world_file)
         assert len(zones) > 0
 
-    def test_zone_has_required_fields(self):
+    def test_zone_has_required_fields(self, world_file):
         """Each zone has id and name."""
-        zones = load_zones_from_rec()
+        zones = load_zones_from_rec(world_file)
         for zone in zones:
             assert zone.id, "Zone must have id"
             assert zone.name, "Zone must have name"
 
-    def test_floor_1_zone_exists(self):
+    def test_floor_1_zone_exists(self, world_file):
         """The floor-1 zone from mansion.rec is loaded."""
-        zones = load_zones_from_rec()
+        zones = load_zones_from_rec(world_file)
         zone_ids = {z.id for z in zones}
         assert "floor-1" in zone_ids
 
-    def test_zone_description_optional(self):
+    def test_zone_description_optional(self, world_file):
         """Zone description is optional."""
-        zones = load_zones_from_rec()
+        zones = load_zones_from_rec(world_file)
         # At least one zone should exist
         assert len(zones) > 0
         # Description can be None or a string
@@ -56,30 +56,30 @@ class TestLoadZonesFromRec:
 class TestLoadRoomsFromRec:
     """Test parsing rooms from rec files."""
 
-    def test_loads_rooms(self):
+    def test_loads_rooms(self, world_file):
         """Rooms are parsed from mansion.rec."""
-        rooms = load_rooms_from_rec()
+        rooms = load_rooms_from_rec(world_file)
         assert len(rooms) > 0
 
-    def test_room_has_required_fields(self):
+    def test_room_has_required_fields(self, world_file):
         """Each room has id, name, description, and zone_id."""
-        rooms = load_rooms_from_rec()
+        rooms = load_rooms_from_rec(world_file)
         for room in rooms:
             assert room.id, f"Room must have id: {room}"
             assert room.name, f"Room must have name: {room}"
             assert room.description, f"Room must have description: {room}"
             assert room.zone_id, f"Room must have zone_id: {room}"
 
-    def test_foyer_room_exists(self):
+    def test_foyer_room_exists(self, world_file):
         """The foyer room from mansion.rec is loaded."""
-        rooms = load_rooms_from_rec()
+        rooms = load_rooms_from_rec(world_file)
         room_ids = {r.id for r in rooms}
         assert "foyer" in room_ids
 
-    def test_room_references_valid_zone(self):
+    def test_room_references_valid_zone(self, world_file):
         """All rooms reference zones that exist."""
-        zones = load_zones_from_rec()
-        rooms = load_rooms_from_rec()
+        zones = load_zones_from_rec(world_file)
+        rooms = load_rooms_from_rec(world_file)
 
         zone_ids = {z.id for z in zones}
         for room in rooms:
@@ -87,41 +87,41 @@ class TestLoadRoomsFromRec:
                 f"Room {room.id} references unknown zone {room.zone_id}"
             )
 
-    def test_has_voice_defaults_to_false(self):
+    def test_has_voice_defaults_to_false(self, world_file):
         """has_voice defaults to False when not specified."""
-        rooms = load_rooms_from_rec()
+        rooms = load_rooms_from_rec(world_file)
         # Find a room without HasVoice specified (foyer doesn't have it)
         foyer = next((r for r in rooms if r.id == "foyer"), None)
         assert foyer is not None
         assert foyer.has_voice is False
 
-    def test_has_voice_parsed_correctly(self):
+    def test_has_voice_parsed_correctly(self, world_file):
         """has_voice is True when specified as 'yes'."""
-        rooms = load_rooms_from_rec()
+        rooms = load_rooms_from_rec(world_file)
         # office, screening-room, and lounge have HasVoice: yes
         office = next((r for r in rooms if r.id == "office"), None)
         assert office is not None
         assert office.has_voice is True
 
-    def test_is_default_defaults_to_false(self):
+    def test_is_default_defaults_to_false(self, world_file):
         """is_default defaults to False when not specified."""
-        rooms = load_rooms_from_rec()
+        rooms = load_rooms_from_rec(world_file)
         # office doesn't have IsDefault specified
         office = next((r for r in rooms if r.id == "office"), None)
         assert office is not None
         assert office.is_default is False
 
-    def test_is_default_parsed_correctly(self):
+    def test_is_default_parsed_correctly(self, world_file):
         """is_default is True when specified as 'yes'."""
-        rooms = load_rooms_from_rec()
+        rooms = load_rooms_from_rec(world_file)
         # foyer has IsDefault: yes
         foyer = next((r for r in rooms if r.id == "foyer"), None)
         assert foyer is not None
         assert foyer.is_default is True
 
-    def test_all_expected_rooms_present(self):
+    def test_all_expected_rooms_present(self, world_file):
         """All rooms from mansion.rec are loaded."""
-        rooms = load_rooms_from_rec()
+        rooms = load_rooms_from_rec(world_file)
         room_ids = {r.id for r in rooms}
 
         expected_rooms = {
@@ -146,9 +146,9 @@ class TestLoadRoomsFromRec:
 class TestGetDefaultRoom:
     """Test get_default_room function."""
 
-    def test_returns_default_room_id(self):
+    def test_returns_default_room_id(self, world_file):
         """get_default_room returns the ID of the room marked as default."""
-        rooms = load_rooms_from_rec()
+        rooms = load_rooms_from_rec(world_file)
         default_room = get_default_room(rooms)
         assert default_room == "foyer"
 
@@ -188,10 +188,10 @@ class TestSyncZonesAndRooms:
     """Test syncing zones and rooms to database using sync_zones_and_rooms_to_db."""
 
     @pytest_asyncio.fixture(scope="class", loop_scope="module")
-    async def synced_db(self, test_db):
+    async def synced_db(self, test_db, world_file):
         """Sync zones and rooms to test database using the actual sync function."""
-        zones = load_zones_from_rec()
-        rooms = load_rooms_from_rec()
+        zones = load_zones_from_rec(world_file)
+        rooms = load_rooms_from_rec(world_file)
 
         # Use the actual sync function (DB-only, no Discord)
         await sync_zones_and_rooms_to_db(test_db, zones, rooms, default_room="foyer")
@@ -251,10 +251,10 @@ class TestSyncZonesAndRooms:
                     f"Room {room['id']} should be in floor-1"
                 )
 
-    async def test_sync_returns_stats(self, test_db):
+    async def test_sync_returns_stats(self, test_db, world_file):
         """sync_zones_and_rooms_to_db returns correct stats."""
-        zones = load_zones_from_rec()
-        rooms = load_rooms_from_rec()
+        zones = load_zones_from_rec(world_file)
+        rooms = load_rooms_from_rec(world_file)
 
         stats = await sync_zones_and_rooms_to_db(
             test_db, zones, rooms, default_room="foyer"
@@ -268,10 +268,10 @@ class TestSyncZonesAndRooms:
 class TestSyncRemovesStaleData:
     """Test that sync removes zones/rooms not in files."""
 
-    async def test_removes_stale_rooms(self, test_db):
+    async def test_removes_stale_rooms(self, test_db, world_file):
         """Rooms not in rec files are removed on sync."""
-        zones = load_zones_from_rec()
-        rooms = load_rooms_from_rec()
+        zones = load_zones_from_rec(world_file)
+        rooms = load_rooms_from_rec(world_file)
 
         async with test_db.acquire() as conn:
             # Ensure zones exist first
@@ -313,10 +313,10 @@ class TestSyncRemovesStaleData:
             )
             assert count == 0
 
-    async def test_removes_stale_zones(self, test_db):
+    async def test_removes_stale_zones(self, test_db, world_file):
         """Zones not in rec files are removed on sync."""
-        zones = load_zones_from_rec()
-        rooms = load_rooms_from_rec()
+        zones = load_zones_from_rec(world_file)
+        rooms = load_rooms_from_rec(world_file)
 
         async with test_db.acquire() as conn:
             # First clean up any existing data
@@ -348,10 +348,10 @@ class TestSyncRemovesStaleData:
             )
             assert count == 0
 
-    async def test_validates_default_room(self, test_db):
+    async def test_validates_default_room(self, test_db, world_file):
         """sync_zones_and_rooms_to_db raises if default_room doesn't exist."""
-        zones = load_zones_from_rec()
-        rooms = load_rooms_from_rec()
+        zones = load_zones_from_rec(world_file)
+        rooms = load_rooms_from_rec(world_file)
 
         with pytest.raises(ValueError, match="Default room 'nonexistent' not found"):
             await sync_zones_and_rooms_to_db(

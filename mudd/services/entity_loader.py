@@ -2,6 +2,7 @@
 
 import logging
 from collections import defaultdict
+from pathlib import Path
 
 import asyncpg
 
@@ -129,13 +130,17 @@ def _validate_and_sort_entities(
     return [entity_map[entity_id] for entity_id in sorted_ids]
 
 
-async def sync_entities(pool: asyncpg.Pool) -> int:
-    """Sync entities from rec files to database with validation.
+async def sync_entities(pool: asyncpg.Pool, world_file: Path) -> int:
+    """Sync entities from a world rec file to database with validation.
 
     Full sync: deletes entities not in current files, upserts all current
     entities. Validates references and circular dependencies before database
     operations. Topologically sorts by prototype_id and container_id to satisfy
     FK constraints.
+
+    Args:
+        pool: Database connection pool
+        world_file: Path to the world .rec file
 
     Returns:
         Number of entities synced.
@@ -143,16 +148,16 @@ async def sync_entities(pool: asyncpg.Pool) -> int:
     Raises:
         ValueError: If validation fails (circular deps, invalid references)
     """
-    entities = load_entities_from_rec()
+    entities = load_entities_from_rec(world_file)
 
     if not entities:
-        logger.warning("No entities found in rec files - deleting all entities")
+        logger.warning("No entities found in world file - deleting all entities")
         async with pool.acquire() as conn:
             await conn.execute("DELETE FROM entities")
         return 0
 
     # Load rooms for room reference validation
-    rooms = load_rooms_from_rec()
+    rooms = load_rooms_from_rec(world_file)
     room_ids = {r.id for r in rooms}
 
     # Validate and sort entities
