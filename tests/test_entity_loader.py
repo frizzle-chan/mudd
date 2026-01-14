@@ -265,7 +265,7 @@ class TestSyncEntities:
 
     @pytest_asyncio.fixture(scope="class", loop_scope="module")
     async def synced_db(self, test_db, world_file):
-        """Sync entities to test database."""
+        """Sync entities to test database (zones/rooms synced via test_db fixture)."""
         await sync_entities(test_db, world_file)
         yield test_db
 

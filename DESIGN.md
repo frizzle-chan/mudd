@@ -111,13 +111,21 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 
 **Constraints:**
 - Mutual exclusivity: `(room IS NOT NULL AND owner_id IS NULL) OR (room IS NULL AND owner_id IS NOT NULL)`
+- Unique constraint on `(entity_id, room)` where room IS NOT NULL (enables idempotent sync)
+- FK to entities.id with ON DELETE CASCADE (deleting an entity cascades to all its instances)
 - FK to users.id with ON DELETE CASCADE (deleting a user cascades to their inventory items)
 - FK to rooms.id with ON DELETE CASCADE (deleting a room cascades to entity instances in it)
 
 **Indexes:**
 - Primary key on `id`
+- Partial unique index on `(entity_id, room)` WHERE room IS NOT NULL (for idempotent sync)
 - Partial index on `room` (WHERE room IS NOT NULL) for room-based queries
 - Partial index on `owner_id` (WHERE owner_id IS NOT NULL) for inventory queries
+
+**Instance Creation:**
+- Instances for entities with `Room` field in `.rec` files are created during `sync_entities()`
+- Uses `INSERT ON CONFLICT DO NOTHING` for idempotent sync (same entity+room = no-op)
+- Inventory instances (owner_id set) are NOT affected by sync - they persist independently
 
 ### Verbs Table
 
@@ -253,3 +261,51 @@ The `VisibilityService.sync_guild()` method ensures Discord channel permissions 
    - Sync permissions: grant `view_channel` for current room, remove for all others
 
 This runs as part of the unified sync flow described above.
+
+## Entity Service
+
+The `EntityService` provides cached runtime access to entity data. It follows the lazy singleton pattern.
+
+### Service Methods
+
+- `get_entity(entity_id)` - Get resolved entity by ID (cached)
+- `get_room_entities(room)` - Get all entity instances in a room with resolved properties
+- `get_entity_instance(instance_id)` - Get specific instance by UUID
+- `get_container_contents(container_id, room)` - Get direct children of a container in a room
+- `invalidate_cache()` - Clear cache (called by `sync_entities()`)
+
+### Caching Strategy
+
+- Resolved entities are cached in memory as `dict[entity_id, ResolvedEntity]`
+- Cache is populated lazily on first access to each entity
+- Cache is invalidated entirely after `sync_entities()` completes
+- Instance queries always hit the database (instances can move to inventory)
+
+### Initialization
+
+```python
+# In main.py setup_hook(), after sync_entities():
+init_entity_service()
+
+# In cogs:
+from mudd.services.entity import get_entity_service
+service = get_entity_service()
+entities = await service.get_room_entities(channel.name)
+```
+
+### Data Flow
+
+```
+sync_entities() [startup or periodic]
+    ├─ Upsert entity definitions
+    ├─ Create/update entity instances
+    └─ invalidate_cache() ─→ Clear entity cache
+
+get_entity(entity_id)
+    ├─ Check cache → HIT: Return cached
+    └─ MISS: Query resolve_entity(), cache result, return
+
+get_room_entities(room)
+    └─ Query entity_instances + resolve_entity()
+       └─ Cache resolved entities as side effect
+```

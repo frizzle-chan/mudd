@@ -71,6 +71,14 @@ Pre-commit hooks (lefthook) auto-run ruff and ty on staged files.
 - Use `typing.cast()` when you've validated a value but the type checker can't infer it
 - Use `@overload` for functions with return types that depend on literal argument values
 
+## PR Reviews
+
+PR reviews are written to `review.md` (gitignored). When working with reviews:
+
+- **Check for existing review**: Read `review.md` at the start of a session to see pending issues
+- **Write reviews**: Use `/pr-review-toolkit:review-pr` to generate comprehensive reviews, then write results to `review.md`
+- **Delete when processed**: Remove `review.md` after all issues are addressed or the PR is merged
+
 ## Devcontainer Setup
 
 If you encounter permission issues pushing to GitHub, run:
