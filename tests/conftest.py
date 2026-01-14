@@ -1,8 +1,10 @@
 """Pytest fixtures for database testing."""
 
 import os
+from pathlib import Path
 
 import asyncpg
+import pytest
 import pytest_asyncio
 
 from mudd.services.migrations import run_migrations
@@ -10,6 +12,15 @@ from mudd.services.migrations import run_migrations
 DB_HOST = os.environ.get("DB_HOST", "db")
 TEST_DB_URL = f"postgresql://mudd:mudd@{DB_HOST}/mudd_test"
 ADMIN_DB_URL = f"postgresql://mudd:mudd@{DB_HOST}/postgres"
+
+# Default world file for testing
+DEFAULT_WORLD_FILE = Path(__file__).parent.parent / "data" / "worlds" / "mansion.rec"
+
+
+@pytest.fixture(scope="module")
+def world_file() -> Path:
+    """Return the path to the default test world file."""
+    return DEFAULT_WORLD_FILE
 
 
 @pytest_asyncio.fixture(scope="module", loop_scope="module")

@@ -64,6 +64,13 @@ Pre-commit hooks (lefthook) auto-run ruff and ty on staged files.
 - `ty` - Type checking (Astral)
 - `uv` - Package management
 
+## Code Style
+
+**Type checking**: Fix root causes of type errors rather than using `# type: ignore`. Common fixes:
+- Use `TYPE_CHECKING` imports to properly type cross-module references
+- Use `typing.cast()` when you've validated a value but the type checker can't infer it
+- Use `@overload` for functions with return types that depend on literal argument values
+
 ## Devcontainer Setup
 
 If you encounter permission issues pushing to GitHub, run:
