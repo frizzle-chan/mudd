@@ -85,8 +85,12 @@ class EntityService:
         if entity_id in self._entity_cache:
             return self._entity_cache[entity_id]
 
-        pool = await get_pool()
-        row = await pool.fetchrow("SELECT * FROM resolve_entity($1)", entity_id)
+        try:
+            pool = await get_pool()
+            row = await pool.fetchrow("SELECT * FROM resolve_entity($1)", entity_id)
+        except Exception:
+            logger.exception("Database error fetching entity '%s'", entity_id)
+            raise
 
         if row is None or row["name"] is None:
             return None
@@ -99,21 +103,25 @@ class EntityService:
         """Get all entity instances in a room with resolved properties.
 
         Args:
-            room: Room ID (Discord channel name)
+            room: Room ID
 
         Returns:
             List of EntityInstance objects in the room
         """
-        pool = await get_pool()
-        rows = await pool.fetch(
-            """
-            SELECT ei.id AS instance_id, ei.room, ei.owner_id, r.*
-            FROM entity_instances ei
-            CROSS JOIN LATERAL resolve_entity(ei.entity_id) r
-            WHERE ei.room = $1
-            """,
-            room,
-        )
+        try:
+            pool = await get_pool()
+            rows = await pool.fetch(
+                """
+                SELECT ei.id AS instance_id, ei.room, ei.owner_id, r.*
+                FROM entity_instances ei
+                CROSS JOIN LATERAL resolve_entity(ei.entity_id) r
+                WHERE ei.room = $1
+                """,
+                room,
+            )
+        except Exception:
+            logger.exception("Database error fetching entities in room '%s'", room)
+            raise
 
         instances = []
         for row in rows:
@@ -139,16 +147,22 @@ class EntityService:
         Returns:
             EntityInstance with resolved entity, or None if not found
         """
-        pool = await get_pool()
-        row = await pool.fetchrow(
-            """
-            SELECT ei.id AS instance_id, ei.room, ei.owner_id, r.*
-            FROM entity_instances ei
-            CROSS JOIN LATERAL resolve_entity(ei.entity_id) r
-            WHERE ei.id = $1
-            """,
-            instance_id,
-        )
+        try:
+            pool = await get_pool()
+            row = await pool.fetchrow(
+                """
+                SELECT ei.id AS instance_id, ei.room, ei.owner_id, r.*
+                FROM entity_instances ei
+                CROSS JOIN LATERAL resolve_entity(ei.entity_id) r
+                WHERE ei.id = $1
+                """,
+                instance_id,
+            )
+        except Exception:
+            logger.exception(
+                "Database error fetching entity instance '%s'", instance_id
+            )
+            raise
 
         if row is None:
             return None
@@ -175,20 +189,28 @@ class EntityService:
         Returns:
             List of EntityInstance objects contained in the entity
         """
-        pool = await get_pool()
-        rows = await pool.fetch(
-            """
-            SELECT ei.id AS instance_id, ei.room, ei.owner_id, r.*
-            FROM entity_instances ei
-            CROSS JOIN LATERAL resolve_entity(ei.entity_id) r
-            WHERE ei.room = $1
-              AND ei.entity_id IN (
-                  SELECT id FROM entities WHERE container_id = $2
-              )
-            """,
-            room,
-            container_id,
-        )
+        try:
+            pool = await get_pool()
+            rows = await pool.fetch(
+                """
+                SELECT ei.id AS instance_id, ei.room, ei.owner_id, r.*
+                FROM entity_instances ei
+                CROSS JOIN LATERAL resolve_entity(ei.entity_id) r
+                WHERE ei.room = $1
+                  AND ei.entity_id IN (
+                      SELECT id FROM entities WHERE container_id = $2
+                  )
+                """,
+                room,
+                container_id,
+            )
+        except Exception:
+            logger.exception(
+                "Database error fetching contents of '%s' in room '%s'",
+                container_id,
+                room,
+            )
+            raise
 
         instances = []
         for row in rows:
