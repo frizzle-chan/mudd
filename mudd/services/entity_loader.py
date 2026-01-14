@@ -243,7 +243,7 @@ async def sync_entities(pool: asyncpg.Pool, world_file: Path) -> int:
                 DO NOTHING""",
                 entities_with_room,
             )
-            logger.info(f"Synced {len(entities_with_room)} entity instances")
+            logger.info(f"Ensured {len(entities_with_room)} entity instances exist")
 
     logger.info(f"Synced {len(sorted_entities)} entities to database")
 

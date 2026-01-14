@@ -264,7 +264,7 @@ This runs as part of the unified sync flow described above.
 
 ## Entity Service
 
-The `EntityService` provides cached runtime access to entity data. It follows the lazy singleton pattern.
+The `EntityService` provides cached runtime access to entity data. It follows the explicit singleton pattern.
 
 ### Service Methods
 
@@ -296,9 +296,9 @@ entities = await service.get_room_entities(channel.name)
 ### Data Flow
 
 ```
-sync_entities() [startup or periodic]
+sync_entities() [startup]
     ├─ Upsert entity definitions
-    ├─ Create/update entity instances
+    ├─ Create entity instances (ON CONFLICT DO NOTHING)
     └─ invalidate_cache() ─→ Clear entity cache
 
 get_entity(entity_id)
