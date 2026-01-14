@@ -17,6 +17,9 @@ logger = logging.getLogger(__name__)
 # Directory containing world .rec files (zones, rooms, entities)
 WORLDS_DIR = Path(__file__).parent.parent.parent / "data" / "worlds"
 
+# Valid spawn modes matching PostgreSQL enum
+SpawnMode = Literal["none", "move", "clone"]
+
 
 @dataclass
 class Zone:
@@ -49,7 +52,7 @@ class Entity:
     container_id: str | None = None
     room: str | None = None
     contents_visible: bool | None = None
-    spawn_mode: str = "none"
+    spawn_mode: SpawnMode = "none"
     description_short: str | None = None
     description_long: str | None = None
     on_look: str | None = None
@@ -144,8 +147,14 @@ def _parse_entity_row(row: dict[str, str]) -> Entity:
     elif contents_visible_str in ("no", "false", "0"):
         contents_visible = False
 
-    # Parse spawn_mode with default
-    spawn_mode = row.get("SpawnMode", "none").lower()
+    # Parse spawn_mode with default and validation
+    spawn_mode_raw = row.get("SpawnMode", "none").lower()
+    if spawn_mode_raw not in ("none", "move", "clone"):
+        raise ValueError(
+            f"Entity '{row['Id']}' has invalid SpawnMode '{spawn_mode_raw}'. "
+            f"Valid values: none, move, clone"
+        )
+    spawn_mode: SpawnMode = spawn_mode_raw  # type: ignore[assignment]
 
     return Entity(
         id=row["Id"],
