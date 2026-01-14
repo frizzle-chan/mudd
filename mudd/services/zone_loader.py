@@ -91,10 +91,7 @@ def _load_records_from_rec[T](
                 reader = csv.DictReader(io.StringIO(result.stdout))
                 records.extend(row_parser(row) for row in reader)
         except subprocess.CalledProcessError as e:
-            # rec2csv returns error if no records of that type exist - this is OK
-            if "error: no records" in e.stderr.lower():
-                continue
-            # Any other error is critical (corrupt file, missing rec2csv, etc.)
+            # Real errors: file not found, parse errors, etc.
             logger.error(f"Failed to parse {record_type} from {rec_file}: {e.stderr}")
             raise
 
