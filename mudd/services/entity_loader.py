@@ -146,7 +146,9 @@ async def sync_entities(pool: asyncpg.Pool) -> int:
     entities = load_entities_from_rec()
 
     if not entities:
-        logger.warning("No entities found in rec files - skipping sync")
+        logger.warning("No entities found in rec files - deleting all entities")
+        async with pool.acquire() as conn:
+            await conn.execute("DELETE FROM entities")
         return 0
 
     # Load rooms for room reference validation
