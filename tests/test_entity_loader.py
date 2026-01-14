@@ -1,7 +1,7 @@
 """Tests for entity loader.
 
 Tests:
-1. load_entities_from_rec parses entities from mansion.rec
+1. load_entities_from_rec parses entities from world rec files
 2. Entity fields are correctly parsed
 3. Validation detects invalid prototype references
 4. Validation detects circular prototype inheritance

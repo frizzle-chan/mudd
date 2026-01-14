@@ -1,8 +1,8 @@
 """Tests for zone loader.
 
 Tests:
-1. load_zones_from_rec parses zones from mansion.rec
-2. load_rooms_from_rec parses rooms from mansion.rec with Zone and HasVoice fields
+1. load_zones_from_rec parses zones from world rec files
+2. load_rooms_from_rec parses rooms from world rec files with Zone and HasVoice fields
 3. sync_zones_and_rooms_to_db loads zones and rooms to database
 4. Rooms reference valid zones (FK constraint)
 5. Has_voice field is correctly parsed

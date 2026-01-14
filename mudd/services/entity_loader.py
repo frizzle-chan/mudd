@@ -134,7 +134,8 @@ async def sync_entities(pool: asyncpg.Pool) -> int:
 
     Full sync: deletes entities not in current files, upserts all current
     entities. Validates references and circular dependencies before database
-    operations. Topologically sorts by prototype_id to satisfy FK constraints.
+    operations. Topologically sorts by prototype_id and container_id to satisfy
+    FK constraints.
 
     Returns:
         Number of entities synced.
