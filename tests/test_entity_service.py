@@ -9,9 +9,11 @@ Tests:
 6. get_entity_instance returns instance by UUID
 7. get_entity_instance returns None for nonexistent UUID
 8. get_container_contents returns children of container
-9. invalidate_cache clears cached entities
-10. Singleton pattern - get_entity_service raises before init
-11. Singleton pattern - get_entity_service returns instance after init
+9. get_top_level_room_entities returns only non-contained entities
+10. get_top_level_room_entities returns empty list for empty room
+11. invalidate_cache clears cached entities
+12. Singleton pattern - get_entity_service raises before init
+13. Singleton pattern - get_entity_service returns instance after init
 """
 
 from uuid import UUID
@@ -130,6 +132,26 @@ class TestEntityService:
         # foyer_flower_vase has no children
         contents = await service.get_container_contents("foyer_flower_vase", "foyer")
         assert contents == []
+
+    async def test_get_top_level_room_entities_excludes_contained(self, service):
+        """get_top_level_room_entities returns only non-contained entities."""
+        # foyer has foyer_table (top-level) and foyer_flower_vase, foyer_plaque
+        # (contained in foyer_table)
+        instances = await service.get_top_level_room_entities("foyer")
+
+        # Should only include foyer_table
+        entity_ids = {i.entity.id for i in instances}
+        assert "foyer_table" in entity_ids
+        # Contained entities should NOT be included
+        assert "foyer_flower_vase" not in entity_ids
+        assert "foyer_plaque" not in entity_ids
+
+    async def test_get_top_level_room_entities_returns_empty_for_empty_room(
+        self, service
+    ):
+        """get_top_level_room_entities returns empty list for room with no entities."""
+        instances = await service.get_top_level_room_entities("nonexistent_room")
+        assert instances == []
 
     async def test_invalidate_cache_clears_cache(self, service):
         """invalidate_cache clears the entity cache."""

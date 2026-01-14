@@ -1,6 +1,8 @@
 from discord import Interaction, app_commands
 from discord.ext import commands
 
+from mudd.formatting.entities import format_room_entities
+from mudd.services.entity import get_entity_service
 from mudd.services.visibility import get_visibility_service
 
 
@@ -10,11 +12,27 @@ class Look(commands.Cog):
 
     @app_commands.command(name="look", description="View surroundings")
     async def look(self, interaction: Interaction):
-        service = get_visibility_service()
-        await service.wait_for_startup()
+        visibility_service = get_visibility_service()
+        await visibility_service.wait_for_startup()
 
+        # Get room description from channel topic
         topic = getattr(interaction.channel, "topic", None)
-        if topic:
-            await interaction.response.send_message(topic, ephemeral=True)
+        room_description = topic or "You see nothing special."
+
+        # Get room name (channel name = room ID)
+        room = getattr(interaction.channel, "name", None)
+
+        # Format entities if room is known
+        entity_text = ""
+        if room:
+            entity_service = get_entity_service()
+            entities = await entity_service.get_top_level_room_entities(room)
+            entity_text = await format_room_entities(entities, entity_service, room)
+
+        # Combine room description and entities
+        if entity_text:
+            message = f"{room_description}\n\n{entity_text}"
         else:
-            await interaction.response.send_message("No topic set", ephemeral=True)
+            message = room_description
+
+        await interaction.response.send_message(message, ephemeral=True)

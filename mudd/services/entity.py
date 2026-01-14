@@ -181,6 +181,49 @@ class EntityService:
             owner_id=row["owner_id"],
         )
 
+    async def get_top_level_room_entities(self, room: str) -> list[EntityInstance]:
+        """Get entity instances in a room that are not contained in another entity.
+
+        Args:
+            room: Room ID
+
+        Returns:
+            List of EntityInstance objects that are top-level (no container)
+        """
+        try:
+            pool = await get_pool()
+            rows = await pool.fetch(
+                """
+                SELECT ei.id AS instance_id, ei.room, ei.owner_id, r.*
+                FROM entity_instances ei
+                CROSS JOIN LATERAL resolve_entity(ei.entity_id) r
+                JOIN entities e ON e.id = ei.entity_id
+                WHERE ei.room = $1
+                  AND e.container_id IS NULL
+                """,
+                room,
+            )
+        except Exception:
+            logger.exception(
+                "Database error fetching top-level entities in room '%s'", room
+            )
+            raise
+
+        instances = []
+        for row in rows:
+            entity = self._entity_from_row(row)
+            self._entity_cache[entity.id] = entity
+            instances.append(
+                EntityInstance(
+                    instance_id=row["instance_id"],
+                    entity=entity,
+                    room=row["room"],
+                    owner_id=row["owner_id"],
+                )
+            )
+
+        return instances
+
     async def get_container_contents(
         self, container_id: str, room: str
     ) -> list[EntityInstance]:
