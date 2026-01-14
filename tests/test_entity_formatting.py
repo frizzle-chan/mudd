@@ -15,12 +15,25 @@ from uuid import uuid4
 import pytest
 
 from mudd.formatting.entities import (
+    format_entity_detail,
     format_entity_name,
     format_entity_with_contents,
     format_room_entities,
     interpolate_description,
 )
 from mudd.services.entity import EntityInstance, ResolvedEntity
+
+
+class MockService:
+    """Mock entity service for testing."""
+
+    def __init__(self, contents: list[EntityInstance] | None = None):
+        self._contents = contents or []
+
+    async def get_container_contents(
+        self, container_id: str, room: str
+    ) -> list[EntityInstance]:
+        return self._contents
 
 
 class TestFormatEntityName:
@@ -164,11 +177,6 @@ class TestFormatRoomEntities:
 
     async def test_empty_entities_returns_empty_string(self):
         """No entities returns empty string."""
-
-        class MockService:
-            async def get_container_contents(self, container_id, room):
-                return []
-
         result = await format_room_entities([], MockService(), "foyer")
         assert result == ""
 
@@ -192,10 +200,6 @@ class TestFormatRoomEntities:
                 instance_id=uuid4(), entity=table, room="foyer", owner_id=None
             ),
         ]
-
-        class MockService:
-            async def get_container_contents(self, container_id, room):
-                return []
 
         result = await format_room_entities(entities, MockService(), "foyer")
         assert result == "a *Wooden Table* sits here"
@@ -287,9 +291,159 @@ class TestFormatRoomEntities:
             ),
         ]
 
-        class MockService:
-            async def get_container_contents(self, container_id, room):
-                return []
-
         result = await format_room_entities(entities, MockService(), "foyer")
         assert result == ("a *Wooden Table* sits here\nan *Old Chair* is in the corner")
+
+
+@pytest.mark.asyncio
+class TestFormatEntityDetail:
+    """Tests for format_entity_detail function."""
+
+    async def test_shows_description_long(self):
+        """Shows entity's long description."""
+        entity = ResolvedEntity(
+            id="table",
+            name="Wooden Table",
+            description_short="a {name}",
+            description_long="A sturdy oak table with worn edges.",
+            on_look=None,
+            on_touch=None,
+            on_attack=None,
+            on_use=None,
+            on_take=None,
+            contents_visible=None,
+            spawn_mode="none",
+        )
+        instance = EntityInstance(
+            instance_id=uuid4(),
+            entity=entity,
+            room="foyer",
+            owner_id=None,
+        )
+
+        result = await format_entity_detail(instance, MockService(), "foyer")
+        assert "A sturdy oak table with worn edges." in result
+
+    async def test_falls_back_to_description_short(self):
+        """Falls back to description_short when description_long is None."""
+        entity = ResolvedEntity(
+            id="plaque",
+            name="Inscribed Plaque",
+            description_short="a {name} on the wall",
+            description_long=None,
+            on_look=None,
+            on_touch=None,
+            on_attack=None,
+            on_use=None,
+            on_take=None,
+            contents_visible=None,
+            spawn_mode="none",
+        )
+        instance = EntityInstance(
+            instance_id=uuid4(),
+            entity=entity,
+            room="foyer",
+            owner_id=None,
+        )
+
+        result = await format_entity_detail(instance, MockService(), "foyer")
+        assert "a *Inscribed Plaque* on the wall" in result
+
+    async def test_shows_container_contents_long_description(self):
+        """Shows long descriptions of container contents."""
+        table_entity = ResolvedEntity(
+            id="table",
+            name="Wooden Table",
+            description_short="a {name}",
+            description_long="A sturdy oak table.",
+            on_look=None,
+            on_touch=None,
+            on_attack=None,
+            on_use=None,
+            on_take=None,
+            contents_visible=True,
+            spawn_mode="none",
+        )
+        table_instance = EntityInstance(
+            instance_id=uuid4(),
+            entity=table_entity,
+            room="foyer",
+            owner_id=None,
+        )
+
+        vase_entity = ResolvedEntity(
+            id="vase",
+            name="Flower Vase",
+            description_short="a {name}",
+            description_long="A teal ceramic vase with gold trim.",
+            on_look=None,
+            on_touch=None,
+            on_attack=None,
+            on_use=None,
+            on_take=None,
+            contents_visible=None,
+            spawn_mode="none",
+        )
+        vase_instance = EntityInstance(
+            instance_id=uuid4(),
+            entity=vase_entity,
+            room="foyer",
+            owner_id=None,
+        )
+
+        mock_service = MockService([vase_instance])
+        result = await format_entity_detail(table_instance, mock_service, "foyer")
+
+        assert "A sturdy oak table." in result
+        assert "On it:" in result
+        assert "A teal ceramic vase with gold trim." in result
+
+    async def test_returns_default_when_no_description(self):
+        """Returns default message when entity has no descriptions."""
+        entity = ResolvedEntity(
+            id="blank",
+            name="Blank",
+            description_short=None,
+            description_long=None,
+            on_look=None,
+            on_touch=None,
+            on_attack=None,
+            on_use=None,
+            on_take=None,
+            contents_visible=None,
+            spawn_mode="none",
+        )
+        instance = EntityInstance(
+            instance_id=uuid4(),
+            entity=entity,
+            room="foyer",
+            owner_id=None,
+        )
+
+        result = await format_entity_detail(instance, MockService(), "foyer")
+        assert result == "You see nothing special."
+
+    async def test_interpolates_name_in_descriptions(self):
+        """Interpolates {name} placeholder in descriptions."""
+        entity = ResolvedEntity(
+            id="table",
+            name="Wooden Table",
+            description_short="a {name}",
+            description_long="The {name} looks sturdy.",
+            on_look=None,
+            on_touch=None,
+            on_attack=None,
+            on_use=None,
+            on_take=None,
+            contents_visible=None,
+            spawn_mode="none",
+        )
+        instance = EntityInstance(
+            instance_id=uuid4(),
+            entity=entity,
+            room="foyer",
+            owner_id=None,
+        )
+
+        result = await format_entity_detail(instance, MockService(), "foyer")
+        assert "The *Wooden Table* looks sturdy." in result

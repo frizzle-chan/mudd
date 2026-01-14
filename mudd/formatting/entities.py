@@ -99,3 +99,54 @@ async def format_room_entities(
             lines.append(formatted)
 
     return "\n".join(lines) if lines else ""
+
+
+async def format_entity_detail(
+    instance: EntityInstance,
+    entity_service: ContainerContentsFetcher,
+    room: str,
+) -> str:
+    """Format detailed entity view with description and contents.
+
+    Output format:
+    - description_long (falling back to description_short), interpolated with {name}
+    - Container contents (if contents_visible, same fallback logic)
+
+    Note: Container contents are only shown one level deep. Nested containers'
+    contents are not displayed; users must examine nested containers separately.
+
+    Args:
+        instance: Entity instance to format
+        entity_service: Service to fetch container contents
+        room: Room ID for querying contents
+
+    Returns:
+        Formatted detailed view string
+    """
+    entity = instance.entity
+    parts: list[str] = []
+
+    # Description (prefer long, fall back to short)
+    desc = interpolate_description(
+        entity.description_long or entity.description_short, entity.name
+    )
+    if desc:
+        parts.append(desc)
+
+    # Container contents (prefer description_long, fall back to description_short)
+    if entity.contents_visible:
+        contents = await entity_service.get_container_contents(entity.id, room)
+        if contents:
+            content_lines: list[str] = []
+            for content in contents:
+                content_desc = interpolate_description(
+                    content.entity.description_long or content.entity.description_short,
+                    content.entity.name,
+                )
+                if content_desc:
+                    content_lines.append(f"- {content_desc}")
+
+            if content_lines:
+                parts.append("On it:\n" + "\n".join(content_lines))
+
+    return "\n\n".join(parts) if parts else "You see nothing special."

@@ -236,3 +236,116 @@ class TestLookCog:
         # Check ephemeral=True
         call_kwargs = mock_interaction.response.send_message.call_args[1]
         assert call_kwargs.get("ephemeral") is True
+
+    async def test_look_at_entity_shows_long_description(
+        self, look_cog, mock_interaction, mock_visibility_service, mock_entity_service
+    ):
+        """Look at specific entity shows description_long."""
+        mock_interaction.channel.topic = "A grand foyer."
+        mock_interaction.channel.name = "foyer"
+
+        # Entity with description_long
+        table = ResolvedEntity(
+            id="table",
+            name="Wooden Table",
+            description_short="a {name} sits here",
+            description_long="A sturdy oak table with worn edges.",
+            on_look=None,
+            on_touch=None,
+            on_attack=None,
+            on_use=None,
+            on_take=None,
+            contents_visible=None,
+            spawn_mode="none",
+        )
+        table_instance = make_instance(table, "foyer")
+
+        mock_entity_service.get_room_entities = AsyncMock(return_value=[table_instance])
+        mock_entity_service.get_container_contents = AsyncMock(return_value=[])
+
+        with (
+            patch(
+                "mudd.cogs.look.get_visibility_service",
+                return_value=mock_visibility_service,
+            ),
+            patch(
+                "mudd.cogs.look.get_entity_service",
+                return_value=mock_entity_service,
+            ),
+        ):
+            # Look at entity by name prefix
+            await look_cog.look.callback(look_cog, mock_interaction, at="wood")
+
+        mock_interaction.response.send_message.assert_called_once()
+        message = mock_interaction.response.send_message.call_args[0][0]
+
+        # Should show long description
+        assert "A sturdy oak table with worn edges." in message
+
+    async def test_look_at_entity_disambiguation(
+        self, look_cog, mock_interaction, mock_visibility_service, mock_entity_service
+    ):
+        """Multiple matching entities shows disambiguation prompt."""
+        mock_interaction.channel.topic = "A grand foyer."
+        mock_interaction.channel.name = "foyer"
+
+        # Two entities starting with "flower"
+        vase = make_entity("vase", "Flower Vase", "a {name}")
+        pot = make_entity("pot", "Flower Pot", "a {name}")
+        vase_instance = make_instance(vase, "foyer")
+        pot_instance = make_instance(pot, "foyer")
+
+        mock_entity_service.get_room_entities = AsyncMock(
+            return_value=[vase_instance, pot_instance]
+        )
+
+        with (
+            patch(
+                "mudd.cogs.look.get_visibility_service",
+                return_value=mock_visibility_service,
+            ),
+            patch(
+                "mudd.cogs.look.get_entity_service",
+                return_value=mock_entity_service,
+            ),
+        ):
+            await look_cog.look.callback(look_cog, mock_interaction, at="flower")
+
+        mock_interaction.response.send_message.assert_called_once()
+        message = mock_interaction.response.send_message.call_args[0][0]
+
+        # Should show disambiguation
+        assert "Which one?" in message
+        assert "*Flower Vase*" in message
+        assert "*Flower Pot*" in message
+
+    async def test_look_at_entity_no_match(
+        self, look_cog, mock_interaction, mock_visibility_service, mock_entity_service
+    ):
+        """No matching entity shows 'not found' message and room description."""
+        mock_interaction.channel.topic = "A grand foyer."
+        mock_interaction.channel.name = "foyer"
+
+        table = make_entity("table", "Wooden Table", "a {name}")
+        table_instance = make_instance(table, "foyer")
+
+        mock_entity_service.get_room_entities = AsyncMock(return_value=[table_instance])
+
+        with (
+            patch(
+                "mudd.cogs.look.get_visibility_service",
+                return_value=mock_visibility_service,
+            ),
+            patch(
+                "mudd.cogs.look.get_entity_service",
+                return_value=mock_entity_service,
+            ),
+        ):
+            await look_cog.look.callback(look_cog, mock_interaction, at="xyz")
+
+        mock_interaction.response.send_message.assert_called_once()
+        message = mock_interaction.response.send_message.call_args[0][0]
+
+        # Should show not found and room description
+        assert "You don't see 'xyz' here." in message
+        assert "A grand foyer." in message
