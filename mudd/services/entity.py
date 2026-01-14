@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 SpawnMode = Literal["none", "move", "clone"]
 
 
-@dataclass
+@dataclass(frozen=True)
 class ResolvedEntity:
     """Entity with all inherited properties resolved."""
 
@@ -32,7 +32,7 @@ class ResolvedEntity:
     spawn_mode: SpawnMode
 
 
-@dataclass
+@dataclass(frozen=True)
 class EntityInstance:
     """Entity instance with location and resolved properties."""
 
@@ -92,7 +92,11 @@ class EntityService:
             logger.exception("Database error fetching entity '%s'", entity_id)
             raise
 
-        if row is None or row["name"] is None:
+        if row is None:
+            return None
+
+        if row["name"] is None:
+            logger.warning("Entity '%s' has null name after resolution", entity_id)
             return None
 
         entity = self._entity_from_row(row)
