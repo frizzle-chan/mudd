@@ -9,6 +9,10 @@ Tests:
 6. Topological sort orders prototypes before children
 7. sync_entities loads entities to database
 8. Re-sync removes entities not in files
+9. Entity instances created for entities with Room field
+10. Re-sync is idempotent (no duplicate instances)
+11. Orphan instances removed on re-sync
+12. Unique constraint prevents duplicate room instances
 """
 
 import pytest
@@ -344,3 +348,93 @@ class TestSyncRemovesStaleEntities:
                 "SELECT COUNT(*) FROM entities WHERE id = $1", "fake-entity"
             )
             assert count == 0
+
+
+@pytest.mark.asyncio(loop_scope="module")
+class TestSyncEntityInstances:
+    """Test entity instance creation during sync."""
+
+    async def test_instances_created_for_entities_with_room(self, test_db, world_file):
+        """Entity instances are created for entities with Room field."""
+        await sync_entities(test_db, world_file)
+
+        async with test_db.acquire() as conn:
+            instances = await conn.fetch(
+                "SELECT * FROM entity_instances WHERE room IS NOT NULL"
+            )
+            instance_entity_ids = {i["entity_id"] for i in instances}
+
+            # foyer_table, foyer_flower_vase, foyer_plaque have Room field
+            assert "foyer_table" in instance_entity_ids
+            assert "foyer_flower_vase" in instance_entity_ids
+            assert "foyer_plaque" in instance_entity_ids
+
+    async def test_sync_is_idempotent(self, test_db, world_file):
+        """Re-sync does not create duplicate instances."""
+        await sync_entities(test_db, world_file)
+
+        async with test_db.acquire() as conn:
+            count_before = await conn.fetchval(
+                "SELECT COUNT(*) FROM entity_instances WHERE room IS NOT NULL"
+            )
+
+        # Sync again
+        await sync_entities(test_db, world_file)
+
+        async with test_db.acquire() as conn:
+            count_after = await conn.fetchval(
+                "SELECT COUNT(*) FROM entity_instances WHERE room IS NOT NULL"
+            )
+
+        assert count_before == count_after
+
+    async def test_orphan_room_instances_removed_on_sync(self, test_db, world_file):
+        """Room instances not in rec files are removed on sync."""
+        await sync_entities(test_db, world_file)
+
+        async with test_db.acquire() as conn:
+            # Insert an orphan room instance
+            await conn.execute(
+                """INSERT INTO entity_instances (entity_id, room)
+                   VALUES ($1, $2)
+                   ON CONFLICT DO NOTHING""",
+                "object",  # 'object' has no Room field in rec file
+                "foyer",
+            )
+
+            # Verify orphan exists
+            count = await conn.fetchval(
+                """SELECT COUNT(*) FROM entity_instances
+                   WHERE entity_id = $1 AND room = $2""",
+                "object",
+                "foyer",
+            )
+            assert count == 1
+
+        # Sync again - should remove orphan
+        await sync_entities(test_db, world_file)
+
+        async with test_db.acquire() as conn:
+            count = await conn.fetchval(
+                """SELECT COUNT(*) FROM entity_instances
+                   WHERE entity_id = $1 AND room = $2""",
+                "object",
+                "foyer",
+            )
+            assert count == 0
+
+    async def test_unique_constraint_prevents_duplicate_room_instances(
+        self, test_db, world_file
+    ):
+        """Partial unique index prevents duplicate (entity_id, room) pairs."""
+        await sync_entities(test_db, world_file)
+
+        async with test_db.acquire() as conn:
+            # Try to insert duplicate room instance - should fail
+            with pytest.raises(Exception, match="idx_entity_instances_entity_room"):
+                await conn.execute(
+                    """INSERT INTO entity_instances (entity_id, room)
+                       VALUES ($1, $2)""",
+                    "foyer_table",
+                    "foyer",
+                )
