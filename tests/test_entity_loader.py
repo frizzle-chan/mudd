@@ -165,6 +165,26 @@ class TestValidateEntities:
         with pytest.raises(ValueError, match="Circular containment"):
             _validate_and_sort_entities(entities, set())
 
+    def test_three_node_prototype_cycle_raises(self):
+        """Three-node prototype cycle raises ValueError."""
+        entities = [
+            Entity(id="a", name="A", prototype_id="b"),
+            Entity(id="b", name="B", prototype_id="c"),
+            Entity(id="c", name="C", prototype_id="a"),
+        ]
+        with pytest.raises(ValueError, match="Circular prototype inheritance"):
+            _validate_and_sort_entities(entities, set())
+
+    def test_three_node_containment_cycle_raises(self):
+        """Three-node containment cycle raises ValueError."""
+        entities = [
+            Entity(id="a", name="A", container_id="b"),
+            Entity(id="b", name="B", container_id="c"),
+            Entity(id="c", name="C", container_id="a"),
+        ]
+        with pytest.raises(ValueError, match="Circular containment"):
+            _validate_and_sort_entities(entities, set())
+
 
 class TestTopologicalSort:
     """Test topological sorting of entities."""
@@ -209,6 +229,34 @@ class TestTopologicalSort:
 
         # Parent must come before child
         assert parent_idx < child_idx
+
+    def test_containers_sorted_before_contents(self):
+        """Containers appear before entities that reference them."""
+        entities = [
+            Entity(id="item", name="Item", container_id="box"),
+            Entity(id="box", name="Box"),
+        ]
+        sorted_entities = _validate_and_sort_entities(entities, set())
+
+        box_idx = next(i for i, e in enumerate(sorted_entities) if e.id == "box")
+        item_idx = next(i for i, e in enumerate(sorted_entities) if e.id == "item")
+        assert box_idx < item_idx
+
+    def test_entity_with_both_prototype_and_container_sorted_correctly(self):
+        """Entity with both prototype and container is sorted after both."""
+        entities = [
+            Entity(id="item", name="Item", prototype_id="object", container_id="box"),
+            Entity(id="box", name="Box"),
+            Entity(id="object", name="Object"),
+        ]
+        sorted_entities = _validate_and_sort_entities(entities, set())
+
+        object_idx = next(i for i, e in enumerate(sorted_entities) if e.id == "object")
+        box_idx = next(i for i, e in enumerate(sorted_entities) if e.id == "box")
+        item_idx = next(i for i, e in enumerate(sorted_entities) if e.id == "item")
+
+        assert object_idx < item_idx
+        assert box_idx < item_idx
 
 
 @pytest.mark.asyncio(loop_scope="module")
