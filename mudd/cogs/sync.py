@@ -7,8 +7,12 @@ perform full syncs every 15 minutes.
 
 import logging
 import os
+from typing import TYPE_CHECKING
 
 from discord.ext import commands, tasks
+
+if TYPE_CHECKING:
+    from main import MuddBot
 
 from mudd.services.database import get_pool
 from mudd.services.visibility import (
@@ -31,7 +35,9 @@ class Sync(commands.Cog):
     - Orphan tracking: Only report NEW orphans to console (not previously seen)
     """
 
-    def __init__(self, bot: commands.Bot):
+    bot: "MuddBot"
+
+    def __init__(self, bot: "MuddBot"):
         self.bot = bot
         self._seen_orphans: set[tuple[int, str, str]] = set()
         self._console_channel = os.environ.get("MUDD_CONSOLE_CHANNEL", "console")
@@ -68,7 +74,7 @@ class Sync(commands.Cog):
         logger.info("Starting initial sync (first run)")
 
         # Access world_file from bot (set in main.py)
-        world_file = self.bot.world_file  # type: ignore[attr-defined]
+        world_file = self.bot.world_file
 
         default_room: str | None = None
 
@@ -120,7 +126,7 @@ class Sync(commands.Cog):
         await service.wait_for_startup()
 
         # Access world_file from bot (set in main.py)
-        world_file = self.bot.world_file  # type: ignore[attr-defined]
+        world_file = self.bot.world_file
 
         for guild in self.bot.guilds:
             logger.info(f"Starting periodic sync for {guild.name}")

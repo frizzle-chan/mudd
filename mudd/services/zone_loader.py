@@ -7,7 +7,7 @@ import subprocess
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal, overload
+from typing import Literal, cast, overload
 
 import asyncpg
 import discord
@@ -147,7 +147,7 @@ def _parse_entity_row(row: dict[str, str]) -> Entity:
             f"Entity '{row['Id']}' has invalid SpawnMode '{spawn_mode_raw}'. "
             f"Valid values: none, move, clone"
         )
-    spawn_mode: SpawnMode = spawn_mode_raw  # type: ignore[assignment]
+    spawn_mode = cast(SpawnMode, spawn_mode_raw)
 
     return Entity(
         id=row["Id"],
@@ -321,7 +321,7 @@ def _find_channels_by_name(
     matches = [ch for ch in channels if ch.name == channel_name]
     # Sort by ID (ascending) - smaller ID = older channel
     matches.sort(key=lambda ch: ch.id)
-    return matches  # type: ignore[return-value]
+    return cast(list[discord.TextChannel] | list[discord.VoiceChannel], matches)
 
 
 async def _sync_channel(
