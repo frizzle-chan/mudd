@@ -89,7 +89,7 @@ Id: foyer_table
 Name: Wooden Table
 Prototype: furniture
 Room: foyer
-DescriptionShort: a {name} sits in the middle of the room
+DescriptionShort: a {{ name }} sits in the middle of the room
 ContentsVisible: yes
 ```
 
@@ -106,7 +106,68 @@ ContentsVisible: yes
 - `DescriptionLong` - Detailed description
 - `On*` - Action handlers: `OnLook`, `OnTouch`, `OnAttack`, `OnUse`, `OnTake`
 
-Text fields support `{name}` interpolation.
+**All text fields** (`DescriptionShort`, `DescriptionLong`, `On*`) are **Jinja2 templates** with access to:
+- `e`: The resolved entity with all properties
+- `name`: Entity name formatted with Discord italics (`*Name*`)
+- `contents`: Bullet list of container contents (only for entities with `ContentsVisible: yes`)
+
+### Templates
+
+The base `object` prototype's `OnLook` template is:
+```jinja
+{{ e.description_long or e.description_short or "You see nothing special." }}{{ contents }}
+```
+
+This means entities inherit the behavior of showing their description when examined. Override `OnLook` for custom behavior:
+
+```rec
+Id: magic_orb
+Name: Magic Orb
+Prototype: object
+Room: library
+DescriptionShort: a glowing {{ name }}
+DescriptionLong: A mysterious orb that pulses with arcane energy.
+OnLook: The {{ name }} pulses softly. {{ e.description_long }}
+```
+
+### Container Contents
+
+The `{{ contents }}` variable contains a bullet list of items inside a container. The format is `\n- item1\n- item2`. Use this to customize how containers display their contents:
+
+```rec
+{# Table - shows contents "on it" #}
+Id: foyer_table
+DescriptionShort: a {{ name }} sits here{% if contents %}. On it:{{ contents }}{% endif %}
+
+{# Chest - shows contents "in it" #}
+Id: treasure_chest
+DescriptionShort: a {{ name }}{% if contents %}. In it:{{ contents }}{% endif %}
+```
+
+The `contents` variable uses each item's `DescriptionShort` template. For entities without `ContentsVisible: yes`, the `contents` variable is always empty.
+
+### Template Examples
+
+```jinja
+{# Simple: just use description #}
+{{ e.description_long or e.description_short }}
+
+{# Custom text with entity reference #}
+You touch the {{ name }}. It feels warm.
+
+{# Conditional #}
+{% if e.description_long %}{{ e.description_long }}{% else %}Nothing special.{% endif %}
+
+{# Container with contents #}
+A sturdy {{ name }}.{% if contents %} On it:{{ contents }}{% endif %}
+```
+
+### Template Errors
+
+If a template has syntax errors or undefined variables, the system:
+1. Falls back to `description_long` or `description_short`
+2. Appends `-# (error rendering template)` to the output
+3. Logs the error for debugging
 
 ## Prototypes vs Instances
 

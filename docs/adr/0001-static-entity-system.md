@@ -45,17 +45,20 @@ The `%rec` descriptor enables:
 - `%mandatory` - Required fields for all entities
 - `%allowed` - Whitelist of valid field names
 
-**Template interpolation:**
-Text fields (`DescriptionShort`, `DescriptionLong`, `On*` handlers) support `{name}` placeholder interpolation. At render time, `{name}` is replaced with the entity's `Name` value. This allows reusable descriptions in prototypes.
+**Jinja2 Templates:**
+Text fields (`DescriptionShort`, `DescriptionLong`, `On*` handlers) are Jinja2 templates. The template context includes:
+- `name`: Entity name formatted with Discord italics (`*Name*`)
+- `e`: The resolved entity with all properties
 
 Example:
 ```rec
 Id: object
-DescriptionShort: a {name}
-OnTouch: you poke the {name}
+DescriptionShort: a {{ name }}
+OnTouch: you poke the {{ name }}
+OnLook: {{ e.description_long or e.description_short or "You see nothing special." }}
 ```
 
-A child entity with `Name: Fancy Vase` would render `DescriptionShort` as "a Fancy Vase".
+A child entity with `Name: Fancy Vase` would render `DescriptionShort` as "a *Fancy Vase*".
 
 **`On*` handlers represent actions, not results:**
 Handler names describe what the player *does* (the action), not what happens (the result). For example, `OnAttack` is triggered when a player attacks an entity - the handler text describes the outcome, which may or may not result in destruction. This keeps handlers predictable and reusable across entity types.
@@ -96,7 +99,7 @@ CREATE TABLE entities (
     name TEXT NOT NULL,
     prototype_id TEXT REFERENCES entities(id),
 
-    -- Descriptions (support {name} template interpolation at render time)
+    -- Descriptions (Jinja2 templates with {{ name }} and {{ e.* }} support)
     description_short TEXT,
     description_long TEXT,
 
@@ -258,15 +261,15 @@ In the context of **parsing `/interact <input>` commands**, facing **the need to
 
 ### Look Output Format
 
-In the context of **displaying room contents via `/look`**, facing **the choice between terse name lists and descriptive prose**, we decided to **show each entity's `DescriptionShort` with the `{name}` placeholder hydrated in Discord italics**, to achieve **immersive room descriptions where interactable objects are visually distinct**, accepting **the need for every entity to have a `DescriptionShort` (directly or via inheritance)**.
+In the context of **displaying room contents via `/look`**, facing **the choice between terse name lists and descriptive prose**, we decided to **show each entity's `DescriptionShort` rendered as a Jinja2 template with `{{ name }}` as a formatted variable**, to achieve **immersive room descriptions where interactable objects are visually distinct**, accepting **the need for every entity to have a `DescriptionShort` (directly or via inheritance)**.
 
-Format: `DescriptionShort` uses a `{name}` template placeholder. The core template system replaces `{name}` with the entity's `Name` value. When rendering for `/look` output specifically, the name is wrapped in Discord markdown italics (`*Name*`) for visual distinction.
+Format: `DescriptionShort` is a Jinja2 template. The `{{ name }}` variable is replaced with the entity's `Name` value wrapped in Discord markdown italics (`*Name*`) for visual distinction.
 
 Example entity definition:
 ```rec
 Id: vase
 Name: Fancy Vase
-DescriptionShort: a {name} sits on the mantle
+DescriptionShort: a {{ name }} sits on the mantle
 ```
 
 Example `/look` output:
@@ -274,7 +277,7 @@ Example `/look` output:
 >
 > a *Fancy Vase* sits on the mantle. a *Wooden Chair* rests by the fire.
 
-Entities without a `DescriptionShort` fall back to: "a *{name}* is here."
+Entities without a `DescriptionShort` fall back to: "a *{entity name}* is here."
 
 ### Entity Containment
 
@@ -289,10 +292,10 @@ In the context of **modeling nested objects** (e.g., a lamp on a table), facing 
 **Example:**
 ```sql
 INSERT INTO entities (id, name, prototype_id, description_short, contents_visible) VALUES
-('table', 'Wooden Table', 'furniture', 'a {name} sits in the corner', TRUE),
+('table', 'Wooden Table', 'furniture', 'a {{ name }} sits in the corner', TRUE),
 ('lamp', 'Brass Lamp', 'object', NULL, NULL),
-('chest', 'Wooden Chest', 'furniture', 'a {name} rests against the wall', FALSE),
-('gold_ring', 'Gold Ring', 'object', 'a {name}', NULL);
+('chest', 'Wooden Chest', 'furniture', 'a {{ name }} rests against the wall', FALSE),
+('gold_ring', 'Gold Ring', 'object', 'a {{ name }}', NULL);
 
 UPDATE entities SET container_id = 'table' WHERE id = 'lamp';
 UPDATE entities SET container_id = 'chest' WHERE id = 'gold_ring';

@@ -18,12 +18,12 @@ CREATE TABLE entities (
     name TEXT NOT NULL,
     prototype_id TEXT REFERENCES entities(id),
 
-    -- Descriptions (support {name} template interpolation at render time)
+    -- Descriptions (Jinja2 templates with {{ name }} and {{ e.* }} support)
     description_short TEXT,
     description_long TEXT,
 
     -- Handlers: NULL means "inherit from prototype"
-    -- Values are text responses with {name} interpolation support
+    -- Values are Jinja2 templates with {{ name }} and {{ e.* }} support
     on_look TEXT,
     on_touch TEXT,
     on_attack TEXT,

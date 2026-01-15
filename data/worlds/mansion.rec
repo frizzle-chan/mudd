@@ -145,22 +145,22 @@ Description: A dimly lit lounge with comfy chairs and one of those oversized glo
 
 Id: object
 Name: object
-DescriptionShort: a {name}
-OnLook: You see nothing special about the {name}.
-OnTouch: You touch the {name}. Nothing happens.
-OnAttack: You attack the {name}, but it has no effect.
-OnUse: You can't use the {name}.
-OnTake: You can't take the {name}.
+DescriptionShort: a {{ name }}
+OnLook: {{ e.description_long or e.description_short or "You see nothing special." }}{{ contents }}
+OnTouch: You touch the {{ name }}. Nothing happens.
+OnAttack: You attack the {{ name }}, but it has no effect.
+OnUse: You can't use the {{ name }}.
+OnTake: You can't take the {{ name }}.
 
 Id: furniture
 Name: furniture
 Prototype: object
-DescriptionShort: a {name} sits here
+DescriptionShort: a {{ name }} sits here{% if contents %}. On it:{{ contents }}{% endif %}
 
 Id: glass_object
 Name: Glass Object
 Prototype: object
-OnAttack: You suppress the intrusive thought to smash the {name}
+OnAttack: You suppress the intrusive thought to smash the {{ name }}
 
 # ----------------------------------------------------------------------------
 # Foyer entities
@@ -170,7 +170,7 @@ Id: foyer_table
 Name: Wooden Table
 Prototype: furniture
 Room: foyer
-DescriptionShort: a {name} sits in the middle of the room
+DescriptionShort: a {{ name }} sits in the middle of the room{% if contents %}. On it:{{ contents }}{% endif %}
 DescriptionLong: A sturdy oak table with worn edges.
 ContentsVisible: yes
 
@@ -179,7 +179,7 @@ Name: Flower Vase
 Prototype: glass_object
 Room: foyer
 Container: foyer_table
-DescriptionShort: a teal {name} with yellow roses in it
+DescriptionShort: a teal {{ name }} with yellow roses in it
 DescriptionLong: a teal ceramic vase with gold trim around the lip. A couple yellow roses sit inside.
 
 Id: foyer_plaque
@@ -187,6 +187,5 @@ Name: Inscribed Plaque
 Prototype: object
 Room: foyer
 Container: foyer_table
-DescriptionShort: a {name}
-DescriptionLong: a wooden plaque with a shiny brass plate with a message inscribed on it.
-OnLook: The plaque reads "Welcome to my mansion! You can usually find us in the office down the hall. -Frizzle"
+DescriptionShort: a {{ name }}
+DescriptionLong: A wooden plaque with a shiny brass plate. The inscription reads: "Welcome to my mansion! You can usually find us in the office down the hall. -Frizzle"

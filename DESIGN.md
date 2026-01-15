@@ -74,8 +74,8 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 | `id` | TEXT (PK) | Unique entity identifier |
 | `name` | TEXT NOT NULL | Display name for the entity |
 | `prototype_id` | TEXT (FK to entities.id) | Reference to parent entity for prototypical inheritance |
-| `description_short` | TEXT | Brief description with {name} template support |
-| `description_long` | TEXT | Detailed description with {name} template support |
+| `description_short` | TEXT | Brief description (Jinja2 template with `{{ name }}` support) |
+| `description_long` | TEXT | Detailed description (Jinja2 template with `{{ name }}` support) |
 | `on_look` | TEXT | Handler response for look action (NULL = inherit from prototype) |
 | `on_touch` | TEXT | Handler response for touch action (NULL = inherit from prototype) |
 | `on_attack` | TEXT | Handler response for attack action (NULL = inherit from prototype) |
@@ -309,3 +309,51 @@ get_room_entities(room)
     └─ Query entity_instances + resolve_entity()
        └─ Cache resolved entities as side effect
 ```
+
+## Template Rendering
+
+Entity action handlers (`on_look`, `on_touch`, `on_attack`, `on_use`, `on_take`) are Jinja2 templates rendered at runtime.
+
+### Template Context
+
+Templates have access to:
+- `e`: The resolved entity (ResolvedEntity) with all inherited properties
+- `name`: Entity name pre-formatted with Discord italics (`*Name*`)
+
+### Rendering Flow
+
+```
+/look at:<entity>
+    └─ render_entity_on_look(instance)
+        ├─ Build context: {"e": entity, "name": "*Wooden Table*"}
+        ├─ Render on_look template
+        │   └─ If error: fallback to description_long or description_short
+        │       └─ Append "-# (error rendering template)" warning
+        └─ Append container contents (if contents_visible)
+```
+
+### Error Handling
+
+Template errors (syntax errors, undefined variables) are handled gracefully:
+1. Log the error with entity ID
+2. Fall back to `description_long` or `description_short`
+3. Append `-# (error rendering template)` to the output
+
+### Example Templates
+
+```jinja
+{# Base object prototype - renders description #}
+{{ e.description_long or e.description_short or "You see nothing special." }}
+
+{# Custom on_look with name reference #}
+You examine the {{ name }}. {{ e.description_long }}
+
+{# Conditional template #}
+{% if e.description_long %}{{ e.description_long }}{% else %}Nothing special about this {{ name }}.{% endif %}
+```
+
+### Template Cache
+
+- Compiled templates are cached in memory by source string
+- Cache lives for the bot's lifetime
+- No TTL needed (entity definitions are static)

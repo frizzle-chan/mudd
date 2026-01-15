@@ -91,7 +91,7 @@ class TestLookCog:
         mock_interaction.channel.name = "foyer"
 
         # Setup entities
-        table = make_entity("table", "Wooden Table", "a {name} sits here", True)
+        table = make_entity("table", "Wooden Table", "a {{ name }} sits here", True)
         table_instance = make_instance(table, "foyer")
 
         mock_entity_service.get_top_level_room_entities = AsyncMock(
@@ -177,14 +177,17 @@ class TestLookCog:
         mock_interaction.channel.topic = "A foyer."
         mock_interaction.channel.name = "foyer"
 
-        # Table with visible contents
+        # Table with visible contents - template controls how contents are shown
         table = make_entity(
-            "table", "Wooden Table", "a {name} sits here", contents_visible=True
+            "table",
+            "Wooden Table",
+            "a {{ name }} sits here{% if contents %}. On it:{{ contents }}{% endif %}",
+            contents_visible=True,
         )
         table_instance = make_instance(table, "foyer")
 
         # Vase inside table
-        vase = make_entity("vase", "Flower Vase", "a {name}", contents_visible=None)
+        vase = make_entity("vase", "Flower Vase", "a {{ name }}", contents_visible=None)
         vase_instance = make_instance(vase, "foyer")
 
         mock_entity_service.get_top_level_room_entities = AsyncMock(
@@ -209,8 +212,9 @@ class TestLookCog:
         mock_interaction.response.send_message.assert_called_once()
         message = mock_interaction.response.send_message.call_args[0][0]
 
-        # Should show nested contents
-        assert "a *Wooden Table* sits here. On it: a *Flower Vase*" in message
+        # Should show nested contents via template
+        assert "a *Wooden Table* sits here. On it:" in message
+        assert "a *Flower Vase*" in message
 
     async def test_look_sends_ephemeral_message(
         self, look_cog, mock_interaction, mock_visibility_service, mock_entity_service
@@ -248,7 +252,7 @@ class TestLookCog:
         table = ResolvedEntity(
             id="table",
             name="Wooden Table",
-            description_short="a {name} sits here",
+            description_short="a {{ name }} sits here",
             description_long="A sturdy oak table with worn edges.",
             on_look=None,
             on_touch=None,
@@ -290,8 +294,8 @@ class TestLookCog:
         mock_interaction.channel.name = "foyer"
 
         # Two entities starting with "flower"
-        vase = make_entity("vase", "Flower Vase", "a {name}")
-        pot = make_entity("pot", "Flower Pot", "a {name}")
+        vase = make_entity("vase", "Flower Vase", "a {{ name }}")
+        pot = make_entity("pot", "Flower Pot", "a {{ name }}")
         vase_instance = make_instance(vase, "foyer")
         pot_instance = make_instance(pot, "foyer")
 
@@ -326,7 +330,7 @@ class TestLookCog:
         mock_interaction.channel.topic = "A grand foyer."
         mock_interaction.channel.name = "foyer"
 
-        table = make_entity("table", "Wooden Table", "a {name}")
+        table = make_entity("table", "Wooden Table", "a {{ name }}")
         table_instance = make_instance(table, "foyer")
 
         mock_entity_service.get_room_entities = AsyncMock(return_value=[table_instance])

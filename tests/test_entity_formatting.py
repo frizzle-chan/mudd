@@ -1,13 +1,12 @@
 """Tests for entity formatting.
 
 Tests:
-1. format_entity_name wraps name in Discord italics
-2. interpolate_description replaces {name} placeholder
-3. interpolate_description handles None template
-4. format_entity_with_contents formats entity without contents
-5. format_entity_with_contents formats entity with nested contents
-6. format_room_entities returns empty string for no entities
-7. format_room_entities formats multiple entities
+1. format_entity_with_contents formats entity without contents
+2. format_entity_with_contents formats entity with nested contents
+3. format_room_entities returns empty string for no entities
+4. format_room_entities formats multiple entities
+5. format_entity_detail shows entity details
+6. render_entity_on_look renders on_look templates
 """
 
 from uuid import uuid4
@@ -15,13 +14,12 @@ from uuid import uuid4
 import pytest
 
 from mudd.formatting.entities import (
-    format_entity_detail,
-    format_entity_name,
     format_entity_with_contents,
     format_room_entities,
-    interpolate_description,
+    render_entity_on_look,
 )
 from mudd.services.entity import EntityInstance, ResolvedEntity
+from mudd.templating import render
 
 
 class MockService:
@@ -36,44 +34,60 @@ class MockService:
         return self._contents
 
 
-class TestFormatEntityName:
-    """Test format_entity_name function."""
+def make_entity(
+    entity_id: str = "test",
+    name: str = "Test Entity",
+    description_short: str | None = "a {{ name }}",
+    description_long: str | None = None,
+) -> ResolvedEntity:
+    """Create a test entity."""
+    return ResolvedEntity(
+        id=entity_id,
+        name=name,
+        description_short=description_short,
+        description_long=description_long,
+        on_look=None,
+        on_touch=None,
+        on_attack=None,
+        on_use=None,
+        on_take=None,
+        contents_visible=None,
+        spawn_mode="none",
+    )
 
-    def test_wraps_name_in_italics(self):
-        """Name is wrapped in Discord italic markers."""
-        assert format_entity_name("Wooden Table") == "*Wooden Table*"
 
-    def test_handles_single_word(self):
-        """Single word names work correctly."""
-        assert format_entity_name("Table") == "*Table*"
+class TestRender:
+    """Test render function from mudd.templating."""
 
-    def test_handles_special_characters(self):
-        """Names with special characters are preserved."""
-        assert format_entity_name("Old Man's Chair") == "*Old Man's Chair*"
-
-
-class TestInterpolateDescription:
-    """Test interpolate_description function."""
-
-    def test_replaces_name_placeholder(self):
-        """The {name} placeholder is replaced with formatted name."""
-        result = interpolate_description("a {name} sits here", "Wooden Table")
+    def test_renders_name_template(self):
+        """The {{ name }} template variable is replaced with formatted name."""
+        entity = make_entity(name="Wooden Table", description_short="a {{ name }}")
+        result = render("a {{ name }} sits here", entity)
         assert result == "a *Wooden Table* sits here"
 
-    def test_handles_multiple_placeholders(self):
-        """Multiple {name} placeholders are all replaced."""
-        result = interpolate_description("the {name} is a nice {name}", "Flower Vase")
+    def test_handles_multiple_name_references(self):
+        """Multiple {{ name }} references are all replaced."""
+        entity = make_entity(name="Flower Vase")
+        result = render("the {{ name }} is a nice {{ name }}", entity)
         assert result == "the *Flower Vase* is a nice *Flower Vase*"
 
-    def test_handles_no_placeholder(self):
-        """Template without placeholder is returned unchanged."""
-        result = interpolate_description("a simple table", "Wooden Table")
+    def test_handles_no_template_variables(self):
+        """Template without variables is returned unchanged."""
+        entity = make_entity(name="Wooden Table")
+        result = render("a simple table", entity)
         assert result == "a simple table"
 
     def test_handles_none_template(self):
         """None template returns empty string."""
-        result = interpolate_description(None, "Wooden Table")
+        entity = make_entity(name="Wooden Table")
+        result = render(None, entity)
         assert result == ""
+
+    def test_renders_entity_properties(self):
+        """Can access entity properties via e variable."""
+        entity = make_entity(description_long="A sturdy table.")
+        result = render("{{ e.description_long }}", entity)
+        assert result == "A sturdy table."
 
 
 class TestFormatEntityWithContents:
@@ -84,7 +98,7 @@ class TestFormatEntityWithContents:
         entity = ResolvedEntity(
             id="table",
             name="Wooden Table",
-            description_short="a {name} sits here",
+            description_short="a {{ name }} sits here",
             description_long=None,
             on_look=None,
             on_touch=None,
@@ -102,7 +116,7 @@ class TestFormatEntityWithContents:
         entity = ResolvedEntity(
             id="table",
             name="Wooden Table",
-            description_short="a {name} sits here",
+            description_short="a {{ name }} sits here",
             description_long=None,
             on_look=None,
             on_touch=None,
@@ -115,12 +129,12 @@ class TestFormatEntityWithContents:
         result = format_entity_with_contents(entity, [])
         assert result == "a *Wooden Table* sits here"
 
-    def test_entity_with_contents(self):
-        """Entity with contents shows nested items."""
+    def test_entity_with_contents_uses_template(self):
+        """Entity with contents passes {{ contents }} to template."""
         table = ResolvedEntity(
             id="table",
             name="Wooden Table",
-            description_short="a {name} sits here",
+            description_short="a {{ name }}. On it:{{ contents }}",
             description_long=None,
             on_look=None,
             on_touch=None,
@@ -133,7 +147,7 @@ class TestFormatEntityWithContents:
         vase = ResolvedEntity(
             id="vase",
             name="Flower Vase",
-            description_short="a {name}",
+            description_short="a {{ name }}",
             description_long=None,
             on_look=None,
             on_touch=None,
@@ -146,7 +160,7 @@ class TestFormatEntityWithContents:
         plaque = ResolvedEntity(
             id="plaque",
             name="Inscribed Plaque",
-            description_short="a {name}",
+            description_short="a {{ name }}",
             description_long=None,
             on_look=None,
             on_touch=None,
@@ -167,8 +181,65 @@ class TestFormatEntityWithContents:
 
         result = format_entity_with_contents(table, contents)
         assert result == (
-            "a *Wooden Table* sits here. On it: a *Flower Vase*, a *Inscribed Plaque*"
+            "a *Wooden Table*. On it:\n- a *Flower Vase*\n- a *Inscribed Plaque*"
         )
+
+    def test_contents_variable_empty_when_no_contents(self):
+        """The {{ contents }} variable is empty string when no contents."""
+        entity = ResolvedEntity(
+            id="table",
+            name="Wooden Table",
+            description_short="a {{ name }}[{{ contents }}]",  # Brackets show empty
+            description_long=None,
+            on_look=None,
+            on_touch=None,
+            on_attack=None,
+            on_use=None,
+            on_take=None,
+            contents_visible=True,
+            spawn_mode="none",
+        )
+        result = format_entity_with_contents(entity, [])
+        assert result == "a *Wooden Table*[]"
+
+    def test_malformed_content_template_uses_fallback(self):
+        """Malformed item template falls back to entity name."""
+        table = ResolvedEntity(
+            id="table",
+            name="Wooden Table",
+            description_short="a {{ name }}. On it:{{ contents }}",
+            description_long=None,
+            on_look=None,
+            on_touch=None,
+            on_attack=None,
+            on_use=None,
+            on_take=None,
+            contents_visible=True,
+            spawn_mode="none",
+        )
+        # Vase has broken template
+        vase = ResolvedEntity(
+            id="vase",
+            name="Broken Vase",
+            description_short="{% if %}broken{% endif %}",  # Syntax error
+            description_long=None,
+            on_look=None,
+            on_touch=None,
+            on_attack=None,
+            on_use=None,
+            on_take=None,
+            contents_visible=None,
+            spawn_mode="none",
+        )
+        contents = [
+            EntityInstance(
+                instance_id=uuid4(), entity=vase, room="foyer", owner_id=None
+            ),
+        ]
+
+        result = format_entity_with_contents(table, contents)
+        # Should fall back to entity name
+        assert "*Broken Vase*" in result
 
 
 @pytest.mark.asyncio
@@ -185,7 +256,7 @@ class TestFormatRoomEntities:
         table = ResolvedEntity(
             id="table",
             name="Wooden Table",
-            description_short="a {name} sits here",
+            description_short="a {{ name }} sits here",
             description_long=None,
             on_look=None,
             on_touch=None,
@@ -209,7 +280,10 @@ class TestFormatRoomEntities:
         table = ResolvedEntity(
             id="table",
             name="Wooden Table",
-            description_short="a {name} sits here",
+            description_short=(
+                "a {{ name }} sits here"
+                "{% if contents %}. On it:{{ contents }}{% endif %}"
+            ),
             description_long=None,
             on_look=None,
             on_touch=None,
@@ -222,7 +296,7 @@ class TestFormatRoomEntities:
         vase = ResolvedEntity(
             id="vase",
             name="Flower Vase",
-            description_short="a {name}",
+            description_short="a {{ name }}",
             description_long=None,
             on_look=None,
             on_touch=None,
@@ -252,14 +326,14 @@ class TestFormatRoomEntities:
                 return []
 
         result = await format_room_entities(entities, MockService(), "foyer")
-        assert result == "a *Wooden Table* sits here. On it: a *Flower Vase*"
+        assert result == "a *Wooden Table* sits here. On it:\n- a *Flower Vase*"
 
     async def test_multiple_entities(self):
         """Multiple top-level entities are joined with newlines."""
         table = ResolvedEntity(
             id="table",
             name="Wooden Table",
-            description_short="a {name} sits here",
+            description_short="a {{ name }} sits here",
             description_long=None,
             on_look=None,
             on_touch=None,
@@ -272,7 +346,7 @@ class TestFormatRoomEntities:
         chair = ResolvedEntity(
             id="chair",
             name="Old Chair",
-            description_short="an {name} is in the corner",
+            description_short="an {{ name }} is in the corner",
             description_long=None,
             on_look=None,
             on_touch=None,
@@ -296,15 +370,40 @@ class TestFormatRoomEntities:
 
 
 @pytest.mark.asyncio
-class TestFormatEntityDetail:
-    """Tests for format_entity_detail function."""
+class TestRenderEntityOnLook:
+    """Tests for render_entity_on_look function."""
 
-    async def test_shows_description_long(self):
-        """Shows entity's long description."""
+    async def test_renders_on_look_template(self):
+        """Renders on_look template with entity context."""
         entity = ResolvedEntity(
             id="table",
             name="Wooden Table",
-            description_short="a {name}",
+            description_short="a {{ name }}",
+            description_long="A sturdy oak table.",
+            on_look="You examine the {{ name }}. {{ e.description_long }}",
+            on_touch=None,
+            on_attack=None,
+            on_use=None,
+            on_take=None,
+            contents_visible=None,
+            spawn_mode="none",
+        )
+        instance = EntityInstance(
+            instance_id=uuid4(),
+            entity=entity,
+            room="foyer",
+            owner_id=None,
+        )
+
+        result = await render_entity_on_look(instance, MockService(), "foyer")
+        assert result == "You examine the *Wooden Table*. A sturdy oak table."
+
+    async def test_falls_back_to_description_when_no_on_look(self):
+        """Falls back to description_long when on_look is None."""
+        entity = ResolvedEntity(
+            id="table",
+            name="Wooden Table",
+            description_short="a {{ name }}",
             description_long="A sturdy oak table with worn edges.",
             on_look=None,
             on_touch=None,
@@ -321,15 +420,15 @@ class TestFormatEntityDetail:
             owner_id=None,
         )
 
-        result = await format_entity_detail(instance, MockService(), "foyer")
-        assert "A sturdy oak table with worn edges." in result
+        result = await render_entity_on_look(instance, MockService(), "foyer")
+        assert result == "A sturdy oak table with worn edges."
 
     async def test_falls_back_to_description_short(self):
         """Falls back to description_short when description_long is None."""
         entity = ResolvedEntity(
-            id="plaque",
-            name="Inscribed Plaque",
-            description_short="a {name} on the wall",
+            id="table",
+            name="Wooden Table",
+            description_short="a {{ name }} sits here",
             description_long=None,
             on_look=None,
             on_touch=None,
@@ -346,17 +445,46 @@ class TestFormatEntityDetail:
             owner_id=None,
         )
 
-        result = await format_entity_detail(instance, MockService(), "foyer")
-        assert "a *Inscribed Plaque* on the wall" in result
+        result = await render_entity_on_look(instance, MockService(), "foyer")
+        assert result == "a *Wooden Table* sits here"
 
-    async def test_shows_container_contents_long_description(self):
-        """Shows long descriptions of container contents."""
+    async def test_shows_error_warning_on_bad_template(self):
+        """Shows error warning when template has syntax error."""
+        entity = ResolvedEntity(
+            id="table",
+            name="Wooden Table",
+            description_short="a {{ name }}",
+            description_long="A sturdy table.",
+            on_look="{% if %}broken{% endif %}",
+            on_touch=None,
+            on_attack=None,
+            on_use=None,
+            on_take=None,
+            contents_visible=None,
+            spawn_mode="none",
+        )
+        instance = EntityInstance(
+            instance_id=uuid4(),
+            entity=entity,
+            room="foyer",
+            owner_id=None,
+        )
+
+        result = await render_entity_on_look(instance, MockService(), "foyer")
+        assert "A sturdy table." in result
+        assert "-# (error rendering template)" in result
+
+    async def test_includes_container_contents(self):
+        """Shows container contents via {{ contents }} template variable."""
         table_entity = ResolvedEntity(
             id="table",
             name="Wooden Table",
-            description_short="a {name}",
+            description_short="a {{ name }}",
             description_long="A sturdy oak table.",
-            on_look=None,
+            on_look=(
+                "{{ e.description_long }}"
+                "{% if contents %}\n\nOn it:{{ contents }}{% endif %}"
+            ),
             on_touch=None,
             on_attack=None,
             on_use=None,
@@ -374,9 +502,9 @@ class TestFormatEntityDetail:
         vase_entity = ResolvedEntity(
             id="vase",
             name="Flower Vase",
-            description_short="a {name}",
-            description_long="A teal ceramic vase with gold trim.",
-            on_look=None,
+            description_short="a teal {{ name }}",
+            description_long="A teal ceramic vase.",
+            on_look="{{ e.description_long }}",
             on_touch=None,
             on_attack=None,
             on_use=None,
@@ -392,14 +520,14 @@ class TestFormatEntityDetail:
         )
 
         mock_service = MockService([vase_instance])
-        result = await format_entity_detail(table_instance, mock_service, "foyer")
+        result = await render_entity_on_look(table_instance, mock_service, "foyer")
 
         assert "A sturdy oak table." in result
         assert "On it:" in result
-        assert "A teal ceramic vase with gold trim." in result
+        assert "a teal *Flower Vase*" in result  # Uses description_short
 
-    async def test_returns_default_when_no_description(self):
-        """Returns default message when entity has no descriptions."""
+    async def test_returns_default_when_no_descriptions(self):
+        """Returns default message when entity has no descriptions or on_look."""
         entity = ResolvedEntity(
             id="blank",
             name="Blank",
@@ -420,17 +548,41 @@ class TestFormatEntityDetail:
             owner_id=None,
         )
 
-        result = await format_entity_detail(instance, MockService(), "foyer")
+        result = await render_entity_on_look(instance, MockService(), "foyer")
         assert result == "You see nothing special."
 
-    async def test_interpolates_name_in_descriptions(self):
-        """Interpolates {name} placeholder in descriptions."""
-        entity = ResolvedEntity(
+    async def test_contents_uses_description_short(self):
+        """Contents are rendered using description_short, not on_look."""
+        table_entity = ResolvedEntity(
             id="table",
             name="Wooden Table",
-            description_short="a {name}",
-            description_long="The {name} looks sturdy.",
-            on_look=None,
+            description_short="a {{ name }}",
+            description_long="A sturdy oak table.",
+            on_look=(
+                "{{ e.description_long }}"
+                "{% if contents %}\n\nOn it:{{ contents }}{% endif %}"
+            ),
+            on_touch=None,
+            on_attack=None,
+            on_use=None,
+            on_take=None,
+            contents_visible=True,
+            spawn_mode="none",
+        )
+        table_instance = EntityInstance(
+            instance_id=uuid4(),
+            entity=table_entity,
+            room="foyer",
+            owner_id=None,
+        )
+
+        # Vase has on_look that's different from description_short
+        vase_entity = ResolvedEntity(
+            id="vase",
+            name="Flower Vase",
+            description_short="a {{ name }}",
+            description_long="A teal ceramic vase.",
+            on_look="You examine the vase closely.",  # NOT used in contents
             on_touch=None,
             on_attack=None,
             on_use=None,
@@ -438,12 +590,17 @@ class TestFormatEntityDetail:
             contents_visible=None,
             spawn_mode="none",
         )
-        instance = EntityInstance(
+        vase_instance = EntityInstance(
             instance_id=uuid4(),
-            entity=entity,
+            entity=vase_entity,
             room="foyer",
             owner_id=None,
         )
 
-        result = await format_entity_detail(instance, MockService(), "foyer")
-        assert "The *Wooden Table* looks sturdy." in result
+        mock_service = MockService([vase_instance])
+        result = await render_entity_on_look(table_instance, mock_service, "foyer")
+
+        assert "A sturdy oak table." in result
+        assert "On it:" in result
+        assert "a *Flower Vase*" in result  # Uses description_short
+        assert "examine the vase closely" not in result  # on_look NOT used

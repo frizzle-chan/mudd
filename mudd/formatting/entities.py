@@ -1,8 +1,12 @@
 """Entity formatting for room descriptions."""
 
+import logging
 from typing import Protocol
 
 from mudd.services.entity import EntityInstance, ResolvedEntity
+from mudd.templating import TemplateRenderError, render
+
+logger = logging.getLogger(__name__)
 
 
 class ContainerContentsFetcher(Protocol):
@@ -13,32 +17,37 @@ class ContainerContentsFetcher(Protocol):
     ) -> list[EntityInstance]: ...
 
 
-def format_entity_name(name: str) -> str:
-    """Format entity name with Discord italics.
+def _build_contents_string(contents: list[EntityInstance]) -> str:
+    """Build a bullet-list string from container contents.
 
     Args:
-        name: Entity display name
+        contents: List of contained entity instances
 
     Returns:
-        Name wrapped in Discord italic markers (*name*)
+        Formatted string like "\\n- a *Vase*\\n- a *Plaque*" or empty string
     """
-    return f"*{name}*"
-
-
-def interpolate_description(template: str | None, name: str) -> str:
-    """Replace {name} placeholder with formatted entity name.
-
-    Args:
-        template: Description template with optional {name} placeholder
-        name: Entity name (will be formatted with italics)
-
-    Returns:
-        Interpolated string, or empty string if template is None
-    """
-    if template is None:
+    if not contents:
         return ""
-    formatted_name = format_entity_name(name)
-    return template.replace("{name}", formatted_name)
+
+    content_lines: list[str] = []
+    for c in contents:
+        try:
+            desc = render(c.entity.description_short, c.entity)
+            if desc:
+                content_lines.append(f"- {desc}")
+        except TemplateRenderError:
+            # Fallback to entity name if template is malformed
+            logger.warning(
+                "Template error rendering description_short for entity '%s', "
+                "using name fallback",
+                c.entity.id,
+            )
+            content_lines.append(f"- *{c.entity.name}*")
+
+    if not content_lines:
+        return ""
+
+    return "\n" + "\n".join(content_lines)
 
 
 def format_entity_with_contents(
@@ -47,24 +56,18 @@ def format_entity_with_contents(
 ) -> str:
     """Format a single entity with optional visible contents.
 
+    The entity's description_short template receives a `contents` variable
+    containing a bullet-list of contents (empty string if none).
+
     Args:
         entity: The resolved entity to format
         contents: List of contained entity instances (if any)
 
     Returns:
-        Formatted string like "a *Wooden Table*. On it: a *Flower Vase*, a *Plaque*"
+        Rendered description_short with contents interpolated
     """
-    base = interpolate_description(entity.description_short, entity.name)
-
-    if not contents:
-        return base
-
-    content_descriptions = [
-        interpolate_description(c.entity.description_short, c.entity.name)
-        for c in contents
-    ]
-
-    return f"{base}. On it: {', '.join(content_descriptions)}"
+    contents_str = _build_contents_string(contents or [])
+    return render(entity.description_short, entity, contents=contents_str)
 
 
 async def format_room_entities(
@@ -101,52 +104,65 @@ async def format_room_entities(
     return "\n".join(lines) if lines else ""
 
 
-async def format_entity_detail(
+async def render_entity_on_look(
     instance: EntityInstance,
     entity_service: ContainerContentsFetcher,
     room: str,
 ) -> str:
-    """Format detailed entity view with description and contents.
+    """Render entity on_look template for /look at:<entity>.
 
-    Output format:
-    - description_long (falling back to description_short), interpolated with {name}
-    - Container contents (if contents_visible, same fallback logic)
+    Uses Jinja2 templating for on_look field. Template context:
+        - `e`: The ResolvedEntity with all properties
+        - `name`: Entity name formatted with Discord italics (*Name*)
+        - `contents`: Pre-formatted bullet list of container contents (empty if none)
 
-    Note: Container contents are only shown one level deep. Nested containers'
-    contents are not displayed; users must examine nested containers separately.
+    If on_look is None or template fails, falls back to description_long
+    or description_short. Template errors append a warning suffix.
 
     Args:
-        instance: Entity instance to format
+        instance: Entity instance to render
         entity_service: Service to fetch container contents
         room: Room ID for querying contents
 
     Returns:
-        Formatted detailed view string
+        Rendered on_look output
     """
     entity = instance.entity
     parts: list[str] = []
 
-    # Description (prefer long, fall back to short)
-    desc = interpolate_description(
-        entity.description_long or entity.description_short, entity.name
-    )
-    if desc:
-        parts.append(desc)
-
-    # Container contents (prefer description_long, fall back to description_short)
+    # Fetch and format container contents
+    contents_str = ""
     if entity.contents_visible:
         contents = await entity_service.get_container_contents(entity.id, room)
-        if contents:
-            content_lines: list[str] = []
-            for content in contents:
-                content_desc = interpolate_description(
-                    content.entity.description_long or content.entity.description_short,
-                    content.entity.name,
-                )
-                if content_desc:
-                    content_lines.append(f"- {content_desc}")
+        contents_str = _build_contents_string(contents)
 
-            if content_lines:
-                parts.append("On it:\n" + "\n".join(content_lines))
+    # Build fallback from descriptions (also rendered as templates)
+    fallback = render(
+        entity.description_long or entity.description_short, entity, contents_str
+    )
+    if not fallback:
+        fallback = "You see nothing special."
+
+    # Render on_look template (use fallback if on_look is None)
+    has_error = False
+    if entity.on_look is None:
+        output = fallback
+    else:
+        try:
+            output = render(entity.on_look, entity, contents_str)
+        except TemplateRenderError:
+            logger.warning(
+                "Template error rendering on_look for entity '%s', using fallback",
+                entity.id,
+            )
+            output = fallback
+            has_error = True
+
+    if output:
+        parts.append(output)
+
+    # Add error warning if template failed
+    if has_error:
+        parts.append("-# (error rendering template)")
 
     return "\n\n".join(parts) if parts else "You see nothing special."

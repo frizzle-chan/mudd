@@ -25,13 +25,13 @@ SAMPLE_ENTITIES = [
         "id": "object",
         "name": "object",
         "prototype_id": None,
-        "description_short": "a {name}",
+        "description_short": "a {{ name }}",
         "description_long": None,
-        "on_look": "You see nothing special about the {name}.",
-        "on_touch": "You touch the {name}. Nothing happens.",
-        "on_attack": "You attack the {name}, but it has no effect.",
-        "on_use": "You can't use the {name}.",
-        "on_take": "You can't take the {name}.",
+        "on_look": "You see nothing special about the {{ name }}.",
+        "on_touch": "You touch the {{ name }}. Nothing happens.",
+        "on_attack": "You attack the {{ name }}, but it has no effect.",
+        "on_use": "You can't use the {{ name }}.",
+        "on_take": "You can't take the {{ name }}.",
         "container_id": None,
         "contents_visible": None,
     },
@@ -44,7 +44,7 @@ SAMPLE_ENTITIES = [
         "description_long": None,
         "on_look": None,
         "on_touch": None,
-        "on_attack": "You suppress the intrusive thought to smash the {name}",
+        "on_attack": "You suppress the intrusive thought to smash the {{ name }}",
         "on_use": None,
         "on_take": None,
         "container_id": None,
@@ -55,7 +55,7 @@ SAMPLE_ENTITIES = [
         "id": "furniture",
         "name": "furniture",
         "prototype_id": "object",
-        "description_short": "a {name} sits here",
+        "description_short": "a {{ name }} sits here",
         "description_long": None,
         "on_look": None,
         "on_touch": None,
@@ -70,7 +70,7 @@ SAMPLE_ENTITIES = [
         "id": "vase",
         "name": "Fancy Vase",
         "prototype_id": "glass_object",
-        "description_short": "a teal {name} with yellow roses",
+        "description_short": "a teal {{ name }} with yellow roses",
         "description_long": "A teal ceramic vase with gold trim.",
         "on_look": None,
         "on_touch": None,
@@ -85,7 +85,7 @@ SAMPLE_ENTITIES = [
         "id": "table",
         "name": "Wooden Table",
         "prototype_id": "furniture",
-        "description_short": "a {name} sits in the corner",
+        "description_short": "a {{ name }} sits in the corner",
         "description_long": "A sturdy oak table with worn edges.",
         "on_look": None,
         "on_touch": None,
@@ -100,12 +100,12 @@ SAMPLE_ENTITIES = [
         "id": "lamp",
         "name": "Brass Lamp",
         "prototype_id": "object",
-        "description_short": "a {name}",
+        "description_short": "a {{ name }}",
         "description_long": "A polished brass lamp with a green shade.",
         "on_look": None,
         "on_touch": None,
         "on_attack": None,
-        "on_use": "You turn on the {name}. Light fills the room.",
+        "on_use": "You turn on the {{ name }}. Light fills the room.",
         "on_take": None,
         "container_id": "table",
         "contents_visible": None,
@@ -115,7 +115,7 @@ SAMPLE_ENTITIES = [
         "id": "book",
         "name": "Old Book",
         "prototype_id": "object",
-        "description_short": "an {name}",
+        "description_short": "an {{ name }}",
         "description_long": "A leather-bound tome with yellowed pages.",
         "on_look": "The book is titled 'A History of the Realm'.",
         "on_touch": None,
@@ -131,13 +131,13 @@ SAMPLE_ENTITIES = [
         "id": "coin",
         "name": "Gold Coin",
         "prototype_id": "object",
-        "description_short": "a shiny {name}",
+        "description_short": "a shiny {{ name }}",
         "description_long": "A gold coin with the king's face on it.",
         "on_look": None,
         "on_touch": None,
         "on_attack": None,
         "on_use": None,
-        "on_take": "You pick up the {name}.",
+        "on_take": "You pick up the {{ name }}.",
         "container_id": None,
         "contents_visible": None,
         "spawn_mode": "move",
@@ -147,13 +147,13 @@ SAMPLE_ENTITIES = [
         "id": "scroll",
         "name": "Magic Scroll",
         "prototype_id": "object",
-        "description_short": "a {name}",
+        "description_short": "a {{ name }}",
         "description_long": "A scroll that produces infinite copies.",
         "on_look": None,
         "on_touch": None,
         "on_attack": None,
         "on_use": None,
-        "on_take": "You take a copy of the {name}.",
+        "on_take": "You take a copy of the {{ name }}.",
         "container_id": None,
         "contents_visible": None,
         "spawn_mode": "clone",
@@ -239,7 +239,7 @@ class TestResolveEntity:
 
         assert row["id"] == "vase"
         assert row["name"] == "Fancy Vase"
-        assert row["description_short"] == "a teal {name} with yellow roses"
+        assert row["description_short"] == "a teal {{ name }} with yellow roses"
         assert row["description_long"] == "A teal ceramic vase with gold trim."
 
     async def test_inherits_from_parent(self, populated_db):
@@ -248,7 +248,7 @@ class TestResolveEntity:
             row = await conn.fetchrow("SELECT * FROM resolve_entity('vase')")
 
         # on_attack should come from glass_object (parent)
-        expected = "You suppress the intrusive thought to smash the {name}"
+        expected = "You suppress the intrusive thought to smash the {{ name }}"
         assert row["on_attack"] == expected
 
     async def test_inherits_from_grandparent(self, populated_db):
@@ -257,8 +257,8 @@ class TestResolveEntity:
             row = await conn.fetchrow("SELECT * FROM resolve_entity('vase')")
 
         # on_touch should come from object (grandparent via glass_object)
-        assert row["on_touch"] == "You touch the {name}. Nothing happens."
-        assert row["on_take"] == "You can't take the {name}."
+        assert row["on_touch"] == "You touch the {{ name }}. Nothing happens."
+        assert row["on_take"] == "You can't take the {{ name }}."
 
     async def test_child_overrides_parent(self, populated_db):
         """Child properties override parent properties."""
@@ -266,10 +266,10 @@ class TestResolveEntity:
             # glass_object overrides on_attack from object
             row = await conn.fetchrow("SELECT * FROM resolve_entity('glass_object')")
 
-        expected = "You suppress the intrusive thought to smash the {name}"
+        expected = "You suppress the intrusive thought to smash the {{ name }}"
         assert row["on_attack"] == expected
         # But still inherits on_touch from object
-        assert row["on_touch"] == "You touch the {name}. Nothing happens."
+        assert row["on_touch"] == "You touch the {{ name }}. Nothing happens."
 
     async def test_resolves_contents_visible(self, populated_db):
         """contents_visible is resolved through inheritance."""
@@ -345,9 +345,9 @@ class TestFuzzyMatching:
         lamp = rows[0]
         assert lamp["name"] == "Brass Lamp"
         # on_use is defined on lamp directly
-        assert lamp["on_use"] == "You turn on the {name}. Light fills the room."
+        assert lamp["on_use"] == "You turn on the {{ name }}. Light fills the room."
         # on_touch is inherited from object
-        assert lamp["on_touch"] == "You touch the {name}. Nothing happens."
+        assert lamp["on_touch"] == "You touch the {{ name }}. Nothing happens."
 
 
 class TestRoomLookup:

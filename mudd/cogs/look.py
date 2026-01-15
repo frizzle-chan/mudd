@@ -3,7 +3,7 @@ from typing import Protocol
 from discord import Interaction, app_commands
 from discord.ext import commands
 
-from mudd.formatting.entities import format_entity_detail, format_room_entities
+from mudd.formatting.entities import format_room_entities, render_entity_on_look
 from mudd.services.entity import EntityInstance, get_entity_service
 from mudd.services.entity_matcher import match_entity_by_prefix
 from mudd.services.visibility import get_visibility_service
@@ -135,9 +135,9 @@ class Look(commands.Cog):
                     f"Which one? {names_list}", ephemeral=True
                 )
             else:
-                # Unique match: show entity detail
+                # Unique match: render on_look template
                 matched_instance = match_result.matches[0].instance
-                detail_text = await format_entity_detail(
+                detail_text = await render_entity_on_look(
                     matched_instance, entity_service, room
                 )
                 await interaction.response.send_message(detail_text, ephemeral=True)
