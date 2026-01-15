@@ -187,5 +187,27 @@ Name: Inscribed Plaque
 Prototype: object
 Room: foyer
 Container: foyer_table
-DescriptionShort: a {{ name }}
+DescriptionShort: an {{ name }}
 DescriptionLong: A wooden plaque with a shiny brass plate. The inscription reads: "Welcome to my mansion! You can usually find us in the office down the hall. -Frizzle"
+
+# ----------------------------------------------------------------------------
+# Gallery entities
+# ----------------------------------------------------------------------------
+
+Id: gallery_map
+Name: Mansion Map
+Prototype: object
+Room: gallery
+DescriptionShort: a rough {{ name }} hangs on the wall
+DescriptionLong: A hand-drawn map of the mansion in a simple wooden frame. The sketchy lines show the layout of the ground floor with annotations:
++ • Library: west from here
++ • Screening Room: through the library, in the northern corner
++ • Office: east to foyer, east to hallway, then east again
++ • Banquet Hall: east to foyer, east to hallway, then north
+
+Id: gallery_portrait
+Name: Portrait of Two Dogs
+Prototype: object
+Room: gallery
+DescriptionShort: a {{ name }} hangs prominently on the wall
+DescriptionLong: A formal oil portrait in an ornate gilded frame. Two goldendoodles pose regally against a deep burgundy backdrop. The smaller one on the left has fluffy apricot fur and bright curious eyes - her brass nametag reads "Lulu". The larger one on the right has a dignified bearing with wavy golden fur - her nametag reads "Ruby". They look like very good girls.
