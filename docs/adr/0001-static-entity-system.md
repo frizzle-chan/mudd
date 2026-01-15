@@ -215,49 +215,59 @@ The `entity_instances.room` column stores logical room names. The channel-to-roo
 
 ### Entity Disambiguation
 
-In the context of **resolving `/interact` commands**, facing **multiple entities in a room potentially matching the user's input**, we decided to **use fuzzy matching with a "be more specific" response**, to achieve **flexible input handling without stateful interaction**, accepting **the need for users to re-issue commands with more specific names**.
+In the context of **resolving `/interact` commands**, facing **multiple entities in a room potentially matching the user's input**, we decided to **use word-prefix matching with disambiguation prompts**, to achieve **predictable, fast matching without database queries during autocomplete**, accepting **slightly less flexible matching than fuzzy search**.
 
-Resolution flow:
-1. Normalize user input (lowercase, strip articles like "the", "a", "an")
-2. Attempt exact match against entity names in the room
-3. If no exact match, attempt fuzzy match using `pg_trgm` similarity
-4. If single match: proceed with interaction
-5. If multiple matches: list matching entities and ask user to be more specific
-6. If no matches: respond with "You don't see that here"
-
-**Fuzzy matching query:**
-```sql
-SELECT r.*, ei.id AS instance_id, similarity(r.name, 'book') AS match_score
-FROM entity_instances ei
-CROSS JOIN LATERAL resolve_entity(ei.entity_id) r
-WHERE ei.room = 'tavern'
-  AND r.name % 'book'
-ORDER BY match_score DESC;
-```
-
-Example disambiguation response:
-> User: /interact look vase
-> Bot: Be more specific. Did you mean: Fancy Vase, Cracked Vase?
-
-### Verb Extraction
-
-In the context of **parsing `/interact <input>` commands**, facing **the need to extract verb and target from natural language input**, we decided to **use first-word extraction with scene-aware fuzzy matching**, to achieve **simple, predictable parsing without NLP dependencies**, accepting **that complex sentence structures (prepositions, multi-word verbs) won't be supported**.
-
-**Parsing rules:**
-1. Split input on whitespace
-2. First token = verb (looked up in verb mapping)
-3. Remaining tokens = target phrase
-4. Fuzzy match target phrase against entities in the current room
-5. Use existing disambiguation rules (substring, prefix, similarity threshold)
+**Matching algorithm** (implemented in `entity_matcher.py`):
+1. Case-insensitive comparison
+2. Matches if ANY word in entity name starts with the query
+3. Exact matches (full name) have higher priority than prefix matches
+4. Results sorted by match quality
 
 **Examples:**
-- `/interact smash the gosh darn vase` → verb: `smash`, target phrase fuzzy-matches "Fancy Vase"
-- `/interact look at fancy vase` → verb: `look`, target phrase fuzzy-matches "Fancy Vase"
-- `/interact break it` → verb: `break`, no entity match → "You don't see that here"
+- `"tab"` matches "Wooden Table" (word "Table" starts with "tab")
+- `"wood"` matches "Wooden Table" (word "Wooden" starts with "wood")
+- `"Wooden Table"` is an exact match (highest priority)
 
-**Edge cases:**
-- Single word input (e.g., `/interact vase`): Treated as entity target with implicit "look" action
-- Unknown verb: Falls through to generic "You can't do that" response
+**Resolution flow:**
+1. Match user input against all entity names in the room using word-prefix matching
+2. If single match: proceed with interaction
+3. If multiple matches: show disambiguation prompt listing all matches
+4. If no matches: respond with "You don't see that here"
+
+**Example disambiguation response:**
+> User: /interact do:smash target:vase
+> Bot: Which one? *Fancy Vase*, *Cracked Vase*
+
+### Verb and Target Selection (Autocomplete-First)
+
+In the context of **parsing `/interact` commands**, facing **the complexity of natural language parsing** (articles, prepositions, multi-word verbs), we decided to **use explicit slash command parameters with Discord autocomplete**, to achieve **predictable UX with zero parsing complexity**, accepting **slightly more verbose command syntax**.
+
+**Command format:**
+```
+/interact do:<verb> target:<entity>
+```
+
+**Benefits over freeform parsing:**
+- No article stripping ("the", "a", "an")
+- No verb extraction logic
+- Entity selection via autocomplete dropdown
+- Verb validation happens server-side via word list lookup
+
+**Verb resolution** (implemented in `verb_matcher.py`):
+1. Look up verb in `verbs` table using pg_trgm fuzzy matching
+2. If match found: map to action handler (`on_attack`, `on_touch`, etc.)
+3. If no match: respond with "You can't do that"
+
+**Entity autocomplete:**
+- Suggests entities from current room as user types
+- Uses word-prefix matching for filtering (same as disambiguation)
+- Excludes entities inside containers with `contents_visible=FALSE`
+
+**Example:**
+> User types: `/interact do:smash target:va`
+> Autocomplete suggests: "Fancy Vase", "Cracked Vase"
+> User selects: "Fancy Vase"
+> Bot executes: attack handler for Fancy Vase
 
 ### Look Output Format
 
