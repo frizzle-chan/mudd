@@ -187,3 +187,6 @@ data/verbs/.lock
 .claude/skills/gnu-recutils/recutils.txt
 
 .commit_sha
+
+# PR review files
+review.md

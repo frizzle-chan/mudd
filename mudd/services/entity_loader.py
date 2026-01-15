@@ -1,4 +1,4 @@
-"""Entity loader for syncing entity definitions to PostgreSQL."""
+"""Entity loader for syncing entity definitions and instances to PostgreSQL."""
 
 import logging
 from collections import defaultdict
@@ -134,9 +134,9 @@ async def sync_entities(pool: asyncpg.Pool, world_file: Path) -> int:
     """Sync entities from a world rec file to database with validation.
 
     Full sync: deletes entities not in current files, upserts all current
-    entities. Validates references and circular dependencies before database
-    operations. Topologically sorts by prototype_id and container_id to satisfy
-    FK constraints.
+    entities, and creates entity_instances for entities with Room field.
+    Validates references and circular dependencies before database operations.
+    Topologically sorts by prototype_id and container_id to satisfy FK constraints.
 
     Args:
         pool: Database connection pool
@@ -154,6 +154,7 @@ async def sync_entities(pool: asyncpg.Pool, world_file: Path) -> int:
         logger.warning("No entities found in world file - deleting all entities")
         async with pool.acquire() as conn:
             await conn.execute("DELETE FROM entities")
+        _invalidate_entity_cache()
         return 0
 
     # Load rooms for room reference validation
@@ -165,8 +166,11 @@ async def sync_entities(pool: asyncpg.Pool, world_file: Path) -> int:
 
     all_entity_ids = [e.id for e in sorted_entities]
 
+    # Collect entities with Room field for instance creation
+    entities_with_room = [(e.id, e.room) for e in sorted_entities if e.room]
+
     async with pool.acquire() as conn, conn.transaction():
-        # Delete entities not in current files
+        # Delete entities not in current files (CASCADE deletes instances)
         deleted = await conn.execute(
             "DELETE FROM entities WHERE id != ALL($1::text[])",
             all_entity_ids,
@@ -213,5 +217,45 @@ async def sync_entities(pool: asyncpg.Pool, world_file: Path) -> int:
                 entity.spawn_mode,
             )
 
+        # Delete orphan room instances not in current rec files
+        # (Inventory instances with owner_id are preserved)
+        if entities_with_room:
+            # Delete room instances for entity/room pairs not in rec files
+            await conn.execute(
+                """DELETE FROM entity_instances
+                WHERE room IS NOT NULL
+                  AND (entity_id, room) NOT IN (
+                      SELECT * FROM unnest($1::text[], $2::text[])
+                  )""",
+                [e[0] for e in entities_with_room],
+                [e[1] for e in entities_with_room],
+            )
+        else:
+            # No entities with rooms - delete all room instances
+            await conn.execute("DELETE FROM entity_instances WHERE room IS NOT NULL")
+
+        # Create entity_instances for entities with Room field
+        if entities_with_room:
+            await conn.executemany(
+                """INSERT INTO entity_instances (entity_id, room)
+                VALUES ($1, $2)
+                ON CONFLICT (entity_id, room) WHERE room IS NOT NULL
+                DO NOTHING""",
+                entities_with_room,
+            )
+            logger.info(f"Ensured {len(entities_with_room)} entity instances exist")
+
     logger.info(f"Synced {len(sorted_entities)} entities to database")
+
+    # Invalidate entity service cache after sync
+    _invalidate_entity_cache()
+
     return len(sorted_entities)
+
+
+def _invalidate_entity_cache() -> None:
+    """Invalidate entity service cache if service is initialized."""
+    from mudd.services.entity import get_entity_service, is_entity_service_initialized
+
+    if is_entity_service_initialized():
+        get_entity_service().invalidate_cache()

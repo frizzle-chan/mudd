@@ -74,8 +74,8 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 | `id` | TEXT (PK) | Unique entity identifier |
 | `name` | TEXT NOT NULL | Display name for the entity |
 | `prototype_id` | TEXT (FK to entities.id) | Reference to parent entity for prototypical inheritance |
-| `description_short` | TEXT | Brief description with {name} template support |
-| `description_long` | TEXT | Detailed description with {name} template support |
+| `description_short` | TEXT | Brief description (Jinja2 template with `{{ name }}` support) |
+| `description_long` | TEXT | Detailed description (Jinja2 template with `{{ name }}` support) |
 | `on_look` | TEXT | Handler response for look action (NULL = inherit from prototype) |
 | `on_touch` | TEXT | Handler response for touch action (NULL = inherit from prototype) |
 | `on_attack` | TEXT | Handler response for attack action (NULL = inherit from prototype) |
@@ -111,13 +111,21 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 
 **Constraints:**
 - Mutual exclusivity: `(room IS NOT NULL AND owner_id IS NULL) OR (room IS NULL AND owner_id IS NOT NULL)`
+- Unique constraint on `(entity_id, room)` where room IS NOT NULL (enables idempotent sync)
+- FK to entities.id with ON DELETE CASCADE (deleting an entity cascades to all its instances)
 - FK to users.id with ON DELETE CASCADE (deleting a user cascades to their inventory items)
 - FK to rooms.id with ON DELETE CASCADE (deleting a room cascades to entity instances in it)
 
 **Indexes:**
 - Primary key on `id`
+- Partial unique index on `(entity_id, room)` WHERE room IS NOT NULL (for idempotent sync)
 - Partial index on `room` (WHERE room IS NOT NULL) for room-based queries
 - Partial index on `owner_id` (WHERE owner_id IS NOT NULL) for inventory queries
+
+**Instance Creation:**
+- Instances for entities with `Room` field in `.rec` files are created during `sync_entities()`
+- Uses `INSERT ON CONFLICT DO NOTHING` for idempotent sync (same entity+room = no-op)
+- Inventory instances (owner_id set) are NOT affected by sync - they persist independently
 
 ### Verbs Table
 
@@ -253,3 +261,99 @@ The `VisibilityService.sync_guild()` method ensures Discord channel permissions 
    - Sync permissions: grant `view_channel` for current room, remove for all others
 
 This runs as part of the unified sync flow described above.
+
+## Entity Service
+
+The `EntityService` provides cached runtime access to entity data. It follows the explicit singleton pattern.
+
+### Service Methods
+
+- `get_entity(entity_id)` - Get resolved entity by ID (cached)
+- `get_room_entities(room)` - Get all entity instances in a room with resolved properties
+- `get_entity_instance(instance_id)` - Get specific instance by UUID
+- `get_container_contents(container_id, room)` - Get direct children of a container in a room
+- `invalidate_cache()` - Clear cache (called by `sync_entities()`)
+
+### Caching Strategy
+
+- Resolved entities are cached in memory as `dict[entity_id, ResolvedEntity]`
+- Cache is populated lazily on first access to each entity
+- Cache is invalidated entirely after `sync_entities()` completes
+- Instance queries always hit the database (instances can move to inventory)
+
+### Initialization
+
+```python
+# In main.py setup_hook(), after sync_entities():
+init_entity_service()
+
+# In cogs:
+from mudd.services.entity import get_entity_service
+service = get_entity_service()
+entities = await service.get_room_entities(channel.name)
+```
+
+### Data Flow
+
+```
+sync_entities() [startup]
+    ├─ Upsert entity definitions
+    ├─ Create entity instances (ON CONFLICT DO NOTHING)
+    └─ invalidate_cache() ─→ Clear entity cache
+
+get_entity(entity_id)
+    ├─ Check cache → HIT: Return cached
+    └─ MISS: Query resolve_entity(), cache result, return
+
+get_room_entities(room)
+    └─ Query entity_instances + resolve_entity()
+       └─ Cache resolved entities as side effect
+```
+
+## Template Rendering
+
+Entity action handlers (`on_look`, `on_touch`, `on_attack`, `on_use`, `on_take`) are Jinja2 templates rendered at runtime.
+
+### Template Context
+
+Templates have access to:
+- `e`: The resolved entity (ResolvedEntity) with all inherited properties
+- `name`: Entity name pre-formatted with Discord italics (`*Name*`)
+
+### Rendering Flow
+
+```
+/look at:<entity>
+    └─ render_entity_on_look(instance)
+        ├─ Build context: {"e": entity, "name": "*Wooden Table*"}
+        ├─ Render on_look template
+        │   └─ If error: fallback to description_long or description_short
+        │       └─ Append "-# (error rendering template)" warning
+        └─ Append container contents (if contents_visible)
+```
+
+### Error Handling
+
+Template errors (syntax errors, undefined variables) are handled gracefully:
+1. Log the error with entity ID
+2. Fall back to `description_long` or `description_short`
+3. Append `-# (error rendering template)` to the output
+
+### Example Templates
+
+```jinja
+{# Base object prototype - renders description #}
+{{ e.description_long or e.description_short or "You see nothing special." }}
+
+{# Custom on_look with name reference #}
+You examine the {{ name }}. {{ e.description_long }}
+
+{# Conditional template #}
+{% if e.description_long %}{{ e.description_long }}{% else %}Nothing special about this {{ name }}.{% endif %}
+```
+
+### Template Cache
+
+- Compiled templates are cached in memory by source string
+- Cache lives for the bot's lifetime
+- No TTL needed (entity definitions are static)
