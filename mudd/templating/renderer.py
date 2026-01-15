@@ -8,6 +8,7 @@ from jinja2 import (
     Template,
     TemplateSyntaxError,
     UndefinedError,
+    select_autoescape,
 )
 
 from mudd.services.entity import ResolvedEntity
@@ -42,7 +43,7 @@ class TemplateRenderer:
 
     def __init__(self) -> None:
         self._env = Environment(
-            autoescape=False,  # Plain text output, not HTML
+            autoescape=select_autoescape(default_for_string=False),  # Plain text output for string templates
             undefined=StrictUndefined,  # Fail on undefined variables
         )
         self._cache: dict[str, Template] = {}  # template source -> compiled Template
