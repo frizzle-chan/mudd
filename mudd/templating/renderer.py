@@ -42,8 +42,9 @@ class TemplateRenderer:
     """
 
     def __init__(self) -> None:
+        # Plain text output - no HTML escaping for string templates
         self._env = Environment(
-            autoescape=select_autoescape(default_for_string=False),  # Plain text output for string templates
+            autoescape=select_autoescape(default_for_string=False),
             undefined=StrictUndefined,  # Fail on undefined variables
         )
         self._cache: dict[str, Template] = {}  # template source -> compiled Template
