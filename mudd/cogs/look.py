@@ -77,6 +77,12 @@ class Look(commands.Cog):
             app_commands.Choice(name=e.entity.name, value=e.entity.name)
             for e in matching
         ]
+
+        # Add "Room" option at top if it matches current input
+        if not current or "room".startswith(current.lower()):
+            room_choice = app_commands.Choice(name="Room", value="Room")
+            return [room_choice] + choices[:24]
+
         return choices[:25]
 
     @app_commands.command(name="look", description="View surroundings or examine item")
@@ -89,7 +95,7 @@ class Look(commands.Cog):
 
         room = getattr(interaction.channel, "name", None)
 
-        if at is None:
+        if at is None or at == "Room":
             # Original behavior: show room description + top-level entities
             topic = getattr(interaction.channel, "topic", None)
             room_description = topic or "You see nothing special."
