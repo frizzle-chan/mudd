@@ -1,8 +1,43 @@
 """Entity name matching and filtering for commands."""
 
 from dataclasses import dataclass
+from typing import Protocol
 
 from mudd.services.entity import EntityInstance
+
+
+class AutocompleteEntityFetcher(Protocol):
+    """Protocol for entity service methods needed by autocomplete."""
+
+    async def get_top_level_room_entities(self, room: str) -> list[EntityInstance]: ...
+
+    async def get_container_contents(
+        self, container_id: str, room: str
+    ) -> list[EntityInstance]: ...
+
+
+async def get_autocomplete_entities(
+    entity_service: AutocompleteEntityFetcher,
+    room: str,
+) -> list[EntityInstance]:
+    """Get entities visible for autocomplete.
+
+    Includes top-level entities and entities in containers with contents_visible=True.
+    Excludes entities in containers with contents_visible=False.
+    """
+    # Start with top-level entities (always visible)
+    top_level = await entity_service.get_top_level_room_entities(room)
+    result = list(top_level)
+
+    # Add contents of visible containers
+    for instance in top_level:
+        if instance.entity.contents_visible:
+            contents = await entity_service.get_container_contents(
+                instance.entity.id, room
+            )
+            result.extend(contents)
+
+    return result
 
 
 @dataclass(frozen=True)

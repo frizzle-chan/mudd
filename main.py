@@ -7,6 +7,7 @@ import discord
 from discord.ext import commands
 from dotenv import load_dotenv
 
+from mudd.cogs.interact import Interact
 from mudd.cogs.look import Look
 from mudd.cogs.movement import Movement
 from mudd.cogs.ping import Ping
@@ -82,6 +83,7 @@ async def setup_hook():
     # Zone/room sync and visibility service initialization handled by Sync cog
     # on first periodic_sync iteration (after bot is ready)
 
+    await bot.add_cog(Interact(bot))
     await bot.add_cog(Look(bot))
     await bot.add_cog(Ping(bot))
     await bot.add_cog(Movement(bot))
