@@ -81,9 +81,12 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 | `on_attack` | TEXT | Handler response for attack action (NULL = inherit from prototype) |
 | `on_use` | TEXT | Handler response for use action (NULL = inherit from prototype) |
 | `on_take` | TEXT | Handler response for take action (NULL = inherit from prototype) |
+| `on_open` | TEXT | Handler response for open action (NULL = inherit from prototype) |
+| `on_close` | TEXT | Handler response for close action (NULL = inherit from prototype) |
 | `container_id` | TEXT (FK to entities.id) | Reference to containing entity |
-| `contents_visible` | BOOLEAN | Whether child entities are visible (NULL = inherit from prototype, TRUE = show in room, FALSE = show when examined) |
+| `contents_visible` | BOOLEAN | Whether child entities appear in room descriptions (NULL = inherit, TRUE = auto-list, FALSE = hidden until examined). Note: This controls *visibility* only; interaction context is controlled by `focus_mode` |
 | `spawn_mode` | spawn_mode NOT NULL | Take behavior: `none` (can't take), `move` (one-time pickup), `clone` (infinite copies) |
+| `focus_mode` | focus_mode NOT NULL | Focus behavior: `none` (no focus), `container` (establish focus on open) |
 
 **Constraints:**
 - Self-reference prevention: `id != prototype_id`
@@ -93,6 +96,10 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 - `none`: Static decoration, cannot be taken (default)
 - `move`: One-time pickup, instance moves from room to inventory
 - `clone`: Infinite source, each take creates a new instance in inventory
+
+**Focus Mode Enum:**
+- `none`: No focus established when opened (default)
+- `container`: Focus established on open, contents become autocomplete targets
 
 **Indexes:**
 - Primary key on `id`
@@ -134,7 +141,7 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 | `verb` | TEXT (PK) | The verb word (e.g., 'smash', 'look') |
 | `action` | verb_action NOT NULL | The action handler type to invoke |
 
-**Verb Action Enum:** `on_look`, `on_touch`, `on_attack`, `on_use`, `on_take`
+**Verb Action Enum:** `on_look`, `on_touch`, `on_attack`, `on_use`, `on_take`, `on_open`, `on_close`
 
 **Indexes:**
 - Primary key on `verb`
@@ -152,7 +159,7 @@ The `resolve_entity(target_id TEXT)` function resolves entity properties by walk
 - First non-NULL value wins for each property (except `spawn_mode` which is always from the entity itself)
 - Supports up to 10 levels of inheritance depth (prevents infinite loops from circular references)
 - Used to materialize the final entity state including inherited properties
-- Returns: `id`, `name`, `description_short`, `description_long`, `on_*` handlers, `contents_visible`, `spawn_mode`
+- Returns: `id`, `name`, `description_short`, `description_long`, `on_*` handlers (including `on_open`, `on_close`), `contents_visible`, `focus_mode`, `spawn_mode`
 
 ## Sync System
 

@@ -261,7 +261,8 @@ In the context of **parsing `/interact` commands**, facing **the complexity of n
 **Entity autocomplete:**
 - Suggests entities from current room as user types
 - Uses word-prefix matching for filtering (same as disambiguation)
-- Excludes entities inside containers with `contents_visible=FALSE`
+- ~~Excludes entities inside containers with `contents_visible=FALSE`~~
+- *Superseded by ADR 0003*: Entity autocomplete is now controlled by focus context, not `contents_visible`
 
 **Example:**
 > User types: `/interact do:smash target:va`
@@ -297,7 +298,9 @@ In the context of **modeling nested objects** (e.g., a lamp on a table), facing 
 - `container_id` - References the parent entity this item is contained within
 - `contents_visible` - Whether children are auto-listed (default: `TRUE`)
   - `TRUE` (table, shelf): Children listed when container appears in room or is examined
-  - `FALSE` (chest, drawer): Children only listed when container is directly examined via `/look`
+  - ~~`FALSE` (chest, drawer): Children only listed when container is directly examined via `/look`~~
+  - `FALSE` (chest, drawer): Children not auto-listed in room descriptions; visibility controlled separately from focus behavior
+  - *Note: ADR 0003 introduces `focus_mode` to control interaction context separately from visibility*
 
 **Example:**
 ```sql
@@ -316,8 +319,10 @@ UPDATE entities SET container_id = 'chest' WHERE id = 'gold_ring';
 - If `contents_visible = TRUE`, children are auto-listed with the container
 - If `contents_visible = FALSE`, children are hidden until the container is examined
 
-**Stateless interactions:**
-Containers have no "opened" state. Players can interact with hidden items if they guess correctly - the visibility flag only affects what's shown, not what's accessible.
+~~**Stateless interactions:**~~
+~~Containers have no "opened" state. Players can interact with hidden items if they guess correctly - the visibility flag only affects what's shown, not what's accessible.~~
+
+*Superseded by ADR 0003*: The modal interaction system introduces focus context to track which container a player is interacting with. See ADR 0003 for focus establishment and lifecycle rules.
 
 **Container examination:**
 When examining an entity that has children, auto-append them to the output:
