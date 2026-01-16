@@ -17,7 +17,7 @@ class ContainerContentsFetcher(Protocol):
     ) -> list[EntityInstance]: ...
 
 
-def _build_contents_string(contents: list[EntityInstance]) -> str:
+def build_contents_string(contents: list[EntityInstance]) -> str:
     """Build a bullet-list string from container contents.
 
     Args:
@@ -66,7 +66,7 @@ def format_entity_with_contents(
     Returns:
         Rendered description_short with contents interpolated
     """
-    contents_str = _build_contents_string(contents or [])
+    contents_str = build_contents_string(contents or [])
     return render(entity.description_short, entity, contents=contents_str)
 
 
@@ -134,7 +134,7 @@ async def render_entity_on_look(
     contents_str = ""
     if entity.contents_visible:
         contents = await entity_service.get_container_contents(entity.id, room)
-        contents_str = _build_contents_string(contents)
+        contents_str = build_contents_string(contents)
 
     # Build fallback from descriptions (also rendered as templates)
     fallback = render(
