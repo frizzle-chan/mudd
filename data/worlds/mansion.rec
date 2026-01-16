@@ -38,7 +38,7 @@ Description: You are standing in a grand entryway
 Id: sitting-room
 Name: Sitting Room
 Zone: floor-1
-Description: Lots of comfy chairs and a cozy fireplace
+Description: A cozy sitting room.
 +
 + to your east is the #foyer
 
@@ -71,7 +71,7 @@ Description: A long room, walls laden with gilt-framed canvases. Impressive art 
 Id: library
 Name: Library
 Zone: floor-1
-Description: You are standing in the library. In the middle of the room are some long couches and a coffee table. 3 of the walls are completely covered by tall bookshelves, mostly stuffed with books that look brand new, as if the owner read the first chapter and then never picked the book up again. Some of the shelves are reserved for movies, others for showing off trinkets. In the southern half of the room there is a desk with a record player on it, a chest full of records beside within reach.
+Description: You are standing in the library.
 +
 + In the northern corner of the room is the entrance to the #screening-room
 + behind you is the #gallery
@@ -120,10 +120,10 @@ Id: lounge
 Name: Lounge
 Zone: floor-1
 HasVoice: yes
-Description: A dimly lit lounge with comfy chairs and one of those oversized globes with a minibar inside it. On the east side of the room is a windowed fridge you can see is full of white claw and lone star tallboys.
+Description: A dimly lit lounge.
 +
 + There is a door on the south side of the room leading to the #office
-+ To the east is the #banquet-hall
++ To the west is the #banquet-hall
 
 # ============================================================================
 # Entity record type
@@ -211,3 +211,105 @@ Prototype: object
 Room: gallery
 DescriptionShort: a {{ name }} hangs prominently on the wall
 DescriptionLong: A formal oil portrait in an ornate gilded frame. Two goldendoodles pose regally against a deep burgundy backdrop. The smaller one on the left has fluffy apricot fur and bright curious eyes - her brass nametag reads "Lulu". The larger one on the right has a dignified bearing with wavy golden fur - her nametag reads "Ruby". They look like very good girls.
+
+# ----------------------------------------------------------------------------
+# Lounge entities
+# ----------------------------------------------------------------------------
+
+Id: lounge_globe_minibar
+Name: Globe Minibar
+Prototype: furniture
+Room: lounge
+DescriptionShort: an oversized {{ name }} sits in the corner
+DescriptionLong: A vintage wooden globe on a brass stand. The northern hemisphere swings open to reveal a minibar stocked with bottles.
+ContentsVisible: yes
+OnUse: You swing open the globe and pour yourself a drink.
+
+Id: lounge_fridge
+Name: Drink Fridge
+Prototype: furniture
+Room: lounge
+DescriptionShort: a windowed {{ name }} sits against the east wall
+DescriptionLong: A glass-door mini fridge humming quietly. Through the window you can see it's full of White Claw and Lone Star tallboys.
+ContentsVisible: yes
+OnTouch: The glass is cold and slightly damp with condensation.
+
+Id: lounge_chairs
+Name: Comfy Chairs
+Prototype: furniture
+Room: lounge
+DescriptionShort: {{ name }} are scattered around the room
+DescriptionLong: Plush leather armchairs that look like they've hosted many late-night conversations.
+OnUse: You sink into one of the leather chairs and close your eyes for a moment. You feel your health regenerating.
+
+# ----------------------------------------------------------------------------
+# Library entities
+# ----------------------------------------------------------------------------
+
+Id: library_couches
+Name: Long Couches
+Prototype: furniture
+Room: library
+DescriptionShort: {{ name }} surround a coffee table in the center
+DescriptionLong: Overstuffed leather couches arranged in a U-shape, perfect for reading or napping.
+OnUse: You stretch out on one of the couches. The leather is soft and worn in all the right places. You feel your health regenerating.
+
+Id: library_coffee_table
+Name: Coffee Table
+Prototype: furniture
+Room: library
+DescriptionShort: a {{ name }} sits between the couches{% if contents %}. On it:{{ contents }}{% endif %}
+DescriptionLong: A low wooden coffee table with some ring stains from forgotten drinks.
+ContentsVisible: yes
+
+Id: library_bookshelves
+Name: Bookshelves
+Prototype: furniture
+Room: library
+DescriptionShort: tall {{ name }} cover three walls
+DescriptionLong: Floor-to-ceiling bookshelves stuffed with books that look brand new, as if the owner read the first chapter and then never picked them up again. Some shelves are reserved for movies, others for showing off trinkets.
+
+Id: library_desk
+Name: Writing Desk
+Prototype: furniture
+Room: library
+DescriptionShort: a {{ name }} sits in the southern half of the room{% if contents %}. On it:{{ contents }}{% endif %}
+DescriptionLong: An antique writing desk with a worn leather top.
+ContentsVisible: yes
+
+Id: library_record_player
+Name: Record Player
+Prototype: object
+Room: library
+Container: library_desk
+DescriptionShort: a vintage {{ name }}
+DescriptionLong: A classic turntable with a wooden case. The needle is resting on a record that's stopped spinning.
+OnUse: You drop the needle and music fills the room.
+
+Id: library_records
+Name: Record Collection
+Prototype: furniture
+Room: library
+DescriptionShort: a chest full of records sits beside the desk
+DescriptionLong: A wooden chest overflowing with vinyl records. Everything from jazz to 80s synth to obscure soundtracks.
+
+# ----------------------------------------------------------------------------
+# Sitting Room entities
+# ----------------------------------------------------------------------------
+
+Id: sitting_room_chairs
+Name: Comfy Chairs
+Prototype: furniture
+Room: sitting-room
+DescriptionShort: several {{ name }} are arranged around the room
+DescriptionLong: Plush armchairs upholstered in faded floral fabric. They look well-loved.
+OnUse: You settle into one of the armchairs near the fire. The warmth and comfort wash over you. You feel your health regenerating.
+
+Id: sitting_room_fireplace
+Name: Fireplace
+Prototype: object
+Room: sitting-room
+DescriptionShort: a cozy {{ name }} crackles on the wall
+DescriptionLong: A stone fireplace with a carved wooden mantle. A small fire crackles warmly.
+OnTouch: The warmth feels nice on your hands.
+OnAttack: You poke at the fire. The logs shift and sparks fly up the chimney.

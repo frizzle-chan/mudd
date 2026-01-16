@@ -330,6 +330,18 @@ Templates have access to:
         │   └─ If error: fallback to description_long or description_short
         │       └─ Append "-# (error rendering template)" warning
         └─ Append container contents (if contents_visible)
+
+/interact do:<verb> target:<entity>
+    ├─ Match target using word-prefix matching (entity_matcher.py)
+    │   ├─ No match → "You don't see '{target}' here."
+    │   └─ Multiple matches → "Which one? *Entity1*, *Entity2*"
+    ├─ Look up verb in verbs table (verb_matcher.py)
+    │   └─ No match → "You can't do that."
+    ├─ Get handler text (on_attack, on_touch, etc.) from entity
+    │   └─ No handler → "Nothing happens."
+    └─ Render handler template
+        ├─ Build context: {"e": entity, "name": "*Fancy Vase*"}
+        └─ If error: log warning, return fallback message
 ```
 
 ### Error Handling

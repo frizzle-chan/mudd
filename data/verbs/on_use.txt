@@ -29,6 +29,7 @@ rotate
 run
 seal
 shut
+sit
 start
 switch
 toggle
