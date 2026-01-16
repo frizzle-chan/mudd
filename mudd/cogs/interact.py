@@ -5,6 +5,7 @@ import logging
 from discord import Interaction, app_commands
 from discord.ext import commands
 
+from mudd.formatting.entities import build_contents_string
 from mudd.services.database import get_pool
 from mudd.services.entity import ResolvedEntity, get_entity_service
 from mudd.services.entity_matcher import (
@@ -123,9 +124,15 @@ class Interact(commands.Cog):
             await interaction.response.send_message("Nothing happens.", ephemeral=True)
             return
 
+        # Fetch container contents for template (regardless of contents_visible)
+        container_contents = await entity_service.get_container_contents(
+            entity.id, room
+        )
+        contents_str = build_contents_string(container_contents)
+
         # Render template with entity context
         try:
-            output = render(handler_text, entity)
+            output = render(handler_text, entity, contents_str)
         except TemplateRenderError:
             logger.warning(
                 "Template error rendering '%s' handler for entity '%s'",

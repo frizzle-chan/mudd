@@ -33,7 +33,9 @@ def mock_visibility_service():
 @pytest.fixture
 def mock_entity_service():
     """Create a mock entity service."""
-    return MagicMock()
+    service = MagicMock()
+    service.get_container_contents = AsyncMock(return_value=[])
+    return service
 
 
 @pytest.fixture
