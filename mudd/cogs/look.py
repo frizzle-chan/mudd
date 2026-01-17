@@ -13,6 +13,7 @@ from mudd.services.entity_matcher import (
 )
 from mudd.services.focus_context import get_focus_context_service
 from mudd.services.visibility import get_visibility_service
+from mudd.templating import TemplateRenderError, render
 
 logger = logging.getLogger(__name__)
 
@@ -100,11 +101,36 @@ class Look(commands.Cog):
         if not at or at == "Room":
             # Clear focus when explicitly selecting "Room" from autocomplete
             # This is the escape mechanism per user request
+            close_msg = None
             if at == "Room":
                 focus_service = get_focus_context_service()
-                await focus_service.clear_focus(
-                    interaction.user.id, reason="interaction"
-                )
+                entity_service = get_entity_service()
+
+                # Get focus to capture entity before clearing (for template rendering)
+                if room:
+                    focus = await focus_service.get_focus(interaction.user.id, room)
+                    focused_entity = None
+                    if focus:
+                        focused_entity = await entity_service.get_entity(
+                            focus.entity_id
+                        )
+
+                    # Clear focus with "close" reason to get on_close template
+                    close_template = await focus_service.clear_focus(
+                        interaction.user.id, reason="close"
+                    )
+
+                    # Render close message if we have template and entity
+                    if close_template and focused_entity:
+                        try:
+                            close_msg = render(close_template, focused_entity, "")
+                        except TemplateRenderError:
+                            logger.warning(
+                                "Template error rendering on_close for entity '%s'",
+                                focused_entity.id,
+                            )
+                else:
+                    await focus_service.clear_focus(interaction.user.id, reason="close")
 
             # Show room description + top-level entities
             topic = getattr(interaction.channel, "topic", None)
@@ -116,10 +142,15 @@ class Look(commands.Cog):
                 entities = await entity_service.get_top_level_room_entities(room)
                 entity_text = await format_room_entities(entities, entity_service, room)
 
+            # Build message, prepending close message if present
+            parts = []
+            if close_msg:
+                parts.append(close_msg)
+            parts.append(room_description)
             if entity_text:
-                message = f"{room_description}\n\n{entity_text}"
-            else:
-                message = room_description
+                parts.append(entity_text)
+
+            message = "\n\n".join(parts)
 
             await interaction.response.send_message(message, ephemeral=True)
         else:

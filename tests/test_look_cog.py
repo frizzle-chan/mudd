@@ -23,6 +23,7 @@ def mock_focus_context_service():
     mock_service.is_entity_in_focus = AsyncMock(return_value=False)
     mock_service.clear_focus = AsyncMock(return_value=None)
     mock_service.update_focus_timestamp = AsyncMock()
+    mock_service.get_focus = AsyncMock(return_value=None)
     with patch(
         "mudd.cogs.look.get_focus_context_service",
         return_value=mock_service,
