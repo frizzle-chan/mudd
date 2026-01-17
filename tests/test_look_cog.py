@@ -36,6 +36,7 @@ def mock_visibility_service():
     """Create a mock visibility service."""
     service = MagicMock()
     service.wait_for_startup = AsyncMock()
+    service.get_room_name = AsyncMock(return_value=None)
     return service
 
 

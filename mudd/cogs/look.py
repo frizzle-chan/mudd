@@ -133,6 +133,7 @@ class Look(commands.Cog):
                     await focus_service.clear_focus(interaction.user.id, reason="close")
 
             # Show room description + top-level entities
+            room_name = await visibility_service.get_room_name(room) if room else None
             topic = getattr(interaction.channel, "topic", None)
             room_description = topic or "You see nothing special."
 
@@ -146,6 +147,8 @@ class Look(commands.Cog):
             parts = []
             if close_msg:
                 parts.append(close_msg)
+            if room_name:
+                parts.append(f"### {room_name}")
             parts.append(room_description)
             if entity_text:
                 parts.append(entity_text)

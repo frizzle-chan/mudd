@@ -89,6 +89,11 @@ class VisibilityService:
         """Get room name for a channel ID."""
         return self._channel_to_room.get(channel_id)
 
+    async def get_room_name(self, room_id: str) -> str | None:
+        """Get the display name for a room ID."""
+        pool = await get_pool()
+        return await pool.fetchval("SELECT name FROM rooms WHERE id = $1", room_id)
+
     def get_default_room(self) -> str:
         """Get the default room name."""
         return self.default_room

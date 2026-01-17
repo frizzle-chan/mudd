@@ -17,24 +17,37 @@ class ContainerContentsFetcher(Protocol):
     ) -> list[EntityInstance]: ...
 
 
+def _lowercase_first(s: str) -> str:
+    """Lowercase the first character of a string, preserving the rest."""
+    if not s:
+        return s
+    return s[0].lower() + s[1:]
+
+
 def build_contents_string(contents: list[EntityInstance]) -> str:
-    """Build a bullet-list string from container contents.
+    """Build a formatted string from container contents.
+
+    Formats based on item count:
+    - 1 item: " Item" (space-prefixed, capitalized)
+    - 2 items: " Item1 and item2" (space-prefixed, first capitalized)
+    - 3+ items: "\\n- item1\\n- item2\\n- item3" (bullet list)
 
     Args:
         contents: List of contained entity instances
 
     Returns:
-        Formatted string like "\\n- a *Vase*\\n- a *Plaque*" or empty string
+        Formatted string or empty string if no contents
     """
     if not contents:
         return ""
 
-    content_lines: list[str] = []
+    # Render all item descriptions
+    descriptions: list[str] = []
     for c in contents:
         try:
             desc = render(c.entity.description_short, c.entity)
             if desc:
-                content_lines.append(f"- {desc}")
+                descriptions.append(desc)
         except TemplateRenderError:
             # Fallback to entity name if template is malformed
             logger.warning(
@@ -42,12 +55,26 @@ def build_contents_string(contents: list[EntityInstance]) -> str:
                 "using name fallback",
                 c.entity.id,
             )
-            content_lines.append(f"- *{c.entity.name}*")
+            descriptions.append(f"*{c.entity.name}*")
 
-    if not content_lines:
+    if not descriptions:
         return ""
 
-    return "\n" + "\n".join(content_lines)
+    # Format based on count
+    if len(descriptions) == 1:
+        # Single item: space-prefixed, lowercase (follows colon in template)
+        return " " + _lowercase_first(descriptions[0])
+    elif len(descriptions) == 2:
+        # Two items: space-prefixed, joined with "and", both lowercased
+        return (
+            " "
+            + _lowercase_first(descriptions[0])
+            + " and "
+            + _lowercase_first(descriptions[1])
+        )
+    else:
+        # Three or more: bullet list (no case change, each line starts fresh)
+        return "\n" + "\n".join(f"- {desc}" for desc in descriptions)
 
 
 def format_entity_with_contents(
