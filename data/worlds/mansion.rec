@@ -135,9 +135,10 @@ Description: A dimly lit lounge.
 %type: Room rec Room
 %type: ContentsVisible bool
 %type: SpawnMode enum none move clone
+%type: FocusMode enum none container
 %mandatory: Id Name
-%allowed: Id Name Prototype Container Room ContentsVisible SpawnMode DescriptionShort DescriptionLong
-%allowed: OnLook OnTouch OnAttack OnUse OnTake
+%allowed: Id Name Prototype Container Room ContentsVisible SpawnMode FocusMode DescriptionShort DescriptionLong
+%allowed: OnLook OnTouch OnAttack OnUse OnTake OnOpen OnClose
 
 # ----------------------------------------------------------------------------
 # Base prototypes (no Room field - these are templates, not instances)
@@ -145,7 +146,7 @@ Description: A dimly lit lounge.
 
 Id: object
 Name: object
-DescriptionShort: a {{ name }}
+DescriptionShort: A {{ name }}.
 OnLook: {{ e.description_long or e.description_short or "You see nothing special." }}{{ contents }}
 OnTouch: You touch the {{ name }}. Nothing happens.
 OnAttack: You attack the {{ name }}, but it has no effect.
@@ -155,14 +156,17 @@ OnTake: You can't take the {{ name }}.
 Id: furniture
 Name: furniture
 Prototype: object
-DescriptionShort: a {{ name }} sits here{% if contents %}. On it:{{ contents }}{% endif %}
+DescriptionShort: A {{ name }} sits here{% if contents %}. On it:{{ contents }}{% endif %}
 
 Id: chest
 Name: chest
 Prototype: object
-DescriptionShort: a {{ name }} sits here
+DescriptionShort: A {{ name }} sits here.
+FocusMode: container
 OnLook: {{ e.description_long or e.description_short or "You see nothing special." }}
 OnUse: You open the {{ name }}.{% if contents %} Inside:{{ contents }}{% else %} It's empty.{% endif %}
+OnOpen: You open the {{ name }}.{% if contents %} Inside:{{ contents }}{% else %} It's empty.{% endif %}
+OnClose: You close the {{ name }}.
 
 Id: glass_object
 Name: Glass Object
@@ -177,7 +181,7 @@ Id: foyer_table
 Name: Wooden Table
 Prototype: furniture
 Room: foyer
-DescriptionShort: a {{ name }} sits in the middle of the room{% if contents %}. On it:{{ contents }}{% endif %}
+DescriptionShort: A {{ name }} sits in the middle of the room{% if contents %}. On it:{{ contents }}{% endif %}
 DescriptionLong: A sturdy oak table with worn edges.
 ContentsVisible: yes
 
@@ -186,7 +190,7 @@ Name: Flower Vase
 Prototype: glass_object
 Room: foyer
 Container: foyer_table
-DescriptionShort: a teal {{ name }} with yellow roses in it
+DescriptionShort: A teal {{ name }} with yellow roses in it
 DescriptionLong: a teal ceramic vase with gold trim around the lip. A couple yellow roses sit inside.
 
 Id: foyer_plaque
@@ -194,7 +198,7 @@ Name: Inscribed Plaque
 Prototype: object
 Room: foyer
 Container: foyer_table
-DescriptionShort: an {{ name }}
+DescriptionShort: An {{ name }}
 DescriptionLong: A wooden plaque with a shiny brass plate. The inscription reads: "Welcome to my mansion! You can usually find us in the office down the hall. -Frizzle"
 
 # ----------------------------------------------------------------------------
@@ -205,7 +209,7 @@ Id: gallery_map
 Name: Mansion Map
 Prototype: object
 Room: gallery
-DescriptionShort: a rough {{ name }} hangs on the wall
+DescriptionShort: A rough {{ name }} hangs on the wall.
 DescriptionLong: A hand-drawn map of the mansion in a simple wooden frame. The sketchy lines show the layout of the ground floor with annotations:
 + • Library: west from here
 + • Screening Room: through the library, in the northern corner
@@ -216,7 +220,7 @@ Id: gallery_portrait
 Name: Portrait of Two Dogs
 Prototype: object
 Room: gallery
-DescriptionShort: a {{ name }} hangs prominently on the wall
+DescriptionShort: A {{ name }} hangs prominently on the wall.
 DescriptionLong: A formal oil portrait in an ornate gilded frame. Two goldendoodles pose regally against a deep burgundy backdrop. The smaller one on the left has fluffy apricot fur and bright curious eyes - her brass nametag reads "Lulu". The larger one on the right has a dignified bearing with wavy golden fur - her nametag reads "Ruby". They look like very good girls.
 
 # ----------------------------------------------------------------------------
@@ -227,7 +231,7 @@ Id: lounge_globe_minibar
 Name: Globe Minibar
 Prototype: furniture
 Room: lounge
-DescriptionShort: an oversized {{ name }} sits in the corner
+DescriptionShort: An oversized {{ name }} sits in the corner.
 DescriptionLong: A vintage wooden globe on a brass stand. The northern hemisphere swings open to reveal a minibar stocked with bottles.
 ContentsVisible: yes
 OnUse: You swing open the globe and pour yourself a drink. It restores health.
@@ -236,7 +240,7 @@ Id: lounge_fridge
 Name: Drink Fridge
 Prototype: furniture
 Room: lounge
-DescriptionShort: a windowed {{ name }} sits against the east wall
+DescriptionShort: A windowed {{ name }} sits against the east wall.
 DescriptionLong: A glass-door mini fridge humming quietly. Through the window you can see it's full of White Claw and Lone Star tallboys.
 ContentsVisible: yes
 OnTouch: The glass is cold and slightly damp with condensation.
@@ -247,7 +251,7 @@ Id: lounge_chairs
 Name: Comfy Chairs
 Prototype: furniture
 Room: lounge
-DescriptionShort: {{ name }} are scattered around the room
+DescriptionShort: Several {{ name }} are scattered around the room.
 DescriptionLong: Plush leather armchairs that look like they've hosted many late-night conversations.
 OnUse: You sink into one of the leather chairs and close your eyes for a moment. You feel your health regenerating.
 
@@ -259,7 +263,7 @@ Id: library_couches
 Name: Long Couches
 Prototype: furniture
 Room: library
-DescriptionShort: {{ name }} surround a coffee table in the center
+DescriptionShort: A pair of {{ name }} surround a coffee table in the center.
 DescriptionLong: Overstuffed leather couches arranged in a U-shape, perfect for reading or napping.
 OnUse: You stretch out on one of the couches. The leather is soft and worn in all the right places. You feel your health regenerating.
 
@@ -267,7 +271,7 @@ Id: library_coffee_table
 Name: Coffee Table
 Prototype: furniture
 Room: library
-DescriptionShort: a {{ name }} sits between the couches{% if contents %}. On it:{{ contents }}{% endif %}
+DescriptionShort: A {{ name }} sits between the couches{% if contents %}. On it:{{ contents }}{% endif %}
 DescriptionLong: A low wooden coffee table with some ring stains from forgotten drinks.
 ContentsVisible: yes
 
@@ -275,14 +279,14 @@ Id: library_bookshelves
 Name: Bookshelves
 Prototype: furniture
 Room: library
-DescriptionShort: tall {{ name }} cover three walls
+DescriptionShort: Tall {{ name }} cover three walls.
 DescriptionLong: Floor-to-ceiling bookshelves stuffed with books that look brand new, as if the owner read the first chapter and then never picked them up again. Some shelves are reserved for movies, others for showing off trinkets.
 
 Id: library_desk
 Name: Writing Desk
 Prototype: furniture
 Room: library
-DescriptionShort: a {{ name }} sits in the southern half of the room{% if contents %}. On it:{{ contents }}{% endif %}
+DescriptionShort: A {{ name }} sits in the southern half of the room{% if contents %}. On it:{{ contents }}{% endif %}
 DescriptionLong: An antique writing desk with a worn leather top.
 ContentsVisible: yes
 
@@ -291,7 +295,7 @@ Name: Record Player
 Prototype: object
 Room: library
 Container: library_desk
-DescriptionShort: an Audio Technica {{ name }}
+DescriptionShort: An Audio Technica {{ name }}
 DescriptionLong: An Audio Technica AT-LP60XBT turntable. Not the fanciest record player by any means, but gets the job done. There is a record ready to play.
 OnUse: You press the play button and the automatic mechanism spins the record and drops the needle. Music fills the room. You like this song!
 
@@ -300,7 +304,7 @@ Name: Wooden Chest
 Prototype: chest
 Room: library
 ContentsVisible: no
-DescriptionShort: A wooden chest
+DescriptionShort: A {{ name }}.
 DescriptionLong: A large wooden chest, it's not locked so you can __open__ it.
 
 Id: record_machine_girl
@@ -308,7 +312,7 @@ Name: Machine Girl - WLFGRL
 Prototype: object
 Room: library
 Container: library_records
-DescriptionShort: a vinyl copy of {{ name }}
+DescriptionShort: A vinyl copy of {{ name }}
 DescriptionLong: 2014. Chaotic internet-era experimental electronic.
 
 Id: record_tv_girl
@@ -316,7 +320,7 @@ Name: TV Girl - Who Really Cares
 Prototype: object
 Room: library
 Container: library_records
-DescriptionShort: a vinyl copy of {{ name }}
+DescriptionShort: A vinyl copy of {{ name }}
 DescriptionLong: 2016. Dreamy indie pop sampling obscure 60s and 70s tracks.
 
 Id: record_the_clash
@@ -324,7 +328,7 @@ Name: The Clash - Combat Rock
 Prototype: object
 Room: library
 Container: library_records
-DescriptionShort: a vinyl copy of {{ name }}
+DescriptionShort: A vinyl copy of {{ name }}
 DescriptionLong: 1982. Features "Should I Stay or Should I Go" and "Rock the Casbah". Allen Ginsberg does backing vocals.
 
 Id: record_saib
@@ -332,7 +336,7 @@ Name: Saib. - Bebop
 Prototype: object
 Room: library
 Container: library_records
-DescriptionShort: a vinyl copy of {{ name }}
+DescriptionShort: A vinyl copy of {{ name }}
 DescriptionLong: 2017. Lo-fi jazzy hip-hop. Perfect study music.
 
 Id: record_mgmt
@@ -340,7 +344,7 @@ Name: MGMT - Oracular Spectacular
 Prototype: object
 Room: library
 Container: library_records
-DescriptionShort: a vinyl copy of {{ name }}
+DescriptionShort: A vinyl copy of {{ name }}
 DescriptionLong: 2007. "Time to Pretend", "Electric Feel", "Kids" - defined late 2000s indie.
 
 Id: record_avalanches_sily
@@ -348,7 +352,7 @@ Name: The Avalanches - Since I Left You
 Prototype: object
 Room: library
 Container: library_records
-DescriptionShort: a vinyl copy of {{ name }}
+DescriptionShort: A vinyl copy of {{ name }}
 DescriptionLong: 2000. Built from 3,500+ vinyl samples. Took years to clear them all.
 
 Id: record_avalanches_wwaly
@@ -356,7 +360,7 @@ Name: The Avalanches - We Will Always Love You
 Prototype: object
 Room: library
 Container: library_records
-DescriptionShort: a vinyl copy of {{ name }}
+DescriptionShort: A vinyl copy of {{ name }}
 DescriptionLong: 2020. Their third album, 16 years after the second. Worth the wait.
 
 Id: record_the_smiths
@@ -364,7 +368,7 @@ Name: The Smiths - Louder Than Bombs
 Prototype: object
 Room: library
 Container: library_records
-DescriptionShort: a vinyl copy of {{ name }}
+DescriptionShort: A vinyl copy of {{ name }}
 DescriptionLong: 1987. Compilation of singles and B-sides. Morrissey at his mopiest.
 
 Id: record_alvvays_anti
@@ -372,7 +376,7 @@ Name: Alvvays - Antisocialites
 Prototype: object
 Room: library
 Container: library_records
-DescriptionShort: a vinyl copy of {{ name }}
+DescriptionShort: A vinyl copy of {{ name }}
 DescriptionLong: 2017. "Dreams Tonite" is a perfect shoegaze-pop song.
 
 Id: record_first_aid_kit
@@ -380,7 +384,7 @@ Name: First Aid Kit - Stay Gold
 Prototype: object
 Room: library
 Container: library_records
-DescriptionShort: a vinyl copy of {{ name }}
+DescriptionShort: A vinyl copy of {{ name }}
 DescriptionLong: 2014. Swedish sisters channeling Laurel Canyon folk.
 
 Id: record_justice
@@ -388,7 +392,7 @@ Name: Justice - Cross
 Prototype: object
 Room: library
 Container: library_records
-DescriptionShort: a vinyl copy of {{ name }}
+DescriptionShort: A vinyl copy of {{ name }}
 DescriptionLong: 2007. French electro house.
 
 Id: record_american_football
@@ -396,7 +400,7 @@ Name: American Football - American Football
 Prototype: object
 Room: library
 Container: library_records
-DescriptionShort: a vinyl copy of {{ name }}
+DescriptionShort: A vinyl copy of {{ name }}
 DescriptionLong: 1999. The house on the cover is real, in Urbana IL. Emo kids make pilgrimages.
 
 Id: record_nujabes_meta
@@ -404,7 +408,7 @@ Name: Nujabes - Metaphorical Music
 Prototype: object
 Room: library
 Container: library_records
-DescriptionShort: a vinyl copy of {{ name }}
+DescriptionShort: A vinyl copy of {{ name }}
 DescriptionLong: 2003. Japanese producer who pioneered jazzy hip-hop. Tragically died in 2010.
 
 Id: record_talking_heads
@@ -412,7 +416,7 @@ Name: Talking Heads - Remain In Light
 Prototype: object
 Room: library
 Container: library_records
-DescriptionShort: a vinyl copy of {{ name }}
+DescriptionShort: A vinyl copy of {{ name }}
 DescriptionLong: 1980. Produced by Brian Eno. "Once In A Lifetime" - how did I get here?
 
 Id: record_skee_mask_resort
@@ -420,7 +424,7 @@ Name: Skee Mask - Resort
 Prototype: object
 Room: library
 Container: library_records
-DescriptionShort: a vinyl copy of {{ name }}
+DescriptionShort: A vinyl copy of {{ name }}
 DescriptionLong: 2024. German producer blending ambient, techno, and jungle.
 
 Id: record_fleet_foxes
@@ -428,7 +432,7 @@ Name: Fleet Foxes - A Very Lonely Solstice
 Prototype: object
 Room: library
 Container: library_records
-DescriptionShort: a vinyl copy of {{ name }}
+DescriptionShort: A vinyl copy of {{ name }}
 DescriptionLong: 2022. Live album recorded during COVID.
 
 Id: record_skee_mask_iss009
@@ -436,7 +440,7 @@ Name: Skee Mask - ISS009
 Prototype: object
 Room: library
 Container: library_records
-DescriptionShort: a vinyl copy of {{ name }}
+DescriptionShort: A vinyl copy of {{ name }}
 DescriptionLong: 2023. Experimental breaks EP on Ilian Tape.
 
 Id: record_santigold
@@ -444,7 +448,7 @@ Name: Santigold - Santigold
 Prototype: object
 Room: library
 Container: library_records
-DescriptionShort: a vinyl copy of {{ name }}
+DescriptionShort: A vinyl copy of {{ name }}
 DescriptionLong: 2008. Diplo-produced indie-electronic. She spelled it "Santogold" at first.
 
 Id: record_cranberries
@@ -452,7 +456,7 @@ Name: The Cranberries - Everybody Else Is Doing It
 Prototype: object
 Room: library
 Container: library_records
-DescriptionShort: a vinyl copy of {{ name }}
+DescriptionShort: A vinyl copy of {{ name }}
 DescriptionLong: 1993. "Linger" and "Dreams".
 
 Id: record_alvvays
@@ -460,7 +464,7 @@ Name: Alvvays - Alvvays
 Prototype: object
 Room: library
 Container: library_records
-DescriptionShort: a vinyl copy of {{ name }}
+DescriptionShort: A vinyl copy of {{ name }}
 DescriptionLong: 2014. "Archie, Marry Me" - jangly Canadian indie pop perfection.
 
 Id: record_gorillaz
@@ -468,7 +472,7 @@ Name: Gorillaz - Gorillaz
 Prototype: object
 Room: library
 Container: library_records
-DescriptionShort: a vinyl copy of {{ name }}
+DescriptionShort: A vinyl copy of {{ name }}
 DescriptionLong: 2001. Virtual band by Damon Albarn. "Clint Eastwood" features Del the Funky Homosapien.
 
 Id: record_nujabes_modal
@@ -476,7 +480,7 @@ Name: Nujabes - Modal Soul
 Prototype: object
 Room: library
 Container: library_records
-DescriptionShort: a vinyl copy of {{ name }}
+DescriptionShort: A vinyl copy of {{ name }}
 DescriptionLong: 2005. Featured in Samurai Champloo. Birthed the lo-fi hip-hop movement.
 
 Id: record_flaming_lips
@@ -484,7 +488,7 @@ Name: The Flaming Lips - Fight Test
 Prototype: object
 Room: library
 Container: library_records
-DescriptionShort: a vinyl copy of {{ name }}
+DescriptionShort: A vinyl copy of {{ name }}
 DescriptionLong: 2003. From Yoshimi Battles the Pink Robots.
 
 Id: record_jet
@@ -492,7 +496,7 @@ Name: Jet - Get Born
 Prototype: object
 Room: library
 Container: library_records
-DescriptionShort: a vinyl copy of {{ name }}
+DescriptionShort: A vinyl copy of {{ name }}
 DescriptionLong: 2003. "Are You Gonna Be My Girl" - you've heard it in every commercial.
 
 Id: record_death_cab_plans
@@ -500,7 +504,7 @@ Name: Death Cab For Cutie - Plans
 Prototype: object
 Room: library
 Container: library_records
-DescriptionShort: a vinyl copy of {{ name }}
+DescriptionShort: A vinyl copy of {{ name }}
 DescriptionLong: 2005. "I Will Follow You Into the Dark", "Soul Meets Body". Their Atlantic debut went platinum.
 
 # ----------------------------------------------------------------------------
@@ -511,7 +515,7 @@ Id: sitting_room_chairs
 Name: Comfy Chairs
 Prototype: furniture
 Room: sitting-room
-DescriptionShort: several {{ name }} are arranged around the room
+DescriptionShort: Several {{ name }} are arranged around the room.
 DescriptionLong: Plush armchairs upholstered in faded floral fabric. They look well-loved.
 OnUse: You settle into one of the armchairs near the fire. The warmth and comfort wash over you. You feel your health regenerating.
 
@@ -519,7 +523,7 @@ Id: sitting_room_fireplace
 Name: Fireplace
 Prototype: object
 Room: sitting-room
-DescriptionShort: a cozy {{ name }} crackles on the wall
+DescriptionShort: A cozy {{ name }} crackles on the wall.
 DescriptionLong: A stone fireplace with a carved wooden mantle. A small fire crackles warmly.
 OnTouch: The warmth feels nice on your hands.
 OnAttack: You poke at the fire with the stoker. The logs shift and sparks fly up the chimney.
