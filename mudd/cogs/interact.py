@@ -9,9 +9,10 @@ from mudd.formatting.entities import build_contents_string
 from mudd.services.database import get_pool
 from mudd.services.entity import ResolvedEntity, get_entity_service
 from mudd.services.entity_matcher import (
-    get_autocomplete_entities,
+    get_focus_aware_autocomplete_entities,
     match_entity_by_prefix,
 )
+from mudd.services.focus_context import get_focus_context_service
 from mudd.services.verb_action import VerbAction
 from mudd.services.verb_matcher import match_verb
 from mudd.services.visibility import get_visibility_service
@@ -30,7 +31,9 @@ class Interact(commands.Cog):
         """Autocomplete callback for target parameter.
 
         Suggests entity names from the current room, excluding entities
-        inside containers with contents_visible=False.
+        inside containers with contents_visible=False. When a user has an
+        active focus (open container), prioritizes focused contents with
+        "[Container Name]" prefix.
         """
         try:
             visibility_service = get_visibility_service()
@@ -41,22 +44,41 @@ class Interact(commands.Cog):
                 return []
 
             entity_service = get_entity_service()
-            visible_entities = await get_autocomplete_entities(entity_service, room)
+            focus_service = get_focus_context_service()
+
+            # Get focus-aware autocomplete choices
+            choices = await get_focus_aware_autocomplete_entities(
+                entity_service, focus_service, interaction.user.id, room
+            )
 
             # Filter by current input using word prefix matching
             if current:
-                match_result = match_entity_by_prefix(current, visible_entities)
-                matching = [m.instance for m in match_result.matches]
-            else:
-                matching = visible_entities
+                # Get matching instances
+                instances = [c.instance for c in choices]
+                match_result = match_entity_by_prefix(current, instances)
+                matched_ids = {m.instance.entity.id for m in match_result.matches}
+                # Filter choices to matched entities only
+                choices = [c for c in choices if c.instance.entity.id in matched_ids]
 
-            # Return as choices (limit 25 per Discord)
-            choices = [
-                app_commands.Choice(name=e.entity.name, value=e.entity.name)
-                for e in matching
-            ]
+            # Reserve slots for room entities when focused
+            # This ensures room entities are visible as escape options
+            focused_items = [c for c in choices if c.is_focused]
+            room_items = [c for c in choices if not c.is_focused]
 
-            return choices[:25]
+            if len(focused_items) > 20 and len(room_items) > 0:
+                # Truncate focused items to show some room entities
+                max_focused = 24 - min(len(room_items), 4)  # Leave up to 4 slots
+                focused_items = focused_items[:max_focused]
+                choices = focused_items + room_items
+
+            # Return as Discord choices (limit 25 per Discord API)
+            return [
+                app_commands.Choice(
+                    name=c.display_name,
+                    value=c.instance.entity.name,  # Use actual name for matching
+                )
+                for c in choices
+            ][:25]
         except Exception:
             logger.exception(
                 "Error in target autocomplete for room '%s'",
@@ -83,6 +105,9 @@ class Interact(commands.Cog):
             return
 
         entity_service = get_entity_service()
+        focus_service = get_focus_context_service()
+        user_id = interaction.user.id
+
         # Uses get_room_entities (not get_autocomplete_entities) intentionally:
         # players can interact with hidden container contents if they know the name
         all_entities = await entity_service.get_room_entities(room)
@@ -117,6 +142,16 @@ class Interact(commands.Cog):
             )
             return
 
+        # Check if target is in current focus (to decide whether to clear focus)
+        is_in_focus = await focus_service.is_entity_in_focus(user_id, room, entity.id)
+
+        if is_in_focus:
+            # Update timestamp to prevent timeout when interacting with focused content
+            await focus_service.update_focus_timestamp(user_id)
+        else:
+            # Clear focus when interacting with entity not in current focus
+            await focus_service.clear_focus(user_id, reason="interaction")
+
         # Get handler text based on action
         handler_text = _get_handler_text(entity, action_type)
 
@@ -138,8 +173,30 @@ class Interact(commands.Cog):
                 "Template error rendering '%s' handler for entity '%s'",
                 action_type.value,
                 entity.id,
+                exc_info=True,
             )
             output = f"*{entity.name}* responds, but something went wrong."
+
+        # Handle focus changes based on action type
+        if action_type == VerbAction.ON_OPEN and entity.focus_mode != "none":
+            # Establish focus when opening a focusable entity (e.g., container)
+            await focus_service.set_focus(user_id, room, entity)
+        elif action_type == VerbAction.ON_CLOSE:
+            # Clear focus when explicitly closing
+            # Get close message (template) before clearing
+            close_template = await focus_service.clear_focus(user_id, reason="close")
+            if close_template:
+                # Render the close template and append
+                try:
+                    close_output = render(close_template, entity, "")
+                    output = f"{output}\n\n{close_output}"
+                except TemplateRenderError:
+                    logger.warning(
+                        "Template error rendering on_close for entity '%s'",
+                        entity.id,
+                        exc_info=True,
+                    )
+                    output = f"{output}\n\nYou step away from the *{entity.name}*."
 
         await interaction.response.send_message(output, ephemeral=True)
 
@@ -160,6 +217,8 @@ def _get_handler_text(entity: ResolvedEntity, action: VerbAction) -> str | None:
         VerbAction.ON_ATTACK: entity.on_attack,
         VerbAction.ON_USE: entity.on_use,
         VerbAction.ON_TAKE: entity.on_take,
+        VerbAction.ON_OPEN: entity.on_open,
+        VerbAction.ON_CLOSE: entity.on_close,
     }
     return handler_map.get(action)
 

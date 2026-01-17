@@ -14,6 +14,7 @@ from uuid import uuid4
 import pytest
 
 from mudd.formatting.entities import (
+    build_contents_string,
     format_entity_with_contents,
     format_room_entities,
     render_entity_on_look,
@@ -51,8 +52,11 @@ def make_entity(
         on_attack=None,
         on_use=None,
         on_take=None,
+        on_open=None,
+        on_close=None,
         contents_visible=None,
         spawn_mode="none",
+        focus_mode="none",
     )
 
 
@@ -90,6 +94,201 @@ class TestRender:
         assert result == "A sturdy table."
 
 
+class TestBuildContentsString:
+    """Test build_contents_string function."""
+
+    def test_empty_list_returns_empty_string(self):
+        """Empty contents list returns empty string."""
+        result = build_contents_string([])
+        assert result == ""
+
+    def test_single_item_space_prefixed(self):
+        """Single item returns space-prefixed description."""
+        vase = ResolvedEntity(
+            id="vase",
+            name="Flower Vase",
+            description_short="a {{ name }}",
+            description_long=None,
+            on_look=None,
+            on_touch=None,
+            on_attack=None,
+            on_use=None,
+            on_take=None,
+            on_open=None,
+            on_close=None,
+            contents_visible=None,
+            spawn_mode="none",
+            focus_mode="none",
+        )
+        contents = [
+            EntityInstance(
+                instance_id=uuid4(), entity=vase, room="foyer", owner_id=None
+            ),
+        ]
+
+        result = build_contents_string(contents)
+        assert result == " a *Flower Vase*"
+
+    def test_two_items_joined_with_and(self):
+        """Two items are joined with 'and', second lowercased."""
+        vase = ResolvedEntity(
+            id="vase",
+            name="Flower Vase",
+            description_short="a {{ name }}",
+            description_long=None,
+            on_look=None,
+            on_touch=None,
+            on_attack=None,
+            on_use=None,
+            on_take=None,
+            on_open=None,
+            on_close=None,
+            contents_visible=None,
+            spawn_mode="none",
+            focus_mode="none",
+        )
+        plaque = ResolvedEntity(
+            id="plaque",
+            name="Inscribed Plaque",
+            description_short="An {{ name }}",  # Starts with capital
+            description_long=None,
+            on_look=None,
+            on_touch=None,
+            on_attack=None,
+            on_use=None,
+            on_take=None,
+            on_open=None,
+            on_close=None,
+            contents_visible=None,
+            spawn_mode="none",
+            focus_mode="none",
+        )
+        contents = [
+            EntityInstance(
+                instance_id=uuid4(), entity=vase, room="foyer", owner_id=None
+            ),
+            EntityInstance(
+                instance_id=uuid4(), entity=plaque, room="foyer", owner_id=None
+            ),
+        ]
+
+        result = build_contents_string(contents)
+        # Second item "An" should be lowercased to "an"
+        assert result == " a *Flower Vase* and an *Inscribed Plaque*"
+
+    def test_three_items_bullet_list(self):
+        """Three or more items returns bullet list."""
+        vase = ResolvedEntity(
+            id="vase",
+            name="Flower Vase",
+            description_short="a {{ name }}",
+            description_long=None,
+            on_look=None,
+            on_touch=None,
+            on_attack=None,
+            on_use=None,
+            on_take=None,
+            on_open=None,
+            on_close=None,
+            contents_visible=None,
+            spawn_mode="none",
+            focus_mode="none",
+        )
+        plaque = ResolvedEntity(
+            id="plaque",
+            name="Inscribed Plaque",
+            description_short="an {{ name }}",
+            description_long=None,
+            on_look=None,
+            on_touch=None,
+            on_attack=None,
+            on_use=None,
+            on_take=None,
+            on_open=None,
+            on_close=None,
+            contents_visible=None,
+            spawn_mode="none",
+            focus_mode="none",
+        )
+        book = ResolvedEntity(
+            id="book",
+            name="Old Book",
+            description_short="an {{ name }}",
+            description_long=None,
+            on_look=None,
+            on_touch=None,
+            on_attack=None,
+            on_use=None,
+            on_take=None,
+            on_open=None,
+            on_close=None,
+            contents_visible=None,
+            spawn_mode="none",
+            focus_mode="none",
+        )
+        contents = [
+            EntityInstance(
+                instance_id=uuid4(), entity=vase, room="foyer", owner_id=None
+            ),
+            EntityInstance(
+                instance_id=uuid4(), entity=plaque, room="foyer", owner_id=None
+            ),
+            EntityInstance(
+                instance_id=uuid4(), entity=book, room="foyer", owner_id=None
+            ),
+        ]
+
+        result = build_contents_string(contents)
+        assert result == "\n- a *Flower Vase*\n- an *Inscribed Plaque*\n- an *Old Book*"
+
+    def test_skips_items_with_empty_description(self):
+        """Items with empty rendered descriptions are skipped."""
+        empty = ResolvedEntity(
+            id="empty",
+            name="Empty",
+            description_short="",  # Empty description
+            description_long=None,
+            on_look=None,
+            on_touch=None,
+            on_attack=None,
+            on_use=None,
+            on_take=None,
+            on_open=None,
+            on_close=None,
+            contents_visible=None,
+            spawn_mode="none",
+            focus_mode="none",
+        )
+        vase = ResolvedEntity(
+            id="vase",
+            name="Flower Vase",
+            description_short="a {{ name }}",
+            description_long=None,
+            on_look=None,
+            on_touch=None,
+            on_attack=None,
+            on_use=None,
+            on_take=None,
+            on_open=None,
+            on_close=None,
+            contents_visible=None,
+            spawn_mode="none",
+            focus_mode="none",
+        )
+        contents = [
+            EntityInstance(
+                instance_id=uuid4(), entity=empty, room="foyer", owner_id=None
+            ),
+            EntityInstance(
+                instance_id=uuid4(), entity=vase, room="foyer", owner_id=None
+            ),
+        ]
+
+        result = build_contents_string(contents)
+        # Empty item skipped, only vase remains (single item format)
+        assert result == " a *Flower Vase*"
+
+
 class TestFormatEntityWithContents:
     """Test format_entity_with_contents function."""
 
@@ -105,8 +304,11 @@ class TestFormatEntityWithContents:
             on_attack=None,
             on_use=None,
             on_take=None,
+            on_open=None,
+            on_close=None,
             contents_visible=True,
             spawn_mode="none",
+            focus_mode="none",
         )
         result = format_entity_with_contents(entity, None)
         assert result == "a *Wooden Table* sits here"
@@ -123,8 +325,11 @@ class TestFormatEntityWithContents:
             on_attack=None,
             on_use=None,
             on_take=None,
+            on_open=None,
+            on_close=None,
             contents_visible=True,
             spawn_mode="none",
+            focus_mode="none",
         )
         result = format_entity_with_contents(entity, [])
         assert result == "a *Wooden Table* sits here"
@@ -141,8 +346,11 @@ class TestFormatEntityWithContents:
             on_attack=None,
             on_use=None,
             on_take=None,
+            on_open=None,
+            on_close=None,
             contents_visible=True,
             spawn_mode="none",
+            focus_mode="none",
         )
         vase = ResolvedEntity(
             id="vase",
@@ -154,8 +362,11 @@ class TestFormatEntityWithContents:
             on_attack=None,
             on_use=None,
             on_take=None,
+            on_open=None,
+            on_close=None,
             contents_visible=None,
             spawn_mode="none",
+            focus_mode="none",
         )
         plaque = ResolvedEntity(
             id="plaque",
@@ -167,8 +378,11 @@ class TestFormatEntityWithContents:
             on_attack=None,
             on_use=None,
             on_take=None,
+            on_open=None,
+            on_close=None,
             contents_visible=None,
             spawn_mode="none",
+            focus_mode="none",
         )
         contents = [
             EntityInstance(
@@ -180,8 +394,9 @@ class TestFormatEntityWithContents:
         ]
 
         result = format_entity_with_contents(table, contents)
+        # 2 items: space-prefixed, joined with "and", second lowercased
         assert result == (
-            "a *Wooden Table*. On it:\n- a *Flower Vase*\n- a *Inscribed Plaque*"
+            "a *Wooden Table*. On it: a *Flower Vase* and a *Inscribed Plaque*"
         )
 
     def test_contents_variable_empty_when_no_contents(self):
@@ -196,8 +411,11 @@ class TestFormatEntityWithContents:
             on_attack=None,
             on_use=None,
             on_take=None,
+            on_open=None,
+            on_close=None,
             contents_visible=True,
             spawn_mode="none",
+            focus_mode="none",
         )
         result = format_entity_with_contents(entity, [])
         assert result == "a *Wooden Table*[]"
@@ -214,8 +432,11 @@ class TestFormatEntityWithContents:
             on_attack=None,
             on_use=None,
             on_take=None,
+            on_open=None,
+            on_close=None,
             contents_visible=True,
             spawn_mode="none",
+            focus_mode="none",
         )
         # Vase has broken template
         vase = ResolvedEntity(
@@ -228,8 +449,11 @@ class TestFormatEntityWithContents:
             on_attack=None,
             on_use=None,
             on_take=None,
+            on_open=None,
+            on_close=None,
             contents_visible=None,
             spawn_mode="none",
+            focus_mode="none",
         )
         contents = [
             EntityInstance(
@@ -263,8 +487,11 @@ class TestFormatRoomEntities:
             on_attack=None,
             on_use=None,
             on_take=None,
+            on_open=None,
+            on_close=None,
             contents_visible=False,  # Not visible
             spawn_mode="none",
+            focus_mode="none",
         )
         entities = [
             EntityInstance(
@@ -290,8 +517,11 @@ class TestFormatRoomEntities:
             on_attack=None,
             on_use=None,
             on_take=None,
+            on_open=None,
+            on_close=None,
             contents_visible=True,
             spawn_mode="none",
+            focus_mode="none",
         )
         vase = ResolvedEntity(
             id="vase",
@@ -303,8 +533,11 @@ class TestFormatRoomEntities:
             on_attack=None,
             on_use=None,
             on_take=None,
+            on_open=None,
+            on_close=None,
             contents_visible=None,
             spawn_mode="none",
+            focus_mode="none",
         )
         entities = [
             EntityInstance(
@@ -326,7 +559,8 @@ class TestFormatRoomEntities:
                 return []
 
         result = await format_room_entities(entities, MockService(), "foyer")
-        assert result == "a *Wooden Table* sits here. On it:\n- a *Flower Vase*"
+        # 1 item: space-prefixed, no case change
+        assert result == "a *Wooden Table* sits here. On it: a *Flower Vase*"
 
     async def test_multiple_entities(self):
         """Multiple top-level entities are joined with newlines."""
@@ -340,8 +574,11 @@ class TestFormatRoomEntities:
             on_attack=None,
             on_use=None,
             on_take=None,
+            on_open=None,
+            on_close=None,
             contents_visible=False,
             spawn_mode="none",
+            focus_mode="none",
         )
         chair = ResolvedEntity(
             id="chair",
@@ -353,8 +590,11 @@ class TestFormatRoomEntities:
             on_attack=None,
             on_use=None,
             on_take=None,
+            on_open=None,
+            on_close=None,
             contents_visible=None,
             spawn_mode="none",
+            focus_mode="none",
         )
         entities = [
             EntityInstance(
@@ -385,8 +625,11 @@ class TestRenderEntityOnLook:
             on_attack=None,
             on_use=None,
             on_take=None,
+            on_open=None,
+            on_close=None,
             contents_visible=None,
             spawn_mode="none",
+            focus_mode="none",
         )
         instance = EntityInstance(
             instance_id=uuid4(),
@@ -396,7 +639,10 @@ class TestRenderEntityOnLook:
         )
 
         result = await render_entity_on_look(instance, MockService(), "foyer")
-        assert result == "You examine the *Wooden Table*. A sturdy oak table."
+        expected = (
+            "### Wooden Table\n\nYou examine the *Wooden Table*. A sturdy oak table."
+        )
+        assert result == expected
 
     async def test_falls_back_to_description_when_no_on_look(self):
         """Falls back to description_long when on_look is None."""
@@ -410,8 +656,11 @@ class TestRenderEntityOnLook:
             on_attack=None,
             on_use=None,
             on_take=None,
+            on_open=None,
+            on_close=None,
             contents_visible=None,
             spawn_mode="none",
+            focus_mode="none",
         )
         instance = EntityInstance(
             instance_id=uuid4(),
@@ -421,7 +670,7 @@ class TestRenderEntityOnLook:
         )
 
         result = await render_entity_on_look(instance, MockService(), "foyer")
-        assert result == "A sturdy oak table with worn edges."
+        assert result == "### Wooden Table\n\nA sturdy oak table with worn edges."
 
     async def test_falls_back_to_description_short(self):
         """Falls back to description_short when description_long is None."""
@@ -435,8 +684,11 @@ class TestRenderEntityOnLook:
             on_attack=None,
             on_use=None,
             on_take=None,
+            on_open=None,
+            on_close=None,
             contents_visible=None,
             spawn_mode="none",
+            focus_mode="none",
         )
         instance = EntityInstance(
             instance_id=uuid4(),
@@ -446,7 +698,7 @@ class TestRenderEntityOnLook:
         )
 
         result = await render_entity_on_look(instance, MockService(), "foyer")
-        assert result == "a *Wooden Table* sits here"
+        assert result == "### Wooden Table\n\na *Wooden Table* sits here"
 
     async def test_shows_error_warning_on_bad_template(self):
         """Shows error warning when template has syntax error."""
@@ -460,8 +712,11 @@ class TestRenderEntityOnLook:
             on_attack=None,
             on_use=None,
             on_take=None,
+            on_open=None,
+            on_close=None,
             contents_visible=None,
             spawn_mode="none",
+            focus_mode="none",
         )
         instance = EntityInstance(
             instance_id=uuid4(),
@@ -489,8 +744,11 @@ class TestRenderEntityOnLook:
             on_attack=None,
             on_use=None,
             on_take=None,
+            on_open=None,
+            on_close=None,
             contents_visible=True,
             spawn_mode="none",
+            focus_mode="none",
         )
         table_instance = EntityInstance(
             instance_id=uuid4(),
@@ -509,8 +767,11 @@ class TestRenderEntityOnLook:
             on_attack=None,
             on_use=None,
             on_take=None,
+            on_open=None,
+            on_close=None,
             contents_visible=None,
             spawn_mode="none",
+            focus_mode="none",
         )
         vase_instance = EntityInstance(
             instance_id=uuid4(),
@@ -524,7 +785,8 @@ class TestRenderEntityOnLook:
 
         assert "A sturdy oak table." in result
         assert "On it:" in result
-        assert "a teal *Flower Vase*" in result  # Uses description_short
+        # 1 item: no case change (uses description_short, not on_look)
+        assert "a teal *Flower Vase*" in result
 
     async def test_returns_default_when_no_descriptions(self):
         """Returns default message when entity has no descriptions or on_look."""
@@ -538,8 +800,11 @@ class TestRenderEntityOnLook:
             on_attack=None,
             on_use=None,
             on_take=None,
+            on_open=None,
+            on_close=None,
             contents_visible=None,
             spawn_mode="none",
+            focus_mode="none",
         )
         instance = EntityInstance(
             instance_id=uuid4(),
@@ -549,7 +814,7 @@ class TestRenderEntityOnLook:
         )
 
         result = await render_entity_on_look(instance, MockService(), "foyer")
-        assert result == "You see nothing special."
+        assert result == "### Blank\n\nYou see nothing special."
 
     async def test_contents_uses_description_short(self):
         """Contents are rendered using description_short, not on_look."""
@@ -566,8 +831,11 @@ class TestRenderEntityOnLook:
             on_attack=None,
             on_use=None,
             on_take=None,
+            on_open=None,
+            on_close=None,
             contents_visible=True,
             spawn_mode="none",
+            focus_mode="none",
         )
         table_instance = EntityInstance(
             instance_id=uuid4(),
@@ -587,8 +855,11 @@ class TestRenderEntityOnLook:
             on_attack=None,
             on_use=None,
             on_take=None,
+            on_open=None,
+            on_close=None,
             contents_visible=None,
             spawn_mode="none",
+            focus_mode="none",
         )
         vase_instance = EntityInstance(
             instance_id=uuid4(),
@@ -602,5 +873,6 @@ class TestRenderEntityOnLook:
 
         assert "A sturdy oak table." in result
         assert "On it:" in result
-        assert "a *Flower Vase*" in result  # Uses description_short
+        # 1 item: no case change (uses description_short, not on_look)
+        assert "a *Flower Vase*" in result
         assert "examine the vase closely" not in result  # on_look NOT used

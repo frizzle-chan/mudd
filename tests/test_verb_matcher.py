@@ -38,12 +38,20 @@ class TestSyncVerbs:
         assert count > 0
 
     async def test_sync_loads_all_actions(self, verbs_db):
-        """All 5 actions have verbs loaded."""
+        """All 7 actions have verbs loaded."""
         async with verbs_db.acquire() as conn:
             actions = await conn.fetch("SELECT DISTINCT action FROM verbs")
 
         action_names = {row["action"] for row in actions}
-        expected = {"on_look", "on_touch", "on_attack", "on_use", "on_take"}
+        expected = {
+            "on_look",
+            "on_touch",
+            "on_attack",
+            "on_use",
+            "on_take",
+            "on_open",
+            "on_close",
+        }
         assert action_names == expected
 
     async def test_sync_removes_deleted_verbs(self, verbs_db):
@@ -101,6 +109,26 @@ class TestMatchVerb:
         """Exact match for 'take' returns VerbAction.ON_TAKE."""
         action = await match_verb(verbs_db, "take")
         assert action == VerbAction.ON_TAKE
+
+    async def test_exact_match_open(self, verbs_db):
+        """Exact match for 'open' returns VerbAction.ON_OPEN."""
+        action = await match_verb(verbs_db, "open")
+        assert action == VerbAction.ON_OPEN
+
+    async def test_exact_match_close(self, verbs_db):
+        """Exact match for 'close' returns VerbAction.ON_CLOSE."""
+        action = await match_verb(verbs_db, "close")
+        assert action == VerbAction.ON_CLOSE
+
+    async def test_exact_match_unlock(self, verbs_db):
+        """Exact match for 'unlock' returns VerbAction.ON_OPEN."""
+        action = await match_verb(verbs_db, "unlock")
+        assert action == VerbAction.ON_OPEN
+
+    async def test_exact_match_shut(self, verbs_db):
+        """Exact match for 'shut' returns VerbAction.ON_CLOSE."""
+        action = await match_verb(verbs_db, "shut")
+        assert action == VerbAction.ON_CLOSE
 
     async def test_fuzzy_match_typo(self, verbs_db):
         """Fuzzy match for typo 'smassh' returns VerbAction.ON_ATTACK."""

@@ -15,6 +15,9 @@ logger = logging.getLogger(__name__)
 SpawnMode = Literal["none", "move", "clone"]
 
 
+FocusMode = Literal["none", "container"]
+
+
 @dataclass(frozen=True)
 class ResolvedEntity:
     """Entity with all inherited properties resolved."""
@@ -28,7 +31,10 @@ class ResolvedEntity:
     on_attack: str | None
     on_use: str | None
     on_take: str | None
+    on_open: str | None
+    on_close: str | None
     contents_visible: bool | None
+    focus_mode: FocusMode
     spawn_mode: SpawnMode
 
 
@@ -69,7 +75,10 @@ class EntityService:
             on_attack=row["on_attack"],
             on_use=row["on_use"],
             on_take=row["on_take"],
+            on_open=row["on_open"],
+            on_close=row["on_close"],
             contents_visible=row["contents_visible"],
+            focus_mode=row["focus_mode"],
             spawn_mode=row["spawn_mode"],
         )
 

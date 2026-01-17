@@ -1,9 +1,18 @@
 """Tests for entity name matching."""
 
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from unittest.mock import AsyncMock, MagicMock
 from uuid import uuid4
 
+import pytest
+
 from mudd.services.entity import EntityInstance, ResolvedEntity
-from mudd.services.entity_matcher import MatchResult, match_entity_by_prefix
+from mudd.services.entity_matcher import (
+    MatchResult,
+    get_focus_aware_autocomplete_entities,
+    match_entity_by_prefix,
+)
 
 
 def make_entity(
@@ -22,8 +31,11 @@ def make_entity(
         on_attack=None,
         on_use=None,
         on_take=None,
+        on_open=None,
+        on_close=None,
         contents_visible=None,
         spawn_mode="none",
+        focus_mode="none",
     )
 
 
@@ -190,3 +202,146 @@ class TestMatchResult:
         """is_empty returns True for empty matches."""
         result = MatchResult(matches=[])
         assert result.is_empty()
+
+
+@dataclass(frozen=True)
+class MockFocusContext:
+    """Mock FocusContext for testing."""
+
+    user_id: int
+    room: str
+    entity_id: str
+    entity_name: str
+    focus_mode: str
+    updated_at: datetime
+
+
+@pytest.mark.asyncio
+class TestGetFocusAwareAutocompleteEntities:
+    """Test focus-aware autocomplete."""
+
+    async def test_no_focus_returns_visible_entities(self):
+        """Without focus, returns visible entities without prefix."""
+        table = make_entity("table", "Wooden Table")
+        table_instance = make_instance(table, "foyer")
+
+        entity_service = MagicMock()
+        entity_service.get_top_level_room_entities = AsyncMock(
+            return_value=[table_instance]
+        )
+        entity_service.get_container_contents = AsyncMock(return_value=[])
+
+        focus_service = MagicMock()
+        focus_service.get_focus = AsyncMock(return_value=None)
+
+        result = await get_focus_aware_autocomplete_entities(
+            entity_service, focus_service, user_id=123, room="foyer"
+        )
+
+        assert len(result) == 1
+        assert result[0].display_name == "Wooden Table"
+        assert result[0].is_focused is False
+
+    async def test_focus_shows_hidden_container_contents(self):
+        """Focus on contents_visible=False container shows contents in autocomplete."""
+        # Container with contents_visible=False
+        chest = make_entity("chest", "Wooden Chest")
+        chest_instance = make_instance(chest, "library")
+
+        # Item inside the chest (normally hidden)
+        record = make_entity("record", "Machine Girl - WLFGRL")
+        record_instance = make_instance(record, "library")
+
+        # Entity service returns chest as top-level, record as container content
+        entity_service = MagicMock()
+        entity_service.get_top_level_room_entities = AsyncMock(
+            return_value=[chest_instance]
+        )
+        entity_service.get_container_contents = AsyncMock(
+            return_value=[record_instance]
+        )
+
+        # User has focus on the chest
+        focus = MockFocusContext(
+            user_id=123,
+            room="library",
+            entity_id="chest",
+            entity_name="Wooden Chest",
+            focus_mode="container",
+            updated_at=datetime.now(UTC),
+        )
+        focus_service = MagicMock()
+        focus_service.get_focus = AsyncMock(return_value=focus)
+
+        result = await get_focus_aware_autocomplete_entities(
+            entity_service, focus_service, user_id=123, room="library"
+        )
+
+        # Should have record (focused) first, then chest (room item)
+        assert len(result) == 2
+
+        # Focused item comes first (no prefix needed since focus context is clear)
+        assert result[0].display_name == "Machine Girl - WLFGRL"
+        assert result[0].is_focused is True
+
+        # Room item (the chest itself) comes second
+        assert result[1].display_name == "Wooden Chest"
+        assert result[1].is_focused is False
+
+    async def test_focus_excludes_focused_contents_from_room_items(self):
+        """Focused contents don't appear twice (once in focused, once in room)."""
+        # Open shelf with contents_visible=True
+        shelf = ResolvedEntity(
+            id="shelf",
+            name="Bookshelf",
+            description_short=None,
+            description_long=None,
+            on_look=None,
+            on_touch=None,
+            on_attack=None,
+            on_use=None,
+            on_take=None,
+            on_open=None,
+            on_close=None,
+            contents_visible=True,
+            spawn_mode="none",
+            focus_mode="container",
+        )
+        shelf_instance = make_instance(shelf, "library")
+
+        # Book visible on shelf (contents_visible=True means it's in visible list)
+        book = make_entity("book", "Ancient Tome")
+        book_instance = make_instance(book, "library")
+
+        # Entity service returns shelf as top-level, book as its content
+        entity_service = MagicMock()
+        entity_service.get_top_level_room_entities = AsyncMock(
+            return_value=[shelf_instance]
+        )
+        # get_container_contents is called twice:
+        # 1. By get_autocomplete_entities for shelf (contents_visible=True)
+        # 2. By get_focus_aware_autocomplete_entities for focused container
+        entity_service.get_container_contents = AsyncMock(return_value=[book_instance])
+
+        # User has focus on the shelf
+        focus = MockFocusContext(
+            user_id=123,
+            room="library",
+            entity_id="shelf",
+            entity_name="Bookshelf",
+            focus_mode="container",
+            updated_at=datetime.now(UTC),
+        )
+        focus_service = MagicMock()
+        focus_service.get_focus = AsyncMock(return_value=focus)
+
+        result = await get_focus_aware_autocomplete_entities(
+            entity_service, focus_service, user_id=123, room="library"
+        )
+
+        # Book should only appear once (as focused item)
+        display_names = [r.display_name for r in result]
+        assert display_names.count("Ancient Tome") == 1
+        # Verify it's the focused item, not a room item
+        assert result[0].display_name == "Ancient Tome"
+        assert result[0].is_focused is True

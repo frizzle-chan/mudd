@@ -53,6 +53,8 @@ Pre-commit hooks (lefthook) auto-run ruff and ty on staged files.
 
 **Design docs**: See `DESIGN.md` for PostgreSQL schema and data persistence details. **Always update DESIGN.md when modifying the database schema.**
 
+**Entity resolution**: When querying entity fields that support prototype inheritance (like `focus_mode`, `on_close`, etc.), use the `resolve_entity()` SQL function instead of joining directly to the `entities` table. Direct joins return NULL for inherited values, while `resolve_entity()` follows the prototype chain and applies defaults.
+
 **Docker**: The `.dockerignore` uses an allowlist pattern (starts with `*`, then `!` to include specific paths). **When adding new top-level directories needed at runtime, you must add them to `.dockerignore`.**
 
 ## Dependencies

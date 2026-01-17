@@ -7,6 +7,7 @@ import discord
 from discord import Interaction, app_commands
 from discord.ext import commands
 
+from mudd.services.focus_context import get_focus_context_service
 from mudd.services.visibility import get_visibility_service
 
 logger = logging.getLogger(__name__)
@@ -136,6 +137,10 @@ class Movement(commands.Cog):
             moved = await service.move_user_to_channel(member, target.id)
 
             if moved:
+                # Clear focus when moving rooms (per ADR 0003)
+                focus_service = get_focus_context_service()
+                await focus_service.clear_focus(member.id, reason="movement")
+
                 await interaction.response.send_message(
                     f"You moved! Click {target.mention} to enter.", ephemeral=True
                 )
@@ -178,9 +183,13 @@ class Movement(commands.Cog):
 
     @commands.Cog.listener()
     async def on_member_remove(self, member: discord.Member):
-        """Clean up user location when member leaves."""
+        """Clean up user location and focus when member leaves."""
         try:
             service = get_visibility_service()
             await service.delete_user_location(member.id)
+
+            # Clean up focus context
+            focus_service = get_focus_context_service()
+            await focus_service.clear_focus(member.id, reason="interaction")
         except Exception as e:
-            logger.error(f"Failed to clean up location for member {member.id}: {e}")
+            logger.error(f"Failed to clean up for member {member.id}: {e}")

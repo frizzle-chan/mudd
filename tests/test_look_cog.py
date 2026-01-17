@@ -16,11 +16,27 @@ from mudd.cogs.look import Look
 from mudd.services.entity import EntityInstance, ResolvedEntity
 
 
+@pytest.fixture(autouse=True)
+def mock_focus_context_service():
+    """Auto-mock the focus context service for all tests."""
+    mock_service = MagicMock()
+    mock_service.is_entity_in_focus = AsyncMock(return_value=False)
+    mock_service.clear_focus = AsyncMock(return_value=None)
+    mock_service.update_focus_timestamp = AsyncMock()
+    mock_service.get_focus = AsyncMock(return_value=None)
+    with patch(
+        "mudd.cogs.look.get_focus_context_service",
+        return_value=mock_service,
+    ):
+        yield mock_service
+
+
 @pytest.fixture
 def mock_visibility_service():
     """Create a mock visibility service."""
     service = MagicMock()
     service.wait_for_startup = AsyncMock()
+    service.get_room_name = AsyncMock(return_value=None)
     return service
 
 
@@ -63,8 +79,11 @@ def make_entity(
         on_attack=None,
         on_use=None,
         on_take=None,
+        on_open=None,
+        on_close=None,
         contents_visible=contents_visible,
         spawn_mode="none",
+        focus_mode="none",
     )
 
 
@@ -110,7 +129,7 @@ class TestLookCog:
             ),
         ):
             # Call the callback directly (not the Command object)
-            await look_cog.look.callback(look_cog, mock_interaction)
+            await look_cog.look.callback(look_cog, mock_interaction, at="Room")
 
         mock_interaction.response.send_message.assert_called_once()
         message = mock_interaction.response.send_message.call_args[0][0]
@@ -139,7 +158,7 @@ class TestLookCog:
                 return_value=mock_entity_service,
             ),
         ):
-            await look_cog.look.callback(look_cog, mock_interaction)
+            await look_cog.look.callback(look_cog, mock_interaction, at="Room")
 
         mock_interaction.response.send_message.assert_called_once()
         message = mock_interaction.response.send_message.call_args[0][0]
@@ -164,7 +183,7 @@ class TestLookCog:
                 return_value=mock_entity_service,
             ),
         ):
-            await look_cog.look.callback(look_cog, mock_interaction)
+            await look_cog.look.callback(look_cog, mock_interaction, at="Room")
 
         mock_interaction.response.send_message.assert_called_once()
         message = mock_interaction.response.send_message.call_args[0][0]
@@ -207,7 +226,7 @@ class TestLookCog:
                 return_value=mock_entity_service,
             ),
         ):
-            await look_cog.look.callback(look_cog, mock_interaction)
+            await look_cog.look.callback(look_cog, mock_interaction, at="Room")
 
         mock_interaction.response.send_message.assert_called_once()
         message = mock_interaction.response.send_message.call_args[0][0]
@@ -235,7 +254,7 @@ class TestLookCog:
                 return_value=mock_entity_service,
             ),
         ):
-            await look_cog.look.callback(look_cog, mock_interaction)
+            await look_cog.look.callback(look_cog, mock_interaction, at="Room")
 
         # Check ephemeral=True
         call_kwargs = mock_interaction.response.send_message.call_args[1]
@@ -259,8 +278,11 @@ class TestLookCog:
             on_attack=None,
             on_use=None,
             on_take=None,
+            on_open=None,
+            on_close=None,
             contents_visible=None,
             spawn_mode="none",
+            focus_mode="none",
         )
         table_instance = make_instance(table, "foyer")
 

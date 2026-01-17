@@ -22,6 +22,21 @@ from mudd.services.verb_action import VerbAction
 from mudd.templating import TemplateRenderError
 
 
+@pytest.fixture(autouse=True)
+def mock_focus_context_service():
+    """Auto-mock the focus context service for all tests."""
+    mock_service = MagicMock()
+    mock_service.is_entity_in_focus = AsyncMock(return_value=False)
+    mock_service.clear_focus = AsyncMock(return_value=None)
+    mock_service.update_focus_timestamp = AsyncMock()
+    mock_service.set_focus = AsyncMock(return_value=None)
+    with patch(
+        "mudd.cogs.interact.get_focus_context_service",
+        return_value=mock_service,
+    ):
+        yield mock_service
+
+
 @pytest.fixture
 def mock_visibility_service():
     """Create a mock visibility service."""
@@ -80,8 +95,11 @@ def make_entity(
         on_attack=on_attack,
         on_use=on_use,
         on_take=on_take,
+        on_open=None,
+        on_close=None,
         contents_visible=None,
         spawn_mode="none",
+        focus_mode="none",
     )
 
 

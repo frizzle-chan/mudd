@@ -12,6 +12,8 @@ from typing import Literal, cast, overload
 import asyncpg
 import discord
 
+from mudd.services.entity import FocusMode
+
 logger = logging.getLogger(__name__)
 
 # Valid spawn modes matching PostgreSQL enum
@@ -50,6 +52,7 @@ class Entity:
     room: str | None = None
     contents_visible: bool | None = None
     spawn_mode: SpawnMode = "none"
+    focus_mode: FocusMode | None = None  # None = inherit from prototype
     description_short: str | None = None
     description_long: str | None = None
     on_look: str | None = None
@@ -57,6 +60,8 @@ class Entity:
     on_attack: str | None = None
     on_use: str | None = None
     on_take: str | None = None
+    on_open: str | None = None
+    on_close: str | None = None
 
 
 def _load_records_from_rec[T](
@@ -149,6 +154,17 @@ def _parse_entity_row(row: dict[str, str]) -> Entity:
         )
     spawn_mode = cast(SpawnMode, spawn_mode_raw)
 
+    # Parse focus_mode - None means inherit from prototype
+    focus_mode: FocusMode | None = None
+    focus_mode_raw = row.get("FocusMode", "").lower()
+    if focus_mode_raw:
+        if focus_mode_raw not in ("none", "container"):
+            raise ValueError(
+                f"Entity '{row['Id']}' has invalid FocusMode '{focus_mode_raw}'. "
+                f"Valid values: none, container"
+            )
+        focus_mode = cast(FocusMode, focus_mode_raw)
+
     return Entity(
         id=row["Id"],
         name=row["Name"],
@@ -157,6 +173,7 @@ def _parse_entity_row(row: dict[str, str]) -> Entity:
         room=row.get("Room") or None,
         contents_visible=contents_visible,
         spawn_mode=spawn_mode,
+        focus_mode=focus_mode,
         description_short=row.get("DescriptionShort") or None,
         description_long=row.get("DescriptionLong") or None,
         on_look=row.get("OnLook") or None,
@@ -164,6 +181,8 @@ def _parse_entity_row(row: dict[str, str]) -> Entity:
         on_attack=row.get("OnAttack") or None,
         on_use=row.get("OnUse") or None,
         on_take=row.get("OnTake") or None,
+        on_open=row.get("OnOpen") or None,
+        on_close=row.get("OnClose") or None,
     )
 
 

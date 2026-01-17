@@ -1,9 +1,12 @@
 """Entity name matching and filtering for commands."""
 
 from dataclasses import dataclass
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
 from mudd.services.entity import EntityInstance
+
+if TYPE_CHECKING:
+    from mudd.services.focus_context import FocusContext
 
 
 class AutocompleteEntityFetcher(Protocol):
@@ -14,6 +17,14 @@ class AutocompleteEntityFetcher(Protocol):
     async def get_container_contents(
         self, container_id: str, room: str
     ) -> list[EntityInstance]: ...
+
+
+class FocusContextFetcher(Protocol):
+    """Protocol for focus context service methods needed by autocomplete."""
+
+    async def get_focus(self, user_id: int, room: str) -> "FocusContext | None": ...
+
+    async def get_focused_contents(self, user_id: int, room: str) -> list[str]: ...
 
 
 async def get_autocomplete_entities(
@@ -114,3 +125,83 @@ def match_entity_by_prefix(
     matches.sort(key=lambda m: m.match_quality)
 
     return MatchResult(matches=matches)
+
+
+@dataclass(frozen=True)
+class AutocompleteChoice:
+    """Autocomplete choice with focus tracking."""
+
+    instance: EntityInstance
+    display_name: str
+    is_focused: bool
+
+
+async def get_focus_aware_autocomplete_entities(
+    entity_service: AutocompleteEntityFetcher,
+    focus_service: FocusContextFetcher,
+    user_id: int,
+    room: str,
+) -> list[AutocompleteChoice]:
+    """Get entities for autocomplete with focus-aware ordering.
+
+    When a user has an active focus (e.g., open container), this function
+    returns entities with the focused container's contents listed first.
+
+    Args:
+        entity_service: Service for entity queries
+        focus_service: Service for focus context queries
+        user_id: Discord user ID
+        room: Current room name
+
+    Returns:
+        List of AutocompleteChoice objects with focused items first.
+    """
+    # Get standard visible entities
+    visible = await get_autocomplete_entities(entity_service, room)
+
+    # Check for active focus
+    focus = await focus_service.get_focus(user_id, room)
+    if not focus:
+        # No focus: return all visible entities without prefix
+        return [
+            AutocompleteChoice(
+                instance=inst,
+                display_name=inst.entity.name,
+                is_focused=False,
+            )
+            for inst in visible
+        ]
+
+    # Get focused container contents directly (may include items not in 'visible'
+    # list when container has contents_visible=False)
+    focused_contents = await entity_service.get_container_contents(
+        focus.entity_id, room
+    )
+
+    # Build focused items from container contents (including hidden ones)
+    focused_items: list[AutocompleteChoice] = []
+    for inst in focused_contents:
+        focused_items.append(
+            AutocompleteChoice(
+                instance=inst,
+                display_name=inst.entity.name,
+                is_focused=True,
+            )
+        )
+
+    # Build room items from visible entities, excluding focused contents
+    focused_content_ids = {inst.entity.id for inst in focused_contents}
+    room_items: list[AutocompleteChoice] = []
+    for inst in visible:
+        # Skip items in the focused container (they're already in focused_items)
+        if inst.entity.id not in focused_content_ids:
+            room_items.append(
+                AutocompleteChoice(
+                    instance=inst,
+                    display_name=inst.entity.name,
+                    is_focused=False,
+                )
+            )
+
+    # Focused items first, then room items
+    return focused_items + room_items
