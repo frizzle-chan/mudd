@@ -280,11 +280,11 @@ class TestGetFocusAwareAutocompleteEntities:
         # Should have record (focused) first, then chest (room item)
         assert len(result) == 2
 
-        # Focused item has prefix and comes first
-        assert result[0].display_name == "[Wooden Chest] Machine Girl - WLFGRL"
+        # Focused item comes first (no prefix needed since focus context is clear)
+        assert result[0].display_name == "Machine Girl - WLFGRL"
         assert result[0].is_focused is True
 
-        # Room item (the chest itself) comes second without prefix
+        # Room item (the chest itself) comes second
         assert result[1].display_name == "Wooden Chest"
         assert result[1].is_focused is False
 
@@ -341,5 +341,7 @@ class TestGetFocusAwareAutocompleteEntities:
 
         # Book should only appear once (as focused item)
         display_names = [r.display_name for r in result]
-        assert display_names.count("[Bookshelf] Ancient Tome") == 1
-        assert "Ancient Tome" not in display_names  # Not in room items
+        assert display_names.count("Ancient Tome") == 1
+        # Verify it's the focused item, not a room item
+        assert result[0].display_name == "Ancient Tome"
+        assert result[0].is_focused is True

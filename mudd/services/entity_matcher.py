@@ -129,7 +129,7 @@ def match_entity_by_prefix(
 
 @dataclass(frozen=True)
 class AutocompleteChoice:
-    """Autocomplete choice with optional focus prefix."""
+    """Autocomplete choice with focus tracking."""
 
     instance: EntityInstance
     display_name: str
@@ -142,11 +142,10 @@ async def get_focus_aware_autocomplete_entities(
     user_id: int,
     room: str,
 ) -> list[AutocompleteChoice]:
-    """Get entities for autocomplete with focus-aware prefixes.
+    """Get entities for autocomplete with focus-aware ordering.
 
     When a user has an active focus (e.g., open container), this function
-    returns entities with the focused container's contents listed first,
-    prefixed with "[Container Name]" for visual distinction.
+    returns entities with the focused container's contents listed first.
 
     Args:
         entity_service: Service for entity queries
@@ -156,7 +155,6 @@ async def get_focus_aware_autocomplete_entities(
 
     Returns:
         List of AutocompleteChoice objects with focused items first.
-        Focused items have display_name prefixed with "[Container Name]".
     """
     # Get standard visible entities
     visible = await get_autocomplete_entities(entity_service, room)
@@ -180,15 +178,13 @@ async def get_focus_aware_autocomplete_entities(
         focus.entity_id, room
     )
 
-    prefix = f"[{focus.entity_name}]"
-
     # Build focused items from container contents (including hidden ones)
     focused_items: list[AutocompleteChoice] = []
     for inst in focused_contents:
         focused_items.append(
             AutocompleteChoice(
                 instance=inst,
-                display_name=f"{prefix} {inst.entity.name}",
+                display_name=inst.entity.name,
                 is_focused=True,
             )
         )
