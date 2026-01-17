@@ -128,7 +128,7 @@ async def render_entity_on_look(
         Rendered on_look output
     """
     entity = instance.entity
-    parts: list[str] = []
+    parts: list[str] = [f"### {entity.name}"]
 
     # Fetch and format container contents
     contents_str = ""
