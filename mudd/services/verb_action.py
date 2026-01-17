@@ -14,3 +14,5 @@ class VerbAction(str, Enum):
     ON_ATTACK = "on_attack"
     ON_USE = "on_use"
     ON_TAKE = "on_take"
+    ON_OPEN = "on_open"
+    ON_CLOSE = "on_close"

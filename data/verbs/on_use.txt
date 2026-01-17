@@ -1,6 +1,5 @@
 activate
 apply
-close
 crank
 cue
 depress
@@ -17,7 +16,6 @@ launch
 lever
 listen
 manipulate
-open
 operate
 play
 power
@@ -32,8 +30,6 @@ reset
 restart
 rotate
 run
-seal
-shut
 sit
 spin
 start
@@ -43,7 +39,6 @@ trigger
 trip
 turn
 uncover
-unlock
 use
 wind
 work

@@ -134,6 +134,35 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 - Uses `INSERT ON CONFLICT DO NOTHING` for idempotent sync (same entity+room = no-op)
 - Inventory instances (owner_id set) are NOT affected by sync - they persist independently
 
+### User Focus Table
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `user_id` | BIGINT (PK, FK to users.id) | Discord user ID |
+| `room` | TEXT NOT NULL (FK to rooms.id) | Room where focus was established |
+| `entity_id` | TEXT NOT NULL (FK to entities.id) | Focused entity ID (e.g., open container) |
+| `updated_at` | TIMESTAMPTZ NOT NULL | Last interaction timestamp for timeout |
+
+**Purpose:**
+- Tracks which container/entity a user has "open" and is currently focusing on
+- Enables autocomplete to prioritize contextually relevant entities
+- Persists across bot restarts (stored in PostgreSQL, not memory)
+
+**Focus Lifecycle (ADR 0003):**
+- Established: When user executes ON_OPEN action on entity with `focus_mode != 'none'`
+- Cleared: Room movement, looking at unrelated entity, ON_CLOSE action, 5-minute timeout
+- Preserved: Looking at room, looking at/interacting with focused entity or its contents
+
+**Constraints:**
+- PK on `user_id` (one focus per user)
+- FK to users(id) with ON DELETE CASCADE
+- FK to rooms(id) with ON DELETE CASCADE
+- FK to entities(id) with ON DELETE CASCADE
+
+**Indexes:**
+- Primary key on `user_id`
+- Index on `updated_at` for timeout queries
+
 ### Verbs Table
 
 | Column | Type | Description |
@@ -317,9 +346,52 @@ get_room_entities(room)
        └─ Cache resolved entities as side effect
 ```
 
+## Focus Context Service
+
+The `FocusContextService` manages per-user focus state for modal interactions (ADR 0003). It follows the explicit singleton pattern.
+
+### Service Methods
+
+- `get_focus(user_id, room)` - Get active focus or None (includes lazy timeout cleanup)
+- `set_focus(user_id, room, entity)` - Establish focus on a container/modal entity
+- `clear_focus(user_id, reason)` - Clear focus, optionally returns close message template
+- `is_entity_in_focus(user_id, room, entity_id)` - Check if entity is focused or in focused contents
+- `get_focused_contents(user_id, room)` - Get entity IDs accessible through focus
+- `update_focus_timestamp(user_id)` - Refresh timestamp to prevent timeout
+
+### Design Decisions
+
+- **No caching**: Always queries database to ensure consistency (focus changes are rare)
+- **Lazy timeout**: Checks `updated_at` when getting focus, deletes stale entries (no background task)
+- **Direct method calls**: Cogs call service methods directly (no pub/sub events)
+- **Optional messages**: `clear_focus()` returns on_close template for rendering
+
+### Initialization
+
+```python
+# In main.py setup_hook(), after init_entity_service():
+init_focus_context_service()
+
+# In cogs:
+from mudd.services.focus_context import get_focus_context_service
+focus_service = get_focus_context_service()
+focus = await focus_service.get_focus(user_id, room)
+```
+
+### Focus-Aware Autocomplete
+
+When a user has an active focus, autocomplete prioritizes focused container contents:
+
+```
+[Wooden Chest] Vinyl Record - Abbey Road    <- Focused content
+[Wooden Chest] Gold Ring                     <- Focused content
+Wooden Table                                 <- Room entity
+Brass Lamp                                   <- Room entity
+```
+
 ## Template Rendering
 
-Entity action handlers (`on_look`, `on_touch`, `on_attack`, `on_use`, `on_take`) are Jinja2 templates rendered at runtime.
+Entity action handlers (`on_look`, `on_touch`, `on_attack`, `on_use`, `on_take`, `on_open`, `on_close`) are Jinja2 templates rendered at runtime.
 
 ### Template Context
 

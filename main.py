@@ -15,6 +15,7 @@ from mudd.cogs.sync import Sync
 from mudd.services.database import close_pool, init_database
 from mudd.services.entity import init_entity_service
 from mudd.services.entity_loader import sync_entities
+from mudd.services.focus_context import init_focus_context_service
 from mudd.services.verb_loader import sync_verbs
 
 load_dotenv()
@@ -79,6 +80,9 @@ async def setup_hook():
 
     # Initialize entity service for runtime lookups
     init_entity_service()
+
+    # Initialize focus context service for modal interactions
+    init_focus_context_service()
 
     # Zone/room sync and visibility service initialization handled by Sync cog
     # on first periodic_sync iteration (after bot is ready)

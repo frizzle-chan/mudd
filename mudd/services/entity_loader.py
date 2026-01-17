@@ -185,9 +185,10 @@ async def sync_entities(pool: asyncpg.Pool, world_file: Path) -> int:
                     id, name, prototype_id, container_id,
                     description_short, description_long,
                     on_look, on_touch, on_attack, on_use, on_take,
-                    contents_visible, spawn_mode
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
-                          $13::spawn_mode)
+                    on_open, on_close,
+                    contents_visible, spawn_mode, focus_mode
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
+                          $14, $15::spawn_mode, $16::focus_mode)
                 ON CONFLICT (id) DO UPDATE SET
                     name = $2,
                     prototype_id = $3,
@@ -199,8 +200,11 @@ async def sync_entities(pool: asyncpg.Pool, world_file: Path) -> int:
                     on_attack = $9,
                     on_use = $10,
                     on_take = $11,
-                    contents_visible = $12,
-                    spawn_mode = $13::spawn_mode
+                    on_open = $12,
+                    on_close = $13,
+                    contents_visible = $14,
+                    spawn_mode = $15::spawn_mode,
+                    focus_mode = $16::focus_mode
                 """,
                 entity.id,
                 entity.name,
@@ -213,8 +217,11 @@ async def sync_entities(pool: asyncpg.Pool, world_file: Path) -> int:
                 entity.on_attack,
                 entity.on_use,
                 entity.on_take,
+                entity.on_open,
+                entity.on_close,
                 entity.contents_visible,
                 entity.spawn_mode,
+                entity.focus_mode,
             )
 
         # Delete orphan room instances not in current rec files

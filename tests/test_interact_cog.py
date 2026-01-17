@@ -80,8 +80,11 @@ def make_entity(
         on_attack=on_attack,
         on_use=on_use,
         on_take=on_take,
+        on_open=None,
+        on_close=None,
         contents_visible=None,
         spawn_mode="none",
+        focus_mode="none",
     )
 
 

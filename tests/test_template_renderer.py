@@ -24,8 +24,11 @@ def make_entity(
         on_attack=None,
         on_use=None,
         on_take=None,
+        on_open=None,
+        on_close=None,
         contents_visible=None,
         spawn_mode="none",
+        focus_mode="none",
     )
 
 
