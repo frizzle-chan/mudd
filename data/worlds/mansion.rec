@@ -169,6 +169,11 @@ Name: Glass Object
 Prototype: object
 OnAttack: You suppress the intrusive thought to smash the {{ name }}
 
+Id: record
+Name: record
+Prototype: object
+OnUse: You pull {{ name }} from its sleeve, place it on the turntable, and drop the needle. Music fills the room.
+
 # ----------------------------------------------------------------------------
 # Foyer entities
 # ----------------------------------------------------------------------------
@@ -305,203 +310,228 @@ DescriptionLong: A large wooden chest, it's not locked so you can open it.
 
 Id: record_machine_girl
 Name: Machine Girl - WLFGRL
-Prototype: object
+Prototype: record
 Room: library
 Container: library_records
 DescriptionShort: a vinyl copy of {{ name }}
 DescriptionLong: 2014. Chaotic internet-era experimental electronic.
+OnUse: You put on {{ name }}. [MG1](https://youtu.be/oWzzNvcxY4w) fills the room.
 
 Id: record_tv_girl
 Name: TV Girl - Who Really Cares
-Prototype: object
+Prototype: record
 Room: library
 Container: library_records
 DescriptionShort: a vinyl copy of {{ name }}
 DescriptionLong: 2016. Dreamy indie pop sampling obscure 60s and 70s tracks.
+OnUse: You put on {{ name }}. [Taking What's Not Yours](https://youtu.be/Ox5ENW0CeAU) fills the room.
 
 Id: record_the_clash
 Name: The Clash - Combat Rock
-Prototype: object
+Prototype: record
 Room: library
 Container: library_records
 DescriptionShort: a vinyl copy of {{ name }}
 DescriptionLong: 1982. Features "Should I Stay or Should I Go" and "Rock the Casbah". Allen Ginsberg does backing vocals.
+OnUse: You put on {{ name }}. [Know Your Rights](https://youtu.be/AxB8xGJvCQQ) fills the room.
 
 Id: record_saib
 Name: Saib. - Bebop
-Prototype: object
+Prototype: record
 Room: library
 Container: library_records
 DescriptionShort: a vinyl copy of {{ name }}
 DescriptionLong: 2017. Lo-fi jazzy hip-hop. Perfect study music.
+OnUse: You put on {{ name }}. [Serenade](https://youtu.be/gVWqdnLH9-U) fills the room.
 
 Id: record_mgmt
 Name: MGMT - Oracular Spectacular
-Prototype: object
+Prototype: record
 Room: library
 Container: library_records
 DescriptionShort: a vinyl copy of {{ name }}
 DescriptionLong: 2007. "Time to Pretend", "Electric Feel", "Kids" - defined late 2000s indie.
+OnUse: You put on {{ name }}. [Time To Pretend](https://youtu.be/B9dSYgd5Elk) fills the room.
 
 Id: record_avalanches_sily
 Name: The Avalanches - Since I Left You
-Prototype: object
+Prototype: record
 Room: library
 Container: library_records
 DescriptionShort: a vinyl copy of {{ name }}
 DescriptionLong: 2000. Built from 3,500+ vinyl samples. Took years to clear them all.
+OnUse: You put on {{ name }}. [Since I Left You](https://youtu.be/R2qYK2siDkE) fills the room.
 
 Id: record_avalanches_wwaly
 Name: The Avalanches - We Will Always Love You
-Prototype: object
+Prototype: record
 Room: library
 Container: library_records
 DescriptionShort: a vinyl copy of {{ name }}
 DescriptionLong: 2020. Their third album, 16 years after the second. Worth the wait.
+OnUse: You put on {{ name }}. [Ghost Story](https://youtu.be/c9tgCR_VjSM) fills the room.
 
 Id: record_the_smiths
 Name: The Smiths - Louder Than Bombs
-Prototype: object
+Prototype: record
 Room: library
 Container: library_records
 DescriptionShort: a vinyl copy of {{ name }}
 DescriptionLong: 1987. Compilation of singles and B-sides. Morrissey at his mopiest.
+OnUse: You put on {{ name }}. [Is It Really So Strange?](https://youtu.be/w_tG4xAUD1k) fills the room.
 
 Id: record_alvvays_anti
 Name: Alvvays - Antisocialites
-Prototype: object
+Prototype: record
 Room: library
 Container: library_records
 DescriptionShort: a vinyl copy of {{ name }}
 DescriptionLong: 2017. "Dreams Tonite" is a perfect shoegaze-pop song.
+OnUse: You put on {{ name }}. [In Undertow](https://youtu.be/T1n72aCdwdU) fills the room.
 
 Id: record_first_aid_kit
 Name: First Aid Kit - Stay Gold
-Prototype: object
+Prototype: record
 Room: library
 Container: library_records
 DescriptionShort: a vinyl copy of {{ name }}
 DescriptionLong: 2014. Swedish sisters channeling Laurel Canyon folk.
+OnUse: You put on {{ name }}. [My Silver Lining](https://youtu.be/DKL4X0PZz7M) fills the room.
 
 Id: record_justice
 Name: Justice - Cross
-Prototype: object
+Prototype: record
 Room: library
 Container: library_records
 DescriptionShort: a vinyl copy of {{ name }}
 DescriptionLong: 2007. French electro house.
+OnUse: You drop the needle on {{ name }}. [Genesis](https://youtu.be/VKzWLUQizz8) fills the room.
 
 Id: record_american_football
 Name: American Football - American Football
-Prototype: object
+Prototype: record
 Room: library
 Container: library_records
 DescriptionShort: a vinyl copy of {{ name }}
 DescriptionLong: 1999. The house on the cover is real, in Urbana IL. Emo kids make pilgrimages.
+OnUse: You put on {{ name }}. [Never Meant](https://youtu.be/QZNYVt87y60) starts playing.
 
 Id: record_nujabes_meta
 Name: Nujabes - Metaphorical Music
-Prototype: object
+Prototype: record
 Room: library
 Container: library_records
 DescriptionShort: a vinyl copy of {{ name }}
 DescriptionLong: 2003. Japanese producer who pioneered jazzy hip-hop. Tragically died in 2010.
+OnUse: You spin {{ name }}. [Blessing It (Remix)](https://youtu.be/7xZY8VJHqU4) fills the room.
 
 Id: record_talking_heads
 Name: Talking Heads - Remain In Light
-Prototype: object
+Prototype: record
 Room: library
 Container: library_records
 DescriptionShort: a vinyl copy of {{ name }}
 DescriptionLong: 1980. Produced by Brian Eno. "Once In A Lifetime" - how did I get here?
+OnUse: You play {{ name }}. [Born Under Punches (The Heat Goes On)](https://youtu.be/Mmp5jAKpyns) comes on.
 
 Id: record_skee_mask_resort
 Name: Skee Mask - Resort
-Prototype: object
+Prototype: record
 Room: library
 Container: library_records
 DescriptionShort: a vinyl copy of {{ name }}
 DescriptionLong: 2024. German producer blending ambient, techno, and jungle.
+OnUse: You put on {{ name }}. [Hedwig Transformation Group](https://youtu.be/dVb6oGdK0uk) starts.
 
 Id: record_fleet_foxes
 Name: Fleet Foxes - A Very Lonely Solstice
-Prototype: object
+Prototype: record
 Room: library
 Container: library_records
 DescriptionShort: a vinyl copy of {{ name }}
 DescriptionLong: 2022. Live album recorded during COVID.
+OnUse: You spin {{ name }}. [Wading In Waist-High Water](https://youtu.be/zKwchungRrM) starts playing.
 
 Id: record_skee_mask_iss009
 Name: Skee Mask - ISS009
-Prototype: object
+Prototype: record
 Room: library
 Container: library_records
 DescriptionShort: a vinyl copy of {{ name }}
 DescriptionLong: 2023. Experimental breaks EP on Ilian Tape.
+OnUse: You drop the needle on {{ name }}. [UWLSD](https://youtu.be/IUJQ4Fw2uXY) comes on.
 
 Id: record_santigold
 Name: Santigold - Santigold
-Prototype: object
+Prototype: record
 Room: library
 Container: library_records
 DescriptionShort: a vinyl copy of {{ name }}
 DescriptionLong: 2008. Diplo-produced indie-electronic. She spelled it "Santogold" at first.
+OnUse: You play {{ name }}. [L.E.S. Artistes](https://youtu.be/ciJDA0tcQfs) fills the room.
 
 Id: record_cranberries
 Name: The Cranberries - Everybody Else Is Doing It
-Prototype: object
+Prototype: record
 Room: library
 Container: library_records
 DescriptionShort: a vinyl copy of {{ name }}
 DescriptionLong: 1993. "Linger" and "Dreams".
+OnUse: You put on {{ name }}. [I Still Do](https://youtu.be/vovVgQ2BsTo) comes on.
 
 Id: record_alvvays
 Name: Alvvays - Alvvays
-Prototype: object
+Prototype: record
 Room: library
 Container: library_records
 DescriptionShort: a vinyl copy of {{ name }}
 DescriptionLong: 2014. "Archie, Marry Me" - jangly Canadian indie pop perfection.
+OnUse: You spin {{ name }}. [Adult Diversion](https://youtu.be/rZHPCcFmEjc) fills the room.
 
 Id: record_gorillaz
 Name: Gorillaz - Gorillaz
-Prototype: object
+Prototype: record
 Room: library
 Container: library_records
 DescriptionShort: a vinyl copy of {{ name }}
 DescriptionLong: 2001. Virtual band by Damon Albarn. "Clint Eastwood" features Del the Funky Homosapien.
+OnUse: You put on {{ name }}. [Re-Hash](https://youtu.be/Tv1SYqLllKI) starts playing.
 
 Id: record_nujabes_modal
 Name: Nujabes - Modal Soul
-Prototype: object
+Prototype: record
 Room: library
 Container: library_records
 DescriptionShort: a vinyl copy of {{ name }}
 DescriptionLong: 2005. Featured in Samurai Champloo. Birthed the lo-fi hip-hop movement.
+OnUse: You play {{ name }}. [Feather](https://youtu.be/8iP3J8jFYdM) comes on.
 
 Id: record_flaming_lips
 Name: The Flaming Lips - Fight Test
-Prototype: object
+Prototype: record
 Room: library
 Container: library_records
 DescriptionShort: a vinyl copy of {{ name }}
 DescriptionLong: 2003. From Yoshimi Battles the Pink Robots.
+OnUse: You spin {{ name }}. [Fight Test](https://youtu.be/fye1XtXQn9s) fills the room.
 
 Id: record_jet
 Name: Jet - Get Born
-Prototype: object
+Prototype: record
 Room: library
 Container: library_records
 DescriptionShort: a vinyl copy of {{ name }}
 DescriptionLong: 2003. "Are You Gonna Be My Girl" - you've heard it in every commercial.
+OnUse: You drop the needle on {{ name }}. [Last Chance](https://youtu.be/pjdn5m2LvNo) starts.
 
 Id: record_death_cab_plans
 Name: Death Cab For Cutie - Plans
-Prototype: object
+Prototype: record
 Room: library
 Container: library_records
 DescriptionShort: a vinyl copy of {{ name }}
 DescriptionLong: 2005. "I Will Follow You Into the Dark", "Soul Meets Body". Their Atlantic debut went platinum.
+OnUse: You play {{ name }}. [Marching Bands Of Manhattan](https://youtu.be/be2LvYXOcSI) fills the room.
 
 # ----------------------------------------------------------------------------
 # Sitting Room entities
