@@ -38,12 +38,20 @@ class TestSyncVerbs:
         assert count > 0
 
     async def test_sync_loads_all_actions(self, verbs_db):
-        """All 5 actions have verbs loaded."""
+        """All 7 actions have verbs loaded."""
         async with verbs_db.acquire() as conn:
             actions = await conn.fetch("SELECT DISTINCT action FROM verbs")
 
         action_names = {row["action"] for row in actions}
-        expected = {"on_look", "on_touch", "on_attack", "on_use", "on_take"}
+        expected = {
+            "on_look",
+            "on_touch",
+            "on_attack",
+            "on_use",
+            "on_take",
+            "on_open",
+            "on_close",
+        }
         assert action_names == expected
 
     async def test_sync_removes_deleted_verbs(self, verbs_db):

@@ -155,7 +155,7 @@ def _parse_entity_row(row: dict[str, str]) -> Entity:
     spawn_mode = cast(SpawnMode, spawn_mode_raw)
 
     # Parse focus_mode with default and validation
-    focus_mode_raw = row.get("FocusMode", "none").lower()
+    focus_mode_raw = row.get("FocusMode", "none").lower() or "none"
     if focus_mode_raw not in ("none", "container"):
         raise ValueError(
             f"Entity '{row['Id']}' has invalid FocusMode '{focus_mode_raw}'. "

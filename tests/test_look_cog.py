@@ -16,6 +16,20 @@ from mudd.cogs.look import Look
 from mudd.services.entity import EntityInstance, ResolvedEntity
 
 
+@pytest.fixture(autouse=True)
+def mock_focus_context_service():
+    """Auto-mock the focus context service for all tests."""
+    mock_service = MagicMock()
+    mock_service.is_entity_in_focus = AsyncMock(return_value=False)
+    mock_service.clear_focus = AsyncMock(return_value=None)
+    mock_service.update_focus_timestamp = AsyncMock()
+    with patch(
+        "mudd.cogs.look.get_focus_context_service",
+        return_value=mock_service,
+    ):
+        yield mock_service
+
+
 @pytest.fixture
 def mock_visibility_service():
     """Create a mock visibility service."""
