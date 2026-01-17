@@ -177,6 +177,7 @@ Id: record
 Name: record
 Prototype: object
 OnUse: You pull {{ name }} from its sleeve, place it on the turntable, and drop the needle. Music fills the room.
+OnTake: You can't take the {{ name }}, but you can __play__ it.
 
 # ----------------------------------------------------------------------------
 # Foyer entities
