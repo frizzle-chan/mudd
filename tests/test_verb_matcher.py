@@ -110,6 +110,26 @@ class TestMatchVerb:
         action = await match_verb(verbs_db, "take")
         assert action == VerbAction.ON_TAKE
 
+    async def test_exact_match_open(self, verbs_db):
+        """Exact match for 'open' returns VerbAction.ON_OPEN."""
+        action = await match_verb(verbs_db, "open")
+        assert action == VerbAction.ON_OPEN
+
+    async def test_exact_match_close(self, verbs_db):
+        """Exact match for 'close' returns VerbAction.ON_CLOSE."""
+        action = await match_verb(verbs_db, "close")
+        assert action == VerbAction.ON_CLOSE
+
+    async def test_exact_match_unlock(self, verbs_db):
+        """Exact match for 'unlock' returns VerbAction.ON_OPEN."""
+        action = await match_verb(verbs_db, "unlock")
+        assert action == VerbAction.ON_OPEN
+
+    async def test_exact_match_shut(self, verbs_db):
+        """Exact match for 'shut' returns VerbAction.ON_CLOSE."""
+        action = await match_verb(verbs_db, "shut")
+        assert action == VerbAction.ON_CLOSE
+
     async def test_fuzzy_match_typo(self, verbs_db):
         """Fuzzy match for typo 'smassh' returns VerbAction.ON_ATTACK."""
         # 'smassh' (double s) has ~0.625 similarity to 'smash', above 0.5 threshold

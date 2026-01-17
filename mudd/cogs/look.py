@@ -56,6 +56,17 @@ class Look(commands.Cog):
                 # Filter choices to matched entities only
                 choices = [c for c in choices if c.instance.entity.id in matched_ids]
 
+            # Reserve slots for room entities when focused
+            # This ensures room entities are visible as escape options
+            focused_items = [c for c in choices if c.is_focused]
+            room_items = [c for c in choices if not c.is_focused]
+
+            if len(focused_items) > 20 and len(room_items) > 0:
+                # Truncate focused items to show some room entities
+                max_focused = 24 - min(len(room_items), 4)  # Leave up to 4 slots
+                focused_items = focused_items[:max_focused]
+                choices = focused_items + room_items
+
             # Return as choices (limit 25 per Discord)
             result = [
                 app_commands.Choice(
@@ -65,9 +76,13 @@ class Look(commands.Cog):
                 for c in choices
             ]
 
+            # Get focus to determine Room option display
+            focus = await focus_service.get_focus(interaction.user.id, room)
+            room_display = f"[Close {focus.entity_name}] Room" if focus else "Room"
+
             # Add "Room" option at top if it matches current input
             if not current or "room".startswith(current.lower()):
-                room_choice = app_commands.Choice(name="Room", value="Room")
+                room_choice = app_commands.Choice(name=room_display, value="Room")
                 return [room_choice] + result[:24]
 
             return result[:25]
@@ -89,8 +104,15 @@ class Look(commands.Cog):
         room = getattr(interaction.channel, "name", None)
 
         if at is None or at == "Room":
-            # Original behavior: show room description + top-level entities
-            # Note: Looking at the room does NOT clear focus (per ADR 0003)
+            # Clear focus when explicitly selecting "Room" from autocomplete
+            # This is the escape mechanism per user request
+            if at == "Room":
+                focus_service = get_focus_context_service()
+                await focus_service.clear_focus(
+                    interaction.user.id, reason="interaction"
+                )
+
+            # Show room description + top-level entities
             topic = getattr(interaction.channel, "topic", None)
             room_description = topic or "You see nothing special."
 

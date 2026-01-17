@@ -11,7 +11,8 @@ CREATE TYPE focus_mode AS ENUM ('none', 'container');
 -- Add open/close handlers and focus mode to entities table
 ALTER TABLE entities ADD COLUMN on_open TEXT;
 ALTER TABLE entities ADD COLUMN on_close TEXT;
-ALTER TABLE entities ADD COLUMN focus_mode focus_mode NOT NULL DEFAULT 'none';
+-- focus_mode: NULL = inherit from prototype, 'none' = explicitly no focus, 'container' = container focus
+ALTER TABLE entities ADD COLUMN focus_mode focus_mode DEFAULT NULL;
 
 -- Add new verb actions
 ALTER TYPE verb_action ADD VALUE 'on_open';
@@ -108,8 +109,11 @@ SELECT
     (SELECT ic.on_open FROM inheritance_chain ic WHERE ic.on_open IS NOT NULL ORDER BY ic.depth LIMIT 1),
     (SELECT ic.on_close FROM inheritance_chain ic WHERE ic.on_close IS NOT NULL ORDER BY ic.depth LIMIT 1),
     (SELECT ic.contents_visible FROM inheritance_chain ic WHERE ic.contents_visible IS NOT NULL ORDER BY ic.depth LIMIT 1),
-    -- focus_mode: NOT NULL so first in chain always wins (entity itself, then prototype)
-    (SELECT ic.focus_mode FROM inheritance_chain ic WHERE ic.focus_mode IS NOT NULL ORDER BY ic.depth LIMIT 1),
+    -- focus_mode: NULL = inherit from prototype, find first non-NULL; default to 'none' if all NULL
+    COALESCE(
+        (SELECT ic.focus_mode FROM inheritance_chain ic WHERE ic.focus_mode IS NOT NULL ORDER BY ic.depth LIMIT 1),
+        'none'::focus_mode
+    ),
     -- spawn_mode is NOT NULL so first in chain always wins (the entity itself)
     (SELECT ic.spawn_mode FROM inheritance_chain ic ORDER BY ic.depth LIMIT 1);
 $$ LANGUAGE sql STABLE;

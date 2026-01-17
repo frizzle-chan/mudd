@@ -160,14 +160,14 @@ class FocusContextService:
         """
         pool = await get_pool()
 
-        # Delete focus and get entity info in one query using RETURNING + subquery
+        # Delete focus and get resolved entity info (with prototype inheritance)
         row = await pool.fetchrow(
             """
             DELETE FROM user_focus
             WHERE user_id = $1
             RETURNING
                 entity_id,
-                (SELECT on_close FROM entities WHERE id = entity_id) AS on_close
+                (SELECT on_close FROM resolve_entity(entity_id)) AS on_close
             """,
             user_id,
         )

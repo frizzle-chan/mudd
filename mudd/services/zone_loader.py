@@ -52,7 +52,7 @@ class Entity:
     room: str | None = None
     contents_visible: bool | None = None
     spawn_mode: SpawnMode = "none"
-    focus_mode: FocusMode = "none"
+    focus_mode: FocusMode | None = None  # None = inherit from prototype
     description_short: str | None = None
     description_long: str | None = None
     on_look: str | None = None
@@ -154,14 +154,16 @@ def _parse_entity_row(row: dict[str, str]) -> Entity:
         )
     spawn_mode = cast(SpawnMode, spawn_mode_raw)
 
-    # Parse focus_mode with default and validation
-    focus_mode_raw = row.get("FocusMode", "none").lower() or "none"
-    if focus_mode_raw not in ("none", "container"):
-        raise ValueError(
-            f"Entity '{row['Id']}' has invalid FocusMode '{focus_mode_raw}'. "
-            f"Valid values: none, container"
-        )
-    focus_mode = cast(FocusMode, focus_mode_raw)
+    # Parse focus_mode - None means inherit from prototype
+    focus_mode: FocusMode | None = None
+    focus_mode_raw = row.get("FocusMode", "").lower()
+    if focus_mode_raw:
+        if focus_mode_raw not in ("none", "container"):
+            raise ValueError(
+                f"Entity '{row['Id']}' has invalid FocusMode '{focus_mode_raw}'. "
+                f"Valid values: none, container"
+            )
+        focus_mode = cast(FocusMode, focus_mode_raw)
 
     return Entity(
         id=row["Id"],

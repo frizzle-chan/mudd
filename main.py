@@ -14,9 +14,7 @@ from mudd.cogs.ping import Ping
 from mudd.cogs.sync import Sync
 from mudd.services.database import close_pool, init_database
 from mudd.services.entity import init_entity_service
-from mudd.services.entity_loader import sync_entities
 from mudd.services.focus_context import init_focus_context_service
-from mudd.services.verb_loader import sync_verbs
 
 load_dotenv()
 
@@ -62,21 +60,7 @@ bot = MuddBot(world_file=args.world, command_prefix="!", intents=intents)
 @bot.event
 async def setup_hook():
     # Initialize database and run migrations
-    pool = await init_database()
-
-    # Sync verb word lists to database
-    try:
-        await sync_verbs(pool)
-    except Exception:
-        logger.exception("Failed to sync verbs - bot may not recognize verb commands")
-        raise
-
-    # Sync entity definitions and instances to database
-    try:
-        await sync_entities(pool, bot.world_file)
-    except Exception:
-        logger.exception("Failed to sync entities - bot may not recognize entities")
-        raise
+    await init_database()
 
     # Initialize entity service for runtime lookups
     init_entity_service()

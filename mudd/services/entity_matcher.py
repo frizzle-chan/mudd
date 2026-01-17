@@ -174,26 +174,31 @@ async def get_focus_aware_autocomplete_entities(
             for inst in visible
         ]
 
-    # Get entity IDs accessible through focus
-    focused_ids = await focus_service.get_focused_contents(user_id, room)
-    focused_set = set(focused_ids)
+    # Get focused container contents directly (may include items not in 'visible'
+    # list when container has contents_visible=False)
+    focused_contents = await entity_service.get_container_contents(
+        focus.entity_id, room
+    )
 
     prefix = f"[{focus.entity_name}]"
 
-    # Separate focused and non-focused entities
+    # Build focused items from container contents (including hidden ones)
     focused_items: list[AutocompleteChoice] = []
-    room_items: list[AutocompleteChoice] = []
-
-    for inst in visible:
-        if inst.entity.id in focused_set:
-            focused_items.append(
-                AutocompleteChoice(
-                    instance=inst,
-                    display_name=f"{prefix} {inst.entity.name}",
-                    is_focused=True,
-                )
+    for inst in focused_contents:
+        focused_items.append(
+            AutocompleteChoice(
+                instance=inst,
+                display_name=f"{prefix} {inst.entity.name}",
+                is_focused=True,
             )
-        else:
+        )
+
+    # Build room items from visible entities, excluding focused contents
+    focused_content_ids = {inst.entity.id for inst in focused_contents}
+    room_items: list[AutocompleteChoice] = []
+    for inst in visible:
+        # Skip items in the focused container (they're already in focused_items)
+        if inst.entity.id not in focused_content_ids:
             room_items.append(
                 AutocompleteChoice(
                     instance=inst,

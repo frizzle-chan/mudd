@@ -15,6 +15,8 @@ if TYPE_CHECKING:
     from main import MuddBot
 
 from mudd.services.database import get_pool
+from mudd.services.entity_loader import sync_entities
+from mudd.services.verb_loader import sync_verbs
 from mudd.services.visibility import (
     get_visibility_service,
     init_visibility_service,
@@ -73,6 +75,13 @@ class Sync(commands.Cog):
         """First sync: initialize visibility service and sync all data."""
         logger.info("Starting initial sync (first run)")
 
+        # Sync verb word lists (no dependencies, can run first)
+        try:
+            await sync_verbs(pool)
+        except Exception:
+            logger.exception("Failed to sync verbs")
+            raise
+
         # Access world_file from bot (set in main.py)
         world_file = self.bot.world_file
 
@@ -95,6 +104,13 @@ class Sync(commands.Cog):
             except Exception:
                 logger.exception(f"Failed initial zone sync for {guild.name}")
                 raise
+
+        # Sync entity definitions and instances to database
+        try:
+            await sync_entities(pool, world_file)
+        except Exception:
+            logger.exception("Failed to sync entities")
+            raise
 
         if not default_room:
             raise RuntimeError(
@@ -125,6 +141,13 @@ class Sync(commands.Cog):
         # Wait for startup to complete (in case we're racing with initial sync)
         await service.wait_for_startup()
 
+        # Sync verb word lists
+        try:
+            await sync_verbs(pool)
+        except Exception:
+            logger.exception("Failed to sync verbs")
+            # Don't raise - allow continued operation
+
         # Access world_file from bot (set in main.py)
         world_file = self.bot.world_file
 
@@ -139,6 +162,13 @@ class Sync(commands.Cog):
 
                 # Track new orphans (reporting handled by zone_loader)
                 self._seen_orphans.update(orphans)
+
+                # Sync entity definitions and instances
+                try:
+                    await sync_entities(pool, world_file)
+                except Exception:
+                    logger.exception("Failed to sync entities")
+                    # Don't raise - allow continued operation
 
                 # Permission sync
                 perm_stats = await service.sync_guild(guild)

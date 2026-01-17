@@ -60,6 +60,17 @@ class Interact(commands.Cog):
                 # Filter choices to matched entities only
                 choices = [c for c in choices if c.instance.entity.id in matched_ids]
 
+            # Reserve slots for room entities when focused
+            # This ensures room entities are visible as escape options
+            focused_items = [c for c in choices if c.is_focused]
+            room_items = [c for c in choices if not c.is_focused]
+
+            if len(focused_items) > 20 and len(room_items) > 0:
+                # Truncate focused items to show some room entities
+                max_focused = 24 - min(len(room_items), 4)  # Leave up to 4 slots
+                focused_items = focused_items[:max_focused]
+                choices = focused_items + room_items
+
             # Return as Discord choices (limit 25 per Discord API)
             return [
                 app_commands.Choice(

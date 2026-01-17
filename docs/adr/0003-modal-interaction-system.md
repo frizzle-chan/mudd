@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed
+Accepted
 
 ## Context
 
@@ -25,16 +25,17 @@ In the context of **container and modal interactions**, facing **the poor UX of 
 
 **Focus context structure:**
 ```python
-@dataclass
+@dataclass(frozen=True)
 class FocusContext:
     user_id: int
     room: str
     entity_id: str           # The focused entity (e.g., chest)
     entity_name: str         # Display name for autocomplete prefix
-    focus_mode: str          # Type of focus: 'container', 'document', etc.
-    contents: list[str]      # Entity IDs accessible through focus
+    focus_mode: FocusMode    # Type of focus: 'none' or 'container'
     updated_at: datetime     # For timeout calculation
 ```
+
+Note: Container contents are retrieved dynamically via `get_focused_contents()` rather than stored in the FocusContext dataclass, avoiding stale data if container contents change.
 
 ### Focus Persistence
 
@@ -67,10 +68,19 @@ In the context of **managing per-user focus state**, facing **the need for globa
 ```python
 class FocusContextService:
     async def get_focus(self, user_id: int, room: str) -> FocusContext | None
-    async def set_focus(self, user_id: int, room: str, entity: ResolvedEntity) -> None
-    async def clear_focus(self, user_id: int) -> None
-    async def clear_stale(self, timeout_minutes: int = 5) -> int  # Returns count cleared
+    async def set_focus(self, user_id: int, room: str, entity: ResolvedEntity) -> str | None
+    async def clear_focus(self, user_id: int, reason: str = "interaction") -> str | None
+    async def update_focus_timestamp(self, user_id: int) -> None
+    async def is_entity_in_focus(self, user_id: int, room: str, entity_id: str) -> bool
+    async def get_focused_contents(self, user_id: int, room: str) -> list[str]
 ```
+
+- `get_focus`: Returns None if no focus, stale (different room), or expired (>5 min). Stale/expired focus is lazily cleaned up.
+- `set_focus`: Creates or updates focus. Returns None (no extra message needed for opening).
+- `clear_focus`: Clears focus. When `reason="close"`, returns the `on_close` template for rendering.
+- `update_focus_timestamp`: Refreshes the timestamp to prevent timeout when interacting with focused content.
+- `is_entity_in_focus`: Checks if an entity is the focused container or contained within it.
+- `get_focused_contents`: Returns entity IDs accessible through current focus (container + contents).
 
 ### Focus Establishment Rules
 
@@ -118,6 +128,7 @@ In the context of **managing when focus contexts are destroyed**, facing **the n
 **Focus is cleared when:**
 - User interacts with a different entity NOT in current focus contents
 - User looks at (`/look at:`) a different entity NOT in current focus contents
+- User selects "Room" from autocomplete (the `[Close <container>] Room` option)
 - User moves to a different room
 - 5 minutes pass without interaction
 - User explicitly closes via `/interact close <container>`
@@ -146,15 +157,16 @@ In the context of **distinguishing opening, using, and closing actions**, facing
 - `data/verbs/on_open.txt`:
   ```
   open
+  pry
   unlock
   unseal
   ```
 - `data/verbs/on_close.txt`:
   ```
   close
-  shut
-  seal
   lock
+  seal
+  shut
   ```
 
 **Example templates:**
@@ -233,16 +245,17 @@ CREATE TYPE focus_mode AS ENUM ('none', 'container');
 ALTER TABLE entities ADD COLUMN on_open TEXT;
 ALTER TABLE entities ADD COLUMN on_close TEXT;
 
--- Focus mode column
-ALTER TABLE entities ADD COLUMN focus_mode focus_mode NOT NULL DEFAULT 'none';
+-- Focus mode column (nullable for prototype inheritance)
+ALTER TABLE entities ADD COLUMN focus_mode focus_mode DEFAULT NULL;
 ```
 
 **Recutils fields:** `OnOpen`, `OnClose`, `FocusMode` (same pattern as OnLook, OnUse, etc.)
 
-**Inheritance:** `on_open`, `on_close`, and `focus_mode` inherit from prototypes like other handler fields. Include `focus_mode` in `resolve_entity()` inheritance chain.
+**Inheritance:** `on_open`, `on_close`, and `focus_mode` inherit from prototypes like other handler fields. Include `focus_mode` in `resolve_entity()` inheritance chain. `focus_mode` is nullable: NULL means "inherit from prototype", explicit values override.
 
-**Focus behavior** is controlled by the `focus_mode` field:
-- `focus_mode='none'` -> no focus established (open door, visible shelf)
+**Focus behavior** is controlled by the resolved `focus_mode` field:
+- `focus_mode=NULL` -> inherit from prototype (default for derived entities)
+- `focus_mode='none'` -> explicitly no focus (open door, visible shelf)
 - `focus_mode='container'` -> focus established on OnOpen, cleared on OnClose (chest, vault)
 
 ## Consequences
