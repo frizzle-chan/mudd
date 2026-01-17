@@ -301,7 +301,7 @@ Prototype: chest
 Room: library
 ContentsVisible: no
 DescriptionShort: A wooden chest
-DescriptionLong: A large wooden chest, it's not locked so you can open it.
+DescriptionLong: A large wooden chest, it's not locked so you can __open__ it.
 
 Id: record_machine_girl
 Name: Machine Girl - WLFGRL
