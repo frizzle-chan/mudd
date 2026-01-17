@@ -441,7 +441,10 @@ class TestRenderEntityOnLook:
         )
 
         result = await render_entity_on_look(instance, MockService(), "foyer")
-        assert result == "You examine the *Wooden Table*. A sturdy oak table."
+        expected = (
+            "### Wooden Table\n\nYou examine the *Wooden Table*. A sturdy oak table."
+        )
+        assert result == expected
 
     async def test_falls_back_to_description_when_no_on_look(self):
         """Falls back to description_long when on_look is None."""
@@ -469,7 +472,7 @@ class TestRenderEntityOnLook:
         )
 
         result = await render_entity_on_look(instance, MockService(), "foyer")
-        assert result == "A sturdy oak table with worn edges."
+        assert result == "### Wooden Table\n\nA sturdy oak table with worn edges."
 
     async def test_falls_back_to_description_short(self):
         """Falls back to description_short when description_long is None."""
@@ -497,7 +500,7 @@ class TestRenderEntityOnLook:
         )
 
         result = await render_entity_on_look(instance, MockService(), "foyer")
-        assert result == "a *Wooden Table* sits here"
+        assert result == "### Wooden Table\n\na *Wooden Table* sits here"
 
     async def test_shows_error_warning_on_bad_template(self):
         """Shows error warning when template has syntax error."""
@@ -612,7 +615,7 @@ class TestRenderEntityOnLook:
         )
 
         result = await render_entity_on_look(instance, MockService(), "foyer")
-        assert result == "You see nothing special."
+        assert result == "### Blank\n\nYou see nothing special."
 
     async def test_contents_uses_description_short(self):
         """Contents are rendered using description_short, not on_look."""

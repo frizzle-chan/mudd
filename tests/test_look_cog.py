@@ -127,7 +127,7 @@ class TestLookCog:
             ),
         ):
             # Call the callback directly (not the Command object)
-            await look_cog.look.callback(look_cog, mock_interaction)
+            await look_cog.look.callback(look_cog, mock_interaction, at="Room")
 
         mock_interaction.response.send_message.assert_called_once()
         message = mock_interaction.response.send_message.call_args[0][0]
@@ -156,7 +156,7 @@ class TestLookCog:
                 return_value=mock_entity_service,
             ),
         ):
-            await look_cog.look.callback(look_cog, mock_interaction)
+            await look_cog.look.callback(look_cog, mock_interaction, at="Room")
 
         mock_interaction.response.send_message.assert_called_once()
         message = mock_interaction.response.send_message.call_args[0][0]
@@ -181,7 +181,7 @@ class TestLookCog:
                 return_value=mock_entity_service,
             ),
         ):
-            await look_cog.look.callback(look_cog, mock_interaction)
+            await look_cog.look.callback(look_cog, mock_interaction, at="Room")
 
         mock_interaction.response.send_message.assert_called_once()
         message = mock_interaction.response.send_message.call_args[0][0]
@@ -224,7 +224,7 @@ class TestLookCog:
                 return_value=mock_entity_service,
             ),
         ):
-            await look_cog.look.callback(look_cog, mock_interaction)
+            await look_cog.look.callback(look_cog, mock_interaction, at="Room")
 
         mock_interaction.response.send_message.assert_called_once()
         message = mock_interaction.response.send_message.call_args[0][0]
@@ -252,7 +252,7 @@ class TestLookCog:
                 return_value=mock_entity_service,
             ),
         ):
-            await look_cog.look.callback(look_cog, mock_interaction)
+            await look_cog.look.callback(look_cog, mock_interaction, at="Room")
 
         # Check ephemeral=True
         call_kwargs = mock_interaction.response.send_message.call_args[1]
