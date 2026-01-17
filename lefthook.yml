@@ -21,3 +21,19 @@ pre-commit:
     - name: verb duplicates check
       glob: "data/verbs/*.txt"
       run: just verbs
+
+    - name: pytest
+      exclude:
+        - "*.md"
+        - "LICENSE"
+        - ".gitignore"
+        - ".dockerignore"
+        - "Dockerfile"
+        - ".editorconfig"
+        - ".env.example"
+        - ".github/**"
+        - ".devcontainer/**"
+        - ".vscode/**"
+        - "lefthook.yml"
+        - ".squawk.toml"
+      run: uv run pytest
