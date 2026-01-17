@@ -94,16 +94,16 @@ class Look(commands.Cog):
             return []
 
     @app_commands.command(name="look", description="View surroundings or examine item")
-    @app_commands.describe(at="Thing to examine (optional)")
+    @app_commands.describe(at="Thing to examine")
     @app_commands.autocomplete(at=at_autocomplete)
-    async def look(self, interaction: Interaction, at: str | None = None):
+    async def look(self, interaction: Interaction, at: str):
         """Look at room or specific entity."""
         visibility_service = get_visibility_service()
         await visibility_service.wait_for_startup()
 
         room = getattr(interaction.channel, "name", None)
 
-        if at is None or at == "Room":
+        if not at or at == "Room":
             # Clear focus when explicitly selecting "Room" from autocomplete
             # This is the escape mechanism per user request
             if at == "Room":
