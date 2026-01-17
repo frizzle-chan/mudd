@@ -380,14 +380,15 @@ focus = await focus_service.get_focus(user_id, room)
 
 ### Focus-Aware Autocomplete
 
-When a user has an active focus, autocomplete prioritizes focused container contents:
+When a user has an active focus, autocomplete shows only the focused container contents with an escape option to close it:
 
 ```
-[Wooden Chest] Vinyl Record - Abbey Road    <- Focused content
-[Wooden Chest] Gold Ring                     <- Focused content
-Wooden Table                                 <- Room entity
-Brass Lamp                                   <- Room entity
+[Close Wooden Chest] Room                    <- Escape option (clears focus)
+Vinyl Record - Abbey Road                    <- Focused content
+Gold Ring                                    <- Focused content
 ```
+
+Room entities are hidden while focused. Selecting the escape option clears focus and shows the room.
 
 ## Template Rendering
 

@@ -173,6 +173,7 @@ class Interact(commands.Cog):
                 "Template error rendering '%s' handler for entity '%s'",
                 action_type.value,
                 entity.id,
+                exc_info=True,
             )
             output = f"*{entity.name}* responds, but something went wrong."
 
@@ -193,7 +194,9 @@ class Interact(commands.Cog):
                     logger.warning(
                         "Template error rendering on_close for entity '%s'",
                         entity.id,
+                        exc_info=True,
                     )
+                    output = f"{output}\n\nYou step away from the *{entity.name}*."
 
         await interaction.response.send_message(output, ephemeral=True)
 

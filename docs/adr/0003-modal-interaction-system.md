@@ -188,23 +188,28 @@ You walk through the {{ name }}.
 
 ### Autocomplete Enhancement
 
-In the context of **helping users interact with focused container contents**, facing **autocomplete showing all room entities equally**, we decided to **prepend focused contents with a distinguishing prefix and list them first**, to achieve **obvious visual distinction and easy selection of contextually relevant items**, accepting **longer autocomplete entries due to prefix**.
+In the context of **helping users interact with focused container contents**, facing **autocomplete showing all room entities equally**, we decided to **show only focused contents when a container is open, with an escape option to close it**, to achieve **clean autocomplete that prioritizes contextually relevant items**, accepting **that room entities are hidden while focused**.
 
-**Format:**
+**Behavior:**
+- When focused on a container, autocomplete shows only the container's contents
+- A special `[Close {container}] Room` option appears at the top as the escape mechanism
+- Selecting this option clears focus and shows the room description
+
+**Example autocomplete when focused on "Wooden Chest":**
 ```
-[Container Name] Item Name
+[Close Wooden Chest] Room        <- escape option (clears focus)
+Vinyl Record - Abbey Road        <- focused content
+Vinyl Record - Dark Side         <- focused content
+Gold Ring                        <- focused content
 ```
 
-**Example autocomplete order:**
+**Example autocomplete with no focus:**
 ```
-[Wooden Chest] Vinyl Record - Abbey Road
-[Wooden Chest] Vinyl Record - Dark Side
-[Wooden Chest] Gold Ring
-Wooden Table                    <- room entity
-Brass Lamp                      <- room entity
+Room                             <- view room description
+Wooden Chest                     <- room entity
+Wooden Table                     <- room entity
+Brass Lamp                       <- room entity
 ```
-
-**Disambiguation behavior:** When a query matches both focused and room entities, focused matches appear first. User sees a combined list with focused items prioritized.
 
 ### Focus-Aware Interaction Flow
 

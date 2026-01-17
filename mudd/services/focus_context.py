@@ -72,9 +72,9 @@ class FocusContextService:
         row = await pool.fetchrow(
             """
             SELECT uf.user_id, uf.room, uf.entity_id, uf.updated_at,
-                   e.name AS entity_name, e.focus_mode
+                   re.name AS entity_name, re.focus_mode
             FROM user_focus uf
-            JOIN entities e ON e.id = uf.entity_id
+            JOIN LATERAL resolve_entity(uf.entity_id) re ON TRUE
             WHERE uf.user_id = $1 AND uf.room = $2
             """,
             user_id,

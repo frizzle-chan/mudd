@@ -29,8 +29,8 @@ class Look(commands.Cog):
 
         Suggests entity names from the current room, excluding entities
         inside containers with contents_visible=False. When a user has an
-        active focus (open container), prioritizes focused contents with
-        "[Container Name]" prefix.
+        active focus (open container), shows only the focused contents with
+        a "[Close {container}] Room" escape option at the top.
         """
         try:
             visibility_service = get_visibility_service()
@@ -128,7 +128,10 @@ class Look(commands.Cog):
                             logger.warning(
                                 "Template error rendering on_close for entity '%s'",
                                 focused_entity.id,
+                                exc_info=True,
                             )
+                            entity_name = focused_entity.name
+                            close_msg = f"You step away from the *{entity_name}*."
                 else:
                     await focus_service.clear_focus(interaction.user.id, reason="close")
 
