@@ -135,9 +135,10 @@ Description: A dimly lit lounge.
 %type: Room rec Room
 %type: ContentsVisible bool
 %type: SpawnMode enum none move clone
+%type: FocusMode enum none container
 %mandatory: Id Name
-%allowed: Id Name Prototype Container Room ContentsVisible SpawnMode DescriptionShort DescriptionLong
-%allowed: OnLook OnTouch OnAttack OnUse OnTake
+%allowed: Id Name Prototype Container Room ContentsVisible SpawnMode FocusMode DescriptionShort DescriptionLong
+%allowed: OnLook OnTouch OnAttack OnUse OnTake OnOpen OnClose
 
 # ----------------------------------------------------------------------------
 # Base prototypes (no Room field - these are templates, not instances)
@@ -161,8 +162,11 @@ Id: chest
 Name: chest
 Prototype: object
 DescriptionShort: A {{ name }} sits here.
+FocusMode: container
 OnLook: {{ e.description_long or e.description_short or "You see nothing special." }}
 OnUse: You open the {{ name }}.{% if contents %} Inside:{{ contents }}{% else %} It's empty.{% endif %}
+OnOpen: You open the {{ name }}.{% if contents %} Inside:{{ contents }}{% else %} It's empty.{% endif %}
+OnClose: You close the {{ name }}.
 
 Id: glass_object
 Name: Glass Object

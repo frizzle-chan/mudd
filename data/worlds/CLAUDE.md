@@ -81,9 +81,10 @@ Description: A grand foyer with marble floors. To your right is a #hallway.
 %type: Room rec Room
 %type: ContentsVisible bool
 %type: SpawnMode enum none move clone
+%type: FocusMode enum none container
 %mandatory: Id Name
-%allowed: Id Name Prototype Container Room ContentsVisible SpawnMode DescriptionShort DescriptionLong
-%allowed: OnLook OnTouch OnAttack OnUse OnTake
+%allowed: Id Name Prototype Container Room ContentsVisible SpawnMode FocusMode DescriptionShort DescriptionLong
+%allowed: OnLook OnTouch OnAttack OnUse OnTake OnOpen OnClose
 
 Id: foyer_table
 Name: Wooden Table
@@ -102,9 +103,10 @@ ContentsVisible: yes
 - `Container` - Parent entity for containment (e.g., lamp on table)
 - `ContentsVisible` - Whether children auto-list (`yes` for tables, `no` for chests)
 - `SpawnMode` - Take behavior: `none` (default), `move` (one-time pickup), `clone` (infinite copies)
+- `FocusMode` - Focus behavior on open: `none` (default), `container` (establishes focus, prioritizes contents in autocomplete)
 - `DescriptionShort` - One-line description for `/look`
 - `DescriptionLong` - Detailed description
-- `On*` - Action handlers: `OnLook`, `OnTouch`, `OnAttack`, `OnUse`, `OnTake`
+- `On*` - Action handlers: `OnLook`, `OnTouch`, `OnAttack`, `OnUse`, `OnTake`, `OnOpen`, `OnClose`
 
 **All text fields** (`DescriptionShort`, `DescriptionLong`, `On*`) are **Jinja2 templates** with access to:
 - `e`: The resolved entity with all properties
