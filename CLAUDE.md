@@ -81,6 +81,17 @@ PR reviews are written to `review.md` (gitignored). When working with reviews:
 - **Write reviews**: Use `/pr-review-toolkit:review-pr` to generate comprehensive reviews, then write results to `review.md`
 - **Delete when processed**: Remove `review.md` after all issues are addressed or the PR is merged
 
+## Testing
+
+See `tests/CLAUDE.md` for detailed testing guidelines.
+
+**Quick reference**:
+```bash
+pytest tests/                    # Run all tests
+pytest tests/integration/        # Run only integration tests
+pytest tests/unit/               # Run only unit tests
+```
+
 ## Devcontainer Setup
 
 If you encounter permission issues pushing to GitHub, run:

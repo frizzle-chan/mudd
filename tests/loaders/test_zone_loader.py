@@ -183,11 +183,11 @@ class TestGetDefaultRoom:
             get_default_room(rooms)
 
 
-@pytest.mark.asyncio(loop_scope="module")
+@pytest.mark.asyncio(loop_scope="session")
 class TestSyncZonesAndRooms:
     """Test syncing zones and rooms to database using sync_zones_and_rooms_to_db."""
 
-    @pytest_asyncio.fixture(scope="class", loop_scope="module")
+    @pytest_asyncio.fixture(scope="class", loop_scope="session")
     async def synced_db(self, test_db, world_file):
         """Sync zones and rooms to test database using the actual sync function."""
         zones = load_zones_from_rec(world_file)
@@ -264,7 +264,7 @@ class TestSyncZonesAndRooms:
         assert stats["rooms"] == len(rooms)
 
 
-@pytest.mark.asyncio(loop_scope="module")
+@pytest.mark.asyncio(loop_scope="session")
 class TestSyncRemovesStaleData:
     """Test that sync removes zones/rooms not in files."""
 
@@ -313,13 +313,13 @@ class TestSyncRemovesStaleData:
             )
             assert count == 0
 
-    async def test_removes_stale_zones(self, test_db, world_file):
+    async def test_removes_stale_zones(self, test_db, world_file, clean_user_state):
         """Zones not in rec files are removed on sync."""
         zones = load_zones_from_rec(world_file)
         rooms = load_rooms_from_rec(world_file)
 
         async with test_db.acquire() as conn:
-            # First clean up any existing data
+            # First clean up any existing data (clean_user_state clears users first)
             await conn.execute("DELETE FROM rooms")
             await conn.execute("DELETE FROM zones")
 
