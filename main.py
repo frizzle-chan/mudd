@@ -16,7 +16,6 @@ from mudd.services.database import close_pool, get_pool, init_database
 from mudd.services.entity import EntityService
 from mudd.services.focus_context import FocusContextService
 from mudd.services.visibility import init_visibility_service
-from mudd.services.zone_loader import get_default_room, load_rooms_from_rec
 
 load_dotenv()
 
@@ -67,14 +66,10 @@ async def setup_hook():
     # Get database pool
     pool = await get_pool()
 
-    # Load rooms to get default room for visibility service
-    rooms = load_rooms_from_rec(bot.world_file)
-    default_room = get_default_room(rooms)
-
     # Create services with explicit dependencies
     entity_service = EntityService(pool)
     focus_service = FocusContextService(pool)
-    visibility_service = init_visibility_service(default_room=default_room)
+    visibility_service = init_visibility_service()
 
     # Create cogs with explicit dependencies
     await bot.add_cog(

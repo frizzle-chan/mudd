@@ -153,11 +153,6 @@ class StubVisibilityService:
         """Check if startup sync has completed."""
         return self._startup_complete
 
-    @property
-    def default_room(self) -> str:
-        """Get the default room name."""
-        return self._default_room
-
     async def wait_for_startup(self) -> None:
         """No-op for tests - immediately returns."""
         pass
@@ -166,7 +161,11 @@ class StubVisibilityService:
         """Mark startup as complete."""
         self._startup_complete = True
 
-    def get_default_channel_id(self) -> int | None:
+    async def get_default_room(self) -> str:
+        """Get the default room name."""
+        return self._default_room
+
+    async def get_default_channel_id(self) -> int | None:
         """Get the default room's channel ID."""
         return None  # Tests don't use real channel IDs
 

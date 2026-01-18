@@ -18,11 +18,6 @@ class VisibilityServiceProtocol(Protocol):
         """Check if startup sync has completed (non-blocking)."""
         ...
 
-    @property
-    def default_room(self) -> str:
-        """Get the default room name."""
-        ...
-
     async def wait_for_startup(self) -> None:
         """Block until startup sync is complete."""
         ...
@@ -31,7 +26,11 @@ class VisibilityServiceProtocol(Protocol):
         """Signal that initial startup sync is complete."""
         ...
 
-    def get_default_channel_id(self) -> int | None:
+    async def get_default_room(self) -> str:
+        """Get the default room ID."""
+        ...
+
+    async def get_default_channel_id(self) -> int | None:
         """Get the default room's channel ID."""
         ...
 

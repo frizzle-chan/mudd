@@ -47,17 +47,19 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 | `description` | TEXT NOT NULL | Room description (synced to Discord channel topic) |
 | `zone_id` | TEXT NOT NULL (FK to zones.id) | Parent zone for this room |
 | `has_voice` | BOOLEAN NOT NULL DEFAULT FALSE | Whether to create a paired voice channel |
+| `is_default` | BOOLEAN NOT NULL DEFAULT FALSE | Whether this is the default spawn room for new users |
 
 **Indexes:**
 - Primary key on `id`
 - Index on `zone_id` for zone-based queries
+- Partial unique index on `is_default` WHERE `is_default = TRUE` (enforces only one default room)
 
 **Data Source:**
 - Rooms are defined in `data/worlds/*.rec` files as `Room` records
 - Each room has a Zone field referencing its parent zone
 - Room connections are implicit via Discord channel mentions in descriptions (e.g., `#hallway`)
 - Synced to database on bot startup; bot creates missing Discord channels
-- `IsDefault` field in rec files marks the default spawn room (not stored in DB, used at load time only)
+- `IsDefault` field in rec files marks the default spawn room (stored in `is_default` column)
 
 ### Schema Migrations Table
 
