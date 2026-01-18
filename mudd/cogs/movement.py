@@ -2,13 +2,15 @@
 
 import logging
 import re
+from typing import TYPE_CHECKING
 
 import discord
 from discord import Interaction, app_commands
 from discord.ext import commands
 
-from mudd.services.focus_context import get_focus_context_service
-from mudd.services.visibility import get_visibility_service
+if TYPE_CHECKING:
+    from mudd.services.focus_context import FocusContextService
+    from mudd.services.visibility_protocol import VisibilityServiceProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -62,8 +64,15 @@ def find_exit_in_input(
 class Movement(commands.Cog):
     """Commands for moving between locations."""
 
-    def __init__(self, bot: commands.Bot):
+    def __init__(
+        self,
+        bot: commands.Bot | None,
+        visibility_service: "VisibilityServiceProtocol",
+        focus_service: "FocusContextService",
+    ) -> None:
         self.bot = bot
+        self.visibility_service = visibility_service
+        self.focus_service = focus_service
 
     async def destination_autocomplete(
         self, interaction: Interaction, current: str
@@ -92,9 +101,7 @@ class Movement(commands.Cog):
     @app_commands.autocomplete(destination=destination_autocomplete)
     async def move(self, interaction: Interaction, destination: str):
         """Move to a different location."""
-        service = get_visibility_service()
-
-        await service.wait_for_startup()
+        await self.visibility_service.wait_for_startup()
 
         if not interaction.guild:
             await interaction.response.send_message(
@@ -128,18 +135,19 @@ class Movement(commands.Cog):
             )
             return
 
-        old_location_id = await service.get_user_location(member.id)
+        old_location_id = await self.visibility_service.get_user_location(member.id)
         old_channel = (
             interaction.guild.get_channel(old_location_id) if old_location_id else None
         )
 
         try:
-            moved = await service.move_user_to_channel(member, target.id)
+            moved = await self.visibility_service.move_user_to_channel(
+                member, target.id
+            )
 
             if moved:
                 # Clear focus when moving rooms (per ADR 0003)
-                focus_service = get_focus_context_service()
-                await focus_service.clear_focus(member.id, reason="movement")
+                await self.focus_service.clear_focus(member.id, reason="movement")
 
                 await interaction.response.send_message(
                     f"You moved! Click {target.mention} to enter.", ephemeral=True
@@ -168,28 +176,27 @@ class Movement(commands.Cog):
             return
 
         try:
-            service = get_visibility_service()
-            await service.wait_for_startup()
-            default_channel_id = service.get_default_channel_id()
+            await self.visibility_service.wait_for_startup()
+            default_channel_id = self.visibility_service.get_default_channel_id()
             if default_channel_id:
-                await service.move_user_to_channel(member, default_channel_id)
+                await self.visibility_service.move_user_to_channel(
+                    member, default_channel_id
+                )
             else:
                 logger.error(
                     f"Cannot assign default location to {member.id}: "
-                    f"default room '{service.default_room}' not found"
+                    f"default room '{self.visibility_service.default_room}' not found"
                 )
-        except Exception as e:
-            logger.error(f"Failed to assign default location to {member.id}: {e}")
+        except Exception:
+            logger.exception("Failed to assign default location to %s", member.id)
 
     @commands.Cog.listener()
     async def on_member_remove(self, member: discord.Member):
         """Clean up user location and focus when member leaves."""
         try:
-            service = get_visibility_service()
-            await service.delete_user_location(member.id)
+            await self.visibility_service.delete_user_location(member.id)
 
             # Clean up focus context
-            focus_service = get_focus_context_service()
-            await focus_service.clear_focus(member.id, reason="interaction")
-        except Exception as e:
-            logger.error(f"Failed to clean up for member {member.id}: {e}")
+            await self.focus_service.clear_focus(member.id, reason="interaction")
+        except Exception:
+            logger.exception("Failed to clean up for member %s", member.id)

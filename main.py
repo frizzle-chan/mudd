@@ -12,9 +12,11 @@ from mudd.cogs.look import Look
 from mudd.cogs.movement import Movement
 from mudd.cogs.ping import Ping
 from mudd.cogs.sync import Sync
-from mudd.services.database import close_pool, init_database
-from mudd.services.entity import init_entity_service
-from mudd.services.focus_context import init_focus_context_service
+from mudd.services.database import close_pool, get_pool, init_database
+from mudd.services.entity import EntityService
+from mudd.services.focus_context import FocusContextService
+from mudd.services.visibility import init_visibility_service
+from mudd.services.zone_loader import get_default_room, load_rooms_from_rec
 
 load_dotenv()
 
@@ -62,20 +64,26 @@ async def setup_hook():
     # Initialize database and run migrations
     await init_database()
 
-    # Initialize entity service for runtime lookups
-    init_entity_service()
+    # Get database pool
+    pool = await get_pool()
 
-    # Initialize focus context service for modal interactions
-    init_focus_context_service()
+    # Load rooms to get default room for visibility service
+    rooms = load_rooms_from_rec(bot.world_file)
+    default_room = get_default_room(rooms)
 
-    # Zone/room sync and visibility service initialization handled by Sync cog
-    # on first periodic_sync iteration (after bot is ready)
+    # Create services with explicit dependencies
+    entity_service = EntityService(pool)
+    focus_service = FocusContextService(pool)
+    visibility_service = init_visibility_service(default_room=default_room)
 
-    await bot.add_cog(Interact(bot))
-    await bot.add_cog(Look(bot))
+    # Create cogs with explicit dependencies
+    await bot.add_cog(
+        Interact(bot, entity_service, focus_service, visibility_service, pool)
+    )
+    await bot.add_cog(Look(bot, entity_service, focus_service, visibility_service))
     await bot.add_cog(Ping(bot))
-    await bot.add_cog(Movement(bot))
-    await bot.add_cog(Sync(bot))
+    await bot.add_cog(Movement(bot, visibility_service, focus_service))
+    await bot.add_cog(Sync(bot, entity_service, visibility_service))
 
 
 @bot.event

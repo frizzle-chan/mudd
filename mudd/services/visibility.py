@@ -25,6 +25,11 @@ class VisibilityService:
         self._category_to_zone: dict[int, str] = {}
         self._room_to_zone: dict[str, str] = {}
 
+    @property
+    def startup_complete(self) -> bool:
+        """Check if startup sync has completed (non-blocking)."""
+        return self._startup_complete.is_set()
+
     async def wait_for_startup(self) -> None:
         """Block until startup sync is complete."""
         await self._startup_complete.wait()

@@ -10,7 +10,8 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
-from mudd.services.database import get_pool
+import asyncpg
+
 from mudd.services.entity import FocusMode
 
 if TYPE_CHECKING:
@@ -45,11 +46,14 @@ class FocusContextService:
     or after timeout.
 
     Usage:
-        service = get_focus_context_service()
+        service = FocusContextService(pool)
         focus = await service.get_focus(user_id, room)
         if focus:
             # Prioritize focused contents in autocomplete
     """
+
+    def __init__(self, pool: asyncpg.Pool) -> None:
+        self._pool = pool
 
     async def get_focus(self, user_id: int, room: str) -> FocusContext | None:
         """Get user's current focus in their current room.
@@ -68,8 +72,7 @@ class FocusContextService:
         Returns:
             Active FocusContext or None
         """
-        pool = await get_pool()
-        row = await pool.fetchrow(
+        row = await self._pool.fetchrow(
             """
             SELECT uf.user_id, uf.room, uf.entity_id, uf.updated_at,
                    re.name AS entity_name, re.focus_mode
@@ -92,7 +95,9 @@ class FocusContextService:
 
         if updated_at < cutoff:
             # Lazy cleanup: delete and return None
-            await pool.execute("DELETE FROM user_focus WHERE user_id = $1", user_id)
+            await self._pool.execute(
+                "DELETE FROM user_focus WHERE user_id = $1", user_id
+            )
             logger.debug(f"Cleared stale focus for user {user_id}")
             return None
 
@@ -122,8 +127,7 @@ class FocusContextService:
             Optional message to append to interaction response.
             Returns None (no extra message needed for opening).
         """
-        pool = await get_pool()
-        await pool.execute(
+        await self._pool.execute(
             """
             INSERT INTO user_focus (user_id, room, entity_id, updated_at)
             VALUES ($1, $2, $3, now())
@@ -158,10 +162,8 @@ class FocusContextService:
             Optional message to append to response when closing.
             Returns None for most reasons.
         """
-        pool = await get_pool()
-
         # Delete focus and get resolved entity info (with prototype inheritance)
-        row = await pool.fetchrow(
+        row = await self._pool.fetchrow(
             """
             DELETE FROM user_focus
             WHERE user_id = $1
@@ -190,8 +192,7 @@ class FocusContextService:
 
         Called when user interacts with focused content.
         """
-        pool = await get_pool()
-        await pool.execute(
+        await self._pool.execute(
             "UPDATE user_focus SET updated_at = now() WHERE user_id = $1",
             user_id,
         )
@@ -223,8 +224,7 @@ class FocusContextService:
             return True
 
         # Check if entity is contained within the focused entity
-        pool = await get_pool()
-        row = await pool.fetchrow(
+        row = await self._pool.fetchrow(
             """
             SELECT 1 FROM entities
             WHERE id = $1 AND container_id = $2
@@ -255,8 +255,7 @@ class FocusContextService:
             return []
 
         # Get container contents
-        pool = await get_pool()
-        rows = await pool.fetch(
+        rows = await self._pool.fetch(
             "SELECT id FROM entities WHERE container_id = $1",
             focus.entity_id,
         )
@@ -266,35 +265,3 @@ class FocusContextService:
         entity_ids.extend([row["id"] for row in rows])
 
         return entity_ids
-
-
-# Module-level singleton
-_service: FocusContextService | None = None
-
-
-def is_focus_context_service_initialized() -> bool:
-    """Check if the focus context service has been initialized."""
-    return _service is not None
-
-
-def get_focus_context_service() -> FocusContextService:
-    """Get the focus context service singleton.
-
-    Raises:
-        RuntimeError: If service not initialized (call init_focus_context_service first)
-    """
-    if _service is None:
-        raise RuntimeError("FocusContextService not initialized")
-    return _service
-
-
-def init_focus_context_service() -> FocusContextService:
-    """Initialize the focus context service singleton.
-
-    Returns:
-        The initialized FocusContextService instance
-    """
-    global _service
-    _service = FocusContextService()
-    logger.info("Focus context service initialized")
-    return _service
