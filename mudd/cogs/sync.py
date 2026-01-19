@@ -17,6 +17,7 @@ if TYPE_CHECKING:
 
 from mudd.services.entity import EntityService
 from mudd.services.entity_loader import sync_entities
+from mudd.services.rendering import RenderingService
 from mudd.services.verb_loader import sync_verbs
 from mudd.services.visibility import VisibilityService
 from mudd.services.zone_loader import sync_zones_and_rooms
@@ -42,11 +43,13 @@ class Sync(commands.Cog):
         entity_service: EntityService,
         visibility_service: VisibilityService,
         pool: asyncpg.Pool,
+        rendering_service: RenderingService,
     ) -> None:
         self.bot = bot
         self.entity_service = entity_service
         self.visibility_service = visibility_service
         self._pool = pool
+        self._rendering = rendering_service
         self._seen_orphans: set[tuple[int, str, str]] = set()
         self._console_channel = os.environ.get("MUDD_CONSOLE_CHANNEL", "console")
         self.periodic_sync.start()
@@ -109,6 +112,8 @@ class Sync(commands.Cog):
             await sync_entities(pool, world_file)
             # Invalidate entity cache after sync
             self.entity_service.invalidate_cache()
+            # Clear template cache to ensure fresh templates
+            self._rendering.clear_cache()
         except Exception:
             logger.exception("Failed to sync entities")
             raise
@@ -158,6 +163,8 @@ class Sync(commands.Cog):
                     await sync_entities(pool, world_file)
                     # Invalidate entity cache after sync
                     self.entity_service.invalidate_cache()
+                    # Clear template cache to ensure fresh templates
+                    self._rendering.clear_cache()
                 except Exception:
                     logger.exception("Failed to sync entities")
                     # Don't raise - allow continued operation

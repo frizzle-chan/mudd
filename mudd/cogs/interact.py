@@ -7,15 +7,14 @@ import asyncpg
 from discord import Interaction, app_commands
 from discord.ext import commands
 
-from mudd.formatting.entities import build_contents_string
 from mudd.services.entity import ResolvedEntity
 from mudd.services.entity_matcher import (
     get_focus_aware_autocomplete_entities,
     match_entity_by_prefix,
 )
+from mudd.services.rendering import RenderingService, TemplateRenderError
 from mudd.services.verb_action import VerbAction
 from mudd.services.verb_matcher import match_verb
-from mudd.templating import TemplateRenderError, render
 
 if TYPE_CHECKING:
     from mudd.services.entity import EntityService
@@ -33,12 +32,14 @@ class Interact(commands.Cog):
         focus_service: "FocusContextService",
         visibility_service: "VisibilityServiceProtocol",
         pool: asyncpg.Pool,
+        rendering_service: RenderingService,
     ) -> None:
         self.bot = bot
         self.entity_service = entity_service
         self.focus_service = focus_service
         self.visibility_service = visibility_service
         self.pool = pool
+        self._rendering = rendering_service
 
     async def target_autocomplete(
         self, interaction: Interaction, current: str
@@ -172,11 +173,11 @@ class Interact(commands.Cog):
         container_contents = await self.entity_service.get_container_contents(
             entity.id, room
         )
-        contents_str = build_contents_string(container_contents)
+        contents_str = self._rendering.build_contents_string(container_contents)
 
         # Render template with entity context
         try:
-            output = render(handler_text, entity, contents_str)
+            output = self._rendering.render(handler_text, entity, contents_str)
         except TemplateRenderError:
             logger.warning(
                 "Template error rendering '%s' handler for entity '%s'",
@@ -199,7 +200,7 @@ class Interact(commands.Cog):
             if close_template:
                 # Render the close template and append
                 try:
-                    close_output = render(close_template, entity, "")
+                    close_output = self._rendering.render(close_template, entity, "")
                     output = f"{output}\n\n{close_output}"
                 except TemplateRenderError:
                     logger.warning(

@@ -7,12 +7,11 @@ import asyncpg
 from discord import Interaction, app_commands
 from discord.ext import commands
 
-from mudd.formatting.entities import format_room_entities, render_entity_on_look
 from mudd.services.entity_matcher import (
     get_focus_aware_autocomplete_entities,
     match_entity_by_prefix,
 )
-from mudd.templating import TemplateRenderError, render
+from mudd.services.rendering import RenderingService, TemplateRenderError
 
 if TYPE_CHECKING:
     from mudd.services.entity import EntityService
@@ -29,11 +28,13 @@ class Look(commands.Cog):
         entity_service: "EntityService",
         focus_service: "FocusContextService",
         visibility_service: "VisibilityServiceProtocol",
+        rendering_service: RenderingService,
     ) -> None:
         self.bot = bot
         self.entity_service = entity_service
         self.focus_service = focus_service
         self.visibility_service = visibility_service
+        self._rendering = rendering_service
 
     async def at_autocomplete(
         self, interaction: Interaction, current: str
@@ -130,7 +131,9 @@ class Look(commands.Cog):
                     # Render close message if we have template and entity
                     if close_template and focused_entity:
                         try:
-                            close_msg = render(close_template, focused_entity, "")
+                            close_msg = self._rendering.render(
+                                close_template, focused_entity, ""
+                            )
                         except TemplateRenderError:
                             logger.warning(
                                 "Template error rendering on_close for entity '%s'",
@@ -154,7 +157,7 @@ class Look(commands.Cog):
             entity_text = ""
             if room:
                 entities = await self.entity_service.get_top_level_room_entities(room)
-                entity_text = await format_room_entities(
+                entity_text = await self._rendering.format_room_entities(
                     entities, self.entity_service, room
                 )
 
@@ -219,7 +222,7 @@ class Look(commands.Cog):
                     await self.focus_service.update_focus_timestamp(user_id)
 
                 # Render on_look template
-                detail_text = await render_entity_on_look(
+                detail_text = await self._rendering.render_entity_on_look(
                     matched_instance, self.entity_service, room
                 )
                 await interaction.response.send_message(detail_text, ephemeral=True)

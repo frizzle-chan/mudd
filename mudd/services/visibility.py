@@ -451,25 +451,3 @@ class VisibilityService:
     def mark_startup_complete(self) -> None:
         """Signal that initial startup sync is complete."""
         self._startup_complete.set()
-
-
-_service: VisibilityService | None = None
-
-
-def is_visibility_service_initialized() -> bool:
-    """Check if the visibility service has been initialized."""
-    return _service is not None
-
-
-def get_visibility_service() -> VisibilityService:
-    """Get the visibility service singleton."""
-    if _service is None:
-        raise RuntimeError("VisibilityService not initialized")
-    return _service
-
-
-def init_visibility_service(pool: asyncpg.Pool) -> VisibilityService:
-    """Initialize the visibility service singleton."""
-    global _service
-    _service = VisibilityService(pool)
-    return _service

@@ -16,6 +16,7 @@ from mudd.cogs.look import Look
 from mudd.cogs.movement import Movement
 from mudd.services.entity import EntityService
 from mudd.services.focus_context import FocusContextService
+from mudd.services.rendering import RenderingService
 from tests.mocks.discord import (
     MockGuild,
     MockInteraction,
@@ -75,6 +76,7 @@ class TestClient:
         self.entity_service = EntityService(pool)
         self.focus_service = FocusContextService(pool)
         self._stub_visibility_service = StubVisibilityService()
+        self.rendering_service = RenderingService()
 
         # Cast stub to VisibilityServiceProtocol for type checking
         # (StubVisibilityService implements the protocol interface)
@@ -89,6 +91,7 @@ class TestClient:
             entity_service=self.entity_service,
             focus_service=self.focus_service,
             visibility_service=visibility_service,
+            rendering_service=self.rendering_service,
         )
         self.interact_cog = Interact(
             bot=None,
@@ -96,6 +99,7 @@ class TestClient:
             focus_service=self.focus_service,
             visibility_service=visibility_service,
             pool=pool,
+            rendering_service=self.rendering_service,
         )
         self.movement_cog = Movement(
             bot=None,
