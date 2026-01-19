@@ -12,7 +12,7 @@ from mudd.cogs.look import Look
 from mudd.cogs.movement import Movement
 from mudd.cogs.ping import Ping
 from mudd.cogs.sync import Sync
-from mudd.services.database import close_pool, get_pool, init_database
+from mudd.database import close_pool, get_pool, init_database
 from mudd.services.entity import EntityService
 from mudd.services.focus_context import FocusContextService
 from mudd.services.rendering import RenderingService

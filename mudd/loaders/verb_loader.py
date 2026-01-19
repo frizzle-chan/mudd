@@ -5,7 +5,7 @@ from pathlib import Path
 
 import asyncpg
 
-from mudd.services.verb_action import VerbAction
+from mudd.types import VerbAction
 
 logger = logging.getLogger(__name__)
 

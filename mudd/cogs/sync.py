@@ -15,12 +15,12 @@ from discord.ext import commands, tasks
 if TYPE_CHECKING:
     from main import MuddBot
 
+from mudd.loaders.entity_loader import sync_entities
+from mudd.loaders.verb_loader import sync_verbs
+from mudd.loaders.zone_loader import sync_zones_and_rooms
 from mudd.services.entity import EntityService
-from mudd.services.entity_loader import sync_entities
 from mudd.services.rendering import RenderingService
-from mudd.services.verb_loader import sync_verbs
 from mudd.services.visibility import VisibilityService
-from mudd.services.zone_loader import sync_zones_and_rooms
 
 logger = logging.getLogger(__name__)
 

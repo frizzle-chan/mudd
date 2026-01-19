@@ -1,4 +1,4 @@
-"""Verb action enum mirroring PostgreSQL verb_action type."""
+"""Core type definitions for MUDD."""
 
 from enum import Enum
 

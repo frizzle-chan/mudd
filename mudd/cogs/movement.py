@@ -10,7 +10,7 @@ from discord.ext import commands
 
 if TYPE_CHECKING:
     from mudd.services.focus_context import FocusContextService
-    from mudd.services.visibility_protocol import VisibilityServiceProtocol
+    from mudd.services.visibility import VisibilityServiceProtocol
 
 logger = logging.getLogger(__name__)
 

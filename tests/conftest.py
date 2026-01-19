@@ -11,10 +11,10 @@ import asyncpg
 import pytest
 import pytest_asyncio
 
-from mudd.services.entity_loader import sync_entities
-from mudd.services.migrations import run_migrations
-from mudd.services.verb_loader import sync_verbs
-from mudd.services.zone_loader import (
+from mudd.database import run_migrations
+from mudd.loaders.entity_loader import sync_entities
+from mudd.loaders.verb_loader import sync_verbs
+from mudd.loaders.zone_loader import (
     get_default_room,
     load_rooms_from_rec,
     load_zones_from_rec,

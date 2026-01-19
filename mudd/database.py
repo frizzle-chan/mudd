@@ -1,6 +1,7 @@
-"""Database migration runner."""
+"""PostgreSQL database connection management and migrations."""
 
 import logging
+import os
 import re
 from pathlib import Path
 
@@ -8,11 +9,54 @@ import asyncpg
 
 logger = logging.getLogger(__name__)
 
-MIGRATIONS_DIR = Path(__file__).parent.parent.parent / "migrations"
+_pool: asyncpg.Pool | None = None
+
+# Migration configuration
+MIGRATIONS_DIR = Path(__file__).parent.parent / "migrations"
 MIGRATION_PATTERN = re.compile(r"^(\d+)_.*\.sql$")
 
 
-async def ensure_migrations_table(conn: asyncpg.Connection) -> None:
+async def get_pool() -> asyncpg.Pool:
+    """Get or create the database connection pool."""
+    global _pool
+    if _pool is None:
+        database_url = os.environ.get(
+            "DATABASE_URL",
+            "postgresql://mudd:mudd@db:5432/mudd",
+        )
+        _pool = await asyncpg.create_pool(
+            database_url,
+            min_size=2,
+            max_size=10,
+            command_timeout=60,
+        )
+        logger.info("Database connection pool created")
+    return _pool
+
+
+async def close_pool() -> None:
+    """Close the database connection pool gracefully."""
+    global _pool
+    if _pool:
+        await _pool.close()
+        logger.info("Database connection pool closed")
+    _pool = None
+
+
+async def init_database() -> asyncpg.Pool:
+    """Initialize database: create pool and run migrations.
+
+    Returns:
+        The database connection pool.
+    """
+    pool = await get_pool()
+    applied = await run_migrations(pool)
+    if applied > 0:
+        logger.info(f"Applied {applied} database migration(s)")
+    return pool
+
+
+async def _ensure_migrations_table(conn: asyncpg.Connection) -> None:
     """Create the migrations tracking table if it doesn't exist."""
     await conn.execute("""
         CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -23,13 +67,13 @@ async def ensure_migrations_table(conn: asyncpg.Connection) -> None:
     """)
 
 
-async def get_applied_migrations(conn: asyncpg.Connection) -> set[int]:
+async def _get_applied_migrations(conn: asyncpg.Connection) -> set[int]:
     """Get the set of already-applied migration versions."""
     rows = await conn.fetch("SELECT version FROM schema_migrations")
     return {row["version"] for row in rows}
 
 
-def discover_migrations() -> list[tuple[int, Path]]:
+def _discover_migrations() -> list[tuple[int, Path]]:
     """Discover migration files and return sorted (version, path) pairs."""
     if not MIGRATIONS_DIR.exists():
         return []
@@ -52,10 +96,10 @@ async def run_migrations(pool: asyncpg.Pool) -> int:
         Number of migrations applied.
     """
     async with pool.acquire() as conn:
-        await ensure_migrations_table(conn)
-        applied = await get_applied_migrations(conn)
+        await _ensure_migrations_table(conn)
+        applied = await _get_applied_migrations(conn)
 
-        migrations = discover_migrations()
+        migrations = _discover_migrations()
         applied_count = 0
 
         for version, path in migrations:

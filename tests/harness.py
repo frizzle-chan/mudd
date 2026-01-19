@@ -27,7 +27,7 @@ from tests.mocks.discord import (
 if TYPE_CHECKING:
     from discord import Interaction
 
-    from mudd.services.visibility_protocol import VisibilityServiceProtocol
+    from mudd.services.visibility import VisibilityServiceProtocol
 
 
 @dataclass

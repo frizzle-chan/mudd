@@ -13,7 +13,7 @@ import asyncpg
 import pytest
 import pytest_asyncio
 
-from mudd.services.zone_loader import (
+from mudd.loaders.zone_loader import (
     Room,
     get_default_room,
     load_rooms_from_rec,
