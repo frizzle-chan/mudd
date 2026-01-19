@@ -2,13 +2,10 @@
 
 import logging
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Literal
+from typing import Literal
 from uuid import UUID
 
-from mudd.services.database import get_pool
-
-if TYPE_CHECKING:
-    import asyncpg
+import asyncpg
 
 logger = logging.getLogger(__name__)
 
@@ -55,15 +52,16 @@ class EntityService:
     Cache is invalidated when entities are synced.
 
     Usage:
-        service = get_entity_service()
+        service = EntityService(pool)
         entity = await service.get_entity("foyer_table")
         room_entities = await service.get_room_entities("foyer")
     """
 
-    def __init__(self) -> None:
+    def __init__(self, pool: asyncpg.Pool) -> None:
+        self._pool = pool
         self._entity_cache: dict[str, ResolvedEntity] = {}
 
-    def _entity_from_row(self, row: "asyncpg.Record") -> ResolvedEntity:
+    def _entity_from_row(self, row: asyncpg.Record) -> ResolvedEntity:
         """Construct ResolvedEntity from database row."""
         return ResolvedEntity(
             id=row["id"],
@@ -95,8 +93,9 @@ class EntityService:
             return self._entity_cache[entity_id]
 
         try:
-            pool = await get_pool()
-            row = await pool.fetchrow("SELECT * FROM resolve_entity($1)", entity_id)
+            row = await self._pool.fetchrow(
+                "SELECT * FROM resolve_entity($1)", entity_id
+            )
         except Exception:
             logger.exception("Database error fetching entity '%s'", entity_id)
             raise
@@ -122,8 +121,7 @@ class EntityService:
             List of EntityInstance objects in the room
         """
         try:
-            pool = await get_pool()
-            rows = await pool.fetch(
+            rows = await self._pool.fetch(
                 """
                 SELECT ei.id AS instance_id, ei.room, ei.owner_id, r.*
                 FROM entity_instances ei
@@ -161,8 +159,7 @@ class EntityService:
             EntityInstance with resolved entity, or None if not found
         """
         try:
-            pool = await get_pool()
-            row = await pool.fetchrow(
+            row = await self._pool.fetchrow(
                 """
                 SELECT ei.id AS instance_id, ei.room, ei.owner_id, r.*
                 FROM entity_instances ei
@@ -200,8 +197,7 @@ class EntityService:
             List of EntityInstance objects that are top-level (no container)
         """
         try:
-            pool = await get_pool()
-            rows = await pool.fetch(
+            rows = await self._pool.fetch(
                 """
                 SELECT ei.id AS instance_id, ei.room, ei.owner_id, r.*
                 FROM entity_instances ei
@@ -246,8 +242,7 @@ class EntityService:
             List of EntityInstance objects contained in the entity
         """
         try:
-            pool = await get_pool()
-            rows = await pool.fetch(
+            rows = await self._pool.fetch(
                 """
                 SELECT ei.id AS instance_id, ei.room, ei.owner_id, r.*
                 FROM entity_instances ei
@@ -290,35 +285,3 @@ class EntityService:
         """
         self._entity_cache.clear()
         logger.debug("Entity cache invalidated")
-
-
-# Module-level singleton
-_service: EntityService | None = None
-
-
-def is_entity_service_initialized() -> bool:
-    """Check if the entity service has been initialized."""
-    return _service is not None
-
-
-def get_entity_service() -> EntityService:
-    """Get the entity service singleton.
-
-    Raises:
-        RuntimeError: If service not initialized (call init_entity_service first)
-    """
-    if _service is None:
-        raise RuntimeError("EntityService not initialized")
-    return _service
-
-
-def init_entity_service() -> EntityService:
-    """Initialize the entity service singleton.
-
-    Returns:
-        The initialized EntityService instance
-    """
-    global _service
-    _service = EntityService()
-    logger.info("Entity service initialized")
-    return _service

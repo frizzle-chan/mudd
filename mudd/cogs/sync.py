@@ -9,19 +9,17 @@ import logging
 import os
 from typing import TYPE_CHECKING
 
+import asyncpg
 from discord.ext import commands, tasks
 
 if TYPE_CHECKING:
     from main import MuddBot
 
-from mudd.services.database import get_pool
+from mudd.services.entity import EntityService
 from mudd.services.entity_loader import sync_entities
+from mudd.services.rendering import RenderingService
 from mudd.services.verb_loader import sync_verbs
-from mudd.services.visibility import (
-    get_visibility_service,
-    init_visibility_service,
-    is_visibility_service_initialized,
-)
+from mudd.services.visibility import VisibilityService
 from mudd.services.zone_loader import sync_zones_and_rooms
 
 logger = logging.getLogger(__name__)
@@ -33,14 +31,25 @@ class Sync(commands.Cog):
     Responsibilities:
     - Zone/room sync: Create missing channels, fix topics, detect orphans
     - Visibility sync: Sync user permissions to match database state
-    - Startup initialization: Initialize VisibilityService on first sync
+    - Startup initialization: Mark VisibilityService ready on first sync
     - Orphan tracking: Only report NEW orphans to console (not previously seen)
     """
 
     bot: "MuddBot"
 
-    def __init__(self, bot: "MuddBot"):
+    def __init__(
+        self,
+        bot: "MuddBot",
+        entity_service: EntityService,
+        visibility_service: VisibilityService,
+        pool: asyncpg.Pool,
+        rendering_service: RenderingService,
+    ) -> None:
         self.bot = bot
+        self.entity_service = entity_service
+        self.visibility_service = visibility_service
+        self._pool = pool
+        self._rendering = rendering_service
         self._seen_orphans: set[tuple[int, str, str]] = set()
         self._console_channel = os.environ.get("MUDD_CONSOLE_CHANNEL", "console")
         self.periodic_sync.start()
@@ -54,7 +63,6 @@ class Sync(commands.Cog):
 
         On first iteration:
         - Sync zones/rooms from rec files to database and Discord
-        - Discover default room and initialize VisibilityService
         - Sync user permissions
         - Mark startup complete (unblocks commands)
 
@@ -63,8 +71,8 @@ class Sync(commands.Cog):
         - Report only NEW orphan channels
         - Sync user permissions
         """
-        pool = await get_pool()
-        is_first_sync = not is_visibility_service_initialized()
+        pool = self._pool
+        is_first_sync = not self.visibility_service.startup_complete
 
         if is_first_sync:
             await self._initial_sync(pool)
@@ -72,7 +80,7 @@ class Sync(commands.Cog):
             await self._periodic_sync(pool)
 
     async def _initial_sync(self, pool) -> None:
-        """First sync: initialize visibility service and sync all data."""
+        """First sync: sync all data and mark visibility service ready."""
         logger.info("Starting initial sync (first run)")
 
         # Sync verb word lists (no dependencies, can run first)
@@ -85,18 +93,12 @@ class Sync(commands.Cog):
         # Access world_file from bot (set in main.py)
         world_file = self.bot.world_file
 
-        default_room: str | None = None
-
         for guild in self.bot.guilds:
             try:
-                stats, discovered_room, orphans = await sync_zones_and_rooms(
+                stats, _, orphans = await sync_zones_and_rooms(
                     pool, guild, world_file, self._console_channel, self._seen_orphans
                 )
                 logger.info(f"Initial zone sync for {guild.name}: {stats}")
-
-                # Get default room from first successful sync
-                if default_room is None and discovered_room:
-                    default_room = discovered_room
 
                 # Track all orphans from first sync
                 self._seen_orphans.update(orphans)
@@ -108,38 +110,31 @@ class Sync(commands.Cog):
         # Sync entity definitions and instances to database
         try:
             await sync_entities(pool, world_file)
+            # Invalidate entity cache after sync
+            self.entity_service.invalidate_cache()
+            # Clear template cache to ensure fresh templates
+            self._rendering.clear_cache()
         except Exception:
             logger.exception("Failed to sync entities")
             raise
 
-        if not default_room:
-            raise RuntimeError(
-                "No guilds found or no default room defined - cannot start"
-            )
-
-        # Initialize visibility service with discovered default room
-        init_visibility_service(default_room=default_room)
-        service = get_visibility_service()
-
         # Sync user permissions
         for guild in self.bot.guilds:
             try:
-                stats = await service.sync_guild(guild)
+                stats = await self.visibility_service.sync_guild(guild)
                 logger.info(f"Initial visibility sync for {guild.name}: {stats}")
             except Exception:
                 logger.exception(f"Failed initial visibility sync for {guild.name}")
                 raise
 
         # Mark startup complete - unblocks commands
-        service.mark_startup_complete()
+        self.visibility_service.mark_startup_complete()
         logger.info("Initial sync complete - bot ready for commands")
 
     async def _periodic_sync(self, pool) -> None:
         """Subsequent syncs: full zone/room/permission sync."""
-        service = get_visibility_service()
-
         # Wait for startup to complete (in case we're racing with initial sync)
-        await service.wait_for_startup()
+        await self.visibility_service.wait_for_startup()
 
         # Sync verb word lists
         try:
@@ -166,12 +161,16 @@ class Sync(commands.Cog):
                 # Sync entity definitions and instances
                 try:
                     await sync_entities(pool, world_file)
+                    # Invalidate entity cache after sync
+                    self.entity_service.invalidate_cache()
+                    # Clear template cache to ensure fresh templates
+                    self._rendering.clear_cache()
                 except Exception:
                     logger.exception("Failed to sync entities")
                     # Don't raise - allow continued operation
 
                 # Permission sync
-                perm_stats = await service.sync_guild(guild)
+                perm_stats = await self.visibility_service.sync_guild(guild)
                 logger.info(f"Permission sync for {guild.name}: {perm_stats}")
 
             except Exception:

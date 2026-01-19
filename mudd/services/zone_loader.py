@@ -287,15 +287,18 @@ async def sync_zones_and_rooms_to_db(
         # Upsert rooms
         for room in rooms:
             await conn.execute(
-                """INSERT INTO rooms (id, name, description, zone_id, has_voice)
-                   VALUES ($1, $2, $3, $4, $5)
+                """INSERT INTO rooms
+                       (id, name, description, zone_id, has_voice, is_default)
+                   VALUES ($1, $2, $3, $4, $5, $6)
                    ON CONFLICT (id) DO UPDATE SET
-                       name = $2, description = $3, zone_id = $4, has_voice = $5""",
+                       name = $2, description = $3, zone_id = $4, has_voice = $5,
+                       is_default = $6""",
                 room.id,
                 room.name,
                 room.description,
                 room.zone_id,
                 room.has_voice,
+                room.is_default,
             )
             stats["rooms"] += 1
 

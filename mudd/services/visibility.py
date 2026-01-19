@@ -6,16 +6,15 @@ import logging
 import asyncpg
 import discord
 
-from mudd.services.database import get_pool
-
 logger = logging.getLogger(__name__)
 
 
 class VisibilityService:
     """Manages user location assignments and Discord channel visibility."""
 
-    def __init__(self, default_room: str):
-        self.default_room = default_room
+    def __init__(self, pool: asyncpg.Pool) -> None:
+        self._pool = pool
+        self._default_room: str | None = None  # Cache for lazy loading from DB
         self._startup_complete = asyncio.Event()
         # Room name caches (rebuilt on each sync)
         self._room_to_channel: dict[str, int] = {}
@@ -25,13 +24,18 @@ class VisibilityService:
         self._category_to_zone: dict[int, str] = {}
         self._room_to_zone: dict[str, str] = {}
 
+    @property
+    def startup_complete(self) -> bool:
+        """Check if startup sync has completed (non-blocking)."""
+        return self._startup_complete.is_set()
+
     async def wait_for_startup(self) -> None:
         """Block until startup sync is complete."""
         await self._startup_complete.wait()
 
     async def _build_room_cache(self, guild: discord.Guild) -> None:
         """Build the room name <-> channel ID caches from database and Discord."""
-        pool = await get_pool()
+        pool = self._pool
 
         # Query zones from database
         zone_rows = await pool.fetch("SELECT id, name FROM zones")
@@ -91,16 +95,24 @@ class VisibilityService:
 
     async def get_room_name(self, room_id: str) -> str | None:
         """Get the display name for a room ID."""
-        pool = await get_pool()
+        pool = self._pool
         return await pool.fetchval("SELECT name FROM rooms WHERE id = $1", room_id)
 
-    def get_default_room(self) -> str:
-        """Get the default room name."""
-        return self.default_room
+    async def get_default_room(self) -> str:
+        """Get the default room ID from the database (cached after first call)."""
+        if self._default_room is None:
+            pool = self._pool
+            self._default_room = await pool.fetchval(
+                "SELECT id FROM rooms WHERE is_default = TRUE"
+            )
+            if self._default_room is None:
+                raise RuntimeError("No default room found in database.")
+        return self._default_room
 
-    def get_default_channel_id(self) -> int | None:
+    async def get_default_channel_id(self) -> int | None:
         """Get the default room's channel ID."""
-        return self.get_channel_for_room(self.default_room)
+        default_room = await self.get_default_room()
+        return self.get_channel_for_room(default_room)
 
     def is_mud_location(self, channel: discord.abc.GuildChannel) -> bool:
         """Check if a channel is a MUD location (in a zone category)."""
@@ -197,7 +209,7 @@ class VisibilityService:
 
         Queries the database for the user's room name, then resolves to channel ID.
         """
-        pool = await get_pool()
+        pool = self._pool
         row = await pool.fetchrow(
             "SELECT current_room FROM users WHERE id = $1",
             user_id,
@@ -208,7 +220,7 @@ class VisibilityService:
 
     async def get_user_room(self, user_id: int) -> str | None:
         """Get the room name of the user's current location, or None if not set."""
-        pool = await get_pool()
+        pool = self._pool
         row = await pool.fetchrow(
             "SELECT current_room FROM users WHERE id = $1",
             user_id,
@@ -226,7 +238,7 @@ class VisibilityService:
             logger.warning(f"Cannot find room for channel {channel_id}")
             return
 
-        pool = await get_pool()
+        pool = self._pool
         await pool.execute(
             """
             INSERT INTO users (id, current_room)
@@ -244,7 +256,7 @@ class VisibilityService:
 
         Used for assigning users to rooms before channels exist.
         """
-        pool = await get_pool()
+        pool = self._pool
         await pool.execute(
             """
             INSERT INTO users (id, current_room)
@@ -258,7 +270,7 @@ class VisibilityService:
 
     async def delete_user_location(self, user_id: int) -> None:
         """Remove user's location assignment from the database."""
-        pool = await get_pool()
+        pool = self._pool
         await pool.execute("DELETE FROM users WHERE id = $1", user_id)
 
     async def sync_user_to_discord(
@@ -392,10 +404,11 @@ class VisibilityService:
         # Build room cache before syncing users
         await self._build_room_cache(guild)
 
-        default_channel_id = self.get_default_channel_id()
+        default_channel_id = await self.get_default_channel_id()
         if default_channel_id is None:
+            default_room = await self.get_default_room()
             raise RuntimeError(
-                f"Default room '{self.default_room}' not found in any zone category. "
+                f"Default room '{default_room}' not found in any zone category. "
                 f"Ensure the room exists in Discord."
             )
 
@@ -438,25 +451,3 @@ class VisibilityService:
     def mark_startup_complete(self) -> None:
         """Signal that initial startup sync is complete."""
         self._startup_complete.set()
-
-
-_service: VisibilityService | None = None
-
-
-def is_visibility_service_initialized() -> bool:
-    """Check if the visibility service has been initialized."""
-    return _service is not None
-
-
-def get_visibility_service() -> VisibilityService:
-    """Get the visibility service singleton."""
-    if _service is None:
-        raise RuntimeError("VisibilityService not initialized")
-    return _service
-
-
-def init_visibility_service(default_room: str) -> VisibilityService:
-    """Initialize the visibility service singleton."""
-    global _service
-    _service = VisibilityService(default_room)
-    return _service

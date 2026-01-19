@@ -1,26 +1,40 @@
 """Look command for viewing surroundings and examining entities."""
 
 import logging
+from typing import TYPE_CHECKING
 
+import asyncpg
 from discord import Interaction, app_commands
 from discord.ext import commands
 
-from mudd.formatting.entities import format_room_entities, render_entity_on_look
-from mudd.services.entity import get_entity_service
 from mudd.services.entity_matcher import (
     get_focus_aware_autocomplete_entities,
     match_entity_by_prefix,
 )
-from mudd.services.focus_context import get_focus_context_service
-from mudd.services.visibility import get_visibility_service
-from mudd.templating import TemplateRenderError, render
+from mudd.services.rendering import RenderingService, TemplateRenderError
+
+if TYPE_CHECKING:
+    from mudd.services.entity import EntityService
+    from mudd.services.focus_context import FocusContextService
+    from mudd.services.visibility_protocol import VisibilityServiceProtocol
 
 logger = logging.getLogger(__name__)
 
 
 class Look(commands.Cog):
-    def __init__(self, bot: commands.Bot):
+    def __init__(
+        self,
+        bot: commands.Bot | None,
+        entity_service: "EntityService",
+        focus_service: "FocusContextService",
+        visibility_service: "VisibilityServiceProtocol",
+        rendering_service: RenderingService,
+    ) -> None:
         self.bot = bot
+        self.entity_service = entity_service
+        self.focus_service = focus_service
+        self.visibility_service = visibility_service
+        self._rendering = rendering_service
 
     async def at_autocomplete(
         self, interaction: Interaction, current: str
@@ -33,19 +47,15 @@ class Look(commands.Cog):
         a "[Close {container}] Room" escape option at the top.
         """
         try:
-            visibility_service = get_visibility_service()
-            await visibility_service.wait_for_startup()
+            await self.visibility_service.wait_for_startup()
 
             room = getattr(interaction.channel, "name", None)
             if not room:
                 return []
 
-            entity_service = get_entity_service()
-            focus_service = get_focus_context_service()
-
             # Get focus-aware autocomplete choices
             choices = await get_focus_aware_autocomplete_entities(
-                entity_service, focus_service, interaction.user.id, room
+                self.entity_service, self.focus_service, interaction.user.id, room
             )
 
             # Filter by current input using word prefix matching
@@ -72,7 +82,7 @@ class Look(commands.Cog):
             ]
 
             # Get focus to determine Room option display
-            focus = await focus_service.get_focus(interaction.user.id, room)
+            focus = await self.focus_service.get_focus(interaction.user.id, room)
             room_display = f"[Close {focus.entity_name}] Room" if focus else "Room"
 
             # Add "Room" option at top if it matches current input
@@ -81,9 +91,9 @@ class Look(commands.Cog):
                 return [room_choice] + result[:24]
 
             return result[:25]
-        except Exception:
+        except asyncpg.PostgresError:
             logger.exception(
-                "Error in at autocomplete for room '%s'",
+                "Database error in at autocomplete for room '%s'",
                 getattr(interaction.channel, "name", "unknown"),
             )
             return []
@@ -93,8 +103,7 @@ class Look(commands.Cog):
     @app_commands.autocomplete(at=at_autocomplete)
     async def look(self, interaction: Interaction, at: str):
         """Look at room or specific entity."""
-        visibility_service = get_visibility_service()
-        await visibility_service.wait_for_startup()
+        await self.visibility_service.wait_for_startup()
 
         room = getattr(interaction.channel, "name", None)
 
@@ -103,27 +112,28 @@ class Look(commands.Cog):
             # This is the escape mechanism per user request
             close_msg = None
             if at == "Room":
-                focus_service = get_focus_context_service()
-                entity_service = get_entity_service()
-
                 # Get focus to capture entity before clearing (for template rendering)
                 if room:
-                    focus = await focus_service.get_focus(interaction.user.id, room)
+                    focus = await self.focus_service.get_focus(
+                        interaction.user.id, room
+                    )
                     focused_entity = None
                     if focus:
-                        focused_entity = await entity_service.get_entity(
+                        focused_entity = await self.entity_service.get_entity(
                             focus.entity_id
                         )
 
                     # Clear focus with "close" reason to get on_close template
-                    close_template = await focus_service.clear_focus(
+                    close_template = await self.focus_service.clear_focus(
                         interaction.user.id, reason="close"
                     )
 
                     # Render close message if we have template and entity
                     if close_template and focused_entity:
                         try:
-                            close_msg = render(close_template, focused_entity, "")
+                            close_msg = self._rendering.render(
+                                close_template, focused_entity, ""
+                            )
                         except TemplateRenderError:
                             logger.warning(
                                 "Template error rendering on_close for entity '%s'",
@@ -133,18 +143,23 @@ class Look(commands.Cog):
                             entity_name = focused_entity.name
                             close_msg = f"You step away from the *{entity_name}*."
                 else:
-                    await focus_service.clear_focus(interaction.user.id, reason="close")
+                    await self.focus_service.clear_focus(
+                        interaction.user.id, reason="close"
+                    )
 
             # Show room description + top-level entities
-            room_name = await visibility_service.get_room_name(room) if room else None
+            room_name = (
+                await self.visibility_service.get_room_name(room) if room else None
+            )
             topic = getattr(interaction.channel, "topic", None)
             room_description = topic or "You see nothing special."
 
             entity_text = ""
             if room:
-                entity_service = get_entity_service()
-                entities = await entity_service.get_top_level_room_entities(room)
-                entity_text = await format_room_entities(entities, entity_service, room)
+                entities = await self.entity_service.get_top_level_room_entities(room)
+                entity_text = await self._rendering.format_room_entities(
+                    entities, self.entity_service, room
+                )
 
             # Build message, prepending close message if present
             parts = []
@@ -167,11 +182,9 @@ class Look(commands.Cog):
                 )
                 return
 
-            entity_service = get_entity_service()
-            focus_service = get_focus_context_service()
             user_id = interaction.user.id
 
-            all_entities = await entity_service.get_room_entities(room)
+            all_entities = await self.entity_service.get_room_entities(room)
 
             match_result = match_entity_by_prefix(at, all_entities)
 
@@ -196,24 +209,20 @@ class Look(commands.Cog):
                 entity = matched_instance.entity
 
                 # Check if looking at entity that is NOT in current focus
-                is_in_focus = await focus_service.is_entity_in_focus(
+                is_in_focus = await self.focus_service.is_entity_in_focus(
                     user_id, room, entity.id
                 )
 
                 # Clear focus if looking at unrelated entity
                 # (per ADR 0003: "focus follows attention")
                 if not is_in_focus:
-                    await focus_service.clear_focus(user_id, reason="interaction")
+                    await self.focus_service.clear_focus(user_id, reason="interaction")
                 else:
                     # Update timestamp to prevent timeout
-                    await focus_service.update_focus_timestamp(user_id)
+                    await self.focus_service.update_focus_timestamp(user_id)
 
                 # Render on_look template
-                detail_text = await render_entity_on_look(
-                    matched_instance, entity_service, room
+                detail_text = await self._rendering.render_entity_on_look(
+                    matched_instance, self.entity_service, room
                 )
                 await interaction.response.send_message(detail_text, ephemeral=True)
-
-
-async def setup(bot: commands.Bot):
-    await bot.add_cog(Look(bot))

@@ -12,9 +12,11 @@ from mudd.cogs.look import Look
 from mudd.cogs.movement import Movement
 from mudd.cogs.ping import Ping
 from mudd.cogs.sync import Sync
-from mudd.services.database import close_pool, init_database
-from mudd.services.entity import init_entity_service
-from mudd.services.focus_context import init_focus_context_service
+from mudd.services.database import close_pool, get_pool, init_database
+from mudd.services.entity import EntityService
+from mudd.services.focus_context import FocusContextService
+from mudd.services.rendering import RenderingService
+from mudd.services.visibility import VisibilityService
 
 load_dotenv()
 
@@ -62,20 +64,34 @@ async def setup_hook():
     # Initialize database and run migrations
     await init_database()
 
-    # Initialize entity service for runtime lookups
-    init_entity_service()
+    # Get database pool
+    pool = await get_pool()
 
-    # Initialize focus context service for modal interactions
-    init_focus_context_service()
+    # Create services with explicit dependencies
+    entity_service = EntityService(pool)
+    focus_service = FocusContextService(pool)
+    visibility_service = VisibilityService(pool)
+    rendering_service = RenderingService()
 
-    # Zone/room sync and visibility service initialization handled by Sync cog
-    # on first periodic_sync iteration (after bot is ready)
-
-    await bot.add_cog(Interact(bot))
-    await bot.add_cog(Look(bot))
+    # Create cogs with explicit dependencies
+    await bot.add_cog(
+        Interact(
+            bot,
+            entity_service,
+            focus_service,
+            visibility_service,
+            pool,
+            rendering_service,
+        )
+    )
+    await bot.add_cog(
+        Look(bot, entity_service, focus_service, visibility_service, rendering_service)
+    )
     await bot.add_cog(Ping(bot))
-    await bot.add_cog(Movement(bot))
-    await bot.add_cog(Sync(bot))
+    await bot.add_cog(Movement(bot, visibility_service, focus_service))
+    await bot.add_cog(
+        Sync(bot, entity_service, visibility_service, pool, rendering_service)
+    )
 
 
 @bot.event

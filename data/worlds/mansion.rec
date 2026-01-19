@@ -558,3 +558,47 @@ DescriptionShort: A cozy {{ name }} crackles on the wall.
 DescriptionLong: A stone fireplace with a carved wooden mantle. A small fire crackles warmly.
 OnTouch: The warmth feels nice on your hands.
 OnAttack: You poke at the fire with the stoker. The logs shift and sparks fly up the chimney.
+
+# ----------------------------------------------------------------------------
+# Store Room entities (test fixtures)
+# ----------------------------------------------------------------------------
+
+Id: storeroom_box
+Name: Cardboard Box
+Prototype: chest
+Room: store-room
+ContentsVisible: no
+DescriptionShort: a beat-up {{ name }} sits in the corner
+DescriptionLong: A cardboard box with "TEST FIXTURES - DO NOT REMOVE" written on it in marker.
+OnOpen: You open the {{ name }}.{% if contents %} Inside:{{ contents }}{% else %} It's empty.{% endif %}
+OnClose: You close the {{ name }}.
+
+Id: test_orb
+Name: Test Orb
+Prototype: object
+Room: store-room
+Container: storeroom_box
+DescriptionShort: a glowing {{ name }}
+DescriptionLong: TEST_LOOK_RESPONSE - A mysterious orb used for testing.
+OnTouch: TEST_TOUCH_RESPONSE - The orb hums softly.
+OnAttack: TEST_ATTACK_RESPONSE - The orb absorbs the blow.
+
+Id: test_gadget
+Name: Test Gadget
+Prototype: object
+Room: store-room
+Container: storeroom_box
+DescriptionShort: a strange {{ name }}
+DescriptionLong: A device with many buttons.
+OnUse: TEST_USE_RESPONSE - The gadget whirs to life.
+OnTake: TEST_TAKE_RESPONSE - You pick up the gadget.
+
+Id: test_lockbox
+Name: Test Lockbox
+Prototype: chest
+Room: store-room
+Container: storeroom_box
+DescriptionShort: a small {{ name }}
+DescriptionLong: A metal lockbox.
+OnOpen: TEST_OPEN_RESPONSE - You open the lockbox.
+OnClose: TEST_CLOSE_RESPONSE - You close the lockbox.

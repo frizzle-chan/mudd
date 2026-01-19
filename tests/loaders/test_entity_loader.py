@@ -263,11 +263,11 @@ class TestTopologicalSort:
         assert box_idx < item_idx
 
 
-@pytest.mark.asyncio(loop_scope="module")
+@pytest.mark.asyncio(loop_scope="session")
 class TestSyncEntities:
     """Test syncing entities to database."""
 
-    @pytest_asyncio.fixture(scope="class", loop_scope="module")
+    @pytest_asyncio.fixture(scope="class", loop_scope="session")
     async def synced_db(self, test_db, world_file):
         """Sync entities to test database (zones/rooms synced via test_db fixture)."""
         await sync_entities(test_db, world_file)
@@ -317,7 +317,7 @@ class TestSyncEntities:
         assert count == len(entities)
 
 
-@pytest.mark.asyncio(loop_scope="module")
+@pytest.mark.asyncio(loop_scope="session")
 class TestSyncRemovesStaleEntities:
     """Test that sync removes entities not in files."""
 
@@ -350,7 +350,7 @@ class TestSyncRemovesStaleEntities:
             assert count == 0
 
 
-@pytest.mark.asyncio(loop_scope="module")
+@pytest.mark.asyncio(loop_scope="session")
 class TestSyncEntityInstances:
     """Test entity instance creation during sync."""
 

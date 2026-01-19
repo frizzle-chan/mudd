@@ -154,7 +154,6 @@ async def sync_entities(pool: asyncpg.Pool, world_file: Path) -> int:
         logger.warning("No entities found in world file - deleting all entities")
         async with pool.acquire() as conn:
             await conn.execute("DELETE FROM entities")
-        _invalidate_entity_cache()
         return 0
 
     # Load rooms for room reference validation
@@ -254,15 +253,4 @@ async def sync_entities(pool: asyncpg.Pool, world_file: Path) -> int:
 
     logger.info(f"Synced {len(sorted_entities)} entities to database")
 
-    # Invalidate entity service cache after sync
-    _invalidate_entity_cache()
-
     return len(sorted_entities)
-
-
-def _invalidate_entity_cache() -> None:
-    """Invalidate entity service cache if service is initialized."""
-    from mudd.services.entity import get_entity_service, is_entity_service_initialized
-
-    if is_entity_service_initialized():
-        get_entity_service().invalidate_cache()
