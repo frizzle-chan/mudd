@@ -69,7 +69,7 @@ async def setup_hook():
     # Create services with explicit dependencies
     entity_service = EntityService(pool)
     focus_service = FocusContextService(pool)
-    visibility_service = init_visibility_service()
+    visibility_service = init_visibility_service(pool)
 
     # Create cogs with explicit dependencies
     await bot.add_cog(
