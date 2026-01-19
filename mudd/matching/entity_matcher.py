@@ -18,6 +18,10 @@ class AutocompleteEntityFetcher(Protocol):
         self, container_id: str, room: str
     ) -> list[EntityInstance]: ...
 
+    async def get_cached_autocomplete_choices(
+        self, room: str
+    ) -> list["AutocompleteChoice"]: ...
+
 
 class FocusContextFetcher(Protocol):
     """Protocol for focus context service methods needed by autocomplete."""
@@ -147,6 +151,9 @@ async def get_focus_aware_autocomplete_entities(
     When a user has an active focus (e.g., open container), this function
     returns entities with the focused container's contents listed first.
 
+    Fast path: For users without focus, returns cached results since all
+    users in the same room see identical autocomplete choices.
+
     Args:
         entity_service: Service for entity queries
         focus_service: Service for focus context queries
@@ -156,21 +163,16 @@ async def get_focus_aware_autocomplete_entities(
     Returns:
         List of AutocompleteChoice objects with focused items first.
     """
+    # Check for active focus FIRST (cheap query ~1ms)
+    focus = await focus_service.get_focus(user_id, room)
+
+    if not focus:
+        # Fast path: return cached choices (0ms if cached)
+        return await entity_service.get_cached_autocomplete_choices(room)
+
+    # Slow path: user has focus, need to compute focused ordering
     # Get standard visible entities
     visible = await get_autocomplete_entities(entity_service, room)
-
-    # Check for active focus
-    focus = await focus_service.get_focus(user_id, room)
-    if not focus:
-        # No focus: return all visible entities without prefix
-        return [
-            AutocompleteChoice(
-                instance=inst,
-                display_name=inst.entity.name,
-                is_focused=False,
-            )
-            for inst in visible
-        ]
 
     # Get focused container contents directly (may include items not in 'visible'
     # list when container has contents_visible=False)
