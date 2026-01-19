@@ -9,12 +9,12 @@ import logging
 import os
 from typing import TYPE_CHECKING
 
+import asyncpg
 from discord.ext import commands, tasks
 
 if TYPE_CHECKING:
     from main import MuddBot
 
-from mudd.services.database import get_pool
 from mudd.services.entity import EntityService
 from mudd.services.entity_loader import sync_entities
 from mudd.services.verb_loader import sync_verbs
@@ -41,10 +41,12 @@ class Sync(commands.Cog):
         bot: "MuddBot",
         entity_service: EntityService,
         visibility_service: VisibilityService,
+        pool: asyncpg.Pool,
     ) -> None:
         self.bot = bot
         self.entity_service = entity_service
         self.visibility_service = visibility_service
+        self._pool = pool
         self._seen_orphans: set[tuple[int, str, str]] = set()
         self._console_channel = os.environ.get("MUDD_CONSOLE_CHANNEL", "console")
         self.periodic_sync.start()
@@ -66,7 +68,7 @@ class Sync(commands.Cog):
         - Report only NEW orphan channels
         - Sync user permissions
         """
-        pool = await get_pool()
+        pool = self._pool
         is_first_sync = not self.visibility_service.startup_complete
 
         if is_first_sync:

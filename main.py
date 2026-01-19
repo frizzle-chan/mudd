@@ -78,7 +78,7 @@ async def setup_hook():
     await bot.add_cog(Look(bot, entity_service, focus_service, visibility_service))
     await bot.add_cog(Ping(bot))
     await bot.add_cog(Movement(bot, visibility_service, focus_service))
-    await bot.add_cog(Sync(bot, entity_service, visibility_service))
+    await bot.add_cog(Sync(bot, entity_service, visibility_service, pool))
 
 
 @bot.event
