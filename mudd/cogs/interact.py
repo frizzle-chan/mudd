@@ -7,19 +7,19 @@ import asyncpg
 from discord import Interaction, app_commands
 from discord.ext import commands
 
-from mudd.services.entity import ResolvedEntity
-from mudd.services.entity_matcher import (
+from mudd.matching.entity_matcher import (
     get_focus_aware_autocomplete_entities,
     match_entity_by_prefix,
 )
+from mudd.matching.verb_matcher import match_verb
+from mudd.services.entity import ResolvedEntity
 from mudd.services.rendering import RenderingService, TemplateRenderError
-from mudd.services.verb_action import VerbAction
-from mudd.services.verb_matcher import match_verb
+from mudd.types import VerbAction
 
 if TYPE_CHECKING:
     from mudd.services.entity import EntityService
     from mudd.services.focus_context import FocusContextService
-    from mudd.services.visibility_protocol import VisibilityServiceProtocol
+    from mudd.services.visibility import VisibilityServiceProtocol
 
 logger = logging.getLogger(__name__)
 

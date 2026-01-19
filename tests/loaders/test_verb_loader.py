@@ -2,7 +2,7 @@
 
 import pytest
 
-from mudd.services.verb_loader import sync_verbs
+from mudd.loaders.verb_loader import sync_verbs
 
 pytestmark = pytest.mark.asyncio(loop_scope="session")
 

@@ -6,7 +6,7 @@ from pathlib import Path
 
 import asyncpg
 
-from mudd.services.zone_loader import (
+from mudd.loaders.zone_loader import (
     Entity,
     load_entities_from_rec,
     load_rooms_from_rec,
