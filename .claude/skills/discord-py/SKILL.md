@@ -243,8 +243,10 @@ WebFetch: https://discordpy.readthedocs.io/en/latest/faq.html
 Always fetch documentation when:
 - The user asks about a feature not covered in this skill
 - You need to verify exact method signatures or parameters
-- Working with less common features (webhooks, voice, threads, forums)
+- Working with less common features (webhooks, voice, threads)
 - The user reports behavior different from what you expect
+
+**Note**: Forum channels are documented in [reference.md](reference.md#forum-channels) with examples in [examples.md](examples.md#forum-channel-operations).
 
 ## Additional Resources
 

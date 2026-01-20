@@ -711,3 +711,131 @@ await channel.send(embed=embed, file=file, view=view)
 await channel.purge(limit=10)
 await channel.set_permissions(member, send_messages=False)
 ```
+
+## Forum Channels
+
+Forum channels are special channels where you can't send messages directly—you create **threads** (called "posts" in the UI). Each post is a `public_thread` parented to the forum.
+
+### ForumChannel Attributes
+
+```python
+forum.name                           # Channel name
+forum.topic                          # Posting guidelines shown to users
+forum.available_tags                 # List[ForumTag] - up to 20 tags
+forum.default_auto_archive_duration  # Minutes: 60, 1440, 4320, or 10080
+forum.default_thread_slowmode_delay  # Seconds (0-21600)
+forum.default_sort_order             # SortOrder.latest_activity or .creation_date (or None)
+forum.default_layout                 # ForumLayoutType.list_view, .gallery_view, or .not_set
+forum.flags.require_tag              # Bool - users must select a tag when posting
+forum.threads                        # List[Thread] - cached active threads
+```
+
+### ForumTag Class
+
+```python
+tag.id         # Snowflake ID
+tag.name       # Tag name (max 20 chars)
+tag.emoji      # Optional emoji (PartialEmoji or None)
+tag.moderated  # Bool - only mods can apply this tag
+
+# Get tag by ID
+tag = forum.get_tag(tag_id)
+```
+
+### Thread (Forum Post) Attributes
+
+When a thread is created in a forum, it has these additional properties:
+
+```python
+thread.type              # Always ChannelType.public_thread (no private threads in forums)
+thread.parent_id         # The forum channel's ID
+thread.owner_id          # User who created the post
+thread.applied_tags      # List[ForumTag] - tags on this post
+thread.starter_message   # Cached first message (often None, must fetch)
+thread.archived          # Bool - auto-archives after inactivity
+thread.locked            # Bool - prevents new replies
+thread.message_count     # Approximate message count
+thread.member_count      # Approximate participant count
+thread.auto_archive_duration  # Minutes until auto-archive
+thread.created_at        # Datetime when created
+
+# Starter message has same ID as thread
+starter = await thread.fetch_message(thread.id)
+```
+
+### Creating Forum Posts
+
+```python
+# Create a new post (thread) in a forum
+thread, message = await forum.create_thread(
+    name='Post Title',              # Required - thread name
+    content='First message text',   # Message content (or use embed/file)
+    embed=embed,                    # Optional embed
+    file=discord.File('image.png'), # Optional attachment
+    files=[file1, file2],           # Multiple files
+    applied_tags=[tag1, tag2],      # Optional tags to apply
+    auto_archive_duration=1440,     # Override default (minutes)
+    slowmode_delay=0,               # Override default (seconds)
+    reason='Audit log reason',      # Optional
+)
+# Returns tuple: (Thread, Message)
+```
+
+### Managing Tags
+
+```python
+# Create a new tag on the forum
+tag = await forum.create_tag(
+    name='Question',
+    emoji='❓',           # String emoji or PartialEmoji
+    moderated=False,      # Only mods can apply if True
+    reason='Audit log',
+)
+
+# Edit/delete tags (must edit the forum channel)
+new_tags = [tag for tag in forum.available_tags if tag.name != 'Old Tag']
+await forum.edit(available_tags=new_tags)
+
+# Apply/remove tags on a thread
+await thread.add_tags(tag1, tag2)
+await thread.remove_tags(tag1)
+await thread.edit(applied_tags=[tag1])  # Replace all tags
+```
+
+### Fetching Threads
+
+```python
+# Active threads are cached
+for thread in forum.threads:
+    print(thread.name)
+
+# Archived threads require async iteration
+async for thread in forum.archived_threads(limit=100):
+    print(f'{thread.name} (archived)')
+
+# With before parameter for pagination
+async for thread in forum.archived_threads(limit=50, before=datetime_obj):
+    pass
+```
+
+### Forum-Specific Flags
+
+```python
+# Check if forum requires tags
+if forum.flags.require_tag:
+    print('Users must select at least one tag')
+
+# Edit forum flags
+await forum.edit(flags=discord.ChannelFlags(require_tag=True))
+```
+
+### Key Differences from Text Channels
+
+| Aspect | Text Channel | Forum Channel |
+|--------|--------------|---------------|
+| Direct messages | Yes | No (must create thread) |
+| Private threads | Yes | No (public only) |
+| Thread parent | Optional | Required (the forum) |
+| Tags | No | Yes (up to 20) |
+| Starter message | Normal message | `message.id == thread.id` |
+| Auto-archive | Optional | Default behavior |

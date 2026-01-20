@@ -665,3 +665,204 @@ async def on_ready():
     daily_message.start()
     print('Tasks started!')
 ```
+
+## Forum Channel Operations
+
+Working with forum channels (posts, tags, threads).
+
+```python
+import discord
+from discord.ext import commands
+
+intents = discord.Intents.default()
+bot = commands.Bot(command_prefix='!', intents=intents)
+
+FORUM_ID = 123456789  # Your forum channel ID
+
+@bot.command()
+async def create_post(ctx, title: str, *, content: str):
+    """Create a new forum post."""
+    forum = bot.get_channel(FORUM_ID)
+    if not isinstance(forum, discord.ForumChannel):
+        await ctx.send('Forum not found!')
+        return
+
+    # Create the post (returns thread and starter message)
+    thread, message = await forum.create_thread(
+        name=title,
+        content=content,
+    )
+    await ctx.send(f'Created post: {thread.jump_url}')
+
+@bot.command()
+async def create_post_with_tags(ctx, title: str):
+    """Create a post with tags applied."""
+    forum = bot.get_channel(FORUM_ID)
+    if not isinstance(forum, discord.ForumChannel):
+        return
+
+    # Find tags by name
+    question_tag = discord.utils.get(forum.available_tags, name='Question')
+    help_tag = discord.utils.get(forum.available_tags, name='Help')
+
+    tags_to_apply = [t for t in [question_tag, help_tag] if t]
+
+    thread, message = await forum.create_thread(
+        name=title,
+        content='Need help with this!',
+        applied_tags=tags_to_apply,
+    )
+    await ctx.send(f'Created: {thread.jump_url}')
+
+@bot.command()
+async def list_posts(ctx):
+    """List active forum posts."""
+    forum = bot.get_channel(FORUM_ID)
+    if not isinstance(forum, discord.ForumChannel):
+        return
+
+    embed = discord.Embed(title=f'Posts in {forum.name}')
+
+    # Active (cached) threads
+    for thread in forum.threads[:10]:
+        tags = ', '.join(t.name for t in thread.applied_tags) or 'No tags'
+        embed.add_field(
+            name=thread.name,
+            value=f'By <@{thread.owner_id}> | Tags: {tags}',
+            inline=False
+        )
+
+    await ctx.send(embed=embed)
+
+@bot.command()
+async def list_archived(ctx, limit: int = 10):
+    """List archived forum posts."""
+    forum = bot.get_channel(FORUM_ID)
+    if not isinstance(forum, discord.ForumChannel):
+        return
+
+    posts = []
+    async for thread in forum.archived_threads(limit=limit):
+        posts.append(f'- {thread.name}')
+
+    await ctx.send(f'**Archived Posts:**\n' + '\n'.join(posts) or 'None')
+
+@bot.command()
+async def add_tag(ctx, thread_id: int, tag_name: str):
+    """Add a tag to a forum post."""
+    forum = bot.get_channel(FORUM_ID)
+    if not isinstance(forum, discord.ForumChannel):
+        return
+
+    thread = forum.get_thread(thread_id)
+    if not thread:
+        await ctx.send('Thread not found!')
+        return
+
+    tag = discord.utils.get(forum.available_tags, name=tag_name)
+    if not tag:
+        await ctx.send(f'Tag "{tag_name}" not found!')
+        return
+
+    await thread.add_tags(tag)
+    await ctx.send(f'Added tag "{tag_name}" to {thread.name}')
+
+@bot.command()
+async def create_forum_tag(ctx, name: str, emoji: str = None):
+    """Create a new tag in the forum (requires Manage Channels)."""
+    forum = bot.get_channel(FORUM_ID)
+    if not isinstance(forum, discord.ForumChannel):
+        return
+
+    if len(forum.available_tags) >= 20:
+        await ctx.send('Forum already has max 20 tags!')
+        return
+
+    tag = await forum.create_tag(
+        name=name,
+        emoji=emoji,
+        moderated=False,
+    )
+    await ctx.send(f'Created tag: {tag.name} (ID: {tag.id})')
+
+@bot.command()
+async def close_post(ctx, thread_id: int):
+    """Archive (close) a forum post."""
+    forum = bot.get_channel(FORUM_ID)
+    if not isinstance(forum, discord.ForumChannel):
+        return
+
+    thread = forum.get_thread(thread_id)
+    if not thread:
+        await ctx.send('Thread not found!')
+        return
+
+    await thread.edit(archived=True)
+    await ctx.send(f'Closed post: {thread.name}')
+
+@bot.command()
+async def lock_post(ctx, thread_id: int):
+    """Lock a forum post (no more replies)."""
+    forum = bot.get_channel(FORUM_ID)
+    thread = forum.get_thread(thread_id) if forum else None
+    if thread:
+        await thread.edit(locked=True, archived=True)
+        await ctx.send(f'Locked: {thread.name}')
+
+bot.run('YOUR_TOKEN')
+```
+
+### Forum Post with Embed and Image
+
+```python
+@bot.command()
+async def showcase(ctx, title: str, *, description: str):
+    """Create a showcase post with embed."""
+    forum = bot.get_channel(FORUM_ID)
+
+    embed = discord.Embed(
+        title=title,
+        description=description,
+        color=discord.Color.gold()
+    )
+    embed.set_author(name=ctx.author.display_name, icon_url=ctx.author.display_avatar.url)
+
+    # If user attached an image
+    file = None
+    if ctx.message.attachments:
+        attachment = ctx.message.attachments[0]
+        embed.set_image(url=f'attachment://{attachment.filename}')
+        file = await attachment.to_file()
+
+    thread, message = await forum.create_thread(
+        name=title,
+        embed=embed,
+        file=file,
+    )
+    await ctx.send(f'Showcase created: {thread.jump_url}')
+```
+
+### Fetch Starter Message Content
+
+```python
+@bot.command()
+async def read_post(ctx, thread_id: int):
+    """Read the first message of a forum post."""
+    forum = bot.get_channel(FORUM_ID)
+    thread = forum.get_thread(thread_id) if forum else None
+
+    if not thread:
+        await ctx.send('Thread not found!')
+        return
+
+    # Starter message ID equals thread ID
+    try:
+        starter = await thread.fetch_message(thread.id)
+        content = starter.content or '(No text content)'
+
+        embed = discord.Embed(title=thread.name, description=content[:2000])
+        embed.set_footer(text=f'By {starter.author} | {len(starter.attachments)} attachments')
+        await ctx.send(embed=embed)
+    except discord.NotFound:
+        await ctx.send('Starter message was deleted.')
+```
