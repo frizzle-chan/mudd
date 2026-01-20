@@ -136,6 +136,37 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 - Uses `INSERT ON CONFLICT DO NOTHING` for idempotent sync (same entity+room = no-op)
 - Inventory instances (owner_id set) are NOT affected by sync - they persist independently
 
+### User Inventory Forums Table
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `user_id` | BIGINT (PK, FK to users.id) | Discord user ID |
+| `forum_id` | BIGINT NOT NULL | Discord forum channel snowflake |
+| `category_id` | BIGINT NOT NULL | Discord category snowflake (for validation) |
+| `created_at` | TIMESTAMPTZ NOT NULL | When the forum was created |
+
+**Purpose:**
+- Tracks per-user inventory forum channels
+- Each user gets a private forum channel named `<base62-user-id>-inventory`
+- Items in inventory are represented as threads within the forum
+- Only the owner can see their inventory forum
+
+**Constraints:**
+- PK on `user_id` (one forum per user)
+- FK to users(id) with ON DELETE CASCADE
+
+**Discord Integration:**
+- Forums created in a dedicated "Inventory" category with `@everyone` view_channel=False
+- Per-user forum permissions grant only the owner view_channel=True
+- When items are taken, a thread is created in the user's forum
+- When items are dropped, the thread is deleted
+
+**Entity Instances Extension:**
+- `discord_thread_id BIGINT` column added to entity_instances
+- Stores the Discord thread ID when an item is in a user's inventory
+- NULL when item is in a room (not in inventory)
+- Indexed for quick thread → instance lookups
+
 ### User Focus Table
 
 | Column | Type | Description |
