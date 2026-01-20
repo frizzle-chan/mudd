@@ -38,10 +38,10 @@ class Interact(commands.Cog):
         self.pool = pool
         self._rendering = rendering_service
 
-    async def target_autocomplete(
+    async def with_autocomplete(
         self, interaction: Interaction, current: str
     ) -> list[app_commands.Choice[str]]:
-        """Autocomplete callback for target parameter.
+        """Autocomplete callback for with parameter.
 
         Suggests entity names from the current room, excluding entities
         inside containers with contents_visible=False. When a user has an
@@ -83,11 +83,11 @@ class Interact(commands.Cog):
 
     @app_commands.command(name="interact", description="Interact with an entity")
     @app_commands.describe(
-        action="Action to perform (e.g., smash, touch, take)",
-        target="Thing to interact with",
+        with_entity="Thing to interact with",
+        do="Action to perform (e.g., smash, touch, take)",
     )
-    @app_commands.autocomplete(target=target_autocomplete)
-    async def interact(self, interaction: Interaction, action: str, target: str):
+    @app_commands.autocomplete(with_entity=with_autocomplete)
+    async def interact(self, interaction: Interaction, with_entity: str, do: str):
         """Interact with an entity using a verb."""
         await self.visibility_service.wait_for_startup()
 
@@ -105,11 +105,11 @@ class Interact(commands.Cog):
         all_entities = await self.entity_service.get_room_entities(room)
 
         # Resolve target to entity
-        match_result = match_entity_by_prefix(target, all_entities)
+        match_result = match_entity_by_prefix(with_entity, all_entities)
 
         if match_result.is_empty():
             await interaction.response.send_message(
-                f"You don't see '{target}' here.", ephemeral=True
+                f"You don't see '{with_entity}' here.", ephemeral=True
             )
             return
 
@@ -125,7 +125,7 @@ class Interact(commands.Cog):
         matched_instance = match_result.matches[0].instance
         entity = matched_instance.entity
 
-        action_type = await match_verb(self.pool, action)
+        action_type = await match_verb(self.pool, do)
 
         if action_type is None:
             await interaction.response.send_message(

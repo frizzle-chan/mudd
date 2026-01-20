@@ -156,13 +156,13 @@ class TestClient:
         await self.look_cog.look.callback(self.look_cog, interaction, at=at)
         return interaction.last_response
 
-    async def interact(self, user: TestUser, action: str, target: str) -> str:
+    async def interact(self, user: TestUser, with_entity: str, do: str) -> str:
         """Execute /interact command in user's current room.
 
         Args:
             user: The test user executing the command.
-            action: The verb action (e.g., "open", "touch", "smash").
-            target: The entity name to interact with.
+            with_entity: The entity name to interact with.
+            do: The verb action (e.g., "open", "touch", "smash").
 
         Returns:
             The response message from the command.
@@ -170,7 +170,7 @@ class TestClient:
         topic = await self._get_room_topic(user.room)
         interaction = MockInteraction(user.id, user.room, topic)
         await self.interact_cog.interact.callback(
-            self.interact_cog, interaction, action=action, target=target
+            self.interact_cog, interaction, with_entity=with_entity, do=do
         )
         return interaction.last_response
 
@@ -222,7 +222,7 @@ class TestClient:
     async def interact_autocomplete(
         self, user: TestUser, current: str = ""
     ) -> list[AutocompleteResult]:
-        """Get autocomplete suggestions for /interact target: parameter.
+        """Get autocomplete suggestions for /interact with_entity: parameter.
 
         Args:
             user: The test user executing the autocomplete.
@@ -235,7 +235,7 @@ class TestClient:
         mock_interaction = MockInteraction(user.id, user.room, topic)
         # Cast for type checker (MockInteraction provides needed interface)
         interaction = cast("Interaction[Any]", mock_interaction)
-        choices = await self.interact_cog.target_autocomplete(interaction, current)
+        choices = await self.interact_cog.with_autocomplete(interaction, current)
         return [AutocompleteResult(name=c.name, value=c.value) for c in choices]
 
     async def move_autocomplete(
