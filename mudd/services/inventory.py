@@ -1,5 +1,6 @@
 """Inventory service for managing per-user inventory forum channels."""
 
+import contextlib
 import logging
 from dataclasses import dataclass
 from uuid import UUID
@@ -143,7 +144,7 @@ class InventoryService:
             user_id: Discord user ID
 
         Returns:
-            The user's forum channel, or None if user not found in guild
+            The user's forum channel, or None if user not found in guild or is a bot
         """
         member = guild.get_member(user_id)
         if member is None:
@@ -189,6 +190,8 @@ class InventoryService:
             member: discord.PermissionOverwrite(
                 view_channel=True,
                 send_messages_in_threads=True,
+                create_public_threads=False,
+                send_messages=False,
             ),
         }
 
@@ -223,7 +226,8 @@ class InventoryService:
             guild: Discord guild
 
         Returns:
-            Stats dict with counts
+            Stats dict with keys: 'created' (new forums), 'existing' (already
+            had forum), 'fixed' (permissions corrected), 'errors' (failed)
         """
         stats = {"created": 0, "existing": 0, "fixed": 0, "errors": 0}
 
@@ -290,6 +294,7 @@ class InventoryService:
         if forum is None:
             return None
 
+        thread: discord.Thread | None = None
         try:
             thread, message = await forum.create_thread(
                 name=item_name,
@@ -309,6 +314,12 @@ class InventoryService:
         except discord.HTTPException as e:
             logger.error(f"Failed to create item thread: {e}")
             return None
+        except asyncpg.PostgresError as e:
+            logger.error(f"Failed to store thread ID, deleting orphaned thread: {e}")
+            if thread:
+                with contextlib.suppress(discord.HTTPException):
+                    await thread.delete()
+            return None
 
     async def delete_item_thread(self, guild: discord.Guild, instance_id: UUID) -> bool:
         """Delete the thread for an inventory item.
@@ -318,7 +329,8 @@ class InventoryService:
             instance_id: Entity instance UUID
 
         Returns:
-            True if deleted, False if not found or failed
+            True if deleted or thread was already gone (DB reference cleared),
+            False if instance has no thread reference or Discord deletion failed
         """
         # Get thread ID from database
         row = await self._pool.fetchrow(
@@ -330,13 +342,7 @@ class InventoryService:
 
         thread_id = row["discord_thread_id"]
 
-        # Clear thread ID from instance
-        await self._pool.execute(
-            "UPDATE entity_instances SET discord_thread_id = NULL WHERE id = $1",
-            instance_id,
-        )
-
-        # Find and delete the Discord thread
+        # Delete Discord thread first (before DB update to avoid orphaning)
         thread = guild.get_thread(thread_id)
         if thread:
             try:
@@ -345,6 +351,12 @@ class InventoryService:
             except discord.HTTPException as e:
                 logger.error(f"Failed to delete thread {thread_id}: {e}")
                 return False
+
+        # Only clear DB reference after successful Discord deletion
+        await self._pool.execute(
+            "UPDATE entity_instances SET discord_thread_id = NULL WHERE id = $1",
+            instance_id,
+        )
 
         return True
 

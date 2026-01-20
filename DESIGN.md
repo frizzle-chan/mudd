@@ -116,6 +116,7 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 | `entity_id` | TEXT NOT NULL (FK to entities.id) | Reference to entity definition |
 | `room` | TEXT (FK to rooms.id) | Logical room name (NULL when in inventory) |
 | `owner_id` | BIGINT (FK to users.id) | Player who owns this instance (NULL when in room) |
+| `discord_thread_id` | BIGINT | Discord thread ID when item is in inventory (NULL when in room) |
 | `created_at` | TIMESTAMPTZ NOT NULL | Instance creation timestamp |
 
 **Constraints:**

@@ -23,9 +23,3 @@ ALTER TABLE entity_instances ADD COLUMN discord_thread_id BIGINT;
 -- squawk-ignore require-concurrent-index-creation
 CREATE INDEX idx_entity_instances_thread ON entity_instances(discord_thread_id)
 WHERE discord_thread_id IS NOT NULL;
-
--- Index for user inventory queries (get all items owned by a user)
--- CONCURRENTLY cannot be used inside a transaction block (migration runner uses transactions)
--- squawk-ignore require-concurrent-index-creation
-CREATE INDEX idx_entity_instances_owner_inventory ON entity_instances(owner_id)
-WHERE owner_id IS NOT NULL;

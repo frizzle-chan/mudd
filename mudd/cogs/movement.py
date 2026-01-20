@@ -191,11 +191,14 @@ class Movement(commands.Cog):
                     f"Cannot assign default location to {member.id}: "
                     f"default room '{default_room}' not found"
                 )
-
-            # Create inventory forum for new member
-            await self.inventory_service.ensure_user_forum(member.guild, member.id)
         except Exception:
             logger.exception("Failed to assign default location to %s", member.id)
+
+        # Create inventory forum for new member
+        try:
+            await self.inventory_service.ensure_user_forum(member.guild, member.id)
+        except Exception:
+            logger.exception("Failed to create inventory forum for %s", member.id)
 
     @commands.Cog.listener()
     async def on_member_remove(self, member: discord.Member):
@@ -215,6 +218,7 @@ class Movement(commands.Cog):
                         logger.error(
                             f"Failed to delete inventory forum for {member.id}: {e}"
                         )
+                        return  # Don't proceed with DB cleanup if forum deletion failed
 
             # Database cleanup (CASCADE will handle user_inventory_forums)
             await self.visibility_service.delete_user_location(member.id)
