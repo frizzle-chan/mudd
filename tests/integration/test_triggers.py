@@ -46,7 +46,9 @@ class TestTriggerTypes:
         """Taking Test Gadget triggers TEST_TAKE_RESPONSE."""
         user = await test_client.create_user(user_id=400000005, room="store-room")
         await test_client.interact(user, with_entity="Cardboard Box", do="open")
-        response = await test_client.interact(user, with_entity="Test Gadget", do="take")
+        response = await test_client.interact(
+            user, with_entity="Test Gadget", do="take"
+        )
         assert "TEST_TAKE_RESPONSE" in response
 
     async def test_on_open_trigger(self, test_client):
@@ -92,14 +94,18 @@ class TestVerbFuzzyMatching:
         """'examine' synonym maps to on_look."""
         user = await test_client.create_user(user_id=400000020, room="store-room")
         await test_client.interact(user, with_entity="Cardboard Box", do="open")
-        response = await test_client.interact(user, with_entity="Test Orb", do="examine")
+        response = await test_client.interact(
+            user, with_entity="Test Orb", do="examine"
+        )
         assert "TEST_LOOK_RESPONSE" in response
 
     async def test_synonym_inspect_maps_to_look(self, test_client):
         """'inspect' synonym maps to on_look."""
         user = await test_client.create_user(user_id=400000021, room="store-room")
         await test_client.interact(user, with_entity="Cardboard Box", do="open")
-        response = await test_client.interact(user, with_entity="Test Orb", do="inspect")
+        response = await test_client.interact(
+            user, with_entity="Test Orb", do="inspect"
+        )
         assert "TEST_LOOK_RESPONSE" in response
 
     async def test_synonym_feel_maps_to_touch(self, test_client):
@@ -120,7 +126,9 @@ class TestVerbFuzzyMatching:
         """'grab' synonym maps to on_take."""
         user = await test_client.create_user(user_id=400000024, room="store-room")
         await test_client.interact(user, with_entity="Cardboard Box", do="open")
-        response = await test_client.interact(user, with_entity="Test Gadget", do="grab")
+        response = await test_client.interact(
+            user, with_entity="Test Gadget", do="grab"
+        )
         assert "TEST_TAKE_RESPONSE" in response
 
     async def test_synonym_unlock_maps_to_open(self, test_client):
