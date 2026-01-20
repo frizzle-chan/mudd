@@ -7,10 +7,7 @@ import asyncpg
 from discord import Interaction, app_commands
 from discord.ext import commands
 
-from mudd.matching.entity_matcher import (
-    get_focus_aware_autocomplete_entities,
-    match_entity_by_prefix,
-)
+from mudd.matching.entity_matcher import match_entity_by_prefix
 from mudd.matching.verb_matcher import match_verb
 from mudd.services.entity import ResolvedEntity
 from mudd.services.rendering import RenderingService, TemplateRenderError
@@ -18,7 +15,7 @@ from mudd.types import VerbAction
 
 if TYPE_CHECKING:
     from mudd.services.entity import EntityService
-    from mudd.services.focus_context import FocusContextService
+    from mudd.services.player_context import PlayerContextService
     from mudd.services.visibility import VisibilityServiceProtocol
 
 logger = logging.getLogger(__name__)
@@ -29,14 +26,14 @@ class Interact(commands.Cog):
         self,
         bot: commands.Bot | None,
         entity_service: "EntityService",
-        focus_service: "FocusContextService",
+        player_context: "PlayerContextService",
         visibility_service: "VisibilityServiceProtocol",
         pool: asyncpg.Pool,
         rendering_service: RenderingService,
     ) -> None:
         self.bot = bot
         self.entity_service = entity_service
-        self.focus_service = focus_service
+        self.player_context = player_context
         self.visibility_service = visibility_service
         self.pool = pool
         self._rendering = rendering_service
@@ -58,30 +55,10 @@ class Interact(commands.Cog):
             if not room:
                 return []
 
-            # Get focus-aware autocomplete choices
-            choices = await get_focus_aware_autocomplete_entities(
-                self.entity_service, self.focus_service, interaction.user.id, room
+            # Get autocomplete choices with text filtering
+            choices = await self.player_context.get_visible_entities(
+                room, interaction.user.id, query=current
             )
-
-            # Filter by current input using word prefix matching
-            if current:
-                # Get matching instances
-                instances = [c.instance for c in choices]
-                match_result = match_entity_by_prefix(current, instances)
-                matched_ids = {m.instance.entity.id for m in match_result.matches}
-                # Filter choices to matched entities only
-                choices = [c for c in choices if c.instance.entity.id in matched_ids]
-
-            # Reserve slots for room entities when focused
-            # This ensures room entities are visible as escape options
-            focused_items = [c for c in choices if c.is_focused]
-            room_items = [c for c in choices if not c.is_focused]
-
-            if len(focused_items) > 20 and len(room_items) > 0:
-                # Truncate focused items to show some room entities
-                max_focused = 24 - min(len(room_items), 4)  # Leave up to 4 slots
-                focused_items = focused_items[:max_focused]
-                choices = focused_items + room_items
 
             # Return as Discord choices (limit 25 per Discord API)
             return [
@@ -94,6 +71,12 @@ class Interact(commands.Cog):
         except asyncpg.PostgresError:
             logger.exception(
                 "Database error in target autocomplete for room '%s'",
+                getattr(interaction.channel, "name", "unknown"),
+            )
+            return []
+        except Exception:
+            logger.exception(
+                "Unexpected error in target autocomplete for room '%s'",
                 getattr(interaction.channel, "name", "unknown"),
             )
             return []
@@ -151,16 +134,16 @@ class Interact(commands.Cog):
             return
 
         # Check if target is in current focus (to decide whether to clear focus)
-        is_in_focus = await self.focus_service.is_entity_in_focus(
+        is_in_focus = await self.player_context.is_entity_in_focus(
             user_id, room, entity.id
         )
 
         if is_in_focus:
             # Update timestamp to prevent timeout when interacting with focused content
-            await self.focus_service.update_focus_timestamp(user_id)
+            await self.player_context.update_focus_timestamp(user_id)
         else:
             # Clear focus when interacting with entity not in current focus
-            await self.focus_service.clear_focus(user_id, reason="interaction")
+            await self.player_context.clear_focus(user_id, reason="interaction")
 
         # Get handler text based on action
         handler_text = _get_handler_text(entity, action_type)
@@ -190,11 +173,11 @@ class Interact(commands.Cog):
         # Handle focus changes based on action type
         if action_type == VerbAction.ON_OPEN and entity.focus_mode != "none":
             # Establish focus when opening a focusable entity (e.g., container)
-            await self.focus_service.set_focus(user_id, room, entity)
+            await self.player_context.set_focus(user_id, room, entity)
         elif action_type == VerbAction.ON_CLOSE:
             # Clear focus when explicitly closing
             # Get close message (template) before clearing
-            close_template = await self.focus_service.clear_focus(
+            close_template = await self.player_context.clear_focus(
                 user_id, reason="close"
             )
             if close_template:

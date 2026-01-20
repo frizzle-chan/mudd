@@ -1,5 +1,7 @@
 """Entity service for runtime entity lookups with caching."""
 
+from __future__ import annotations
+
 import logging
 from dataclasses import dataclass
 from typing import Literal
@@ -278,8 +280,32 @@ class EntityService:
 
         return instances
 
+    async def get_visible_entities(self, room: str) -> list[EntityInstance]:
+        """Get visible entities for a room.
+
+        Returns top-level entities + contents of visible containers.
+        Not cached here - PlayerContextService caches the processed results.
+
+        Args:
+            room: Room ID
+
+        Returns:
+            List of EntityInstance objects visible in the room
+        """
+        top_level = await self.get_top_level_room_entities(room)
+        result: list[EntityInstance] = []
+
+        for instance in top_level:
+            result.append(instance)
+            # Add contents of visible containers
+            if instance.entity.contents_visible:
+                contents = await self.get_container_contents(instance.entity.id, room)
+                result.extend(contents)
+
+        return result
+
     def invalidate_cache(self) -> None:
-        """Clear the entity cache.
+        """Clear entity resolution cache.
 
         Called after entity sync to ensure cache reflects latest data.
         """

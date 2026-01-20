@@ -7,15 +7,12 @@ import asyncpg
 from discord import Interaction, app_commands
 from discord.ext import commands
 
-from mudd.matching.entity_matcher import (
-    get_focus_aware_autocomplete_entities,
-    match_entity_by_prefix,
-)
+from mudd.matching.entity_matcher import match_entity_by_prefix
 from mudd.services.rendering import RenderingService, TemplateRenderError
 
 if TYPE_CHECKING:
     from mudd.services.entity import EntityService
-    from mudd.services.focus_context import FocusContextService
+    from mudd.services.player_context import PlayerContextService
     from mudd.services.visibility import VisibilityServiceProtocol
 
 logger = logging.getLogger(__name__)
@@ -26,13 +23,13 @@ class Look(commands.Cog):
         self,
         bot: commands.Bot | None,
         entity_service: "EntityService",
-        focus_service: "FocusContextService",
+        player_context: "PlayerContextService",
         visibility_service: "VisibilityServiceProtocol",
         rendering_service: RenderingService,
     ) -> None:
         self.bot = bot
         self.entity_service = entity_service
-        self.focus_service = focus_service
+        self.player_context = player_context
         self.visibility_service = visibility_service
         self._rendering = rendering_service
 
@@ -53,24 +50,10 @@ class Look(commands.Cog):
             if not room:
                 return []
 
-            # Get focus-aware autocomplete choices
-            choices = await get_focus_aware_autocomplete_entities(
-                self.entity_service, self.focus_service, interaction.user.id, room
+            # Get autocomplete choices with text filtering
+            choices = await self.player_context.get_visible_entities(
+                room, interaction.user.id, query=current
             )
-
-            # Filter by current input using word prefix matching
-            if current:
-                # Get matching instances
-                instances = [c.instance for c in choices]
-                match_result = match_entity_by_prefix(current, instances)
-                matched_ids = {m.instance.entity.id for m in match_result.matches}
-                # Filter choices to matched entities only
-                choices = [c for c in choices if c.instance.entity.id in matched_ids]
-
-            # When focused, only show container contents (not room entities)
-            focused_items = [c for c in choices if c.is_focused]
-            if focused_items:
-                choices = focused_items
 
             # Return as choices (limit 25 per Discord)
             result = [
@@ -82,7 +65,7 @@ class Look(commands.Cog):
             ]
 
             # Get focus to determine Room option display
-            focus = await self.focus_service.get_focus(interaction.user.id, room)
+            focus = await self.player_context.get_focus(interaction.user.id, room)
             room_display = f"[Close {focus.entity_name}] Room" if focus else "Room"
 
             # Add "Room" option at top if it matches current input
@@ -94,6 +77,12 @@ class Look(commands.Cog):
         except asyncpg.PostgresError:
             logger.exception(
                 "Database error in at autocomplete for room '%s'",
+                getattr(interaction.channel, "name", "unknown"),
+            )
+            return []
+        except Exception:
+            logger.exception(
+                "Unexpected error in at autocomplete for room '%s'",
                 getattr(interaction.channel, "name", "unknown"),
             )
             return []
@@ -114,7 +103,7 @@ class Look(commands.Cog):
             if at == "Room":
                 # Get focus to capture entity before clearing (for template rendering)
                 if room:
-                    focus = await self.focus_service.get_focus(
+                    focus = await self.player_context.get_focus(
                         interaction.user.id, room
                     )
                     focused_entity = None
@@ -124,7 +113,7 @@ class Look(commands.Cog):
                         )
 
                     # Clear focus with "close" reason to get on_close template
-                    close_template = await self.focus_service.clear_focus(
+                    close_template = await self.player_context.clear_focus(
                         interaction.user.id, reason="close"
                     )
 
@@ -143,7 +132,7 @@ class Look(commands.Cog):
                             entity_name = focused_entity.name
                             close_msg = f"You step away from the *{entity_name}*."
                 else:
-                    await self.focus_service.clear_focus(
+                    await self.player_context.clear_focus(
                         interaction.user.id, reason="close"
                     )
 
@@ -209,17 +198,17 @@ class Look(commands.Cog):
                 entity = matched_instance.entity
 
                 # Check if looking at entity that is NOT in current focus
-                is_in_focus = await self.focus_service.is_entity_in_focus(
+                is_in_focus = await self.player_context.is_entity_in_focus(
                     user_id, room, entity.id
                 )
 
                 # Clear focus if looking at unrelated entity
                 # (per ADR 0003: "focus follows attention")
                 if not is_in_focus:
-                    await self.focus_service.clear_focus(user_id, reason="interaction")
+                    await self.player_context.clear_focus(user_id, reason="interaction")
                 else:
                     # Update timestamp to prevent timeout
-                    await self.focus_service.update_focus_timestamp(user_id)
+                    await self.player_context.update_focus_timestamp(user_id)
 
                 # Render on_look template
                 detail_text = await self._rendering.render_entity_on_look(

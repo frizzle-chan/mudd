@@ -15,6 +15,7 @@ from mudd.cogs.sync import Sync
 from mudd.database import close_pool, get_pool, init_database
 from mudd.services.entity import EntityService
 from mudd.services.focus_context import FocusContextService
+from mudd.services.player_context import PlayerContextService
 from mudd.services.rendering import RenderingService
 from mudd.services.visibility import VisibilityService
 
@@ -70,6 +71,7 @@ async def setup_hook():
     # Create services with explicit dependencies
     entity_service = EntityService(pool)
     focus_service = FocusContextService(pool)
+    player_context = PlayerContextService(entity_service, focus_service)
     visibility_service = VisibilityService(pool)
     rendering_service = RenderingService()
 
@@ -78,19 +80,26 @@ async def setup_hook():
         Interact(
             bot,
             entity_service,
-            focus_service,
+            player_context,
             visibility_service,
             pool,
             rendering_service,
         )
     )
     await bot.add_cog(
-        Look(bot, entity_service, focus_service, visibility_service, rendering_service)
+        Look(bot, entity_service, player_context, visibility_service, rendering_service)
     )
     await bot.add_cog(Ping(bot))
-    await bot.add_cog(Movement(bot, visibility_service, focus_service))
+    await bot.add_cog(Movement(bot, visibility_service, player_context))
     await bot.add_cog(
-        Sync(bot, entity_service, visibility_service, pool, rendering_service)
+        Sync(
+            bot,
+            entity_service,
+            player_context,
+            visibility_service,
+            pool,
+            rendering_service,
+        )
     )
 
 

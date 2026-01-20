@@ -19,6 +19,7 @@ from mudd.loaders.entity_loader import sync_entities
 from mudd.loaders.verb_loader import sync_verbs
 from mudd.loaders.zone_loader import sync_zones_and_rooms
 from mudd.services.entity import EntityService
+from mudd.services.player_context import PlayerContextService
 from mudd.services.rendering import RenderingService
 from mudd.services.visibility import VisibilityService
 
@@ -41,12 +42,14 @@ class Sync(commands.Cog):
         self,
         bot: "MuddBot",
         entity_service: EntityService,
+        player_context: PlayerContextService,
         visibility_service: VisibilityService,
         pool: asyncpg.Pool,
         rendering_service: RenderingService,
     ) -> None:
         self.bot = bot
         self.entity_service = entity_service
+        self.player_context = player_context
         self.visibility_service = visibility_service
         self._pool = pool
         self._rendering = rendering_service
@@ -112,11 +115,20 @@ class Sync(commands.Cog):
             await sync_entities(pool, world_file)
             # Invalidate entity cache after sync
             self.entity_service.invalidate_cache()
+            # Invalidate player context cache after entity sync
+            self.player_context.invalidate_cache()
             # Clear template cache to ensure fresh templates
             self._rendering.clear_cache()
         except Exception:
             logger.exception("Failed to sync entities")
             raise
+
+        # Prepopulate autocomplete cache for all rooms with entities
+        try:
+            await self._prepopulate_autocomplete_cache(pool)
+        except Exception:
+            logger.exception("Failed to prepopulate autocomplete cache")
+            # Non-fatal: continue operation
 
         # Sync user permissions
         for guild in self.bot.guilds:
@@ -163,11 +175,20 @@ class Sync(commands.Cog):
                     await sync_entities(pool, world_file)
                     # Invalidate entity cache after sync
                     self.entity_service.invalidate_cache()
+                    # Invalidate player context cache after entity sync
+                    self.player_context.invalidate_cache()
                     # Clear template cache to ensure fresh templates
                     self._rendering.clear_cache()
                 except Exception:
                     logger.exception("Failed to sync entities")
                     # Don't raise - allow continued operation
+
+                # Prepopulate autocomplete cache for all rooms with entities
+                try:
+                    await self._prepopulate_autocomplete_cache(pool)
+                except Exception:
+                    logger.exception("Failed to prepopulate autocomplete cache")
+                    # Non-fatal: continue operation
 
                 # Permission sync
                 perm_stats = await self.visibility_service.sync_guild(guild)
@@ -181,3 +202,13 @@ class Sync(commands.Cog):
         """Wait for bot to be ready before starting sync."""
         await self.bot.wait_until_ready()
         logger.info("Sync task ready - starting first sync")
+
+    async def _prepopulate_autocomplete_cache(self, pool) -> None:
+        """Prepopulate autocomplete cache for all rooms with entities."""
+        rows = await pool.fetch(
+            "SELECT DISTINCT room FROM entity_instances WHERE room IS NOT NULL"
+        )
+        rooms = [row["room"] for row in rows]
+        if rooms:
+            count = await self.player_context.prepopulate_cache(rooms)
+            logger.info(f"Prepopulated autocomplete cache for {count} rooms")
