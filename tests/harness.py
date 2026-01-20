@@ -16,6 +16,7 @@ from mudd.cogs.look import Look
 from mudd.cogs.movement import Movement
 from mudd.services.entity import EntityService
 from mudd.services.focus_context import FocusContextService
+from mudd.services.inventory import InventoryService
 from mudd.services.player_context import PlayerContextService
 from mudd.services.rendering import RenderingService
 from tests.mocks.discord import (
@@ -81,6 +82,7 @@ class TestClient:
         )
         self._stub_visibility_service = StubVisibilityService()
         self.rendering_service = RenderingService()
+        self.inventory_service = InventoryService(pool, self.entity_service)
 
         # Cast stub to VisibilityServiceProtocol for type checking
         # (StubVisibilityService implements the protocol interface)
@@ -109,6 +111,7 @@ class TestClient:
             bot=None,
             visibility_service=visibility_service,
             player_context=self.player_context,
+            inventory_service=self.inventory_service,
         )
 
         # Cached mock guild (built lazily from DB room data)

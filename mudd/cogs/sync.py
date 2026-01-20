@@ -19,6 +19,7 @@ from mudd.loaders.entity_loader import sync_entities
 from mudd.loaders.verb_loader import sync_verbs
 from mudd.loaders.zone_loader import sync_zones_and_rooms
 from mudd.services.entity import EntityService
+from mudd.services.inventory import InventoryService
 from mudd.services.player_context import PlayerContextService
 from mudd.services.rendering import RenderingService
 from mudd.services.visibility import VisibilityService
@@ -46,6 +47,7 @@ class Sync(commands.Cog):
         visibility_service: VisibilityService,
         pool: asyncpg.Pool,
         rendering_service: RenderingService,
+        inventory_service: InventoryService,
     ) -> None:
         self.bot = bot
         self.entity_service = entity_service
@@ -53,6 +55,7 @@ class Sync(commands.Cog):
         self.visibility_service = visibility_service
         self._pool = pool
         self._rendering = rendering_service
+        self.inventory_service = inventory_service
         self._seen_orphans: set[tuple[int, str, str]] = set()
         self._console_channel = os.environ.get("MUDD_CONSOLE_CHANNEL", "console")
         self.periodic_sync.start()
@@ -130,7 +133,7 @@ class Sync(commands.Cog):
             logger.exception("Failed to prepopulate autocomplete cache")
             # Non-fatal: continue operation
 
-        # Sync user permissions
+        # Sync user permissions and inventory forums
         for guild in self.bot.guilds:
             try:
                 stats = await self.visibility_service.sync_guild(guild)
@@ -138,6 +141,14 @@ class Sync(commands.Cog):
             except Exception:
                 logger.exception(f"Failed initial visibility sync for {guild.name}")
                 raise
+
+            # Sync inventory forums for all members
+            try:
+                inv_stats = await self.inventory_service.sync_user_forums(guild)
+                logger.info(f"Initial inventory sync for {guild.name}: {inv_stats}")
+            except Exception:
+                logger.exception(f"Failed initial inventory sync for {guild.name}")
+                # Non-fatal: continue operation
 
         # Mark startup complete - unblocks commands
         self.visibility_service.mark_startup_complete()
@@ -193,6 +204,14 @@ class Sync(commands.Cog):
                 # Permission sync
                 perm_stats = await self.visibility_service.sync_guild(guild)
                 logger.info(f"Permission sync for {guild.name}: {perm_stats}")
+
+                # Inventory forum sync
+                try:
+                    inv_stats = await self.inventory_service.sync_user_forums(guild)
+                    logger.info(f"Inventory sync for {guild.name}: {inv_stats}")
+                except Exception:
+                    logger.exception(f"Failed inventory sync for {guild.name}")
+                    # Non-fatal: continue operation
 
             except Exception:
                 logger.exception(f"Periodic sync failed for {guild.name}")

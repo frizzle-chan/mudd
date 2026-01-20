@@ -9,6 +9,7 @@ from discord import Interaction, app_commands
 from discord.ext import commands
 
 if TYPE_CHECKING:
+    from mudd.services.inventory import InventoryService
     from mudd.services.player_context import PlayerContextService
     from mudd.services.visibility import VisibilityServiceProtocol
 
@@ -69,10 +70,12 @@ class Movement(commands.Cog):
         bot: commands.Bot | None,
         visibility_service: "VisibilityServiceProtocol",
         player_context: "PlayerContextService",
+        inventory_service: "InventoryService",
     ) -> None:
         self.bot = bot
         self.visibility_service = visibility_service
         self.player_context = player_context
+        self.inventory_service = inventory_service
 
     async def destination_autocomplete(
         self, interaction: Interaction, current: str
@@ -171,7 +174,7 @@ class Movement(commands.Cog):
 
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
-        """Assign new members to the default location."""
+        """Assign new members to the default location and create inventory forum."""
         if member.bot:
             return
 
@@ -191,10 +194,33 @@ class Movement(commands.Cog):
         except Exception:
             logger.exception("Failed to assign default location to %s", member.id)
 
+        # Create inventory forum for new member
+        try:
+            await self.inventory_service.ensure_user_forum(member.guild, member.id)
+        except Exception:
+            logger.exception("Failed to create inventory forum for %s", member.id)
+
     @commands.Cog.listener()
     async def on_member_remove(self, member: discord.Member):
-        """Clean up user location and focus when member leaves."""
+        """Clean up user location, focus, and inventory forum when member leaves."""
         try:
+            # Delete inventory forum first (needs guild context before DB cleanup)
+            forum_data = await self.inventory_service.get_user_forum_from_db(member.id)
+            if forum_data:
+                forum = member.guild.get_channel(forum_data.forum_id)
+                if forum:
+                    try:
+                        await forum.delete()
+                        logger.info(
+                            f"Deleted inventory forum for departing user {member.id}"
+                        )
+                    except discord.HTTPException as e:
+                        logger.error(
+                            f"Failed to delete inventory forum for {member.id}: {e}"
+                        )
+                        return  # Don't proceed with DB cleanup if forum deletion failed
+
+            # Database cleanup (CASCADE will handle user_inventory_forums)
             await self.visibility_service.delete_user_location(member.id)
 
             # Clean up focus context
