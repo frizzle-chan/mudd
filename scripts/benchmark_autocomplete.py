@@ -9,9 +9,8 @@
 """Benchmark autocomplete performance.
 
 Measures:
-- get_autocomplete_entities() latency
 - focus_service.get_focus() latency
-- get_focus_aware_autocomplete_entities() end-to-end latency
+- player_context.get_visible_entities() end-to-end latency (cold and warm cache)
 
 Run before and after optimization to quantify improvement.
 """
@@ -29,12 +28,9 @@ from dotenv import load_dotenv
 # Add project root to path for imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from mudd.matching.entity_matcher import (
-    get_autocomplete_entities,
-    get_focus_aware_autocomplete_entities,
-)
 from mudd.services.entity import EntityService
 from mudd.services.focus_context import FocusContextService
+from mudd.services.player_context import PlayerContextService
 
 
 async def benchmark_function(name: str, func, iterations: int = 20) -> dict:
@@ -108,6 +104,7 @@ async def main() -> int:
     # Create services
     entity_service = EntityService(pool)
     focus_service = FocusContextService(pool)
+    player_context = PlayerContextService(entity_service, focus_service)
 
     # Use a fake user ID that won't have focus state
     user_id = 999999999
@@ -116,65 +113,43 @@ async def main() -> int:
     print("AUTOCOMPLETE BENCHMARKS")
     print("=" * 60)
 
-    # Benchmark 1: get_autocomplete_entities (cold cache)
-    entity_service.invalidate_cache()
+    # Benchmark 1: focus_service.get_focus()
     results1 = await benchmark_function(
-        "get_autocomplete_entities() [cold then warm cache]",
-        lambda: get_autocomplete_entities(entity_service, room),
-    )
-    print_results(results1)
-
-    # Benchmark 2: focus_service.get_focus()
-    results2 = await benchmark_function(
         "focus_service.get_focus() [no focus exists]",
         lambda: focus_service.get_focus(user_id, room),
     )
+    print_results(results1)
+
+    # Benchmark 2: player_context.get_visible_entities - empty query (cold cache)
+    player_context.invalidate_cache()
+    results2 = await benchmark_function(
+        "player_context.get_visible_entities('') [cold then warm cache]",
+        lambda: player_context.get_visible_entities(room, user_id, query=""),
+    )
     print_results(results2)
 
-    # Benchmark 3: get_focus_aware_autocomplete_entities (cold cache)
-    entity_service.invalidate_cache()
+    # Benchmark 3: player_context.get_visible_entities - warm cache with empty query
+    await player_context.get_visible_entities(room, user_id, query="")
     results3 = await benchmark_function(
-        "get_focus_aware_autocomplete_entities() [cold then warm cache]",
-        lambda: get_focus_aware_autocomplete_entities(
-            entity_service, focus_service, user_id, room
-        ),
+        "player_context.get_visible_entities('') [warm cache only]",
+        lambda: player_context.get_visible_entities(room, user_id, query=""),
     )
     print_results(results3)
 
-    # Benchmark 4: get_focus_aware_autocomplete_entities (warm cache only)
-    # First call to warm up, then measure
-    await get_focus_aware_autocomplete_entities(
-        entity_service, focus_service, user_id, room
-    )
+    # Benchmark 4: player_context.get_visible_entities - warm cache with query filter
     results4 = await benchmark_function(
-        "get_focus_aware_autocomplete_entities() [warm cache only]",
-        lambda: get_focus_aware_autocomplete_entities(
-            entity_service, focus_service, user_id, room
-        ),
+        "player_context.get_visible_entities('tab') [warm cache + query filter]",
+        lambda: player_context.get_visible_entities(room, user_id, query="tab"),
     )
     print_results(results4)
-
-    # Benchmark 5: Test with cached autocomplete choices (if available)
-    if hasattr(entity_service, "get_cached_autocomplete_choices"):
-        print("\n[OPTIMIZED PATH AVAILABLE]")
-        entity_service.invalidate_cache()
-        results5 = await benchmark_function(
-            "get_cached_autocomplete_choices() [cold then warm]",
-            lambda: entity_service.get_cached_autocomplete_choices(room),
-        )
-        print_results(results5)
 
     print("\n" + "=" * 60)
     print("SUMMARY")
     print("=" * 60)
     print(f"Room tested: {room}")
-    print(f"Focus check overhead: ~{results2['mean_ms']:.2f}ms")
-    print(f"Full autocomplete (warm): ~{results4['mean_ms']:.2f}ms")
-
-    if hasattr(entity_service, "get_cached_autocomplete_choices"):
-        print(f"Cached autocomplete: ~{results5['mean_ms']:.2f}ms")  # type: ignore
-        speedup = results4["mean_ms"] / results5["mean_ms"]  # type: ignore
-        print(f"Speedup: {speedup:.1f}x")
+    print(f"Focus check overhead: ~{results1['mean_ms']:.2f}ms")
+    print(f"Full autocomplete, empty query (warm): ~{results3['mean_ms']:.2f}ms")
+    print(f"Full autocomplete, with query filter (warm): ~{results4['mean_ms']:.2f}ms")
 
     await pool.close()
     return 0

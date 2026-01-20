@@ -4,13 +4,10 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Literal
+from typing import Literal
 from uuid import UUID
 
 import asyncpg
-
-if TYPE_CHECKING:
-    from mudd.matching.entity_matcher import AutocompleteChoice
 
 logger = logging.getLogger(__name__)
 
@@ -65,7 +62,6 @@ class EntityService:
     def __init__(self, pool: asyncpg.Pool) -> None:
         self._pool = pool
         self._entity_cache: dict[str, ResolvedEntity] = {}
-        self._autocomplete_cache: dict[str, list[AutocompleteChoice]] = {}
 
     def _entity_from_row(self, row: asyncpg.Record) -> ResolvedEntity:
         """Construct ResolvedEntity from database row."""
@@ -284,59 +280,34 @@ class EntityService:
 
         return instances
 
-    async def get_cached_autocomplete_choices(
-        self, room: str
-    ) -> list[AutocompleteChoice]:
-        """Get cached autocomplete choices for a room.
+    async def get_visible_entities(self, room: str) -> list[EntityInstance]:
+        """Get visible entities for a room.
 
-        This method returns pre-computed autocomplete choices for users without
-        focus state. Results are identical for all users in the same room, so
-        caching provides significant performance improvement.
+        Returns top-level entities + contents of visible containers.
+        Not cached here - PlayerContextService caches the processed results.
 
         Args:
             room: Room ID
 
         Returns:
-            List of AutocompleteChoice objects for the room
+            List of EntityInstance objects visible in the room
         """
-        if room in self._autocomplete_cache:
-            return self._autocomplete_cache[room]
-
-        # Import here to avoid circular imports at module level
-        from mudd.matching.entity_matcher import AutocompleteChoice
-
-        # Build choices from visible entities
         top_level = await self.get_top_level_room_entities(room)
-        choices: list[AutocompleteChoice] = []
+        result: list[EntityInstance] = []
 
         for instance in top_level:
-            choices.append(
-                AutocompleteChoice(
-                    instance=instance,
-                    display_name=instance.entity.name,
-                    is_focused=False,
-                )
-            )
+            result.append(instance)
             # Add contents of visible containers
             if instance.entity.contents_visible:
                 contents = await self.get_container_contents(instance.entity.id, room)
-                for content_instance in contents:
-                    choices.append(
-                        AutocompleteChoice(
-                            instance=content_instance,
-                            display_name=content_instance.entity.name,
-                            is_focused=False,
-                        )
-                    )
+                result.extend(contents)
 
-        self._autocomplete_cache[room] = choices
-        return choices
+        return result
 
     def invalidate_cache(self) -> None:
-        """Clear all caches.
+        """Clear entity resolution cache.
 
-        Called after entity sync to ensure caches reflect latest data.
+        Called after entity sync to ensure cache reflects latest data.
         """
         self._entity_cache.clear()
-        self._autocomplete_cache.clear()
-        logger.debug("Entity caches invalidated")
+        logger.debug("Entity cache invalidated")

@@ -3,6 +3,7 @@
 from uuid import uuid4
 
 from mudd.matching.entity_matcher import (
+    EntityMatch,
     MatchResult,
     match_entity_by_prefix,
 )
@@ -156,18 +157,12 @@ class TestMatchResult:
         """is_unique returns True for single match."""
         table = make_entity("table", "Table")
         result = MatchResult(
-            matches=[
-                type(
-                    "Match", (), {"instance": make_instance(table), "match_quality": 0}
-                )()
-            ]
+            matches=[EntityMatch(instance=make_instance(table), match_quality=0)]
         )
         assert result.is_unique()
 
     def test_is_unique_with_multiple_matches(self):
         """is_unique returns False for multiple matches."""
-        from mudd.matching.entity_matcher import EntityMatch
-
         table = make_entity("table", "Table")
         chair = make_entity("chair", "Chair")
         result = MatchResult(
@@ -180,8 +175,6 @@ class TestMatchResult:
 
     def test_is_ambiguous_with_multiple_matches(self):
         """is_ambiguous returns True for multiple matches."""
-        from mudd.matching.entity_matcher import EntityMatch
-
         table = make_entity("table", "Table")
         chair = make_entity("chair", "Chair")
         result = MatchResult(

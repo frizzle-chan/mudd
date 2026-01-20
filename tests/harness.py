@@ -16,6 +16,7 @@ from mudd.cogs.look import Look
 from mudd.cogs.movement import Movement
 from mudd.services.entity import EntityService
 from mudd.services.focus_context import FocusContextService
+from mudd.services.player_context import PlayerContextService
 from mudd.services.rendering import RenderingService
 from tests.mocks.discord import (
     MockGuild,
@@ -75,6 +76,9 @@ class TestClient:
         # Create real services with test database
         self.entity_service = EntityService(pool)
         self.focus_service = FocusContextService(pool)
+        self.player_context = PlayerContextService(
+            self.entity_service, self.focus_service
+        )
         self._stub_visibility_service = StubVisibilityService()
         self.rendering_service = RenderingService()
 
@@ -89,14 +93,14 @@ class TestClient:
         self.look_cog = Look(
             bot=None,
             entity_service=self.entity_service,
-            focus_service=self.focus_service,
+            player_context=self.player_context,
             visibility_service=visibility_service,
             rendering_service=self.rendering_service,
         )
         self.interact_cog = Interact(
             bot=None,
             entity_service=self.entity_service,
-            focus_service=self.focus_service,
+            player_context=self.player_context,
             visibility_service=visibility_service,
             pool=pool,
             rendering_service=self.rendering_service,
@@ -104,7 +108,7 @@ class TestClient:
         self.movement_cog = Movement(
             bot=None,
             visibility_service=visibility_service,
-            focus_service=self.focus_service,
+            player_context=self.player_context,
         )
 
         # Cached mock guild (built lazily from DB room data)
