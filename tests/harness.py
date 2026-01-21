@@ -156,13 +156,13 @@ class TestClient:
         await self.look_cog.look.callback(self.look_cog, interaction, at=at)
         return interaction.last_response
 
-    async def interact(self, user: TestUser, with_entity: str, do: str) -> str:
+    async def interact(self, user: TestUser, with_entity: str, do_verb: str) -> str:
         """Execute /interact command in user's current room.
 
         Args:
             user: The test user executing the command.
             with_entity: The entity name to interact with.
-            do: The verb action (e.g., "open", "touch", "smash").
+            do_verb: The verb action (e.g., "open", "touch", "smash").
 
         Returns:
             The response message from the command.
@@ -170,7 +170,7 @@ class TestClient:
         topic = await self._get_room_topic(user.room)
         interaction = MockInteraction(user.id, user.room, topic)
         await self.interact_cog.interact.callback(
-            self.interact_cog, interaction, with_entity=with_entity, do=do
+            self.interact_cog, interaction, with_entity=with_entity, do_verb=do_verb
         )
         return interaction.last_response
 

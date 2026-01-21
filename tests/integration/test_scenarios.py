@@ -47,7 +47,7 @@ class TestUserExploresFoyer:
 
         # User tries to smash the vase (attack verb)
         response = await test_client.interact(
-            user, with_entity="Flower Vase", do="smash"
+            user, with_entity="Flower Vase", do_verb="smash"
         )
         assert "intrusive thought" in response.lower()
 
@@ -57,7 +57,7 @@ class TestUserExploresFoyer:
 
         # User touches the table
         response = await test_client.interact(
-            user, with_entity="Wooden Table", do="touch"
+            user, with_entity="Wooden Table", do_verb="touch"
         )
         assert "touch" in response.lower() or "nothing happens" in response.lower()
 
@@ -81,7 +81,7 @@ class TestUserDiscoversRecords:
 
         # User opens the chest - establishes focus
         response = await test_client.interact(
-            user, with_entity="Wooden Chest", do="open"
+            user, with_entity="Wooden Chest", do_verb="open"
         )
         # Should show contents or "Inside" text
         has_content = any(
@@ -118,10 +118,10 @@ class TestUserDiscoversRecords:
         user = await test_client.create_user(user_id=300000011, room="library")
 
         # User opens the chest
-        await test_client.interact(user, with_entity="Wooden Chest", do="open")
+        await test_client.interact(user, with_entity="Wooden Chest", do_verb="open")
 
         # User uses a record
-        response = await test_client.interact(user, with_entity="WLFGRL", do="use")
+        response = await test_client.interact(user, with_entity="WLFGRL", do_verb="use")
         assert "music" in response.lower() or "fills the room" in response.lower()
 
         # Focus preserved when interacting with chest contents
@@ -138,7 +138,7 @@ class TestFocusClears:
         user = await test_client.create_user(user_id=300000020, room="library")
 
         # User opens the chest
-        await test_client.interact(user, with_entity="Wooden Chest", do="open")
+        await test_client.interact(user, with_entity="Wooden Chest", do_verb="open")
 
         # Verify focus is set
         focus = await test_client.get_focus(user)
@@ -146,7 +146,7 @@ class TestFocusClears:
 
         # User closes the chest
         response = await test_client.interact(
-            user, with_entity="Wooden Chest", do="close"
+            user, with_entity="Wooden Chest", do_verb="close"
         )
         assert "close" in response.lower()
 
@@ -159,7 +159,7 @@ class TestFocusClears:
         user = await test_client.create_user(user_id=300000021, room="library")
 
         # User opens the chest
-        await test_client.interact(user, with_entity="Wooden Chest", do="open")
+        await test_client.interact(user, with_entity="Wooden Chest", do_verb="open")
 
         # Verify focus is set
         focus = await test_client.get_focus(user)
@@ -180,7 +180,7 @@ class TestFocusClears:
         user = await test_client.create_user(user_id=300000022, room="library")
 
         # User opens the chest
-        await test_client.interact(user, with_entity="Wooden Chest", do="open")
+        await test_client.interact(user, with_entity="Wooden Chest", do_verb="open")
 
         # Verify focus is set
         focus = await test_client.get_focus(user)
@@ -198,14 +198,14 @@ class TestFocusClears:
         user = await test_client.create_user(user_id=300000023, room="library")
 
         # User opens the chest
-        await test_client.interact(user, with_entity="Wooden Chest", do="open")
+        await test_client.interact(user, with_entity="Wooden Chest", do_verb="open")
 
         # Verify focus is set
         focus = await test_client.get_focus(user)
         assert focus is not None
 
         # User interacts with bookshelves (not in the chest)
-        await test_client.interact(user, with_entity="Bookshelves", do="touch")
+        await test_client.interact(user, with_entity="Bookshelves", do_verb="touch")
 
         # Focus should be cleared
         focus = await test_client.get_focus(user)
@@ -240,7 +240,7 @@ class TestInvalidActions:
         user = await test_client.create_user(user_id=300000041, room="foyer")
 
         response = await test_client.interact(
-            user, with_entity="Nonexistent Thing", do="touch"
+            user, with_entity="Nonexistent Thing", do_verb="touch"
         )
         assert "don't see" in response.lower()
 
@@ -249,7 +249,7 @@ class TestInvalidActions:
         user = await test_client.create_user(user_id=300000042, room="foyer")
 
         response = await test_client.interact(
-            user, with_entity="Flower Vase", do="juggle"
+            user, with_entity="Flower Vase", do_verb="juggle"
         )
         assert "can't do that" in response.lower()
 
@@ -262,7 +262,7 @@ class TestDisambiguation:
         user = await test_client.create_user(user_id=300000050, room="library")
 
         # First open the chest so records are accessible
-        await test_client.interact(user, with_entity="Wooden Chest", do="open")
+        await test_client.interact(user, with_entity="Wooden Chest", do_verb="open")
 
         # Search for partial match "Alvvays" (there are two Alvvays records)
         response = await test_client.look(user, at="Alvvays")
@@ -301,7 +301,7 @@ class TestMovement:
         user = await test_client.create_user(user_id=400008, room="library")
 
         # User opens the chest
-        await test_client.interact(user, with_entity="Wooden Chest", do="open")
+        await test_client.interact(user, with_entity="Wooden Chest", do_verb="open")
         focus = await test_client.get_focus(user)
         assert focus is not None
 

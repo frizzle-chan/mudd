@@ -84,10 +84,11 @@ class Interact(commands.Cog):
     @app_commands.command(name="interact", description="Interact with an entity")
     @app_commands.describe(
         with_entity="Thing to interact with",
-        do="Action to perform (e.g., smash, touch, take)",
+        do_verb="Action to perform (e.g., smash, touch, take)",
     )
+    @app_commands.rename(with_entity="with", do_verb="do")
     @app_commands.autocomplete(with_entity=with_autocomplete)
-    async def interact(self, interaction: Interaction, with_entity: str, do: str):
+    async def interact(self, interaction: Interaction, with_entity: str, do_verb: str):
         """Interact with an entity using a verb."""
         await self.visibility_service.wait_for_startup()
 
@@ -125,7 +126,7 @@ class Interact(commands.Cog):
         matched_instance = match_result.matches[0].instance
         entity = matched_instance.entity
 
-        action_type = await match_verb(self.pool, do)
+        action_type = await match_verb(self.pool, do_verb)
 
         if action_type is None:
             await interaction.response.send_message(
