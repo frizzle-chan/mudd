@@ -82,13 +82,14 @@ class Interact(commands.Cog):
             )
             return []
 
-    @app_commands.command(name="interact", description="Interact with an entity")
+    @app_commands.command(name="interact", description="Interact with things")
     @app_commands.describe(
         action="Action to perform (e.g., smash, touch, take)",
         target="Thing to interact with",
     )
+    @app_commands.rename(target="with")
     @app_commands.autocomplete(target=target_autocomplete)
-    async def interact(self, interaction: Interaction, action: str, target: str):
+    async def interact(self, interaction: Interaction, target: str, action: str):
         """Interact with an entity using a verb."""
         await self.visibility_service.wait_for_startup()
 
