@@ -65,6 +65,32 @@ async def test_stale_focus_cleared_on_get(self, test_client):
     )
 ```
 
+## Test Fixtures in Store Room
+
+The `store-room` contains test fixtures with predictable strings for integration tests. These entities are in the `storeroom_box` container:
+
+| Entity | Purpose | Test Strings |
+|--------|---------|--------------|
+| `test_orb` | Testing OnLook, OnTouch, OnAttack | `TEST_LOOK_RESPONSE`, `TEST_TOUCH_RESPONSE`, `TEST_ATTACK_RESPONSE` |
+| `test_gadget` | Testing OnUse, OnTake | `TEST_USE_RESPONSE`, `TEST_TAKE_RESPONSE` |
+| `test_lockbox` | Testing OnOpen, OnClose | `TEST_OPEN_RESPONSE`, `TEST_CLOSE_RESPONSE` |
+| `test_record` | Testing effects.broadcast() | `TEST_EPHEMERAL_RESPONSE`, `TEST_BROADCAST_RESPONSE` |
+
+### Example: Using Test Fixtures
+
+```python
+async def test_broadcast_functionality(self, test_client):
+    user = await test_client.create_user(user_id=123, room="store-room")
+    # Open the container to access fixtures
+    await test_client.interact(user, action="open", target="Cardboard Box")
+    # Use the test record
+    response, broadcasts = await test_client.interact_with_broadcasts(
+        user, action="use", target="Test Record"
+    )
+    assert "TEST_EPHEMERAL_RESPONSE" in response
+    assert "TEST_BROADCAST_RESPONSE" in broadcasts[0]
+```
+
 ## Directory Structure
 
 ```

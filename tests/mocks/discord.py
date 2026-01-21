@@ -49,6 +49,8 @@ class MockTextChannel:
         self.topic = topic
         # Use hash of name as default ID to ensure consistency
         self.id = channel_id if channel_id is not None else hash(name) & 0xFFFFFFFF
+        # Capture messages sent to channel (for testing broadcasts)
+        self.sent_messages: list[str] = []
 
     @property
     def mention(self) -> str:
@@ -56,8 +58,8 @@ class MockTextChannel:
         return f"<#{self.id}>"
 
     async def send(self, content: str) -> None:
-        """Mock sending a message to the channel (no-op in tests)."""
-        pass
+        """Capture messages sent to the channel."""
+        self.sent_messages.append(content)
 
 
 class MockGuild:
@@ -86,8 +88,14 @@ class MockGuild:
 class MockUser:
     """Mock Discord user."""
 
-    def __init__(self, user_id: int) -> None:
+    def __init__(self, user_id: int, display_name: str | None = None) -> None:
         self.id = user_id
+        self.display_name = display_name or f"TestUser{user_id}"
+
+    @property
+    def mention(self) -> str:
+        """Return Discord-style user mention."""
+        return f"<@{self.id}>"
 
 
 class MockInteraction:

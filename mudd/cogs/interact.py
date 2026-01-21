@@ -11,7 +11,8 @@ from mudd.matching.entity_matcher import match_entity_by_prefix
 from mudd.matching.verb_matcher import match_verb
 from mudd.services.entity import ResolvedEntity
 from mudd.services.rendering import RenderingService, TemplateRenderError
-from mudd.types import VerbAction
+from mudd.services.trigger_effects import TriggerEffects
+from mudd.types import UserContext, VerbAction
 
 if TYPE_CHECKING:
     from mudd.services.entity import EntityService
@@ -158,9 +159,18 @@ class Interact(commands.Cog):
         )
         contents_str = self._rendering.build_contents_string(container_contents)
 
-        # Render template with entity context
+        # Create user context for template
+        user_context = UserContext(
+            name=interaction.user.display_name,
+            mention=interaction.user.mention,
+        )
+
+        # Render template with entity and user context
+        effects: TriggerEffects
         try:
-            output = self._rendering.render(handler_text, entity, contents_str)
+            output, effects = self._rendering.render_with_effects(
+                handler_text, entity, user_context, contents_str
+            )
         except TemplateRenderError:
             logger.warning(
                 "Template error rendering '%s' handler for entity '%s'",
@@ -169,6 +179,7 @@ class Interact(commands.Cog):
                 exc_info=True,
             )
             output = f"*{entity.name}* responds, but something went wrong."
+            effects = TriggerEffects()
 
         # Handle focus changes based on action type
         if action_type == VerbAction.ON_OPEN and entity.focus_mode != "none":
@@ -194,6 +205,12 @@ class Interact(commands.Cog):
                     output = f"{output}\n\nYou step away from the *{entity.name}*."
 
         await interaction.response.send_message(output, ephemeral=True)
+
+        # Execute broadcast side effects (public messages to channel)
+        channel = interaction.channel
+        if channel is not None and hasattr(channel, "send"):
+            for broadcast_msg in effects.broadcasts:
+                await channel.send(broadcast_msg)  # type: ignore[union-attr]
 
 
 def _get_handler_text(entity: ResolvedEntity, action: VerbAction) -> str | None:
