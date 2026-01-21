@@ -8,6 +8,7 @@ from mudd.services.rendering import (
     TemplateRenderer,
     TemplateRenderError,
 )
+from mudd.types import UserContext
 
 
 def make_entity(
@@ -154,3 +155,96 @@ class TestRenderingServiceClearCache:
 
         # Clear and verify no exception
         rendering_service.clear_cache()
+
+
+class TestRenderWithEffects:
+    """Tests for RenderingService.render_with_effects() method."""
+
+    def test_simple_template_returns_output_and_effects(self, rendering_service):
+        """render_with_effects returns tuple of (output, effects)."""
+        entity = make_entity()
+        user = UserContext(name="Frizzle", mention="<@12345>")
+        output, effects = rendering_service.render_with_effects(
+            "Hello world", entity, user
+        )
+        assert output == "Hello world"
+        assert effects.broadcasts == []
+
+    def test_template_with_user_context(self, rendering_service):
+        """Template can access user.name and user.mention."""
+        entity = make_entity()
+        user = UserContext(name="Frizzle", mention="<@12345>")
+        output, effects = rendering_service.render_with_effects(
+            "Welcome {{ user.name }}!", entity, user
+        )
+        assert output == "Welcome Frizzle!"
+
+    def test_template_with_user_mention(self, rendering_service):
+        """Template can use user.mention for @mentions."""
+        entity = make_entity()
+        user = UserContext(name="Frizzle", mention="<@12345>")
+        output, effects = rendering_service.render_with_effects(
+            "{{ user.mention }} did something", entity, user
+        )
+        assert output == "<@12345> did something"
+
+    def test_template_with_broadcast_effect(self, rendering_service):
+        """effects.broadcast() collects messages in effects.broadcasts."""
+        entity = make_entity()
+        user = UserContext(name="Frizzle", mention="<@12345>")
+        template = '{{ effects.broadcast("**" ~ user.name ~ "** did it.") }}You did it!'
+        output, effects = rendering_service.render_with_effects(template, entity, user)
+        assert output == "You did it!"
+        assert effects.broadcasts == ["**Frizzle** did it."]
+
+    def test_template_with_multiple_broadcasts(self, rendering_service):
+        """Multiple broadcast() calls collect all messages."""
+        entity = make_entity()
+        user = UserContext(name="Frizzle", mention="<@12345>")
+        template = (
+            '{{ effects.broadcast("First") }}{{ effects.broadcast("Second") }}Output'
+        )
+        output, effects = rendering_service.render_with_effects(template, entity, user)
+        assert output == "Output"
+        assert effects.broadcasts == ["First", "Second"]
+
+    def test_none_template_returns_empty_output_and_effects(self, rendering_service):
+        """None template returns empty string and empty effects."""
+        entity = make_entity()
+        user = UserContext(name="Frizzle", mention="<@12345>")
+        output, effects = rendering_service.render_with_effects(None, entity, user)
+        assert output == ""
+        assert effects.broadcasts == []
+
+    def test_template_with_entity_and_user_context(self, rendering_service):
+        """Template can use both entity (e) and user context."""
+        entity = make_entity(description_long="A magical item.")
+        user = UserContext(name="Frizzle", mention="<@12345>")
+        template = "{{ user.name }} examines {{ name }}. {{ e.description_long }}"
+        output, effects = rendering_service.render_with_effects(template, entity, user)
+        assert output == "Frizzle examines *Test Entity*. A magical item."
+
+    def test_template_with_contents(self, rendering_service):
+        """Template can use contents variable."""
+        entity = make_entity()
+        user = UserContext(name="Frizzle", mention="<@12345>")
+        output, effects = rendering_service.render_with_effects(
+            "Items:{{ contents }}", entity, user, contents="\n- a *Vase*"
+        )
+        assert output == "Items:\n- a *Vase*"
+
+    def test_syntax_error_raises_exception(self, rendering_service):
+        """Template syntax error raises TemplateRenderError."""
+        entity = make_entity()
+        user = UserContext(name="Frizzle", mention="<@12345>")
+        with pytest.raises(TemplateRenderError):
+            rendering_service.render_with_effects(
+                "{% if %}broken{% endif %}", entity, user
+            )
+
+    def test_undefined_variable_raises_exception(self, rendering_service):
+        """Undefined variable raises TemplateRenderError."""
+        entity = make_entity()
+        user = UserContext(name="Frizzle", mention="<@12345>")
+        with pytest.raises(TemplateRenderError):
+            rendering_service.render_with_effects("{{ undefined_var }}", entity, user)

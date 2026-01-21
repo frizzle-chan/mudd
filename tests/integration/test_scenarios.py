@@ -120,9 +120,9 @@ class TestUserDiscoversRecords:
         # User opens the chest
         await test_client.interact(user, action="open", target="Wooden Chest")
 
-        # User uses a record
+        # User uses a record - ephemeral message about putting it on
         response = await test_client.interact(user, action="use", target="WLFGRL")
-        assert "music" in response.lower() or "fills the room" in response.lower()
+        assert "turntable" in response.lower() or "unsleeve" in response.lower()
 
         # Focus preserved when interacting with chest contents
         focus = await test_client.get_focus(user)

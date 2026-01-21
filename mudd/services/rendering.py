@@ -1,7 +1,7 @@
 """Entity rendering service using Jinja2 templates."""
 
 import logging
-from typing import Protocol
+from typing import Any, Protocol
 
 from jinja2 import (
     Environment,
@@ -13,6 +13,8 @@ from jinja2 import (
 )
 
 from mudd.services.entity import EntityInstance, ResolvedEntity
+from mudd.services.trigger_effects import TriggerEffects
+from mudd.types import UserContext
 
 logger = logging.getLogger(__name__)
 
@@ -71,23 +73,44 @@ class TemplateRenderer:
         Raises:
             TemplateRenderError: If template has syntax errors or undefined variables
         """
+        context = {"e": entity, "name": name_formatted, "contents": contents}
+        return self.render_with_context(template_source, context, entity.id)
+
+    def render_with_context(
+        self,
+        template_source: str,
+        context: dict[str, Any],
+        entity_id: str,
+    ) -> str:
+        """Render a Jinja2 template with a custom context dictionary.
+
+        Args:
+            template_source: Jinja2 template string
+            context: Dictionary of template variables
+            entity_id: Entity ID for error logging
+
+        Returns:
+            Rendered string
+
+        Raises:
+            TemplateRenderError: If template has syntax errors or undefined variables
+        """
         try:
             template = self._get_or_compile(template_source)
-            context = {"e": entity, "name": name_formatted, "contents": contents}
             return template.render(context)
         except TemplateSyntaxError as exc:
             logger.error(
-                "Template syntax error in entity '%s': %s", entity.id, str(exc)
+                "Template syntax error in entity '%s': %s", entity_id, str(exc)
             )
             raise TemplateRenderError(str(exc)) from exc
         except UndefinedError as exc:
             logger.error(
-                "Template undefined variable in entity '%s': %s", entity.id, str(exc)
+                "Template undefined variable in entity '%s': %s", entity_id, str(exc)
             )
             raise TemplateRenderError(str(exc)) from exc
         except Exception as exc:
             logger.exception(
-                "Unexpected template error in entity '%s': %s", entity.id, str(exc)
+                "Unexpected template error in entity '%s': %s", entity_id, str(exc)
             )
             raise TemplateRenderError(str(exc)) from exc
 
@@ -166,6 +189,51 @@ class RenderingService:
         return self._renderer.render_template(
             template, entity, name_formatted, contents
         )
+
+    def render_with_effects(
+        self,
+        template: str | None,
+        entity: ResolvedEntity,
+        user: UserContext,
+        contents: str = "",
+    ) -> tuple[str, TriggerEffects]:
+        """Render a template and collect side effects.
+
+        Extended template context:
+            - `e`: The ResolvedEntity
+            - `name`: Entity name formatted with Discord italics (*Name*)
+            - `contents`: Pre-formatted bullet list of container contents
+            - `user`: UserContext with name and mention
+            - `effects`: TriggerEffects for queuing side effects
+
+        Example template:
+            {{ effects.broadcast("**" ~ user.name ~ "** put on some music.") }}
+            You slide the record onto the turntable.
+
+        Args:
+            template: Jinja2 template string (or None)
+            entity: The entity providing context
+            user: User context with name and mention
+            contents: Pre-formatted bullet list of contents (default: "")
+
+        Returns:
+            Tuple of (rendered output, collected effects)
+
+        Raises:
+            TemplateRenderError: If template has syntax errors or undefined variables
+        """
+        effects = TriggerEffects()
+        if template is None:
+            return "", effects
+        context = {
+            "e": entity,
+            "name": f"*{entity.name}*",
+            "contents": contents,
+            "user": user,
+            "effects": effects,
+        }
+        output = self._renderer.render_with_context(template, context, entity.id)
+        return output, effects
 
     def build_contents_string(self, contents: list[EntityInstance]) -> str:
         """Build a formatted string from container contents.

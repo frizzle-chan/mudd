@@ -310,7 +310,7 @@ Name: Wooden Chest
 Prototype: chest
 Room: library
 ContentsVisible: no
-DescriptionShort: A {{ name }}.
+DescriptionShort: A {{ name }} sits on the floor next to the desk.
 DescriptionLong: A large wooden chest, it's not locked so you can __open__ it.
 
 Id: record_machine_girl
@@ -320,7 +320,7 @@ Room: library
 Container: library_records
 DescriptionShort: A vinyl copy of {{ name }}
 DescriptionLong: 2014. Chaotic internet-era experimental electronic.
-OnUse: You put on {{ name }}. [MG1](https://youtu.be/oWzzNvcxY4w) fills the room.
+OnUse: You unsleeve {{ name }} and place it on the turntable.{{ effects.broadcast(user.mention ~ " put " ~ name ~ " on the record player. [MG1](https://youtu.be/oWzzNvcxY4w) fills the room.") }}
 
 Id: record_tv_girl
 Name: TV Girl - Who Really Cares
@@ -329,7 +329,7 @@ Room: library
 Container: library_records
 DescriptionShort: A vinyl copy of {{ name }}
 DescriptionLong: 2016. Dreamy indie pop sampling obscure 60s and 70s tracks.
-OnUse: You put on {{ name }}. [Taking What's Not Yours](https://youtu.be/Ox5ENW0CeAU) fills the room.
+OnUse: You slide {{ name }} from its sleeve and drop the needle.{{ effects.broadcast(user.mention ~ " is playing " ~ name ~ " on the record player. [Taking What's Not Yours](https://youtu.be/Ox5ENW0CeAU) fills the room.") }}
 
 Id: record_the_clash
 Name: The Clash - Combat Rock
@@ -338,7 +338,7 @@ Room: library
 Container: library_records
 DescriptionShort: A vinyl copy of {{ name }}
 DescriptionLong: 1982. Features "Should I Stay or Should I Go" and "Rock the Casbah". Allen Ginsberg does backing vocals.
-OnUse: You put on {{ name }}. [Know Your Rights](https://youtu.be/AxB8xGJvCQQ) fills the room.
+OnUse: You put {{ name }} on and crank the volume.{{ effects.broadcast(user.mention ~ " put on " ~ name ~ ". [Know Your Rights](https://youtu.be/AxB8xGJvCQQ) fills the room.") }}
 
 Id: record_saib
 Name: Saib. - Bebop
@@ -347,7 +347,7 @@ Room: library
 Container: library_records
 DescriptionShort: A vinyl copy of {{ name }}
 DescriptionLong: 2017. Lo-fi jazzy hip-hop. Perfect study music.
-OnUse: You put on {{ name }}. [Serenade](https://youtu.be/gVWqdnLH9-U) fills the room.
+OnUse: You queue up {{ name }}.{{ effects.broadcast(user.mention ~ " put " ~ name ~ " on the record player. [Serenade](https://youtu.be/gVWqdnLH9-U) fills the room.") }}
 
 Id: record_mgmt
 Name: MGMT - Oracular Spectacular
@@ -356,7 +356,7 @@ Room: library
 Container: library_records
 DescriptionShort: A vinyl copy of {{ name }}
 DescriptionLong: 2007. "Time to Pretend", "Electric Feel", "Kids" - defined late 2000s indie.
-OnUse: You put on {{ name }}. [Time To Pretend](https://youtu.be/B9dSYgd5Elk) fills the room.
+OnUse: You spin up {{ name }}.{{ effects.broadcast(user.mention ~ " started " ~ name ~ " on the record player. [Time To Pretend](https://youtu.be/B9dSYgd5Elk) fills the room.") }}
 
 Id: record_avalanches_sily
 Name: The Avalanches - Since I Left You
@@ -365,7 +365,7 @@ Room: library
 Container: library_records
 DescriptionShort: A vinyl copy of {{ name }}
 DescriptionLong: 2000. Built from 3,500+ vinyl samples. Took years to clear them all.
-OnUse: You put on {{ name }}. [Since I Left You](https://youtu.be/R2qYK2siDkE) fills the room.
+OnUse: You set {{ name }} on the turntable and hit play.{{ effects.broadcast(user.mention ~ " put on " ~ name ~ " on the record player. [Since I Left You](https://youtu.be/R2qYK2siDkE) fills the room.") }}
 
 Id: record_avalanches_wwaly
 Name: The Avalanches - We Will Always Love You
@@ -374,7 +374,7 @@ Room: library
 Container: library_records
 DescriptionShort: A vinyl copy of {{ name }}
 DescriptionLong: 2020. Their third album, 16 years after the second. Worth the wait.
-OnUse: You put on {{ name }}. [Ghost Story](https://youtu.be/c9tgCR_VjSM) fills the room.
+OnUse: You place {{ name }} on the turntable.{{ effects.broadcast(user.mention ~ " put " ~ name ~ " on the record player. [Ghost Story](https://youtu.be/c9tgCR_VjSM) fills the room.") }}
 
 Id: record_the_smiths
 Name: The Smiths - Louder Than Bombs
@@ -383,7 +383,7 @@ Room: library
 Container: library_records
 DescriptionShort: A vinyl copy of {{ name }}
 DescriptionLong: 1987. Compilation of singles and B-sides. Morrissey at his mopiest.
-OnUse: You put on {{ name }}. [Is It Really So Strange?](https://youtu.be/w_tG4xAUD1k) fills the room.
+OnUse: You slide {{ name }} onto the player.{{ effects.broadcast(user.mention ~ " is playing " ~ name ~ " on the record player. [Is It Really So Strange?](https://youtu.be/w_tG4xAUD1k) fills the room.") }}
 
 Id: record_alvvays_anti
 Name: Alvvays - Antisocialites
@@ -392,7 +392,7 @@ Room: library
 Container: library_records
 DescriptionShort: A vinyl copy of {{ name }}
 DescriptionLong: 2017. "Dreams Tonite" is a perfect shoegaze-pop song.
-OnUse: You put on {{ name }}. [In Undertow](https://youtu.be/T1n72aCdwdU) fills the room.
+OnUse: You unsleeve {{ name }} and put it on.{{ effects.broadcast(user.mention ~ " put on " ~ name ~ " on the record player. [In Undertow](https://youtu.be/T1n72aCdwdU) fills the room.") }}
 
 Id: record_first_aid_kit
 Name: First Aid Kit - Stay Gold
@@ -401,7 +401,7 @@ Room: library
 Container: library_records
 DescriptionShort: A vinyl copy of {{ name }}
 DescriptionLong: 2014. Swedish sisters channeling Laurel Canyon folk.
-OnUse: You put on {{ name }}. [My Silver Lining](https://youtu.be/DKL4X0PZz7M) fills the room.
+OnUse: You put {{ name }} on the turntable.{{ effects.broadcast(user.mention ~ " put " ~ name ~ " on the record player. [My Silver Lining](https://youtu.be/DKL4X0PZz7M) fills the room.") }}
 
 Id: record_justice
 Name: Justice - Cross
@@ -410,7 +410,7 @@ Room: library
 Container: library_records
 DescriptionShort: A vinyl copy of {{ name }}
 DescriptionLong: 2007. French electro house.
-OnUse: You drop the needle on {{ name }}. [Genesis](https://youtu.be/VKzWLUQizz8) fills the room.
+OnUse: You drop the needle on {{ name }}.{{ effects.broadcast(user.mention ~ " started " ~ name ~ " on the record player. [Genesis](https://youtu.be/VKzWLUQizz8) fills the room.") }}
 
 Id: record_american_football
 Name: American Football - American Football
@@ -419,7 +419,7 @@ Room: library
 Container: library_records
 DescriptionShort: A vinyl copy of {{ name }}
 DescriptionLong: 1999. The house on the cover is real, in Urbana IL. Emo kids make pilgrimages.
-OnUse: You put on {{ name }}. [Never Meant](https://youtu.be/QZNYVt87y60) starts playing.
+OnUse: You carefully place {{ name }} on the player.{{ effects.broadcast(user.mention ~ " put on " ~ name ~ " on the record player. [Never Meant](https://youtu.be/QZNYVt87y60) starts.") }}
 
 Id: record_nujabes_meta
 Name: Nujabes - Metaphorical Music
@@ -428,7 +428,7 @@ Room: library
 Container: library_records
 DescriptionShort: A vinyl copy of {{ name }}
 DescriptionLong: 2003. Japanese producer who pioneered jazzy hip-hop. Tragically died in 2010.
-OnUse: You spin {{ name }}. [Blessing It (Remix)](https://youtu.be/7xZY8VJHqU4) fills the room.
+OnUse: You load {{ name }} onto the player.{{ effects.broadcast(user.mention ~ " put " ~ name ~ " on the record player. [Blessing It (Remix)](https://youtu.be/7xZY8VJHqU4) fills the room.") }}
 
 Id: record_talking_heads
 Name: Talking Heads - Remain In Light
@@ -437,7 +437,7 @@ Room: library
 Container: library_records
 DescriptionShort: A vinyl copy of {{ name }}
 DescriptionLong: 1980. Produced by Brian Eno. "Once In A Lifetime" - how did I get here?
-OnUse: You play {{ name }}. [Born Under Punches (The Heat Goes On)](https://youtu.be/Mmp5jAKpyns) comes on.
+OnUse: You unsleeve {{ name }} and press play.{{ effects.broadcast(user.mention ~ " put " ~ name ~ " on the record player. [Born Under Punches (The Heat Goes On)](https://youtu.be/Mmp5jAKpyns) comes on.") }}
 
 Id: record_skee_mask_resort
 Name: Skee Mask - Resort
@@ -446,7 +446,7 @@ Room: library
 Container: library_records
 DescriptionShort: A vinyl copy of {{ name }}
 DescriptionLong: 2024. German producer blending ambient, techno, and jungle.
-OnUse: You put on {{ name }}. [Hedwig Transformation Group](https://youtu.be/dVb6oGdK0uk) starts.
+OnUse: You start up {{ name }} on the player.{{ effects.broadcast(user.mention ~ " started " ~ name ~ " on the record player. [Hedwig Transformation Group](https://youtu.be/dVb6oGdK0uk) starts.") }}
 
 Id: record_fleet_foxes
 Name: Fleet Foxes - A Very Lonely Solstice
@@ -455,7 +455,7 @@ Room: library
 Container: library_records
 DescriptionShort: A vinyl copy of {{ name }}
 DescriptionLong: 2022. Live album recorded during COVID.
-OnUse: You spin {{ name }}. [Wading In Waist-High Water](https://youtu.be/zKwchungRrM) starts playing.
+OnUse: You put {{ name }} on and press play.{{ effects.broadcast(user.mention ~ " put on " ~ name ~ " on the record player. [Wading In Waist-High Water](https://youtu.be/zKwchungRrM) starts.") }}
 
 Id: record_skee_mask_iss009
 Name: Skee Mask - ISS009
@@ -464,7 +464,7 @@ Room: library
 Container: library_records
 DescriptionShort: A vinyl copy of {{ name }}
 DescriptionLong: 2023. Experimental breaks EP on Ilian Tape.
-OnUse: You drop the needle on {{ name }}. [UWLSD](https://youtu.be/IUJQ4Fw2uXY) comes on.
+OnUse: You cue up {{ name }} on the turntable.{{ effects.broadcast(user.mention ~ " put " ~ name ~ " on the record player. [UWLSD](https://youtu.be/IUJQ4Fw2uXY) comes on.") }}
 
 Id: record_santigold
 Name: Santigold - Santigold
@@ -473,7 +473,7 @@ Room: library
 Container: library_records
 DescriptionShort: A vinyl copy of {{ name }}
 DescriptionLong: 2008. Diplo-produced indie-electronic. She spelled it "Santogold" at first.
-OnUse: You play {{ name }}. [L.E.S. Artistes](https://youtu.be/ciJDA0tcQfs) fills the room.
+OnUse: You throw {{ name }} on the record player.{{ effects.broadcast(user.mention ~ " is playing " ~ name ~ " on the record player. [L.E.S. Artistes](https://youtu.be/ciJDA0tcQfs) fills the room.") }}
 
 Id: record_cranberries
 Name: The Cranberries - Everybody Else Is Doing It
@@ -482,7 +482,7 @@ Room: library
 Container: library_records
 DescriptionShort: A vinyl copy of {{ name }}
 DescriptionLong: 1993. "Linger" and "Dreams".
-OnUse: You put on {{ name }}. [I Still Do](https://youtu.be/vovVgQ2BsTo) comes on.
+OnUse: You slide {{ name }} from its sleeve.{{ effects.broadcast(user.mention ~ " put on " ~ name ~ " on the record player. [I Still Do](https://youtu.be/vovVgQ2BsTo) comes on.") }}
 
 Id: record_alvvays
 Name: Alvvays - Alvvays
@@ -491,7 +491,7 @@ Room: library
 Container: library_records
 DescriptionShort: A vinyl copy of {{ name }}
 DescriptionLong: 2014. "Archie, Marry Me" - jangly Canadian indie pop perfection.
-OnUse: You spin {{ name }}. [Adult Diversion](https://youtu.be/rZHPCcFmEjc) fills the room.
+OnUse: You get {{ name }} spinning on the turntable.{{ effects.broadcast(user.mention ~ " put " ~ name ~ " on the record player. [Adult Diversion](https://youtu.be/rZHPCcFmEjc) fills the room.") }}
 
 Id: record_gorillaz
 Name: Gorillaz - Gorillaz
@@ -500,7 +500,7 @@ Room: library
 Container: library_records
 DescriptionShort: A vinyl copy of {{ name }}
 DescriptionLong: 2001. Virtual band by Damon Albarn. "Clint Eastwood" features Del the Funky Homosapien.
-OnUse: You put on {{ name }}. [Re-Hash](https://youtu.be/Tv1SYqLllKI) starts playing.
+OnUse: You drop {{ name }} on the turntable and let it spin.{{ effects.broadcast(user.mention ~ " started " ~ name ~ " on the record player. [Re-Hash](https://youtu.be/Tv1SYqLllKI) starts.") }}
 
 Id: record_nujabes_modal
 Name: Nujabes - Modal Soul
@@ -509,7 +509,7 @@ Room: library
 Container: library_records
 DescriptionShort: A vinyl copy of {{ name }}
 DescriptionLong: 2005. Featured in Samurai Champloo. Birthed the lo-fi hip-hop movement.
-OnUse: You play {{ name }}. [Feather](https://youtu.be/8iP3J8jFYdM) comes on.
+OnUse: You lay {{ name }} on the platter and start it up.{{ effects.broadcast(user.mention ~ " put on " ~ name ~ " on the record player. [Feather](https://youtu.be/8iP3J8jFYdM) comes on.") }}
 
 Id: record_flaming_lips
 Name: The Flaming Lips - Fight Test
@@ -518,7 +518,7 @@ Room: library
 Container: library_records
 DescriptionShort: A vinyl copy of {{ name }}
 DescriptionLong: 2003. From Yoshimi Battles the Pink Robots.
-OnUse: You spin {{ name }}. [Fight Test](https://youtu.be/fye1XtXQn9s) fills the room.
+OnUse: You pop {{ name }} on the record player.{{ effects.broadcast(user.mention ~ " put " ~ name ~ " on the record player. [Fight Test](https://youtu.be/fye1XtXQn9s) fills the room.") }}
 
 Id: record_jet
 Name: Jet - Get Born
@@ -527,7 +527,7 @@ Room: library
 Container: library_records
 DescriptionShort: A vinyl copy of {{ name }}
 DescriptionLong: 2003. "Are You Gonna Be My Girl" - you've heard it in every commercial.
-OnUse: You drop the needle on {{ name }}. [Last Chance](https://youtu.be/pjdn5m2LvNo) starts.
+OnUse: You stick {{ name }} on the player and hit play.{{ effects.broadcast(user.mention ~ " is playing " ~ name ~ " on the record player. [Last Chance](https://youtu.be/pjdn5m2LvNo) starts.") }}
 
 Id: record_death_cab_plans
 Name: Death Cab For Cutie - Plans
@@ -536,7 +536,7 @@ Room: library
 Container: library_records
 DescriptionShort: A vinyl copy of {{ name }}
 DescriptionLong: 2005. "I Will Follow You Into the Dark", "Soul Meets Body". Their Atlantic debut went platinum.
-OnUse: You play {{ name }}. [Marching Bands Of Manhattan](https://youtu.be/be2LvYXOcSI) fills the room.
+OnUse: You place {{ name }} on the player.{{ effects.broadcast(user.mention ~ " put on " ~ name ~ " on the record player. [Marching Bands Of Manhattan](https://youtu.be/be2LvYXOcSI) fills the room.") }}
 
 # ----------------------------------------------------------------------------
 # Sitting Room entities
@@ -602,3 +602,12 @@ DescriptionShort: a small {{ name }}
 DescriptionLong: A metal lockbox.
 OnOpen: TEST_OPEN_RESPONSE - You open the lockbox.
 OnClose: TEST_CLOSE_RESPONSE - You close the lockbox.
+
+Id: test_record
+Name: Test Record
+Prototype: record
+Room: store-room
+Container: storeroom_box
+DescriptionShort: a {{ name }} for testing
+DescriptionLong: A test record.
+OnUse: TEST_EPHEMERAL_RESPONSE{{ effects.broadcast("TEST_BROADCAST_RESPONSE " ~ user.mention) }}

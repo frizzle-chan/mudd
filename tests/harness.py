@@ -168,11 +168,41 @@ class TestClient:
             The response message from the command.
         """
         topic = await self._get_room_topic(user.room)
-        interaction = MockInteraction(user.id, user.room, topic)
+        guild = await self._build_mock_guild()
+        interaction = MockInteraction(user.id, user.room, topic, guild=guild)
         await self.interact_cog.interact.callback(
             self.interact_cog, interaction, action=action, target=target
         )
         return interaction.last_response
+
+    async def interact_with_broadcasts(
+        self, user: TestUser, action: str, target: str
+    ) -> tuple[str, list[str]]:
+        """Execute /interact command and return both ephemeral and broadcast messages.
+
+        Args:
+            user: The test user executing the command.
+            action: The verb action (e.g., "open", "touch", "smash").
+            target: The entity name to interact with.
+
+        Returns:
+            Tuple of (ephemeral response, list of broadcast messages).
+        """
+        topic = await self._get_room_topic(user.room)
+        guild = await self._build_mock_guild()
+        interaction = MockInteraction(user.id, user.room, topic, guild=guild)
+
+        # Clear any previous sent messages on the channel (MockTextChannel)
+        channel = cast(MockTextChannel, interaction.channel)
+        channel.sent_messages.clear()
+
+        await self.interact_cog.interact.callback(
+            self.interact_cog, interaction, action=action, target=target
+        )
+
+        broadcasts = channel.sent_messages.copy()
+
+        return interaction.last_response, broadcasts
 
     async def get_focus(self, user: TestUser) -> dict | None:
         """Get the user's current focus state from database.

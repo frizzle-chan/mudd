@@ -202,3 +202,42 @@ class TestVerbCaseInsensitivity:
         await test_client.interact(user, action="open", target="Cardboard Box")
         response = await test_client.interact(user, action="SmAsH", target="Test Orb")
         assert "TEST_ATTACK_RESPONSE" in response
+
+
+class TestBroadcastEffects:
+    """Tests for effects.broadcast() template functionality."""
+
+    async def test_broadcast_sends_public_message(self, test_client):
+        """Using test record sends ephemeral to user and broadcast to channel."""
+        user = await test_client.create_user(user_id=400000060, room="store-room")
+        await test_client.interact(user, action="open", target="Cardboard Box")
+        response, broadcasts = await test_client.interact_with_broadcasts(
+            user, action="use", target="Test Record"
+        )
+        # User sees ephemeral response
+        assert "TEST_EPHEMERAL_RESPONSE" in response
+        # Channel receives the broadcast
+        assert len(broadcasts) == 1
+        assert "TEST_BROADCAST_RESPONSE" in broadcasts[0]
+
+    async def test_broadcast_includes_user_mention(self, test_client):
+        """Broadcast message includes the interacting user's mention."""
+        user = await test_client.create_user(user_id=400000061, room="store-room")
+        await test_client.interact(user, action="open", target="Cardboard Box")
+        response, broadcasts = await test_client.interact_with_broadcasts(
+            user, action="use", target="Test Record"
+        )
+        assert len(broadcasts) == 1
+        # User mention format is "<@id>"
+        assert "<@400000061>" in broadcasts[0]
+
+    async def test_no_broadcast_for_normal_trigger(self, test_client):
+        """Actions without effects.broadcast() don't send public messages."""
+        user = await test_client.create_user(user_id=400000062, room="store-room")
+        await test_client.interact(user, action="open", target="Cardboard Box")
+        response, broadcasts = await test_client.interact_with_broadcasts(
+            user, action="use", target="Test Gadget"
+        )
+        # Normal action has response but no broadcasts
+        assert "TEST_USE_RESPONSE" in response
+        assert len(broadcasts) == 0

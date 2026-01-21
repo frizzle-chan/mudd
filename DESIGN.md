@@ -433,6 +433,9 @@ Entity action handlers (`on_look`, `on_touch`, `on_attack`, `on_use`, `on_take`,
 Templates have access to:
 - `e`: The resolved entity (ResolvedEntity) with all inherited properties
 - `name`: Entity name pre-formatted with Discord italics (`*Name*`)
+- `contents`: Pre-formatted bullet list of container contents (for entities with `contents_visible`)
+- `user`: User context with `name` (display name) and `mention` (@mention string)
+- `effects`: Side effects object for triggering actions beyond the ephemeral response
 
 ### Rendering Flow
 
@@ -483,3 +486,25 @@ You examine the {{ name }}. {{ e.description_long }}
 - Compiled templates are cached in memory by source string
 - Cache lives for the bot's lifetime
 - No TTL needed (entity definitions are static)
+
+### Side Effects (Scripting)
+
+Templates can trigger side effects that execute after the ephemeral response is sent. Currently supported:
+
+**`effects.broadcast(message)`** - Sends a public message to the channel after the ephemeral response.
+
+```jinja
+{# Record player that announces to the room #}
+{{ effects.broadcast("**" ~ user.name ~ "** put on some music.") }}You slide the record onto the turntable. Music fills the room.
+```
+
+Result:
+- **Ephemeral to user**: "You slide the record onto the turntable. Music fills the room."
+- **Public to channel**: "**Frizzle** put on some music."
+
+The `broadcast()` function returns an empty string, allowing inline use without affecting output. Multiple broadcasts can be queued in a single template.
+
+**Implementation:**
+- `TriggerEffects` dataclass collects side effects during rendering
+- `RenderingService.render_with_effects()` returns `(output, effects)` tuple
+- Interact cog executes `effects.broadcasts` after sending ephemeral response
