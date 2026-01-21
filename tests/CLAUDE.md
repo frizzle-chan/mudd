@@ -34,7 +34,7 @@ async def test_user_discovers_records(self, test_client):
     user = await test_client.create_user(room="library")
 
     # User opens the chest - establishes focus
-    response = await test_client.interact(user, with_entity="Wooden Chest", do_verb="open")
+    response = await test_client.interact(user, with_entity="Wooden Chest", action_verb="open")
 
     # User examines a record inside
     response = await test_client.look(user, at="WLFGRL")
