@@ -310,7 +310,7 @@ Name: Wooden Chest
 Prototype: chest
 Room: library
 ContentsVisible: no
-DescriptionShort: A {{ name }}.
+DescriptionShort: A {{ name }} sits on the floor next to the desk.
 DescriptionLong: A large wooden chest, it's not locked so you can __open__ it.
 
 Id: record_machine_girl
