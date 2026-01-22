@@ -156,7 +156,7 @@ In the context of **preventing griefing via item spam**, facing **the risk of pl
 
 **Behavior:**
 - On drop attempt: Count `player_dropped=TRUE` instances in room
-- If >= 5: "The floor is too cluttered to drop anything else."
+- If >= 5: "The floor is too cluttered. Pick something up first."
 - Otherwise: Proceed with drop
 
 ## Recutils Authoring Format
@@ -273,3 +273,36 @@ ALTER TABLE entities ADD COLUMN on_drop TEXT;
 - Complex tag queries (AND/OR logic: `beverage AND alcoholic`)
 - Per-spawning-pool rarity weight overrides
 - Inventory capacity limits
+
+### Drop Autocomplete Context Detection
+
+In the context of **dropping items from inventory**, facing **the mismatch between autocomplete (shows room items) and drop action (uses inventory items)**, we decided to **add context-aware autocomplete that detects inventory threads and supports an "i." prefix shortcut**, to achieve **seamless drop workflow from inventory threads and explicit inventory access from any channel**, accepting **additional autocomplete logic and the "i." prefix convention**.
+
+**Inventory Thread Context:**
+- When `/interact` is run from an inventory item's forum thread, autocomplete shows only that item
+- Detection via `InventoryService.get_thread_item(channel)` which queries `entity_instances.discord_thread_id`
+- This is the preferred workflow for dropping items
+
+**"i." Prefix Shortcut:**
+- Typing `i.` in the target field switches autocomplete to inventory search
+- Example: `i.beer` shows inventory items matching "beer"
+- Case-insensitive prefix detection
+- Works from any room channel
+
+**Display Format:**
+- Inventory items shown with `[Inventory]` prefix: `[Inventory] Beer ⚪`
+- Distinguishes from room items in mixed contexts
+- Rarity emoji preserved via `display_name`
+
+**Behavior Matrix:**
+
+| Context | Query | Autocomplete Source |
+|---------|-------|---------------------|
+| Inventory thread | Any | That thread's item only |
+| Room channel | `i.beer` | User's inventory filtered by "beer" |
+| Room channel | `beer` | Room entities filtered by "beer" |
+
+**No Droppability Filtering:**
+- All inventory items shown, not just those with `on_drop` handler
+- Items without `on_drop` return "Nothing happens." when drop attempted
+- Users see full inventory context
