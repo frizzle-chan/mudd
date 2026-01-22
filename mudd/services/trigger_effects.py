@@ -39,7 +39,7 @@ class TriggerEffects:
     """
 
     broadcasts: list[str] = field(default_factory=list)
-    drops: list[bool] = field(default_factory=list)  # Just track that drop was called
+    _drop_called: bool = False
     grants: list[GrantEffect] = field(default_factory=list)
     grant_randoms: list[GrantRandomEffect] = field(default_factory=list)
 
@@ -65,7 +65,7 @@ class TriggerEffects:
         Returns:
             Empty string (allows inline use in templates without output)
         """
-        self.drops.append(True)
+        self._drop_called = True
         return ""
 
     def grant(self, entity_id: str) -> str:
@@ -106,4 +106,4 @@ class TriggerEffects:
     @property
     def has_drop(self) -> bool:
         """Whether drop() was called during template rendering."""
-        return len(self.drops) > 0
+        return self._drop_called
