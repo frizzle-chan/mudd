@@ -1,23 +1,23 @@
 """Interact command for entity interactions."""
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 from uuid import UUID
 
 import asyncpg
+import discord
 from discord import Interaction, app_commands
 from discord.ext import commands
 
 from mudd.matching.entity_matcher import match_entity_by_prefix
 from mudd.matching.verb_matcher import match_verb
-from mudd.services.entity import RARITY_WEIGHTS, ResolvedEntity
+from mudd.services.entity import ResolvedEntity
 from mudd.services.rendering import RenderingService, TemplateRenderError
 from mudd.services.trigger_effects import TriggerEffects
 from mudd.types import UserContext, VerbAction
-from mudd.utils.random import weighted_choice
 
 if TYPE_CHECKING:
-    from mudd.services.entity import EntityService
+    from mudd.services.entity import EntityInstance, EntityService
     from mudd.services.inventory import InventoryService
     from mudd.services.player_context import PlayerContextService
     from mudd.services.visibility import VisibilityServiceProtocol
@@ -49,43 +49,76 @@ class Interact(commands.Cog):
     ) -> list[app_commands.Choice[str]]:
         """Autocomplete callback for target parameter.
 
-        Suggests entity names from the current room, excluding entities
-        inside containers with contents_visible=False. When a user has an
-        active focus (open container), prioritizes focused contents with
-        "[Container Name]" prefix.
+        Supports three contexts:
+        1. Inventory thread: Shows only that thread's item
+        2. "i." prefix: Searches user's inventory
+        3. Default: Searches room entities
         """
         try:
             await self.visibility_service.wait_for_startup()
+            user_id = interaction.user.id
 
+            # Feature 1: Check if in inventory thread
+            # Cast is safe: get_thread_item checks isinstance(Thread) and
+            # returns None otherwise
+            channel = cast(
+                discord.abc.GuildChannel | discord.Thread | None, interaction.channel
+            )
+            thread_item = await self._inventory.get_thread_item(channel)
+            if thread_item is not None:
+                return self._build_inventory_choices([thread_item])
+
+            # Feature 2: Check for "i." prefix
+            if current.lower().startswith("i."):
+                query = current[2:]  # Strip "i." prefix
+                return await self._autocomplete_inventory(user_id, query)
+
+            # Default: Room entities (existing behavior)
             room = getattr(interaction.channel, "name", None)
             if not room:
                 return []
 
-            # Get autocomplete choices with text filtering
             choices = await self.player_context.get_visible_entities(
-                room, interaction.user.id, query=current
+                room, user_id, query=current
             )
-
-            # Return as Discord choices (limit 25 per Discord API)
             return [
                 app_commands.Choice(
                     name=c.display_name,
-                    value=c.instance.entity.name,  # Use actual name for matching
+                    value=c.instance.entity.name,
                 )
                 for c in choices
             ][:25]
+
         except asyncpg.PostgresError:
-            logger.exception(
-                "Database error in target autocomplete for room '%s'",
-                getattr(interaction.channel, "name", "unknown"),
-            )
+            logger.exception("Database error in target autocomplete")
             return []
         except Exception:
-            logger.exception(
-                "Unexpected error in target autocomplete for room '%s'",
-                getattr(interaction.channel, "name", "unknown"),
-            )
+            logger.exception("Unexpected error in target autocomplete")
             return []
+
+    async def _autocomplete_inventory(
+        self, user_id: int, query: str
+    ) -> list[app_commands.Choice[str]]:
+        """Build autocomplete choices from user's inventory."""
+        inventory = await self.entity_service.get_user_inventory(user_id)
+
+        if query:
+            match_result = match_entity_by_prefix(query, inventory)
+            inventory = [m.instance for m in match_result.matches]
+
+        return self._build_inventory_choices(inventory)
+
+    def _build_inventory_choices(
+        self, instances: list["EntityInstance"]
+    ) -> list[app_commands.Choice[str]]:
+        """Build Discord choices with [Inventory] prefix."""
+        return [
+            app_commands.Choice(
+                name=f"[Inventory] {inst.entity.display_name}",
+                value=inst.entity.name,
+            )
+            for inst in instances
+        ][:25]
 
     @app_commands.command(name="interact", description="Interact with things")
     @app_commands.describe(
@@ -236,9 +269,9 @@ class Interact(commands.Cog):
 
         # Execute broadcast side effects (public messages to channel)
         channel = interaction.channel
-        if channel is not None and hasattr(channel, "send"):
+        if isinstance(channel, discord.TextChannel):
             for broadcast_msg in effects.broadcasts:
-                await channel.send(broadcast_msg)  # type: ignore[union-attr]
+                await channel.send(broadcast_msg)
 
             # Process grant_random effects
             for grant_random_effect in effects.grant_randoms:
@@ -397,13 +430,12 @@ class Interact(commands.Cog):
         self,
         interaction: Interaction,
         tag: str,
-        channel: object,
+        channel: discord.TextChannel,
     ) -> None:
         """Handle granting a random item from a tag.
 
-        Queries entities matching the tag (excluding quest rarity),
-        does weighted random selection, creates an instance in the
-        user's inventory, and broadcasts the result.
+        Uses EntityService for weighted random selection, creates an instance
+        in the user's inventory, and broadcasts the result.
 
         Args:
             interaction: Discord interaction
@@ -414,54 +446,25 @@ class Interact(commands.Cog):
         if guild is None:
             return
 
-        # Query entities matching the tag (excluding quest rarity)
-        candidates = await self.pool.fetch(
-            """
-            SELECT DISTINCT e.id, e.name, e.rarity
-            FROM entities e
-            JOIN entity_tags et ON e.id = et.entity_id
-            WHERE et.tag = $1 AND e.rarity != 'quest'
-            """,
-            tag,
-        )
-
-        if not candidates:
+        # Select random entity by tag with weighted rarity
+        entity = await self.entity_service.get_random_entity_by_tag(tag)
+        if entity is None:
             logger.warning("No entities found for grant_random with tag '%s'", tag)
             return
-
-        # Build list of (data, weight) for weighted selection
-        items = [
-            (
-                (candidate["id"], candidate["name"], candidate["rarity"]),
-                RARITY_WEIGHTS.get(candidate["rarity"], 0),
-            )
-            for candidate in candidates
-        ]
-
-        selected = weighted_choice(items)
-        if selected is None:
-            logger.warning("No weighted candidates for grant_random with tag '%s'", tag)
-            return
-
-        entity_id, name, rarity = selected
 
         # Create instance in user's inventory
         user_id = interaction.user.id
         new_instance_id = await self.pool.fetchval(
             """INSERT INTO entity_instances (entity_id, owner_id)
             VALUES ($1, $2) RETURNING id""",
-            entity_id,
+            entity.id,
             user_id,
         )
         if new_instance_id is None:
-            logger.error("Failed to create grant_random instance for %s", entity_id)
+            logger.error("Failed to create grant_random instance for %s", entity.id)
             return
 
-        # Get display_name via resolve_entity for proper formatting
-        resolved = await self.pool.fetchrow(
-            "SELECT * FROM resolve_entity($1)", entity_id
-        )
-        display_name = resolved["display_name"] if resolved else name
+        display_name = entity.display_name
 
         # Create Discord thread for the item
         thread = await self._inventory.create_item_thread(
@@ -473,18 +476,18 @@ class Interact(commands.Cog):
         )
         if thread is None:
             logger.warning(
-                "Failed to create thread for grant_random item %s", entity_id
+                "Failed to create thread for grant_random item %s", entity.id
             )
 
         # Broadcast the granted item to the channel
         user_name = interaction.user.display_name
-        await channel.send(f"**{user_name}** picks up a *{display_name}*.")  # type: ignore[union-attr]
+        await channel.send(f"**{user_name}** picks up a *{display_name}*.")
 
     async def _handle_grant(
         self,
         interaction: Interaction,
         entity_id: str,
-        channel: object,
+        channel: discord.TextChannel,
     ) -> None:
         """Handle granting a specific item to the user.
 
@@ -503,14 +506,12 @@ class Interact(commands.Cog):
         user_id = interaction.user.id
 
         # Verify entity exists and get display_name
-        resolved = await self.pool.fetchrow(
-            "SELECT * FROM resolve_entity($1)", entity_id
-        )
-        if resolved is None:
+        entity = await self.entity_service.get_entity(entity_id)
+        if entity is None:
             logger.warning("Entity '%s' not found for grant()", entity_id)
             return
 
-        display_name = resolved["display_name"]
+        display_name = entity.display_name
 
         # Create instance in user's inventory
         new_instance_id = await self.pool.fetchval(

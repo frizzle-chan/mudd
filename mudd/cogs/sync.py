@@ -19,12 +19,11 @@ if TYPE_CHECKING:
 from mudd.loaders.entity_loader import sync_entities
 from mudd.loaders.verb_loader import sync_verbs
 from mudd.loaders.zone_loader import sync_zones_and_rooms
-from mudd.services.entity import RARITY_WEIGHTS, EntityService
+from mudd.services.entity import EntityService
 from mudd.services.inventory import InventoryService
 from mudd.services.player_context import PlayerContextService
 from mudd.services.rendering import RenderingService
 from mudd.services.visibility import VisibilityService
-from mudd.utils.random import weighted_choice
 
 logger = logging.getLogger(__name__)
 
@@ -296,7 +295,7 @@ class Sync(commands.Cog):
                     continue
 
             # Select random entity by tag with weighted rarity
-            entity = await self._select_random_entity(sp["tag_query"])
+            entity = await self.entity_service.get_random_entity_by_tag(sp["tag_query"])
             if entity is None:
                 logger.warning(
                     "No entities found for spawning pool '%s' with tag '%s'",
@@ -312,7 +311,7 @@ class Sync(commands.Cog):
                     (entity_id, room, spawning_pool_id, container_entity_id)
                 VALUES ($1, $2, $3, $4)
                 """,
-                entity["id"],
+                entity.id,
                 sp["room"],
                 sp["id"],
                 sp["container_id"],
@@ -328,7 +327,7 @@ class Sync(commands.Cog):
             spawned += 1
             logger.debug(
                 "Spawned '%s' in room '%s' from pool '%s'",
-                entity["name"],
+                entity.name,
                 sp["room"],
                 sp["id"],
             )
@@ -338,34 +337,3 @@ class Sync(commands.Cog):
             self.entity_service.invalidate_cache()
             self.player_context.invalidate_cache()
             logger.info(f"Spawned {spawned} items from spawning pools")
-
-    async def _select_random_entity(self, tag_query: str) -> dict | None:
-        """Select a random entity by tag with weighted rarity.
-
-        Args:
-            tag_query: Tag to filter entities by
-
-        Returns:
-            Entity dict with id, name, rarity, or None if no matching entities
-        """
-        # Get entities with the tag (exclude quest rarity - weight 0)
-        candidates = await self._pool.fetch(
-            """
-            SELECT DISTINCT e.id, e.name, e.rarity
-            FROM entities e
-            JOIN entity_tags et ON et.entity_id = e.id
-            WHERE et.tag = $1 AND e.rarity != 'quest'
-            """,
-            tag_query,
-        )
-
-        if not candidates:
-            return None
-
-        # Build list of (candidate, weight) for weighted selection
-        items = [
-            (dict(candidate), RARITY_WEIGHTS.get(candidate["rarity"], 0))
-            for candidate in candidates
-        ]
-
-        return weighted_choice(items)

@@ -9,6 +9,8 @@ from uuid import UUID
 
 import asyncpg
 
+from mudd.utils.random import weighted_choice
+
 logger = logging.getLogger(__name__)
 
 SpawnMode = Literal["none", "move", "clone"]
@@ -381,6 +383,42 @@ class EntityService:
             )
 
         return instances
+
+    async def get_random_entity_by_tag(self, tag: str) -> ResolvedEntity | None:
+        """Select random entity by tag with weighted rarity.
+
+        Queries entities matching the tag (excluding quest rarity),
+        does weighted random selection based on RARITY_WEIGHTS.
+
+        Args:
+            tag: Tag to filter entities by
+
+        Returns:
+            ResolvedEntity with weighted random selection, or None if no matches
+        """
+        candidates = await self._pool.fetch(
+            """
+            SELECT DISTINCT e.id, e.rarity
+            FROM entities e
+            JOIN entity_tags et ON e.id = et.entity_id
+            WHERE et.tag = $1 AND e.rarity != 'quest'
+            """,
+            tag,
+        )
+
+        if not candidates:
+            return None
+
+        items = [
+            (candidate["id"], RARITY_WEIGHTS.get(candidate["rarity"], 0))
+            for candidate in candidates
+        ]
+
+        selected_id = weighted_choice(items)
+        if selected_id is None:
+            return None
+
+        return await self.get_entity(selected_id)
 
     def invalidate_cache(self) -> None:
         """Clear entity resolution cache.
