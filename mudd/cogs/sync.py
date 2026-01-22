@@ -7,6 +7,7 @@ perform full syncs every 15 minutes.
 
 import logging
 import os
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 import asyncpg
@@ -18,11 +19,12 @@ if TYPE_CHECKING:
 from mudd.loaders.entity_loader import sync_entities
 from mudd.loaders.verb_loader import sync_verbs
 from mudd.loaders.zone_loader import sync_zones_and_rooms
-from mudd.services.entity import EntityService
+from mudd.services.entity import RARITY_WEIGHTS, EntityService
 from mudd.services.inventory import InventoryService
 from mudd.services.player_context import PlayerContextService
 from mudd.services.rendering import RenderingService
 from mudd.services.visibility import VisibilityService
+from mudd.utils.random import weighted_choice
 
 logger = logging.getLogger(__name__)
 
@@ -59,9 +61,11 @@ class Sync(commands.Cog):
         self._seen_orphans: set[tuple[int, str, str]] = set()
         self._console_channel = os.environ.get("MUDD_CONSOLE_CHANNEL", "console")
         self.periodic_sync.start()
+        self.respawn_task.start()
 
     def cog_unload(self):
         self.periodic_sync.cancel()
+        self.respawn_task.cancel()
 
     @tasks.loop(minutes=15)
     async def periodic_sync(self):
@@ -231,3 +235,137 @@ class Sync(commands.Cog):
         if rooms:
             count = await self.player_context.prepopulate_cache(rooms)
             logger.info(f"Prepopulated autocomplete cache for {count} rooms")
+
+    @tasks.loop(minutes=5)
+    async def respawn_task(self):
+        """Process spawning pools for item respawns.
+
+        Runs every 5 minutes. For each pool:
+        1. Check current instance count vs max_count
+        2. Check if respawn_interval has elapsed
+        3. If spawning needed, select weighted random entity by tag
+        4. Create instance with spawning_pool_id
+        """
+        # Wait for startup to complete
+        await self.visibility_service.wait_for_startup()
+
+        try:
+            await self._process_spawning_pools()
+        except Exception:
+            logger.exception("Failed to process spawning pools")
+
+    @respawn_task.before_loop
+    async def before_respawn_task(self):
+        """Wait for bot to be ready before starting respawn task."""
+        await self.bot.wait_until_ready()
+
+    async def _process_spawning_pools(self) -> None:
+        """Check and process all spawning pools."""
+        pool = self._pool
+        now = datetime.now(UTC)
+
+        # Get all spawning pools with current instance counts
+        pools = await pool.fetch(
+            """
+            SELECT
+                sp.id,
+                sp.room,
+                sp.container_id,
+                sp.tag_query,
+                sp.max_count,
+                sp.respawn_interval_minutes,
+                sp.last_spawn_at,
+                COUNT(ei.id) AS current_count
+            FROM spawning_pools sp
+            LEFT JOIN entity_instances ei ON ei.spawning_pool_id = sp.id
+            GROUP BY sp.id
+            """
+        )
+
+        spawned = 0
+        for sp in pools:
+            # Check if at capacity
+            if sp["current_count"] >= sp["max_count"]:
+                continue
+
+            # Check if interval has elapsed
+            last_spawn = sp["last_spawn_at"]
+            if last_spawn is not None:
+                elapsed_minutes = (now - last_spawn).total_seconds() / 60
+                if elapsed_minutes < sp["respawn_interval_minutes"]:
+                    continue
+
+            # Select random entity by tag with weighted rarity
+            entity = await self._select_random_entity(sp["tag_query"])
+            if entity is None:
+                logger.warning(
+                    "No entities found for spawning pool '%s' with tag '%s'",
+                    sp["id"],
+                    sp["tag_query"],
+                )
+                continue
+
+            # Create instance (with container if spawning pool has one)
+            await pool.execute(
+                """
+                INSERT INTO entity_instances
+                    (entity_id, room, spawning_pool_id, container_entity_id)
+                VALUES ($1, $2, $3, $4)
+                """,
+                entity["id"],
+                sp["room"],
+                sp["id"],
+                sp["container_id"],
+            )
+
+            # Update last_spawn_at
+            await pool.execute(
+                "UPDATE spawning_pools SET last_spawn_at = $1 WHERE id = $2",
+                now,
+                sp["id"],
+            )
+
+            spawned += 1
+            logger.debug(
+                "Spawned '%s' in room '%s' from pool '%s'",
+                entity["name"],
+                sp["room"],
+                sp["id"],
+            )
+
+        if spawned > 0:
+            # Invalidate caches since entities changed
+            self.entity_service.invalidate_cache()
+            self.player_context.invalidate_cache()
+            logger.info(f"Spawned {spawned} items from spawning pools")
+
+    async def _select_random_entity(self, tag_query: str) -> dict | None:
+        """Select a random entity by tag with weighted rarity.
+
+        Args:
+            tag_query: Tag to filter entities by
+
+        Returns:
+            Entity dict with id, name, rarity, or None if no matching entities
+        """
+        # Get entities with the tag (exclude quest rarity - weight 0)
+        candidates = await self._pool.fetch(
+            """
+            SELECT DISTINCT e.id, e.name, e.rarity
+            FROM entities e
+            JOIN entity_tags et ON et.entity_id = e.id
+            WHERE et.tag = $1 AND e.rarity != 'quest'
+            """,
+            tag_query,
+        )
+
+        if not candidates:
+            return None
+
+        # Build list of (candidate, weight) for weighted selection
+        items = [
+            (dict(candidate), RARITY_WEIGHTS.get(candidate["rarity"], 0))
+            for candidate in candidates
+        ]
+
+        return weighted_choice(items)

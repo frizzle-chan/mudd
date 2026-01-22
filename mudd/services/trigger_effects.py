@@ -4,6 +4,20 @@ from dataclasses import dataclass, field
 
 
 @dataclass
+class GrantEffect:
+    """A queued grant of a specific item."""
+
+    entity_id: str
+
+
+@dataclass
+class GrantRandomEffect:
+    """A queued random grant from a tag."""
+
+    tag: str
+
+
+@dataclass
 class TriggerEffects:
     """Collects side effects during template rendering.
 
@@ -11,6 +25,9 @@ class TriggerEffects:
     that will be executed after the template renders:
 
     - `broadcast(message)`: Queue a message to send publicly to the channel
+    - `drop()`: Queue dropping the current item from inventory to room
+    - `grant(entity_id)`: Queue granting a specific item to the user
+    - `grant_random(tag)`: Queue granting a random item from a tag (broadcasts result)
 
     Example template:
         {{ effects.broadcast("**" ~ user.name ~ "** put on music.") }}
@@ -22,6 +39,9 @@ class TriggerEffects:
     """
 
     broadcasts: list[str] = field(default_factory=list)
+    drops: list[bool] = field(default_factory=list)  # Just track that drop was called
+    grants: list[GrantEffect] = field(default_factory=list)
+    grant_randoms: list[GrantRandomEffect] = field(default_factory=list)
 
     def broadcast(self, message: str) -> str:
         """Queue a message to broadcast publicly to the channel.
@@ -35,3 +55,55 @@ class TriggerEffects:
         if message:
             self.broadcasts.append(message)
         return ""
+
+    def drop(self) -> str:
+        """Queue dropping the current item from inventory to room.
+
+        Must be called in an on_drop handler. The item will be moved
+        from the user's inventory to their current room.
+
+        Returns:
+            Empty string (allows inline use in templates without output)
+        """
+        self.drops.append(True)
+        return ""
+
+    def grant(self, entity_id: str) -> str:
+        """Queue granting a specific item to the user.
+
+        Creates a new instance of the entity in the user's inventory.
+
+        Args:
+            entity_id: ID of the entity to grant
+
+        Returns:
+            Empty string (allows inline use in templates without output)
+        """
+        if entity_id:
+            self.grants.append(GrantEffect(entity_id=entity_id))
+        return ""
+
+    def grant_random(self, tag: str) -> str:
+        """Queue granting a random item from entities with the given tag.
+
+        The actual selection and granting happens after template rendering.
+        Uses weighted random selection based on rarity. Quest items
+        are excluded from random selection.
+
+        If an item is granted, a broadcast message is sent to the channel
+        so other players can see it.
+
+        Args:
+            tag: Tag to filter entities by
+
+        Returns:
+            Empty string (allows inline use in templates without output)
+        """
+        if tag:
+            self.grant_randoms.append(GrantRandomEffect(tag=tag))
+        return ""
+
+    @property
+    def has_drop(self) -> bool:
+        """Whether drop() was called during template rendering."""
+        return len(self.drops) > 0

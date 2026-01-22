@@ -1,0 +1,12 @@
+abandon
+deposit
+discard
+ditch
+drop
+dump
+leave
+place
+put
+release
+set
+toss

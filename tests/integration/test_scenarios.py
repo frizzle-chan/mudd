@@ -20,17 +20,18 @@ class TestUserExploresFoyer:
         """User looks around the foyer and examines objects."""
         user = await test_client.create_user(user_id=300000001, room="foyer")
 
-        # Autocomplete shows room entities
+        # Autocomplete shows room entities (display names include rarity emoji)
         results = await test_client.look_autocomplete(user)
         names = [r.name for r in results]
         assert "Room" in names
-        assert "Wooden Table" in names
+        # Entity names now include rarity emoji suffix (e.g., "Wooden Table ⚪")
+        assert any("Wooden Table" in n for n in names)
 
         # Autocomplete filters by prefix
         results = await test_client.interact_autocomplete(user, current="Wood")
         names = [r.name for r in results]
-        assert "Wooden Table" in names
-        assert "Flower Vase" not in names
+        assert any("Wooden Table" in n for n in names)
+        assert not any("Flower Vase" in n for n in names)
 
         # User looks around the room
         response = await test_client.look(user)

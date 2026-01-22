@@ -12,12 +12,23 @@ from typing import Literal, cast, overload
 import asyncpg
 import discord
 
-from mudd.services.entity import FocusMode
+from mudd.services.entity import FocusMode, Rarity
 
 logger = logging.getLogger(__name__)
 
 # Valid spawn modes matching PostgreSQL enum
 SpawnMode = Literal["none", "move", "clone"]
+
+# Valid rarity values matching PostgreSQL enum
+VALID_RARITIES: set[str] = {
+    "common",
+    "uncommon",
+    "rare",
+    "epic",
+    "legendary",
+    "mythic",
+    "quest",
+}
 
 
 @dataclass
@@ -53,6 +64,8 @@ class Entity:
     contents_visible: bool | None = None
     spawn_mode: SpawnMode = "none"
     focus_mode: FocusMode | None = None  # None = inherit from prototype
+    rarity: Rarity = "common"
+    tags: list[str] | None = None  # Space-separated in rec files
     description_short: str | None = None
     description_long: str | None = None
     on_look: str | None = None
@@ -62,6 +75,19 @@ class Entity:
     on_take: str | None = None
     on_open: str | None = None
     on_close: str | None = None
+    on_drop: str | None = None
+
+
+@dataclass
+class SpawningPool:
+    """Spawning pool data from rec file."""
+
+    id: str
+    room: str
+    tag_query: str
+    container_id: str | None = None
+    max_count: int = 1
+    respawn_interval_minutes: int = 30
 
 
 def _load_records_from_rec[T](
@@ -165,6 +191,19 @@ def _parse_entity_row(row: dict[str, str]) -> Entity:
             )
         focus_mode = cast(FocusMode, focus_mode_raw)
 
+    # Parse rarity with default and validation
+    rarity_raw = row.get("Rarity", "common").lower()
+    if rarity_raw not in VALID_RARITIES:
+        raise ValueError(
+            f"Entity '{row['Id']}' has invalid Rarity '{rarity_raw}'. "
+            f"Valid values: {', '.join(sorted(VALID_RARITIES))}"
+        )
+    rarity = cast(Rarity, rarity_raw)
+
+    # Parse tags (space-separated string)
+    tags_str = row.get("Tags", "").strip()
+    tags = tags_str.split() if tags_str else None
+
     return Entity(
         id=row["Id"],
         name=row["Name"],
@@ -174,6 +213,8 @@ def _parse_entity_row(row: dict[str, str]) -> Entity:
         contents_visible=contents_visible,
         spawn_mode=spawn_mode,
         focus_mode=focus_mode,
+        rarity=rarity,
+        tags=tags,
         description_short=row.get("DescriptionShort") or None,
         description_long=row.get("DescriptionLong") or None,
         on_look=row.get("OnLook") or None,
@@ -183,12 +224,59 @@ def _parse_entity_row(row: dict[str, str]) -> Entity:
         on_take=row.get("OnTake") or None,
         on_open=row.get("OnOpen") or None,
         on_close=row.get("OnClose") or None,
+        on_drop=row.get("OnDrop") or None,
     )
 
 
 def load_entities_from_rec(world_file: Path) -> list[Entity]:
     """Load Entity records from a world rec file using rec2csv."""
     return _load_records_from_rec(world_file, "Entity", _parse_entity_row)
+
+
+def _parse_spawning_pool_row(row: dict[str, str]) -> SpawningPool:
+    """Parse a CSV row into a SpawningPool object."""
+    # Parse max_count with default
+    max_count_str = row.get("MaxCount", "1")
+    try:
+        max_count = int(max_count_str)
+    except ValueError as e:
+        raise ValueError(
+            f"SpawningPool '{row['Id']}' has invalid MaxCount '{max_count_str}'. "
+            f"Must be an integer."
+        ) from e
+
+    # Parse respawn_interval_minutes with default (30 minutes)
+    interval_str = row.get("RespawnIntervalMinutes", "30")
+    try:
+        respawn_interval_minutes = int(interval_str)
+    except ValueError as e:
+        raise ValueError(
+            f"SpawningPool '{row['Id']}' has invalid RespawnIntervalMinutes "
+            f"'{interval_str}'. Must be an integer."
+        ) from e
+
+    return SpawningPool(
+        id=row["Id"],
+        room=row["Room"],
+        tag_query=row["TagQuery"],
+        container_id=row.get("Container") or None,
+        max_count=max_count,
+        respawn_interval_minutes=respawn_interval_minutes,
+    )
+
+
+def load_spawning_pools_from_rec(world_file: Path) -> list[SpawningPool]:
+    """Load SpawningPool records from a world rec file using rec2csv.
+
+    Returns empty list if no SpawningPool records exist (graceful handling).
+    """
+    try:
+        return _load_records_from_rec(
+            world_file, "SpawningPool", _parse_spawning_pool_row
+        )
+    except subprocess.CalledProcessError:
+        # No SpawningPool records in file is OK
+        return []
 
 
 def get_default_room(rooms: list[Room]) -> str:

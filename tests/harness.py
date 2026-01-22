@@ -104,6 +104,7 @@ class TestClient:
             entity_service=self.entity_service,
             player_context=self.player_context,
             visibility_service=visibility_service,
+            inventory_service=self.inventory_service,
             pool=pool,
             rendering_service=self.rendering_service,
         )

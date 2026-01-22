@@ -223,14 +223,15 @@ class FocusContextService:
         if entity_id == focus.entity_id:
             return True
 
-        # Check if entity is contained within the focused entity
+        # Check if entity is contained within the focused entity (check instances)
         row = await self._pool.fetchrow(
             """
-            SELECT 1 FROM entities
-            WHERE id = $1 AND container_id = $2
+            SELECT 1 FROM entity_instances
+            WHERE entity_id = $1 AND container_entity_id = $2 AND room = $3
             """,
             entity_id,
             focus.entity_id,
+            room,
         )
 
         return row is not None
@@ -254,14 +255,18 @@ class FocusContextService:
         if not focus:
             return []
 
-        # Get container contents
+        # Get container contents (query instances, not entity definitions)
         rows = await self._pool.fetch(
-            "SELECT id FROM entities WHERE container_id = $1",
+            """
+            SELECT DISTINCT entity_id FROM entity_instances
+            WHERE container_entity_id = $1 AND room = $2
+            """,
             focus.entity_id,
+            room,
         )
 
         # Include the focused entity itself and its contents
         entity_ids = [focus.entity_id]
-        entity_ids.extend([row["id"] for row in rows])
+        entity_ids.extend([row["entity_id"] for row in rows])
 
         return entity_ids

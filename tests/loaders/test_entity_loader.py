@@ -234,20 +234,21 @@ class TestTopologicalSort:
         # Parent must come before child
         assert parent_idx < child_idx
 
-    def test_containers_sorted_before_contents(self):
-        """Containers appear before entities that reference them."""
+    def test_container_order_is_irrelevant(self):
+        """Container order doesn't matter (no FK on entities table)."""
+        # Container relationships are stored on instances now, not entities.
+        # The topological sort only needs to order by prototype_id.
         entities = [
             Entity(id="item", name="Item", container_id="box"),
             Entity(id="box", name="Box"),
         ]
+        # Should not raise - container order doesn't matter
         sorted_entities = _validate_and_sort_entities(entities, set())
+        assert len(sorted_entities) == 2
 
-        box_idx = next(i for i, e in enumerate(sorted_entities) if e.id == "box")
-        item_idx = next(i for i, e in enumerate(sorted_entities) if e.id == "item")
-        assert box_idx < item_idx
-
-    def test_entity_with_both_prototype_and_container_sorted_correctly(self):
-        """Entity with both prototype and container is sorted after both."""
+    def test_entity_with_both_prototype_and_container_sorted_after_prototype(self):
+        """Entity with both prototype and container is sorted after prototype only."""
+        # Container order doesn't matter (no FK), but prototype order does.
         entities = [
             Entity(id="item", name="Item", prototype_id="object", container_id="box"),
             Entity(id="box", name="Box"),
@@ -256,11 +257,11 @@ class TestTopologicalSort:
         sorted_entities = _validate_and_sort_entities(entities, set())
 
         object_idx = next(i for i, e in enumerate(sorted_entities) if e.id == "object")
-        box_idx = next(i for i, e in enumerate(sorted_entities) if e.id == "box")
         item_idx = next(i for i, e in enumerate(sorted_entities) if e.id == "item")
 
+        # Prototype must come before child
         assert object_idx < item_idx
-        assert box_idx < item_idx
+        # Container order is irrelevant (no assertion on box_idx)
 
 
 @pytest.mark.asyncio(loop_scope="session")
@@ -291,14 +292,18 @@ class TestSyncEntities:
             assert foyer_table is not None
             assert foyer_table["prototype_id"] == "furniture"
 
-    async def test_container_reference_stored(self, synced_db):
-        """Container references are stored correctly."""
+    async def test_container_reference_stored_on_instance(self, synced_db):
+        """Container references are stored on instances (not entities)."""
         async with synced_db.acquire() as conn:
-            foyer_flower_vase = await conn.fetchrow(
-                "SELECT * FROM entities WHERE id = $1", "foyer_flower_vase"
+            # Container is now stored on entity_instances, not entities
+            instance = await conn.fetchrow(
+                """SELECT * FROM entity_instances
+                   WHERE entity_id = $1 AND room = $2""",
+                "foyer_flower_vase",
+                "foyer",
             )
-            assert foyer_flower_vase is not None
-            assert foyer_flower_vase["container_id"] == "foyer_table"
+            assert instance is not None
+            assert instance["container_entity_id"] == "foyer_table"
 
     async def test_resolve_entity_function_works(self, synced_db):
         """The resolve_entity function resolves inherited properties."""

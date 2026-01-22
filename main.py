@@ -84,6 +84,7 @@ async def setup_hook():
             entity_service,
             player_context,
             visibility_service,
+            inventory_service,
             pool,
             rendering_service,
         )

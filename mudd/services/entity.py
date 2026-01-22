@@ -13,8 +13,31 @@ logger = logging.getLogger(__name__)
 
 SpawnMode = Literal["none", "move", "clone"]
 
-
 FocusMode = Literal["none", "container"]
+
+Rarity = Literal["common", "uncommon", "rare", "epic", "legendary", "mythic", "quest"]
+
+# Rarity emoji for display names
+RARITY_EMOJI: dict[Rarity, str] = {
+    "common": "\u26aa",  # White circle
+    "uncommon": "\U0001f7e2",  # Green circle
+    "rare": "\U0001f535",  # Blue circle
+    "epic": "\U0001f7e3",  # Purple circle
+    "legendary": "\U0001f7e0",  # Orange circle
+    "mythic": "\u3299\ufe0f",  # Japanese "secret" symbol
+    "quest": "\U0001f537",  # Blue diamond
+}
+
+# Rarity weights for spawning (sum to 1000)
+RARITY_WEIGHTS: dict[Rarity, int] = {
+    "common": 600,
+    "uncommon": 250,
+    "rare": 100,
+    "epic": 40,
+    "legendary": 9,
+    "mythic": 1,
+    "quest": 0,  # Never spawns from pools
+}
 
 
 @dataclass(frozen=True)
@@ -32,9 +55,16 @@ class ResolvedEntity:
     on_take: str | None
     on_open: str | None
     on_close: str | None
+    on_drop: str | None
     contents_visible: bool | None
     focus_mode: FocusMode
     spawn_mode: SpawnMode
+    rarity: Rarity
+
+    @property
+    def display_name(self) -> str:
+        """Name with rarity emoji suffix for display."""
+        return f"{self.name} {RARITY_EMOJI[self.rarity]}"
 
 
 @dataclass(frozen=True)
@@ -45,6 +75,7 @@ class EntityInstance:
     entity: ResolvedEntity
     room: str | None
     owner_id: int | None
+    container_entity_id: str | None = None
 
 
 class EntityService:
@@ -77,9 +108,11 @@ class EntityService:
             on_take=row["on_take"],
             on_open=row["on_open"],
             on_close=row["on_close"],
+            on_drop=row["on_drop"],
             contents_visible=row["contents_visible"],
             focus_mode=row["focus_mode"],
             spawn_mode=row["spawn_mode"],
+            rarity=row["rarity"],
         )
 
     async def get_entity(self, entity_id: str) -> ResolvedEntity | None:
@@ -125,7 +158,8 @@ class EntityService:
         try:
             rows = await self._pool.fetch(
                 """
-                SELECT ei.id AS instance_id, ei.room, ei.owner_id, r.*
+                SELECT ei.id AS instance_id, ei.room, ei.owner_id,
+                       ei.container_entity_id, r.*
                 FROM entity_instances ei
                 CROSS JOIN LATERAL resolve_entity(ei.entity_id) r
                 WHERE ei.room = $1
@@ -146,6 +180,7 @@ class EntityService:
                     entity=entity,
                     room=row["room"],
                     owner_id=row["owner_id"],
+                    container_entity_id=row["container_entity_id"],
                 )
             )
 
@@ -163,7 +198,8 @@ class EntityService:
         try:
             row = await self._pool.fetchrow(
                 """
-                SELECT ei.id AS instance_id, ei.room, ei.owner_id, r.*
+                SELECT ei.id AS instance_id, ei.room, ei.owner_id,
+                       ei.container_entity_id, r.*
                 FROM entity_instances ei
                 CROSS JOIN LATERAL resolve_entity(ei.entity_id) r
                 WHERE ei.id = $1
@@ -187,6 +223,7 @@ class EntityService:
             entity=entity,
             room=row["room"],
             owner_id=row["owner_id"],
+            container_entity_id=row["container_entity_id"],
         )
 
     async def get_top_level_room_entities(self, room: str) -> list[EntityInstance]:
@@ -201,12 +238,12 @@ class EntityService:
         try:
             rows = await self._pool.fetch(
                 """
-                SELECT ei.id AS instance_id, ei.room, ei.owner_id, r.*
+                SELECT ei.id AS instance_id, ei.room, ei.owner_id,
+                       ei.container_entity_id, r.*
                 FROM entity_instances ei
                 CROSS JOIN LATERAL resolve_entity(ei.entity_id) r
-                JOIN entities e ON e.id = ei.entity_id
                 WHERE ei.room = $1
-                  AND e.container_id IS NULL
+                  AND ei.container_entity_id IS NULL
                 """,
                 room,
             )
@@ -226,6 +263,7 @@ class EntityService:
                     entity=entity,
                     room=row["room"],
                     owner_id=row["owner_id"],
+                    container_entity_id=row["container_entity_id"],
                 )
             )
 
@@ -246,13 +284,12 @@ class EntityService:
         try:
             rows = await self._pool.fetch(
                 """
-                SELECT ei.id AS instance_id, ei.room, ei.owner_id, r.*
+                SELECT ei.id AS instance_id, ei.room, ei.owner_id,
+                       ei.container_entity_id, r.*
                 FROM entity_instances ei
                 CROSS JOIN LATERAL resolve_entity(ei.entity_id) r
                 WHERE ei.room = $1
-                  AND ei.entity_id IN (
-                      SELECT id FROM entities WHERE container_id = $2
-                  )
+                  AND ei.container_entity_id = $2
                 """,
                 room,
                 container_id,
@@ -275,6 +312,7 @@ class EntityService:
                     entity=entity,
                     room=row["room"],
                     owner_id=row["owner_id"],
+                    container_entity_id=row["container_entity_id"],
                 )
             )
 
@@ -303,6 +341,46 @@ class EntityService:
                 result.extend(contents)
 
         return result
+
+    async def get_user_inventory(self, user_id: int) -> list[EntityInstance]:
+        """Get all entity instances owned by a user.
+
+        Args:
+            user_id: Discord user ID
+
+        Returns:
+            List of EntityInstance objects in the user's inventory
+        """
+        try:
+            rows = await self._pool.fetch(
+                """
+                SELECT ei.id AS instance_id, ei.room, ei.owner_id,
+                       ei.container_entity_id, r.*
+                FROM entity_instances ei
+                CROSS JOIN LATERAL resolve_entity(ei.entity_id) r
+                WHERE ei.owner_id = $1
+                """,
+                user_id,
+            )
+        except Exception:
+            logger.exception("Database error fetching inventory for user '%s'", user_id)
+            raise
+
+        instances = []
+        for row in rows:
+            entity = self._entity_from_row(row)
+            self._entity_cache[entity.id] = entity
+            instances.append(
+                EntityInstance(
+                    instance_id=row["instance_id"],
+                    entity=entity,
+                    room=row["room"],
+                    owner_id=row["owner_id"],
+                    container_entity_id=row["container_entity_id"],
+                )
+            )
+
+        return instances
 
     def invalidate_cache(self) -> None:
         """Clear entity resolution cache.

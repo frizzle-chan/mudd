@@ -152,7 +152,7 @@ class PlayerContextService:
         return [
             AutocompleteChoice(
                 instance=inst,
-                display_name=inst.entity.name,
+                display_name=inst.entity.display_name,
                 is_focused=False,
             )
             for inst in visible
@@ -187,7 +187,7 @@ class PlayerContextService:
                 focus_parent_item = [
                     AutocompleteChoice(
                         instance=inst,
-                        display_name=inst.entity.name,
+                        display_name=inst.entity.display_name,
                         is_focused=True,
                     )
                 ]
@@ -195,7 +195,7 @@ class PlayerContextService:
                 room_items.append(
                     AutocompleteChoice(
                         instance=inst,
-                        display_name=inst.entity.name,
+                        display_name=inst.entity.display_name,
                         is_focused=False,
                     )
                 )
@@ -204,7 +204,7 @@ class PlayerContextService:
         content_items = [
             AutocompleteChoice(
                 instance=inst,
-                display_name=inst.entity.name,
+                display_name=inst.entity.display_name,
                 is_focused=True,
             )
             for inst in focused_contents

@@ -54,6 +54,12 @@ In the context of **categorizing entities for spawning pools**, facing **the nee
 - Rarity indicates discovery difficulty only, not power level
 - No zone-based weight modifiers (same odds everywhere)
 
+**Display Names:**
+- Item names are always displayed with their rarity icon suffix for visual consistency
+- Format: `{name} {rarity_icon}` (e.g., "Beer ⚪", "White Claw 🔵", "Rusty Key 🔷")
+- The `display_name` property on entities and returned objects includes this formatting
+- Templates should use `display_name` rather than `name` when showing items to players
+
 ### Spawning Pool System
 
 In the context of **respawning items in the world**, facing **the need for items to reappear after being taken, with randomized variety**, we decided to **introduce spawning pools that query entities by tag and select randomly weighted by rarity**, to achieve **dynamic, varied item respawning without manual placement**, accepting **a background task for respawn processing and additional schema tables**.
@@ -64,7 +70,7 @@ In the context of **respawning items in the world**, facing **the need for items
 - `container_id`: Optional parent entity (e.g., fridge, chest)
 - `tag_query`: Tag to filter eligible entities
 - `max_count`: Maximum concurrent instances from this pool
-- `respawn_interval`: Time between respawns (default: 30 minutes)
+- `respawn_interval_minutes`: Time between respawns in minutes (default: 30)
 
 **Respawn algorithm:**
 1. Background task runs periodically
@@ -82,7 +88,7 @@ Room: lounge
 Container: fridge
 TagQuery: beverage
 MaxCount: 3
-RespawnInterval: 30 minutes
+RespawnIntervalMinutes: 30
 ```
 
 Matching entities: Beer (common), White Monster (uncommon), White Claw (rare)
@@ -110,10 +116,10 @@ OnDrop: {{ effects.drop() }}{{ effects.broadcast(user.name ~ " places " ~ name ~
 
 ### Item Granting via Templates
 
-In the context of **rewarding players for interactions**, facing **the need to give items as outcomes of actions (puzzles, combat, exploration)**, we decided to **add an `effects.grant(entity_id)` function available in templates**, to achieve **scriptable item rewards without custom code**, accepting **that granted items bypass spawn mode restrictions**.
+In the context of **rewarding players for interactions**, facing **the need to give items as outcomes of actions (puzzles, combat, exploration)**, we decided to **add `effects.grant()` and `effects.grant_random()` functions available in templates**, to achieve **scriptable item rewards without custom code**, accepting **that granted items bypass spawn mode restrictions**.
 
-**Behavior:**
-- `effects.grant("entity_id")`: Creates new instance of entity in user's inventory
+**`effects.grant(entity_id)`** - Grant a specific item:
+- Creates new instance of entity in user's inventory
 - Returns empty string (can be used inline in templates)
 - Creates inventory thread via existing inventory system
 
@@ -121,6 +127,22 @@ In the context of **rewarding players for interactions**, facing **the need to g
 ```jinja
 {{ effects.grant("rusty_key") }}The {{ name }} shatters! A *Rusty Key* clatters to the floor. You pick it up.
 ```
+
+**`effects.grant_random(tag)`** - Grant a random item from a tag:
+- Queues the grant; actual selection happens after template rendering
+- Queries entities matching the tag, excluding `quest` rarity
+- Weighted random selection using rarity weights (common=600, uncommon=250, rare=100, epic=40, legendary=9, mythic=1)
+- Creates instance in user's inventory
+- Broadcasts result to channel: "**{user.name}** picks up a *{item.display_name}*"
+- Returns empty string (allows inline use in templates)
+- If no matching entities, nothing happens (no grant, no broadcast)
+
+**Example:**
+```jinja
+{{ effects.grant_random("treasure") }}The vase shatters!
+```
+
+The granted item (if any) is announced via broadcast to the room.
 
 ### Floor Clutter Limits
 
@@ -177,14 +199,14 @@ SpawnMode: clone
 %rec: SpawningPool
 %key: Id
 %mandatory: Id Room TagQuery
-%allowed: Id Room Container TagQuery MaxCount RespawnInterval
+%allowed: Id Room Container TagQuery MaxCount RespawnIntervalMinutes
 
 Id: fridge-beverages
 Room: lounge
 Container: fridge
 TagQuery: beverage
 MaxCount: 3
-RespawnInterval: 30 minutes
+RespawnIntervalMinutes: 30
 ```
 
 ## PostgreSQL Schema
@@ -210,7 +232,7 @@ CREATE TABLE spawning_pools (
     container_id TEXT REFERENCES entities(id) ON DELETE CASCADE,
     tag_query TEXT NOT NULL,
     max_count INTEGER NOT NULL DEFAULT 1,
-    respawn_interval INTERVAL NOT NULL DEFAULT '30 minutes'
+    respawn_interval_minutes INTEGER NOT NULL DEFAULT 30
 );
 
 -- Track spawning pool origin

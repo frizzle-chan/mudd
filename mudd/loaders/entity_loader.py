@@ -8,8 +8,10 @@ import asyncpg
 
 from mudd.loaders.zone_loader import (
     Entity,
+    SpawningPool,
     load_entities_from_rec,
     load_rooms_from_rec,
+    load_spawning_pools_from_rec,
 )
 
 logger = logging.getLogger(__name__)
@@ -90,10 +92,10 @@ def _validate_and_sort_entities(
                 f"Circular containment detected involving entity '{entity.id}'"
             )
 
-    # Topological sort by prototype_id AND container_id (Kahn's algorithm)
+    # Topological sort by prototype_id (Kahn's algorithm)
     # Build dependency graph: entity -> entities that depend on it
-    # An entity must be inserted BEFORE anything that references it as
-    # prototype_id or container_id
+    # An entity must be inserted BEFORE anything that references it as prototype_id
+    # Note: container_id no longer has FK on entities table (moved to instances)
     dependents: dict[str, list[str]] = defaultdict(list)
     in_degree = {e.id: 0 for e in entities}
 
@@ -101,11 +103,8 @@ def _validate_and_sort_entities(
         if entity.prototype_id:
             dependents[entity.prototype_id].append(entity.id)
             in_degree[entity.id] += 1
-        if entity.container_id:
-            dependents[entity.container_id].append(entity.id)
-            in_degree[entity.id] += 1
 
-    # Start with entities that have no dependencies (no prototype or container)
+    # Start with entities that have no dependencies (no prototype)
     queue = [e.id for e in entities if in_degree[e.id] == 0]
     sorted_ids: list[str] = []
 
@@ -166,7 +165,10 @@ async def sync_entities(pool: asyncpg.Pool, world_file: Path) -> int:
     all_entity_ids = [e.id for e in sorted_entities]
 
     # Collect entities with Room field for instance creation
-    entities_with_room = [(e.id, e.room) for e in sorted_entities if e.room]
+    # container_id from rec file becomes container_entity_id on instance
+    entities_with_room = [
+        (e.id, e.room, e.container_id) for e in sorted_entities if e.room
+    ]
 
     async with pool.acquire() as conn, conn.transaction():
         # Delete entities not in current files (CASCADE deletes instances)
@@ -181,34 +183,34 @@ async def sync_entities(pool: asyncpg.Pool, world_file: Path) -> int:
         for entity in sorted_entities:
             await conn.execute(
                 """INSERT INTO entities (
-                    id, name, prototype_id, container_id,
+                    id, name, prototype_id,
                     description_short, description_long,
                     on_look, on_touch, on_attack, on_use, on_take,
-                    on_open, on_close,
-                    contents_visible, spawn_mode, focus_mode
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13,
-                          $14, $15::spawn_mode, $16::focus_mode)
+                    on_open, on_close, on_drop,
+                    contents_visible, spawn_mode, focus_mode, rarity
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
+                          $13, $14, $15::spawn_mode, $16::focus_mode, $17::rarity)
                 ON CONFLICT (id) DO UPDATE SET
                     name = $2,
                     prototype_id = $3,
-                    container_id = $4,
-                    description_short = $5,
-                    description_long = $6,
-                    on_look = $7,
-                    on_touch = $8,
-                    on_attack = $9,
-                    on_use = $10,
-                    on_take = $11,
-                    on_open = $12,
-                    on_close = $13,
+                    description_short = $4,
+                    description_long = $5,
+                    on_look = $6,
+                    on_touch = $7,
+                    on_attack = $8,
+                    on_use = $9,
+                    on_take = $10,
+                    on_open = $11,
+                    on_close = $12,
+                    on_drop = $13,
                     contents_visible = $14,
                     spawn_mode = $15::spawn_mode,
-                    focus_mode = $16::focus_mode
+                    focus_mode = $16::focus_mode,
+                    rarity = $17::rarity
                 """,
                 entity.id,
                 entity.name,
                 entity.prototype_id,
-                entity.container_id,
                 entity.description_short,
                 entity.description_long,
                 entity.on_look,
@@ -218,9 +220,11 @@ async def sync_entities(pool: asyncpg.Pool, world_file: Path) -> int:
                 entity.on_take,
                 entity.on_open,
                 entity.on_close,
+                entity.on_drop,
                 entity.contents_visible,
                 entity.spawn_mode,
                 entity.focus_mode,
+                entity.rarity,
             )
 
         # Delete orphan room instances not in current rec files
@@ -241,16 +245,124 @@ async def sync_entities(pool: asyncpg.Pool, world_file: Path) -> int:
             await conn.execute("DELETE FROM entity_instances WHERE room IS NOT NULL")
 
         # Create entity_instances for entities with Room field
+        # container_entity_id comes from Container field in rec file
         if entities_with_room:
             await conn.executemany(
-                """INSERT INTO entity_instances (entity_id, room)
-                VALUES ($1, $2)
+                """INSERT INTO entity_instances (entity_id, room, container_entity_id)
+                VALUES ($1, $2, $3)
                 ON CONFLICT (entity_id, room) WHERE room IS NOT NULL
-                DO NOTHING""",
+                DO UPDATE SET container_entity_id = $3""",
                 entities_with_room,
             )
             logger.info(f"Ensured {len(entities_with_room)} entity instances exist")
 
+        # Sync entity tags
+        await _sync_entity_tags(conn, sorted_entities)
+
+        # Load and sync spawning pools
+        spawning_pools = load_spawning_pools_from_rec(world_file)
+        await _sync_spawning_pools(conn, spawning_pools, room_ids, all_entity_ids)
+
     logger.info(f"Synced {len(sorted_entities)} entities to database")
 
     return len(sorted_entities)
+
+
+async def _sync_entity_tags(conn: asyncpg.Connection, entities: list[Entity]) -> None:
+    """Sync entity tags to database.
+
+    Deletes all existing tags and inserts current tags from entities.
+    This ensures tags stay in sync with the rec file.
+
+    Args:
+        conn: Database connection (in transaction)
+        entities: List of entities with tags
+    """
+    # Collect all (entity_id, tag) pairs
+    tag_pairs: list[tuple[str, str]] = []
+    for entity in entities:
+        if entity.tags:
+            for tag in entity.tags:
+                tag_pairs.append((entity.id, tag))
+
+    # Delete all tags for these entities (clean slate)
+    entity_ids = [e.id for e in entities]
+    await conn.execute(
+        "DELETE FROM entity_tags WHERE entity_id = ANY($1::text[])",
+        entity_ids,
+    )
+
+    # Insert current tags
+    if tag_pairs:
+        await conn.executemany(
+            "INSERT INTO entity_tags (entity_id, tag) VALUES ($1, $2)",
+            tag_pairs,
+        )
+        logger.info(f"Synced {len(tag_pairs)} entity tags")
+
+
+async def _sync_spawning_pools(
+    conn: asyncpg.Connection,
+    pools: list[SpawningPool],
+    room_ids: set[str],
+    entity_ids: list[str],
+) -> None:
+    """Sync spawning pools to database.
+
+    Validates references and upserts pools. Preserves last_spawn_at timestamps.
+
+    Args:
+        conn: Database connection (in transaction)
+        pools: List of SpawningPool objects
+        room_ids: Valid room IDs for validation
+        entity_ids: Valid entity IDs for container validation
+    """
+    if not pools:
+        # No pools - delete any existing
+        await conn.execute("DELETE FROM spawning_pools")
+        return
+
+    entity_id_set = set(entity_ids)
+
+    # Validate pool references
+    for pool in pools:
+        if pool.room not in room_ids:
+            raise ValueError(
+                f"SpawningPool '{pool.id}' references invalid room '{pool.room}'"
+            )
+        if pool.container_id and pool.container_id not in entity_id_set:
+            raise ValueError(
+                f"SpawningPool '{pool.id}' references invalid container "
+                f"'{pool.container_id}'"
+            )
+
+    pool_ids = [p.id for p in pools]
+
+    # Delete pools not in current files
+    await conn.execute(
+        "DELETE FROM spawning_pools WHERE id != ALL($1::text[])",
+        pool_ids,
+    )
+
+    # Upsert pools (preserve last_spawn_at)
+    for pool in pools:
+        await conn.execute(
+            """INSERT INTO spawning_pools (
+                id, room, container_id, tag_query, max_count, respawn_interval_minutes
+            ) VALUES ($1, $2, $3, $4, $5, $6)
+            ON CONFLICT (id) DO UPDATE SET
+                room = $2,
+                container_id = $3,
+                tag_query = $4,
+                max_count = $5,
+                respawn_interval_minutes = $6
+            """,
+            pool.id,
+            pool.room,
+            pool.container_id,
+            pool.tag_query,
+            pool.max_count,
+            pool.respawn_interval_minutes,
+        )
+
+    logger.info(f"Synced {len(pools)} spawning pools")
