@@ -448,7 +448,7 @@ Templates have access to:
         │       └─ Append "-# (error rendering template)" warning
         └─ Append container contents (if contents_visible)
 
-/interact do:<verb> target:<entity>
+/interact with:<entity> action:<verb>
     ├─ Match target using word-prefix matching (entity_matcher.py)
     │   ├─ No match → "You don't see '{target}' here."
     │   └─ Multiple matches → "Which one? *Entity1*, *Entity2*"
