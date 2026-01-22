@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
+import discord
+
 
 class MockResponse:
     """Captures response messages sent via interaction.response.send_message."""
@@ -39,12 +41,17 @@ class MockChannel:
         self.topic = topic
 
 
-class MockTextChannel:
-    """Mock Discord text channel with ID for movement testing."""
+class MockTextChannel(discord.TextChannel):
+    """Mock Discord text channel with ID for movement testing.
+
+    Inherits from discord.TextChannel so it passes isinstance() checks,
+    but doesn't call super().__init__() since we're a test mock.
+    """
 
     def __init__(
         self, name: str, topic: str | None = None, channel_id: int | None = None
     ) -> None:
+        # Don't call super().__init__() - we're a test mock
         self.name = name
         self.topic = topic
         # Use hash of name as default ID to ensure consistency
@@ -57,32 +64,182 @@ class MockTextChannel:
         """Return Discord-style channel mention."""
         return f"<#{self.id}>"
 
-    async def send(self, content: str) -> None:
+    async def send(self, content: str, **kwargs) -> None:  # type: ignore[override]
         """Capture messages sent to the channel."""
         self.sent_messages.append(content)
+
+
+class MockMember:
+    """Mock Discord member for testing."""
+
+    def __init__(self, user_id: int, display_name: str | None = None) -> None:
+        self.id = user_id
+        self.display_name = display_name or f"TestUser{user_id}"
+        self.bot = False
+
+    @property
+    def mention(self) -> str:
+        """Return Discord-style user mention."""
+        return f"<@{self.id}>"
+
+
+class MockForumChannel:
+    """Mock Discord forum channel for inventory testing."""
+
+    def __init__(self, name: str, forum_id: int | None = None) -> None:
+        self.name = name
+        self.id = forum_id if forum_id is not None else hash(name) & 0xFFFFFFFF
+        self._threads: dict[int, MockThread] = {}
+        self._next_thread_id = 1
+
+    async def create_thread(
+        self, *, name: str, content: str
+    ) -> tuple[MockThread, MockMessage]:
+        """Create a thread in the forum."""
+        thread_id = self._next_thread_id
+        self._next_thread_id += 1
+        thread = MockThread(name, thread_id, self)
+        message = MockMessage(content)
+        self._threads[thread_id] = thread
+        return thread, message
+
+    def set_permissions(self, member: MockMember, **kwargs) -> None:
+        """Mock permission setting (no-op for tests)."""
+        pass
+
+    def overwrites_for(self, member: MockMember) -> MockPermissionOverwrite:
+        """Get permission overwrites for a member."""
+        return MockPermissionOverwrite()
+
+
+class MockThread:
+    """Mock Discord thread for inventory testing."""
+
+    def __init__(
+        self, name: str, thread_id: int, parent: MockForumChannel | None = None
+    ) -> None:
+        self.name = name
+        self.id = thread_id
+        self.parent = parent
+
+    async def delete(self) -> None:
+        """Delete the thread."""
+        if self.parent and self.id in self.parent._threads:
+            del self.parent._threads[self.id]
+
+
+class MockMessage:
+    """Mock Discord message."""
+
+    def __init__(self, content: str) -> None:
+        self.content = content
+
+
+class MockCategoryChannel:
+    """Mock Discord category channel for inventory testing."""
+
+    def __init__(self, name: str, category_id: int | None = None) -> None:
+        self.name = name
+        self.id = category_id if category_id is not None else hash(name) & 0xFFFFFFFF
+        self._forums: dict[int, MockForumChannel] = {}
+        self._next_forum_id = 1
+
+    async def create_forum(
+        self, name: str, *, topic: str = "", overwrites: dict | None = None
+    ) -> MockForumChannel:
+        """Create a forum in this category."""
+        forum_id = self._next_forum_id
+        self._next_forum_id += 1
+        forum = MockForumChannel(name, forum_id)
+        self._forums[forum_id] = forum
+        return forum
+
+
+class MockPermissionOverwrite:
+    """Mock Discord permission overwrite."""
+
+    def __init__(self) -> None:
+        self.create_public_threads: bool | None = None
+
+
+class MockRole:
+    """Mock Discord role."""
+
+    def __init__(self, role_id: int = 0) -> None:
+        self.id = role_id
 
 
 class MockGuild:
     """Mock Discord guild with text channels for movement testing."""
 
     def __init__(self, channels: list[MockTextChannel] | None = None) -> None:
+        self.id = hash("mock_guild") & 0xFFFFFFFF
         self._channels = channels or []
         self._channel_by_id: dict[int, MockTextChannel] = {
             ch.id: ch for ch in self._channels
         }
+        self._members: dict[int, MockMember] = {}
+        self._categories: list[MockCategoryChannel] = []
+        self._threads: dict[int, MockThread] = {}
+        self.default_role = MockRole()
+        self.name = "Test Guild"
 
     @property
     def text_channels(self) -> list[MockTextChannel]:
         return self._channels
 
-    def get_channel(self, channel_id: int) -> MockTextChannel | None:
+    @property
+    def categories(self) -> list[MockCategoryChannel]:
+        return self._categories
+
+    def get_channel(
+        self, channel_id: int
+    ) -> MockTextChannel | MockCategoryChannel | MockForumChannel | None:
         """Get a channel by its ID."""
-        return self._channel_by_id.get(channel_id)
+        if channel_id in self._channel_by_id:
+            return self._channel_by_id[channel_id]
+        # Check categories
+        for category in self._categories:
+            if category.id == channel_id:
+                return category
+            # Check forums in category
+            for forum in category._forums.values():
+                if forum.id == channel_id:
+                    return forum
+        return None
+
+    def get_thread(self, thread_id: int) -> MockThread | None:
+        """Get a thread by its ID."""
+        # Check threads in all forums in all categories
+        for category in self._categories:
+            for forum in category._forums.values():
+                if thread_id in forum._threads:
+                    return forum._threads[thread_id]
+        return self._threads.get(thread_id)
+
+    async def create_category(
+        self, name: str, *, overwrites: dict | None = None
+    ) -> MockCategoryChannel:
+        """Create a category channel."""
+        category = MockCategoryChannel(name)
+        self._categories.append(category)
+        return category
 
     def add_channel(self, channel: MockTextChannel) -> None:
         """Add a channel to the guild."""
         self._channels.append(channel)
         self._channel_by_id[channel.id] = channel
+
+    def get_member(self, user_id: int) -> MockMember | None:
+        """Get a member by their ID, creating if needed for tests."""
+        if user_id not in self._members:
+            # Auto-create members for test convenience
+            self._members[user_id] = MockMember(user_id)
+        return self._members[user_id]
+
+    def add_member(self, member: MockMember) -> None:
+        """Add a member to the guild."""
+        self._members[member.id] = member
 
 
 class MockUser:

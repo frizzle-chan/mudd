@@ -86,9 +86,12 @@ async def clean_user_state(test_db):
 
     Clears:
     - user_focus: focus state
+    - entity_instances: player-owned and player-dropped items
     - users: user records (cascades to user_focus)
     """
     await test_db.execute("DELETE FROM user_focus")
+    await test_db.execute("DELETE FROM entity_instances WHERE owner_id IS NOT NULL")
+    await test_db.execute("DELETE FROM entity_instances WHERE player_dropped = TRUE")
     await test_db.execute("DELETE FROM users")
     yield test_db
 

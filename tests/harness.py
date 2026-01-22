@@ -331,3 +331,48 @@ class TestClient:
             )
 
         return interaction.last_response
+
+    async def get_inventory(self, user: TestUser) -> list[tuple[str, str]]:
+        """Get items in user's inventory.
+
+        Args:
+            user: The test user whose inventory to check.
+
+        Returns:
+            List of (entity_id, entity_name) tuples.
+        """
+        instances = await self.entity_service.get_user_inventory(user.id)
+        return [(inst.entity.id, inst.entity.name) for inst in instances]
+
+    async def is_entity_in_room(self, entity_id: str, room: str) -> bool:
+        """Check if an entity instance exists in a room.
+
+        Args:
+            entity_id: The entity ID to check for.
+            room: The room ID to search in.
+
+        Returns:
+            True if the entity has an instance in the room.
+        """
+        row = await self.pool.fetchrow(
+            "SELECT id FROM entity_instances WHERE entity_id = $1 AND room = $2",
+            entity_id,
+            room,
+        )
+        return row is not None
+
+    async def count_player_dropped_items(self, room: str) -> int:
+        """Count player-dropped items in a room.
+
+        Args:
+            room: The room ID to count dropped items in.
+
+        Returns:
+            Number of player-dropped items in the room.
+        """
+        count = await self.pool.fetchval(
+            """SELECT COUNT(*) FROM entity_instances
+            WHERE room = $1 AND player_dropped = TRUE""",
+            room,
+        )
+        return count or 0
