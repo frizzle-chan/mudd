@@ -138,7 +138,8 @@ Description: A dimly lit lounge.
 %type: FocusMode enum none container
 %mandatory: Id Name
 %allowed: Id Name Prototype Container Room ContentsVisible SpawnMode FocusMode DescriptionShort DescriptionLong
-%allowed: OnLook OnTouch OnAttack OnUse OnTake OnOpen OnClose
+%allowed: OnLook OnTouch OnAttack OnUse OnTake OnOpen OnClose OnDrop
+%allowed: Tags Rarity
 
 # ----------------------------------------------------------------------------
 # Base prototypes (no Room field - these are templates, not instances)
@@ -611,3 +612,152 @@ Container: storeroom_box
 DescriptionShort: a {{ name }} for testing
 DescriptionLong: A test record.
 OnUse: TEST_EPHEMERAL_RESPONSE{{ effects.broadcast("TEST_BROADCAST_RESPONSE " ~ user.mention) }}
+
+Id: test_takeable
+Name: Test Takeable
+Prototype: object
+Room: store-room
+Container: storeroom_box
+SpawnMode: move
+DescriptionShort: a {{ name }} you can pick up
+DescriptionLong: A test item that can be picked up.
+OnTake: TEST_TAKE_MOVE_RESPONSE - You pick up the {{ name }}.
+
+Id: test_quest_map
+Name: Test Quest Map
+Prototype: object
+Room: store-room
+Container: storeroom_box
+SpawnMode: clone
+Rarity: quest
+DescriptionShort: a {{ name }} for your quest
+DescriptionLong: A test quest item that can be cloned.
+OnTake: TEST_TAKE_CLONE_RESPONSE - You copy the {{ name }}.
+
+Id: test_droppable
+Name: Test Droppable
+Prototype: object
+Room: store-room
+Container: storeroom_box
+SpawnMode: move
+DescriptionShort: a {{ name }} you can drop
+DescriptionLong: A test item that can be dropped.
+OnTake: You pick up the {{ name }}.
+OnDrop: TEST_DROP_RESPONSE - You drop the {{ name }}.{{ effects.drop() }}
+
+Id: test_sticky
+Name: Test Sticky
+Prototype: object
+Room: store-room
+Container: storeroom_box
+SpawnMode: move
+DescriptionShort: a {{ name }} that sticks to you
+DescriptionLong: A test item that cannot be dropped.
+OnTake: You pick up the {{ name }}.
+
+Id: test_granting_key
+Name: Test Granting Key
+Prototype: object
+Room: store-room
+Container: storeroom_box
+DescriptionShort: a {{ name }} that grants an item
+DescriptionLong: A test key that grants a specific item when used.
+OnUse: TEST_GRANT_RESPONSE - The key glows and grants you an item!{{ effects.grant("test_granted_item") }}
+
+Id: test_granted_item
+Name: Test Granted Item
+Prototype: object
+Rarity: quest
+DescriptionShort: a {{ name }} received from a key
+DescriptionLong: A test item that is granted by the test key.
+
+Id: test_random_grantor
+Name: Test Random Grantor
+Prototype: chest
+Room: store-room
+Container: storeroom_box
+DescriptionShort: a {{ name }} that grants random loot
+DescriptionLong: A test chest that grants random loot when opened.
+OnOpen: TEST_RANDOM_GRANT_RESPONSE - You open the chest and find something inside!{{ effects.grant_random("test_loot") }}
+
+Id: test_common_loot
+Name: Test Common Loot
+Prototype: object
+Rarity: common
+Tags: test_loot
+DescriptionShort: a {{ name }} of common quality
+DescriptionLong: A common test item from the loot pool.
+
+Id: test_rare_loot
+Name: Test Rare Loot
+Prototype: object
+Rarity: rare
+Tags: test_loot
+DescriptionShort: a {{ name }} of rare quality
+DescriptionLong: A rare test item from the loot pool.
+
+Id: test_droppable_2
+Name: Test Droppable 2
+Prototype: object
+Room: store-room
+Container: storeroom_box
+SpawnMode: move
+DescriptionShort: a {{ name }} you can drop
+DescriptionLong: A test item for floor clutter testing.
+OnTake: You pick up the {{ name }}.
+OnDrop: You drop the item.{{ effects.drop() }}
+
+Id: test_droppable_3
+Name: Test Droppable 3
+Prototype: object
+Room: store-room
+Container: storeroom_box
+SpawnMode: move
+DescriptionShort: a {{ name }} you can drop
+DescriptionLong: A test item for floor clutter testing.
+OnTake: You pick up the {{ name }}.
+OnDrop: You drop the item.{{ effects.drop() }}
+
+Id: test_droppable_4
+Name: Test Droppable 4
+Prototype: object
+Room: store-room
+Container: storeroom_box
+SpawnMode: move
+DescriptionShort: a {{ name }} you can drop
+DescriptionLong: A test item for floor clutter testing.
+OnTake: You pick up the {{ name }}.
+OnDrop: You drop the item.{{ effects.drop() }}
+
+Id: test_droppable_5
+Name: Test Droppable 5
+Prototype: object
+Room: store-room
+Container: storeroom_box
+SpawnMode: move
+DescriptionShort: a {{ name }} you can drop
+DescriptionLong: A test item for floor clutter testing.
+OnTake: You pick up the {{ name }}.
+OnDrop: You drop the item.{{ effects.drop() }}
+
+Id: test_droppable_6
+Name: Test Droppable 6
+Prototype: object
+Room: store-room
+Container: storeroom_box
+SpawnMode: move
+DescriptionShort: a {{ name }} you can drop
+DescriptionLong: A test item for floor clutter testing.
+OnTake: You pick up the {{ name }}.
+OnDrop: You drop the item.{{ effects.drop() }}
+
+Id: test_droppable_7
+Name: Test Droppable 7
+Prototype: object
+Room: store-room
+Container: storeroom_box
+SpawnMode: move
+DescriptionShort: a {{ name }} you can drop
+DescriptionLong: A test item for floor clutter testing.
+OnTake: You pick up the {{ name }}.
+OnDrop: You drop the item.{{ effects.drop() }}
