@@ -172,7 +172,7 @@ def _parse_entity_row(row: dict[str, str]) -> Entity:
         contents_visible = False
 
     # Parse spawn_mode with default and validation
-    spawn_mode_raw = row.get("SpawnMode", "none").lower()
+    spawn_mode_raw = row.get("SpawnMode", "").lower() or "none"
     if spawn_mode_raw not in ("none", "move", "clone"):
         raise ValueError(
             f"Entity '{row['Id']}' has invalid SpawnMode '{spawn_mode_raw}'. "
@@ -192,7 +192,7 @@ def _parse_entity_row(row: dict[str, str]) -> Entity:
         focus_mode = cast(FocusMode, focus_mode_raw)
 
     # Parse rarity with default and validation
-    rarity_raw = row.get("Rarity", "common").lower()
+    rarity_raw = row.get("Rarity", "").lower() or "common"
     if rarity_raw not in VALID_RARITIES:
         raise ValueError(
             f"Entity '{row['Id']}' has invalid Rarity '{rarity_raw}'. "
