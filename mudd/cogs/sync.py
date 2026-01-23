@@ -216,6 +216,22 @@ class Sync(commands.Cog):
                     logger.exception(f"Failed inventory sync for {guild.name}")
                     # Non-fatal: continue operation
 
+                # Sync inventory thread descriptions (update first post if changed)
+                try:
+                    desc_stats = (
+                        await self.inventory_service.sync_inventory_descriptions(
+                            guild, self._rendering
+                        )
+                    )
+                    logger.info(
+                        f"Inventory description sync for {guild.name}: {desc_stats}"
+                    )
+                except Exception:
+                    logger.exception(
+                        f"Failed inventory description sync for {guild.name}"
+                    )
+                    # Non-fatal: continue operation
+
             except Exception:
                 logger.exception(f"Periodic sync failed for {guild.name}")
 

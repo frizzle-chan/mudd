@@ -9,6 +9,7 @@ import asyncpg
 import discord
 
 from mudd.services.entity import EntityInstance, EntityService
+from mudd.services.rendering import RenderingService
 from mudd.utils.text import encode_braille
 
 logger = logging.getLogger(__name__)
@@ -563,12 +564,15 @@ class InventoryService:
     ) -> discord.Thread | None:
         """Create a thread for an inventory item.
 
+        The starter message contains the item's description (rendered on_look).
+        The message ID is stored in discord_description_msg_id for sync updates.
+
         Args:
             guild: Discord guild
             user_id: Owner's Discord ID
             instance_id: Entity instance UUID
-            item_name: Name for the thread
-            item_description: Content for the starter message
+            item_name: Name for the thread (display name with rarity emoji)
+            item_description: Item description (rendered on_look output)
 
         Returns:
             The created thread, or None if failed
@@ -584,10 +588,13 @@ class InventoryService:
                 content=item_description or f"You have a {item_name}.",
             )
 
-            # Store thread ID on instance
+            # Store thread ID and description message ID on instance
             await self._pool.execute(
-                "UPDATE entity_instances SET discord_thread_id = $1 WHERE id = $2",
+                """UPDATE entity_instances
+                SET discord_thread_id = $1, discord_description_msg_id = $2
+                WHERE id = $3""",
                 thread.id,
+                message.id,
                 instance_id,
             )
 
@@ -682,3 +689,85 @@ class InventoryService:
 
         # Check if this thread belongs to an inventory item
         return await self.get_instance_by_thread_id(channel.id)
+
+    async def sync_inventory_descriptions(
+        self,
+        guild: discord.Guild,
+        rendering_service: RenderingService,
+    ) -> dict[str, int]:
+        """Sync inventory thread descriptions for all users.
+
+        Updates the first message in each inventory thread to reflect
+        current entity on_look rendering. This keeps item descriptions
+        up-to-date when entity definitions change.
+
+        Args:
+            guild: Discord guild
+            rendering_service: Service to render entity descriptions
+
+        Returns:
+            Stats dict with 'updated', 'unchanged', 'skipped', 'errors' counts
+        """
+        stats = {"updated": 0, "unchanged": 0, "skipped": 0, "errors": 0}
+
+        # Query all inventory items with thread and message IDs
+        rows = await self._pool.fetch(
+            """
+            SELECT ei.id, ei.entity_id, ei.owner_id,
+                   ei.discord_thread_id, ei.discord_description_msg_id
+            FROM entity_instances ei
+            WHERE ei.owner_id IS NOT NULL
+              AND ei.discord_thread_id IS NOT NULL
+              AND ei.discord_description_msg_id IS NOT NULL
+            """
+        )
+
+        for row in rows:
+            try:
+                thread_id = row["discord_thread_id"]
+                msg_id = row["discord_description_msg_id"]
+                instance_id = row["id"]
+
+                # Get thread from guild
+                thread = guild.get_thread(thread_id)
+                if not thread:
+                    stats["skipped"] += 1
+                    continue
+
+                # Get entity instance for rendering
+                instance = await self._entity_service.get_entity_instance(instance_id)
+                if not instance:
+                    stats["skipped"] += 1
+                    continue
+
+                # Render current description (room=None for inventory items)
+                new_description = await rendering_service.render_entity_on_look(
+                    instance, self._entity_service, None
+                )
+
+                # Fetch and compare message
+                try:
+                    message = await thread.fetch_message(msg_id)
+                    if message.content != new_description:
+                        await message.edit(content=new_description)
+                        stats["updated"] += 1
+                        logger.debug(
+                            f"Updated description for instance {instance_id} "
+                            f"in thread {thread_id}"
+                        )
+                    else:
+                        stats["unchanged"] += 1
+                except discord.NotFound:
+                    stats["skipped"] += 1
+                    logger.warning(
+                        f"Description message {msg_id} not found in thread {thread_id}"
+                    )
+                except discord.HTTPException as e:
+                    stats["errors"] += 1
+                    logger.error(f"Failed to update description message {msg_id}: {e}")
+
+            except Exception:
+                logger.exception(f"Failed to sync description for instance {row['id']}")
+                stats["errors"] += 1
+
+        return stats

@@ -352,7 +352,7 @@ class Interact(commands.Cog):
         result = await self.pool.execute(
             """UPDATE entity_instances
             SET room = NULL, owner_id = $1, player_dropped = FALSE,
-                container_entity_id = NULL
+                container_entity_id = NULL, is_world_instance = FALSE
             WHERE id = $2 AND room = $3""",
             user_id,
             instance_id,
@@ -361,9 +361,20 @@ class Interact(commands.Cog):
         if result == "UPDATE 0":
             return "The item is no longer there."
 
+        # Get the entity instance for rendering description
+        instance = await self.entity_service.get_entity_instance(instance_id)
+        if instance is None:
+            logger.error("Entity instance %s not found after pickup", instance_id)
+            description = f"### {entity.display_name}\n\nYou see nothing special."
+        else:
+            # Render on_look as the thread description
+            description = await self._rendering.render_entity_on_look(
+                instance, self.entity_service, None
+            )
+
         # Create Discord thread for the item
         thread = await self._inventory.create_item_thread(
-            guild, user_id, instance_id, entity.display_name, template_output
+            guild, user_id, instance_id, entity.display_name, description
         )
         if thread is None:
             logger.warning("Failed to create thread for moved item %s", entity.id)
@@ -426,7 +437,7 @@ class Interact(commands.Cog):
         result = await self.pool.execute(
             """UPDATE entity_instances
             SET room = $1, owner_id = NULL, player_dropped = TRUE,
-                container_entity_id = $4
+                container_entity_id = $4, is_world_instance = FALSE
             WHERE id = $2 AND owner_id = $3""",
             room,
             instance_id,
@@ -485,13 +496,23 @@ class Interact(commands.Cog):
 
         display_name = entity.display_name
 
+        # Get the instance for rendering description
+        instance = await self.entity_service.get_entity_instance(new_instance_id)
+        if instance is None:
+            logger.error("Entity instance %s not found after grant", new_instance_id)
+            description = f"### {display_name}\n\nYou see nothing special."
+        else:
+            description = await self._rendering.render_entity_on_look(
+                instance, self.entity_service, None
+            )
+
         # Create Discord thread for the item
         thread = await self._inventory.create_item_thread(
             guild,
             user_id,
             new_instance_id,
             display_name,
-            f"You received a **{display_name}**!",
+            description,
         )
         if thread is None:
             logger.warning(
@@ -543,13 +564,23 @@ class Interact(commands.Cog):
             logger.error("Failed to create grant instance for %s", entity_id)
             return
 
+        # Get the instance for rendering description
+        instance = await self.entity_service.get_entity_instance(new_instance_id)
+        if instance is None:
+            logger.error("Entity instance %s not found after grant", new_instance_id)
+            description = f"### {display_name}\n\nYou see nothing special."
+        else:
+            description = await self._rendering.render_entity_on_look(
+                instance, self.entity_service, None
+            )
+
         # Create Discord thread for the item
         thread = await self._inventory.create_item_thread(
             guild,
             user_id,
             new_instance_id,
             display_name,
-            f"You received a **{display_name}**!",
+            description,
         )
         if thread is None:
             logger.warning("Failed to create thread for granted item %s", entity_id)

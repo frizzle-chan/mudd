@@ -349,7 +349,7 @@ class RenderingService:
         self,
         instance: EntityInstance,
         entity_service: ContainerContentsFetcher,
-        room: str,
+        room: str | None,
     ) -> str:
         """Render entity on_look template for /look at:<entity>.
 
@@ -364,7 +364,7 @@ class RenderingService:
         Args:
             instance: Entity instance to render
             entity_service: Service to fetch container contents
-            room: Room ID for querying contents
+            room: Room ID for querying contents (None for inventory items)
 
         Returns:
             Rendered on_look output
@@ -372,9 +372,9 @@ class RenderingService:
         entity = instance.entity
         parts: list[str] = [f"### {entity.display_name}"]
 
-        # Fetch and format container contents
+        # Fetch and format container contents (skip for inventory items with no room)
         contents_str = ""
-        if entity.contents_visible:
+        if entity.contents_visible and room is not None:
             contents = await entity_service.get_container_contents(entity.id, room)
             contents_str = self.build_contents_string(contents)
 

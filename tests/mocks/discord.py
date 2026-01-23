@@ -139,8 +139,12 @@ class MockThread:
 class MockMessage:
     """Mock Discord message."""
 
+    _next_id = 1
+
     def __init__(self, content: str) -> None:
         self.content = content
+        self.id = MockMessage._next_id
+        MockMessage._next_id += 1
 
 
 class MockCategoryChannel:
