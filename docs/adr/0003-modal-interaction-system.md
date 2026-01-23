@@ -123,11 +123,10 @@ CREATE TYPE focus_mode AS ENUM ('none', 'container');
 
 ### Focus Lifecycle
 
-In the context of **managing when focus contexts are destroyed**, facing **the need for intuitive, predictable behavior**, we decided to **clear focus when looking at or interacting with unrelated entities, changing rooms, or after 5 minutes of inactivity**, to achieve **a simple mental model where focus follows attention**, accepting **that users must re-open containers after switching context**.
+In the context of **managing when focus contexts are destroyed**, facing **the need for intuitive, predictable behavior**, we decided to **clear focus when interacting with unrelated entities, changing rooms, or after 5 minutes of inactivity**, to achieve **a simple mental model where focus follows interaction**, accepting **that users must re-open containers after switching context**.
 
 **Focus is cleared when:**
 - User interacts with a different entity NOT in current focus contents
-- User looks at (`/look at:`) a different entity NOT in current focus contents
 - User selects "Room" from autocomplete (the `[Close <container>] Room` option)
 - User moves to a different room
 - 5 minutes pass without interaction
@@ -135,11 +134,8 @@ In the context of **managing when focus contexts are destroyed**, facing **the n
 
 **Focus is NOT cleared when:**
 - User interacts with an item inside the focused container
-- User looks at an item inside the focused container
+- User looks at any entity (looking is read-only and doesn't affect focus)
 - User looks at the room itself (`/look` with no target)
-- User looks at the focused container itself
-
-**Why does looking break focus?** If you're looking at something across the room, you're no longer standing at the open chest. The physical metaphor is that you've walked away.
 
 ### OnOpen and OnClose Handlers
 
@@ -226,15 +222,13 @@ In the context of **the /interact command flow**, facing **the need to check and
 
 ### Focus-Aware Look Flow
 
-In the context of **the /look command flow**, facing **the need to clear focus when attention shifts**, we decided to **clear focus when looking at unrelated entities**, to achieve **consistent "attention follows gaze" behavior**, accepting **additional service calls in the look cog**.
+**Current implementation:** The `/look` command does NOT clear focus. Focus is only cleared by:
+- Room movement
+- `/interact` with an unrelated entity
+- Explicit close action (`/interact close <container>`)
+- 5-minute timeout
 
-**Updated flow:**
-1. **NEW:** If looking at specific entity (`/look at:<target>`)
-2. **NEW:** Check if target is in current focus or is the focused container
-3. **NEW:** If target is unrelated -> clear focus
-4. Execute look (unchanged)
-
-**Note:** `/look` with no target (view room) does NOT clear focus.
+**Note:** `/look` with no target (view room) does NOT clear focus. Looking at entities also does not clear focus - only explicit interaction does.
 
 ### Entity Schema Changes
 
