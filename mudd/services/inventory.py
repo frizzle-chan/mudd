@@ -9,12 +9,9 @@ import asyncpg
 import discord
 
 from mudd.services.entity import EntityInstance, EntityService
+from mudd.utils.text import encode_braille
 
 logger = logging.getLogger(__name__)
-
-# Braille encoding for compact, non-distracting forum names
-# U+2800 to U+28FF gives us 256 characters (base256)
-BRAILLE_BASE = 0x2800
 
 INVENTORY_CATEGORY_NAME = "Inventory"
 
@@ -47,32 +44,6 @@ def _find_inventory_forums_by_name(
     ]
     matches.sort(key=lambda ch: ch.id)
     return matches
-
-
-def encode_braille(num: int) -> str:
-    """Encode an integer to a Braille pattern string (base256).
-
-    Uses Unicode Braille Patterns block (U+2800-U+28FF) to encode
-    integers compactly. Each character represents one byte (0-255).
-
-    Discord user IDs (64-bit) encode to 8 characters max.
-    The result is visually unobtrusive (appears as dot patterns).
-
-    Args:
-        num: Non-negative integer to encode
-
-    Raises:
-        ValueError: If num is negative
-    """
-    if num < 0:
-        raise ValueError("Cannot encode negative numbers")
-    if num == 0:
-        return chr(BRAILLE_BASE)  # ⠀ (blank braille pattern)
-    result = []
-    while num:
-        result.append(chr(BRAILLE_BASE + (num & 0xFF)))
-        num >>= 8
-    return "".join(reversed(result))
 
 
 def get_inventory_forum_name(user_id: int) -> str:
