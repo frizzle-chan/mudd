@@ -21,6 +21,7 @@ SpawnMode = Literal["none", "move", "clone"]
 
 # Valid rarity values matching PostgreSQL enum
 VALID_RARITIES: set[str] = {
+    "none",
     "common",
     "uncommon",
     "rare",
@@ -64,7 +65,7 @@ class Entity:
     contents_visible: bool | None = None
     spawn_mode: SpawnMode = "none"
     focus_mode: FocusMode | None = None  # None = inherit from prototype
-    rarity: Rarity = "common"
+    rarity: Rarity = "none"
     tags: list[str] | None = None  # Space-separated in rec files
     description_short: str | None = None
     description_long: str | None = None
@@ -192,7 +193,7 @@ def _parse_entity_row(row: dict[str, str]) -> Entity:
         focus_mode = cast(FocusMode, focus_mode_raw)
 
     # Parse rarity with default and validation
-    rarity_raw = row.get("Rarity", "").lower() or "common"
+    rarity_raw = row.get("Rarity", "").lower() or "none"
     if rarity_raw not in VALID_RARITIES:
         raise ValueError(
             f"Entity '{row['Id']}' has invalid Rarity '{rarity_raw}'. "

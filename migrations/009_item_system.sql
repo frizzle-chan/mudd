@@ -9,9 +9,10 @@ ALTER TYPE verb_action ADD VALUE 'on_drop';
 
 -- Rarity enum for weighted spawn selection
 -- Weights sum to 1000 for precise probability calculation:
--- common=600 (60%), uncommon=250 (25%), rare=100 (10%), epic=40 (4%),
--- legendary=9 (0.9%), mythic=1 (0.1%), quest=0 (never spawns from pools)
-CREATE TYPE rarity AS ENUM ('common', 'uncommon', 'rare', 'epic', 'legendary', 'mythic', 'quest');
+-- none=0 (static world items, default), common=600 (60%), uncommon=250 (25%),
+-- rare=100 (10%), epic=40 (4%), legendary=9 (0.9%), mythic=1 (0.1%),
+-- quest=0 (never spawns from pools)
+CREATE TYPE rarity AS ENUM ('none', 'common', 'uncommon', 'rare', 'epic', 'legendary', 'mythic', 'quest');
 
 -- Entity tags for categorization (many-to-many)
 -- Space-separated in .rec files: Tags: beverage alcoholic
@@ -37,7 +38,7 @@ CREATE TABLE spawning_pools (
 );
 
 -- Add rarity and on_drop handler to entities
-ALTER TABLE entities ADD COLUMN rarity rarity NOT NULL DEFAULT 'common';
+ALTER TABLE entities ADD COLUMN rarity rarity NOT NULL DEFAULT 'none';
 ALTER TABLE entities ADD COLUMN on_drop TEXT;
 
 -- Add spawning pool tracking and player-dropped flag to entity_instances

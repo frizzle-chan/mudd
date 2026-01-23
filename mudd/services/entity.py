@@ -17,10 +17,13 @@ SpawnMode = Literal["none", "move", "clone"]
 
 FocusMode = Literal["none", "container"]
 
-Rarity = Literal["common", "uncommon", "rare", "epic", "legendary", "mythic", "quest"]
+Rarity = Literal[
+    "none", "common", "uncommon", "rare", "epic", "legendary", "mythic", "quest"
+]
 
 # Rarity emoji for display names
 RARITY_EMOJI: dict[Rarity, str] = {
+    "none": "",  # No emoji for static world items
     "common": "\u26aa",  # White circle
     "uncommon": "\U0001f7e2",  # Green circle
     "rare": "\U0001f535",  # Blue circle
@@ -30,8 +33,9 @@ RARITY_EMOJI: dict[Rarity, str] = {
     "quest": "\U0001f537",  # Blue diamond
 }
 
-# Rarity weights for spawning (sum to 1000)
+# Rarity weights for spawning (sum to 1000, excluding none and quest)
 RARITY_WEIGHTS: dict[Rarity, int] = {
+    "none": 0,  # Static world items never spawn
     "common": 600,
     "uncommon": 250,
     "rare": 100,
@@ -66,7 +70,8 @@ class ResolvedEntity:
     @property
     def display_name(self) -> str:
         """Name with rarity emoji suffix for display."""
-        return f"{self.name} {RARITY_EMOJI[self.rarity]}"
+        emoji = RARITY_EMOJI[self.rarity]
+        return f"{self.name} {emoji}" if emoji else self.name
 
 
 @dataclass(frozen=True)

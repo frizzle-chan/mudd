@@ -136,6 +136,7 @@ Description: A dimly lit lounge.
 %type: ContentsVisible bool
 %type: SpawnMode enum none move clone
 %type: FocusMode enum none container
+%type: Rarity enum none common uncommon rare epic legendary mythic quest
 %mandatory: Id Name
 %allowed: Id Name Prototype Container Room ContentsVisible SpawnMode FocusMode DescriptionShort DescriptionLong
 %allowed: OnLook OnTouch OnAttack OnUse OnTake OnOpen OnClose OnDrop
@@ -147,6 +148,7 @@ Description: A dimly lit lounge.
 
 Id: object
 Name: object
+Rarity: none
 DescriptionShort: A {{ name }}.
 OnLook: {{ e.description_long or e.description_short or "You see nothing special." }}{{ contents }}
 OnTouch: You touch the {{ name }}. Nothing happens.

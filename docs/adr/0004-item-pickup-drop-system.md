@@ -41,6 +41,7 @@ In the context of **categorizing entities for spawning pools**, facing **the nee
 
 | Emoji | Tier | Spawn Weight | Odds |
 |-------|------|--------------|------|
+| (none) | None | 0 | Not spawned |
 | ⚪ | Common | 600 | 60% |
 | 🟢 | Uncommon | 250 | 25% |
 | 🔵 | Rare | 100 | 10% |
@@ -49,14 +50,16 @@ In the context of **categorizing entities for spawning pools**, facing **the nee
 | ㊙️ | Mythic | 1 | 0.1% |
 | 🔷 | Quest | — | Not spawned |
 
-- Weights sum to 1000 for precise probability calculation
+- Weights sum to 1000 for precise probability calculation (excluding none and quest)
+- **None**: Default for all entities. Static world items that cannot be picked up and shouldn't appear in spawning pools. Displays no emoji suffix.
 - Quest items never spawn from pools—placed deliberately or granted via `effects.grant()`
 - Rarity indicates discovery difficulty only, not power level
 - No zone-based weight modifiers (same odds everywhere)
 
 **Display Names:**
-- Item names are always displayed with their rarity icon suffix for visual consistency
+- Item names are displayed with their rarity icon suffix when applicable
 - Format: `{name} {rarity_icon}` (e.g., "Beer ⚪", "White Claw 🔵", "Rusty Key 🔷")
+- Items with "none" rarity display just the name with no emoji suffix
 - The `display_name` property on entities and returned objects includes this formatting
 - Templates should use `display_name` rather than `name` when showing items to players
 
@@ -191,7 +194,7 @@ Rarity: quest
 SpawnMode: clone
 ```
 
-- `Rarity`: One of `common`, `uncommon`, `rare`, `epic`, `legendary`, `mythic`, `quest` (default: `common`)
+- `Rarity`: One of `none`, `common`, `uncommon`, `rare`, `epic`, `legendary`, `mythic`, `quest` (default: `none`)
 
 ### Spawning Pools
 
@@ -213,9 +216,10 @@ RespawnIntervalMinutes: 30
 
 ```sql
 -- Entity rarity for weighted spawn selection (weights sum to 1000)
--- common=600, uncommon=250, rare=100, epic=40, legendary=9, mythic=1, quest=0 (never spawns)
-CREATE TYPE rarity AS ENUM ('common', 'uncommon', 'rare', 'epic', 'legendary', 'mythic', 'quest');
-ALTER TABLE entities ADD COLUMN rarity rarity NOT NULL DEFAULT 'common';
+-- none=0 (static world items, default), common=600, uncommon=250, rare=100, epic=40,
+-- legendary=9, mythic=1, quest=0 (never spawns from pools)
+CREATE TYPE rarity AS ENUM ('none', 'common', 'uncommon', 'rare', 'epic', 'legendary', 'mythic', 'quest');
+ALTER TABLE entities ADD COLUMN rarity rarity NOT NULL DEFAULT 'none';
 
 -- Entity tags for categorization
 CREATE TABLE entity_tags (
