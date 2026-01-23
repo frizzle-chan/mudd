@@ -40,8 +40,8 @@ class TestItemPickup:
         # Item should no longer be in room
         assert not await test_client.is_entity_in_room("test_takeable", "store-room")
 
-    async def test_take_quest_item_creates_copy(self, test_client):
-        """Taking a quest item (rarity=quest) copies it to inventory, original stays."""
+    async def test_take_quest_item_moves_instance(self, test_client):
+        """Taking a quest item moves it to inventory like regular items."""
         user = await test_client.create_user(user_id=500002, room="store-room")
 
         # Verify item exists in room before taking
@@ -54,39 +54,15 @@ class TestItemPickup:
         response = await test_client.interact(
             user, action="take", target="Test Quest Map"
         )
-        assert "TEST_TAKE_CLONE_RESPONSE" in response
+        assert "TEST_TAKE_MOVE_RESPONSE" in response
 
         # Item should be in inventory
         inventory = await test_client.get_inventory(user)
         entity_ids = [eid for eid, _ in inventory]
         assert "test_quest_map" in entity_ids
 
-        # Original item should still be in room (quest items clone, don't move)
-        assert await test_client.is_entity_in_room("test_quest_map", "store-room")
-
-    async def test_cannot_take_quest_item_twice(self, test_client):
-        """Taking a quest item you already have returns an error."""
-        user = await test_client.create_user(user_id=500003, room="store-room")
-
-        # Open the container
-        await test_client.interact(user, action="open", target="Cardboard Box")
-
-        # Take the quest item first time
-        response = await test_client.interact(
-            user, action="take", target="Test Quest Map"
-        )
-        assert "TEST_TAKE_CLONE_RESPONSE" in response
-
-        # Confirm it's in inventory
-        inventory = await test_client.get_inventory(user)
-        entity_ids = [eid for eid, _ in inventory]
-        assert "test_quest_map" in entity_ids
-
-        # Try to take again
-        response = await test_client.interact(
-            user, action="take", target="Test Quest Map"
-        )
-        assert "already have" in response.lower()
+        # Item should no longer be in room (quest items now move like regular items)
+        assert not await test_client.is_entity_in_room("test_quest_map", "store-room")
 
 
 class TestItemDrop:
@@ -217,6 +193,42 @@ class TestItemDrop:
         inventory = await test_client.get_inventory(user)
         entity_ids = [eid for eid, _ in inventory]
         assert "test_droppable_7" in entity_ids
+
+
+class TestQuestItemDrop:
+    """Tests for dropping quest items."""
+
+    async def test_drop_quest_item_moves_to_room(self, test_client):
+        """Quest items can be dropped and move from inventory to room."""
+        user = await test_client.create_user(user_id=500050, room="store-room")
+
+        # Open the container to access the granting key
+        await test_client.interact(user, action="open", target="Cardboard Box")
+
+        # Use the key that grants test_granted_item (a quest item)
+        await test_client.interact(user, action="use", target="Test Granting Key")
+
+        # Verify the quest item is in inventory
+        inventory = await test_client.get_inventory(user)
+        entity_ids = [eid for eid, _ in inventory]
+        assert "test_granted_item" in entity_ids
+
+        # Close the container so item drops to floor
+        await test_client.interact(user, action="close", target="Cardboard Box")
+
+        # Drop the quest item
+        response = await test_client.interact(
+            user, action="drop", target="Test Granted Item"
+        )
+        assert "drop" in response.lower()
+
+        # Item should no longer be in inventory
+        inventory = await test_client.get_inventory(user)
+        entity_ids = [eid for eid, _ in inventory]
+        assert "test_granted_item" not in entity_ids
+
+        # Item should be on floor
+        assert await test_client.is_entity_in_room("test_granted_item", "store-room")
 
 
 class TestItemGranting:

@@ -643,13 +643,14 @@ OnTake: {{ effects.pickup() }}TEST_TAKE_MOVE_RESPONSE - You pick up the {{ name 
 
 Id: test_quest_map
 Name: Test Quest Map
-Prototype: object
+Prototype: item
 Room: store-room
 Container: storeroom_box
 Rarity: quest
+Tags: test_quest_map_spawn
 DescriptionShort: a {{ name }} for your quest
-DescriptionLong: A test quest item that can be cloned.
-OnTake: {{ effects.pickup() }}TEST_TAKE_CLONE_RESPONSE - You copy the {{ name }}.
+DescriptionLong: A test quest item that moves to inventory and respawns via spawning pool.
+OnTake: {{ effects.pickup() }}TEST_TAKE_MOVE_RESPONSE - You pick up the {{ name }}.
 
 Id: test_droppable
 Name: Test Droppable
@@ -682,7 +683,7 @@ OnUse: TEST_GRANT_RESPONSE - The key glows and grants you an item!{{ effects.gra
 
 Id: test_granted_item
 Name: Test Granted Item
-Prototype: object
+Prototype: item
 Rarity: quest
 DescriptionShort: a {{ name }} received from a key
 DescriptionLong: A test item that is granted by the test key.
@@ -801,3 +802,18 @@ Container: storeroom_box
 Rarity: common
 DescriptionShort: a {{ name }} you can drop
 DescriptionLong: A test item for floor clutter testing.
+
+# ============================================================================
+# Spawning Pool record type
+# ============================================================================
+%rec: SpawningPool
+%key: Id
+%mandatory: Id Room TagQuery
+%allowed: Id Room Container TagQuery MaxCount RespawnIntervalMinutes
+
+Id: test_quest_map_pool
+Room: store-room
+Container: storeroom_box
+TagQuery: test_quest_map_spawn
+MaxCount: 1
+RespawnIntervalMinutes: 1
