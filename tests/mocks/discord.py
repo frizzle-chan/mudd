@@ -86,9 +86,12 @@ class MockMember:
 class MockForumChannel:
     """Mock Discord forum channel for inventory testing."""
 
-    def __init__(self, name: str, forum_id: int | None = None) -> None:
+    def __init__(
+        self, name: str, forum_id: int | None = None, category_id: int | None = None
+    ) -> None:
         self.name = name
         self.id = forum_id if forum_id is not None else hash(name) & 0xFFFFFFFF
+        self.category_id = category_id
         self._threads: dict[int, MockThread] = {}
         self._next_thread_id = 1
 
@@ -102,6 +105,11 @@ class MockForumChannel:
         message = MockMessage(content)
         self._threads[thread_id] = thread
         return thread, message
+
+    async def edit(self, *, name: str | None = None, **kwargs) -> None:
+        """Edit forum properties."""
+        if name is not None:
+            self.name = name
 
     def set_permissions(self, member: MockMember, **kwargs) -> None:
         """Mock permission setting (no-op for tests)."""
@@ -144,13 +152,18 @@ class MockCategoryChannel:
         self._forums: dict[int, MockForumChannel] = {}
         self._next_forum_id = 1
 
+    @property
+    def channels(self) -> list[MockForumChannel]:
+        """Return all channels (forums) in this category."""
+        return list(self._forums.values())
+
     async def create_forum(
         self, name: str, *, topic: str = "", overwrites: dict | None = None
     ) -> MockForumChannel:
         """Create a forum in this category."""
         forum_id = self._next_forum_id
         self._next_forum_id += 1
-        forum = MockForumChannel(name, forum_id)
+        forum = MockForumChannel(name, forum_id, category_id=self.id)
         self._forums[forum_id] = forum
         return forum
 
@@ -191,6 +204,14 @@ class MockGuild:
     @property
     def categories(self) -> list[MockCategoryChannel]:
         return self._categories
+
+    @property
+    def forums(self) -> list[MockForumChannel]:
+        """Return all forum channels across all categories."""
+        all_forums: list[MockForumChannel] = []
+        for category in self._categories:
+            all_forums.extend(category._forums.values())
+        return all_forums
 
     def get_channel(
         self, channel_id: int

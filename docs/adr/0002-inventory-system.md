@@ -41,7 +41,7 @@ In the context of **displaying player inventories in Discord**, facing **the nee
 
 Key implementation details:
 - A dedicated "Inventory" category is created and hidden from @everyone
-- Each user gets a forum channel named `{base62_user_id}-inventory`
+- Each user gets a forum channel named `{braille_user_id}-inventory`
 - Each inventory item becomes a thread in the user's forum (thread name is the item name)
 - Only the owner can view their forum channel
 
@@ -64,6 +64,47 @@ Database additions:
 - `discord_thread_id` column on `entity_instances` (nullable BIGINT)
 - Foreign key from forums to users with cascade delete (user deletion cleans up forum record)
 
+### Sync Recovery for Duplicate Forums
+
+In the context of **database resets or data loss**, facing **the scenario where Discord channels persist but DB loses track of them**, we decided to **search Discord by expected forum name before creating new forums**, to achieve **automatic recovery of existing forums and prevention of duplicates**, accepting **a small performance cost during sync to search for existing forums**.
+
+Recovery behavior:
+- Before creating a forum, search the Inventory category for forums matching `{braille_user_id}-inventory`
+- If found, keep the oldest forum (smallest Discord ID), delete any duplicates
+- Update DB to track the recovered forum
+- Log "Recovered existing inventory forum" to distinguish from new creations
+
+This mirrors the duplicate detection pattern used in zone/room channel sync (`zone_loader.py`).
+
+### Forum Name Encoding
+
+In the context of **inventory forum naming**, facing **Discord normalizing channel names to lowercase (breaking base62 uniqueness) and alphanumeric names being visually distracting**, we decided to **use Braille patterns (U+2800-U+28FF) for base256 encoding of user IDs**, to achieve **shorter names (8 chars vs 11) that are visually unobtrusive**, accepting **names that are not human-readable**.
+
+Encoding details:
+- Each byte of the user ID maps to one Braille pattern character
+- 64-bit user IDs encode to 8 characters maximum
+- Names look like `⠁⠃⣿⠙⡑⢋⠛⠓-inventory`
+- Discord does not normalize Braille characters, avoiding the case-collision issue
+
+Migration from legacy base62:
+- Sync detects forums with old base62 names and renames them to Braille
+- Both DB-tracked and orphaned legacy forums are migrated
+- Migration is logged as "Migrated forum name" with old and new names
+
+### Thread Pruning
+
+In the context of **maintaining inventory thread consistency**, facing **orphan threads that don't correspond to actual inventory items**, we decided to **prune orphan threads during sync**, to achieve **clean inventory forums without stale threads**, accepting **automatic deletion of threads not tracked in the database**.
+
+Orphan threads can result from:
+- DB reset while Discord threads persist
+- Manual thread creation by users (if permissions somehow allow)
+- Failed item deletions that removed DB record but not Discord thread
+
+Pruning behavior:
+- During `sync_user_forums()`, query `entity_instances` for valid thread IDs
+- Delete any forum threads whose ID is not in the valid set
+- Log "Pruned orphan thread" with thread name and ID
+
 ## Consequences
 
 ### Positive
@@ -75,6 +116,8 @@ Database additions:
 - Per-user forum channels maintain fog-of-war for inventories
 - Thread-based items enable detailed examination and future interaction
 - Permission sync repairs drifted Discord state automatically
+- Sync recovery prevents duplicate forums after DB reset
+- Thread pruning keeps inventory forums clean of stale threads
 
 ### Negative
 
@@ -82,6 +125,7 @@ Database additions:
 - spawn_mode doesn't inherit, requiring explicit configuration on takeable entities
 - One forum channel per user increases Discord resource usage
 - Thread ID tracking requires database updates on item creation/deletion
+- Thread pruning deletes threads not tracked in DB (no recovery for manually created threads)
 
 ### Future Considerations
 

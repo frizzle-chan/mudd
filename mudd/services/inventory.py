@@ -12,17 +12,51 @@ from mudd.services.entity import EntityInstance, EntityService
 
 logger = logging.getLogger(__name__)
 
-# Base62 encoding for shorter forum names
-BASE62_CHARS = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+# Braille encoding for compact, non-distracting forum names
+# U+2800 to U+28FF gives us 256 characters (base256)
+BRAILLE_BASE = 0x2800
 
 INVENTORY_CATEGORY_NAME = "Inventory"
 
 
-def encode_base62(num: int) -> str:
-    """Encode an integer to base62 string.
+def _find_inventory_forums_by_name(
+    guild: discord.Guild,
+    category: discord.CategoryChannel,
+    forum_name: str,
+) -> list[discord.ForumChannel]:
+    """Find all forum channels with the given name in the category.
 
-    Used to shorten Discord user IDs (18-19 digits) to ~11 characters
-    for more readable inventory forum names.
+    Used for duplicate detection during sync recovery when the database
+    loses track of existing Discord forums.
+
+    Note: We search guild.forums instead of category.channels because
+    Discord.py's CategoryChannel.channels doesn't include ForumChannels.
+
+    Args:
+        guild: The Discord guild to search
+        category: The Inventory category to filter by
+        forum_name: Expected forum name (e.g., "{braille_user_id}-inventory")
+
+    Returns:
+        List of matching forums sorted by ID (oldest first).
+    """
+    matches = [
+        forum
+        for forum in guild.forums
+        if forum.category_id == category.id and forum.name == forum_name
+    ]
+    matches.sort(key=lambda ch: ch.id)
+    return matches
+
+
+def encode_braille(num: int) -> str:
+    """Encode an integer to a Braille pattern string (base256).
+
+    Uses Unicode Braille Patterns block (U+2800-U+28FF) to encode
+    integers compactly. Each character represents one byte (0-255).
+
+    Discord user IDs (64-bit) encode to 8 characters max.
+    The result is visually unobtrusive (appears as dot patterns).
 
     Args:
         num: Non-negative integer to encode
@@ -31,19 +65,58 @@ def encode_base62(num: int) -> str:
         ValueError: If num is negative
     """
     if num < 0:
-        raise ValueError("Cannot encode negative numbers to base62")
+        raise ValueError("Cannot encode negative numbers")
     if num == 0:
-        return "0"
+        return chr(BRAILLE_BASE)  # ⠀ (blank braille pattern)
     result = []
     while num:
-        result.append(BASE62_CHARS[num % 62])
-        num //= 62
+        result.append(chr(BRAILLE_BASE + (num & 0xFF)))
+        num >>= 8
     return "".join(reversed(result))
 
 
 def get_inventory_forum_name(user_id: int) -> str:
     """Get the forum channel name for a user's inventory."""
-    return f"{encode_base62(user_id)}-inventory"
+    return f"{encode_braille(user_id)}-inventory"
+
+
+# Legacy base62 encoding for migration
+_BASE62_CHARS = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+
+def _encode_base62_legacy(num: int) -> str:
+    """Legacy base62 encoding for migration purposes."""
+    if num == 0:
+        return "0"
+    result = []
+    while num:
+        result.append(_BASE62_CHARS[num % 62])
+        num //= 62
+    return "".join(reversed(result))
+
+
+def _get_legacy_forum_name(user_id: int) -> str:
+    """Get the legacy base62 forum name for migration."""
+    return f"{_encode_base62_legacy(user_id)}-inventory"
+
+
+def _find_legacy_forums(
+    guild: discord.Guild,
+    category: discord.CategoryChannel,
+    user_id: int,
+) -> list[discord.ForumChannel]:
+    """Find forums with legacy base62 names for migration.
+
+    Discord lowercases channel names, so we match case-insensitively.
+    """
+    legacy_name_lower = _get_legacy_forum_name(user_id).lower()
+    matches = [
+        forum
+        for forum in guild.forums
+        if forum.category_id == category.id and forum.name.lower() == legacy_name_lower
+    ]
+    matches.sort(key=lambda ch: ch.id)
+    return matches
 
 
 @dataclass(frozen=True)
@@ -139,6 +212,10 @@ class InventoryService:
     ) -> discord.ForumChannel | None:
         """Ensure user has an inventory forum, create if missing.
 
+        Handles sync recovery: if the database loses track of an existing
+        Discord forum (e.g., after DB reset), searches Discord by name
+        and recovers the existing forum instead of creating a duplicate.
+
         Args:
             guild: Discord guild
             user_id: Discord user ID
@@ -154,21 +231,147 @@ class InventoryService:
         if member.bot:
             return None
 
+        # Ensure category exists first (needed for both recovery and creation)
+        category = await self.ensure_inventory_category(guild)
+        forum_name = get_inventory_forum_name(user_id)
+
         # Check database first
         forum_data = await self.get_user_forum_from_db(user_id)
         if forum_data:
-            # Verify forum still exists
+            # Verify forum still exists in Discord
             forum = guild.get_channel(forum_data.forum_id)
             if forum and isinstance(forum, discord.ForumChannel):
+                # Check if name needs migration to Braille format
+                if forum.name != forum_name:
+                    try:
+                        old_name = forum.name
+                        await forum.edit(name=forum_name)
+                        logger.info(
+                            f"Migrated forum name '{old_name}' -> '{forum_name}' "
+                            f"for user {user_id}"
+                        )
+                    except discord.HTTPException as e:
+                        logger.error(
+                            f"Failed to rename forum {forum.id} to '{forum_name}': {e}"
+                        )
                 return forum
-            # Forum was deleted, remove from DB and recreate
+            # Forum was deleted from Discord, clear stale DB record
             logger.info(
-                f"Forum {forum_data.forum_id} was deleted, "
-                f"recreating for user {user_id}"
+                f"Forum {forum_data.forum_id} was deleted from Discord, "
+                f"clearing DB record for user {user_id}"
             )
             await self._pool.execute(
                 "DELETE FROM user_inventory_forums WHERE user_id = $1", user_id
             )
+
+        # DB doesn't know about a forum - search Discord for existing forums
+        # This handles sync recovery after DB reset
+        existing_forums = _find_inventory_forums_by_name(guild, category, forum_name)
+
+        if existing_forums:
+            # Keep oldest forum (smallest ID), delete duplicates
+            forum = existing_forums[0]
+
+            for duplicate in existing_forums[1:]:
+                try:
+                    await duplicate.delete(
+                        reason="Duplicate inventory forum cleanup during sync"
+                    )
+                    logger.info(
+                        f"Deleted duplicate inventory forum '{forum_name}' "
+                        f"(ID: {duplicate.id})"
+                    )
+                except discord.HTTPException as e:
+                    logger.error(
+                        f"Failed to delete duplicate forum {duplicate.id}: {e}"
+                    )
+
+            # Ensure user exists in users table
+            await self._pool.execute(
+                """
+                INSERT INTO users (id, current_room)
+                SELECT $1, (SELECT id FROM rooms WHERE is_default = TRUE)
+                WHERE NOT EXISTS (SELECT 1 FROM users WHERE id = $1)
+                """,
+                user_id,
+            )
+
+            # Update DB to track the recovered forum
+            await self._pool.execute(
+                """
+                INSERT INTO user_inventory_forums (user_id, forum_id, category_id)
+                VALUES ($1, $2, $3)
+                ON CONFLICT (user_id) DO UPDATE SET forum_id = $2, category_id = $3
+                """,
+                user_id,
+                forum.id,
+                category.id,
+            )
+
+            logger.info(
+                f"Recovered existing inventory forum '{forum_name}' "
+                f"(ID: {forum.id}) for user {user_id}"
+            )
+            return forum
+
+        # No new-style forum found - check for legacy base62-named forums
+        legacy_forums = _find_legacy_forums(guild, category, user_id)
+
+        if legacy_forums:
+            # Keep oldest forum (smallest ID), delete duplicates
+            forum = legacy_forums[0]
+
+            for duplicate in legacy_forums[1:]:
+                try:
+                    await duplicate.delete(
+                        reason="Duplicate legacy inventory forum cleanup during sync"
+                    )
+                    logger.info(
+                        f"Deleted duplicate legacy inventory forum (ID: {duplicate.id})"
+                    )
+                except discord.HTTPException as e:
+                    logger.error(
+                        f"Failed to delete duplicate legacy forum {duplicate.id}: {e}"
+                    )
+
+            # Migrate forum name from legacy base62 to Braille
+            old_name = forum.name
+            try:
+                await forum.edit(name=forum_name)
+                logger.info(
+                    f"Migrated legacy forum '{old_name}' -> '{forum_name}' "
+                    f"for user {user_id}"
+                )
+            except discord.HTTPException as e:
+                logger.error(
+                    f"Failed to rename legacy forum {forum.id} to '{forum_name}': {e}"
+                )
+
+            # Ensure user exists in users table
+            await self._pool.execute(
+                """
+                INSERT INTO users (id, current_room)
+                SELECT $1, (SELECT id FROM rooms WHERE is_default = TRUE)
+                WHERE NOT EXISTS (SELECT 1 FROM users WHERE id = $1)
+                """,
+                user_id,
+            )
+
+            # Update DB to track the migrated forum
+            await self._pool.execute(
+                """
+                INSERT INTO user_inventory_forums (user_id, forum_id, category_id)
+                VALUES ($1, $2, $3)
+                ON CONFLICT (user_id) DO UPDATE SET forum_id = $2, category_id = $3
+                """,
+                user_id,
+                forum.id,
+                category.id,
+            )
+
+            return forum
+
+        # No existing forum found - create new one
 
         # Ensure user exists in users table first
         await self._pool.execute(
@@ -179,10 +382,6 @@ class InventoryService:
             """,
             user_id,
         )
-
-        # Create forum
-        category = await self.ensure_inventory_category(guild)
-        forum_name = get_inventory_forum_name(user_id)
 
         # Permissions: only owner can see and reply to threads (not create)
         overwrites = {
@@ -219,20 +418,37 @@ class InventoryService:
     async def sync_user_forums(self, guild: discord.Guild) -> dict[str, int]:
         """Sync inventory forums for all guild members.
 
-        Creates missing forums for existing members.
+        Creates missing forums for existing members. Handles sync recovery
+        when DB loses track of existing Discord forums (e.g., after DB reset).
+        Prunes orphan threads that don't correspond to inventory items.
+
         Does NOT delete forums for members who left (preserves inventory).
 
         Args:
             guild: Discord guild
 
         Returns:
-            Stats dict with keys: 'created' (new forums), 'existing' (already
-            had forum), 'fixed' (permissions corrected), 'errors' (failed)
+            Stats dict with keys:
+            - 'created': New forums created
+            - 'recovered': Existing Discord forums recovered after DB lost track
+            - 'migrated': Legacy base62-named forums renamed to Braille
+            - 'existing': Forums already tracked in DB
+            - 'fixed': Permissions corrected
+            - 'threads_pruned': Orphan threads deleted
+            - 'errors': Failed operations
         """
-        stats = {"created": 0, "existing": 0, "fixed": 0, "errors": 0}
+        stats = {
+            "created": 0,
+            "recovered": 0,
+            "migrated": 0,
+            "existing": 0,
+            "fixed": 0,
+            "threads_pruned": 0,
+            "errors": 0,
+        }
 
         # Ensure category exists first
-        await self.ensure_inventory_category(guild)
+        category = await self.ensure_inventory_category(guild)
 
         for member in guild.members:
             if member.bot:
@@ -240,10 +456,28 @@ class InventoryService:
 
             try:
                 forum_data = await self.get_user_forum_from_db(member.id)
+                forum: discord.ForumChannel | None = None
+
                 if forum_data:
                     # Verify it still exists
-                    forum = guild.get_channel(forum_data.forum_id)
-                    if forum and isinstance(forum, discord.ForumChannel):
+                    channel = guild.get_channel(forum_data.forum_id)
+                    if channel and isinstance(channel, discord.ForumChannel):
+                        forum = channel
+                        forum_name = get_inventory_forum_name(member.id)
+
+                        # Migrate legacy name to Braille if needed
+                        if forum.name != forum_name:
+                            try:
+                                old_name = forum.name
+                                await forum.edit(name=forum_name)
+                                logger.info(
+                                    f"Migrated forum name '{old_name}' -> "
+                                    f"'{forum_name}' for user {member.id}"
+                                )
+                                stats["migrated"] += 1
+                            except discord.HTTPException as e:
+                                logger.error(f"Failed to rename forum {forum.id}: {e}")
+
                         # Fix permissions if needed (remove thread creation ability)
                         overwrites = forum.overwrites_for(member)
                         if overwrites.create_public_threads is not False:
@@ -256,18 +490,96 @@ class InventoryService:
                             )
                             stats["fixed"] += 1
                         stats["existing"] += 1
-                        continue
+                    # If forum was deleted, fall through to ensure_user_forum
 
-                # Create forum (handles DB cleanup if needed)
-                forum = await self.ensure_user_forum(guild, member.id)
+                if forum is None:
+                    # Check if forum exists in Discord but not DB (recovery case)
+                    forum_name = get_inventory_forum_name(member.id)
+                    existing_forums = _find_inventory_forums_by_name(
+                        guild, category, forum_name
+                    )
+                    legacy_forums = _find_legacy_forums(guild, category, member.id)
+                    will_recover = len(existing_forums) > 0
+                    will_migrate = len(legacy_forums) > 0 and not will_recover
+
+                    # Create, recover, or migrate forum
+                    forum = await self.ensure_user_forum(guild, member.id)
+                    if forum:
+                        if will_recover:
+                            stats["recovered"] += 1
+                        elif will_migrate:
+                            stats["migrated"] += 1
+                        else:
+                            stats["created"] += 1
+
+                # Prune orphan threads from the forum
                 if forum:
-                    stats["created"] += 1
+                    prune_stats = await self.prune_orphan_threads(guild, member.id)
+                    stats["threads_pruned"] += prune_stats["pruned"]
 
             except discord.HTTPException as e:
                 logger.error(f"Failed to sync inventory forum for {member.id}: {e}")
                 stats["errors"] += 1
 
         logger.info(f"Inventory forum sync for {guild.name}: {stats}")
+        return stats
+
+    async def prune_orphan_threads(
+        self, guild: discord.Guild, user_id: int
+    ) -> dict[str, int]:
+        """Delete threads that don't correspond to inventory items.
+
+        Handles cleanup of orphan threads that can result from:
+        - DB reset while Discord threads persist
+        - Manual thread creation by users (if permissions allow)
+        - Failed item deletions that removed DB record but not thread
+
+        Args:
+            guild: Discord guild
+            user_id: Discord user ID
+
+        Returns:
+            Stats dict with keys: 'pruned' (deleted threads), 'kept' (valid threads)
+        """
+        stats = {"pruned": 0, "kept": 0}
+
+        # Get user's forum from DB
+        forum_data = await self.get_user_forum_from_db(user_id)
+        if forum_data is None:
+            return stats
+
+        forum = guild.get_channel(forum_data.forum_id)
+        if not forum or not isinstance(forum, discord.ForumChannel):
+            return stats
+
+        # Query all valid thread IDs for this user's inventory items
+        rows = await self._pool.fetch(
+            """
+            SELECT discord_thread_id FROM entity_instances
+            WHERE owner_id = $1 AND discord_thread_id IS NOT NULL
+            """,
+            user_id,
+        )
+        valid_thread_ids = {row["discord_thread_id"] for row in rows}
+
+        # Iterate over forum's threads and prune orphans
+        # Forum threads include both active and archived threads
+        for thread in forum.threads:
+            if thread.id in valid_thread_ids:
+                stats["kept"] += 1
+                continue
+
+            # Orphan thread - delete it
+            try:
+                await thread.delete()
+                stats["pruned"] += 1
+                logger.info(
+                    f"Pruned orphan thread '{thread.name}' (ID: {thread.id}) "
+                    f"from inventory forum for user {user_id}"
+                )
+            except discord.HTTPException as e:
+                logger.error(f"Failed to prune thread {thread.id}: {e}")
+
         return stats
 
     async def create_item_thread(
