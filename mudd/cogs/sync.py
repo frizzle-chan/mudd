@@ -235,11 +235,11 @@ class Sync(commands.Cog):
             count = await self.player_context.prepopulate_cache(rooms)
             logger.info(f"Prepopulated autocomplete cache for {count} rooms")
 
-    @tasks.loop(minutes=5)
+    @tasks.loop(minutes=1)
     async def respawn_task(self):
         """Process spawning pools for item respawns.
 
-        Runs every 5 minutes. For each pool:
+        Runs every minute. For each pool:
         1. Check current instance count vs max_count
         2. Check if respawn_interval has elapsed
         3. If spawning needed, select weighted random entity by tag
