@@ -116,6 +116,7 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 | `room` | TEXT (FK to rooms.id) | Logical room name (NULL when in inventory or container) |
 | `owner_id` | BIGINT (FK to users.id) | Player who owns this instance (NULL when in room) |
 | `discord_thread_id` | BIGINT | Discord thread ID when item is in inventory (NULL when in room) |
+| `discord_description_msg_id` | BIGINT | Message ID of the description post in thread (for sync updates) |
 | `created_at` | TIMESTAMPTZ NOT NULL | Instance creation timestamp |
 | `spawning_pool_id` | TEXT (FK to spawning_pools.id) | Spawning pool that created this instance (NULL for static instances) |
 | `player_dropped` | BOOLEAN NOT NULL DEFAULT false | Whether this item was dropped by a player (prevents respawn cleanup) |
@@ -205,9 +206,11 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 
 **Entity Instances Extension:**
 - `discord_thread_id BIGINT` column added to entity_instances
+- `discord_description_msg_id BIGINT` stores the first message ID (item description)
 - Stores the Discord thread ID when an item is in a user's inventory
 - NULL when item is in a room (not in inventory)
 - Indexed for quick thread → instance lookups
+- Thread first post contains rendered `on_look` description, edited during sync to stay current
 
 ### User Focus Table
 
