@@ -7,7 +7,6 @@ These are **not services** - they are pure functions that implement matching alg
 ## What belongs here
 - Entity matching functions (prefix matching, autocomplete)
 - Verb matching functions
-- Protocol definitions for DI in matching contexts
 - Match result dataclasses
 
 ## What does NOT belong here

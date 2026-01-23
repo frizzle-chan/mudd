@@ -21,7 +21,7 @@ This service is running in production with active users. When planning changes:
 # Install dependencies
 uv sync --locked
 
-# Run all checks (lint + format + types)
+# Run all checks (see justfile for full list)
 just
 
 # Individual checks
@@ -59,12 +59,19 @@ Pre-commit hooks (lefthook) auto-run ruff and ty on staged files.
 
 ## Dependencies
 
+**Runtime:**
 - `discord.py` - Discord bot library
 - `python-dotenv` - Environment variable loading
 - `asyncpg` - PostgreSQL client for data persistence
+- `jinja2` - Template rendering for entity handlers
+
+**Development:**
 - `ruff` - Linting and formatting
 - `ty` - Type checking (Astral)
 - `uv` - Package management
+- `lefthook` - Git hooks
+- `pytest` / `pytest-asyncio` - Testing
+- `squawk-cli` - PostgreSQL migration linting
 
 ## Code Style
 

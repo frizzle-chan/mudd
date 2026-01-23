@@ -2,7 +2,7 @@
 
 This package contains functions for loading/syncing data from source files (rec files, text files) to the database.
 
-Loaders are **not services** - they are pure functions or functions that take a database pool as an argument. They handle batch synchronization of static game data.
+Loaders are **not services** - they are async functions that take a database pool as an argument and sync file data to database tables. They have side effects (database mutations, logging, file I/O).
 
 ## What belongs here
 - Functions that read from data files (rec, txt, etc.)

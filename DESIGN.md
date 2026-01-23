@@ -85,19 +85,18 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 | `on_take` | TEXT | Handler response for take action (NULL = inherit from prototype) |
 | `on_open` | TEXT | Handler response for open action (NULL = inherit from prototype) |
 | `on_close` | TEXT | Handler response for close action (NULL = inherit from prototype) |
-| `container_id` | TEXT (FK to entities.id) | Reference to containing entity |
+| `on_drop` | TEXT | Handler response for drop action (NULL = inherit from prototype) |
 | `contents_visible` | BOOLEAN | Whether child entities appear in room descriptions (NULL = inherit, TRUE = auto-list, FALSE = hidden until examined). Note: This controls *visibility* only; interaction context is controlled by `focus_mode` |
-| `focus_mode` | focus_mode NOT NULL | Focus behavior: `none` (no focus), `container` (establish focus on open) |
+| `focus_mode` | focus_mode | Focus behavior: `none` (no focus), `container` (establish focus on open). NULL = inherit from prototype |
+| `rarity` | rarity NOT NULL DEFAULT 'none' | Item rarity affecting name display and pickup behavior |
 
 **Constraints:**
 - Self-reference prevention: `id != prototype_id`
-- Self-containment prevention: `id != container_id`
 
 **Pickup Behavior:**
 - Controlled by `effects.pickup()` in `on_take` templates
 - If template calls `pickup()`: item moves to inventory
 - If template doesn't call `pickup()`: message shown, item stays
-- Quest items (`rarity=quest`): clone on pickup (original stays in room)
 
 **Focus Mode Enum:**
 - `none`: No focus established when opened (default)
@@ -114,21 +113,25 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 |--------|------|-------------|
 | `id` | UUID (PK) | Auto-generated unique instance identifier |
 | `entity_id` | TEXT NOT NULL (FK to entities.id) | Reference to entity definition |
-| `room` | TEXT (FK to rooms.id) | Logical room name (NULL when in inventory) |
+| `room` | TEXT (FK to rooms.id) | Logical room name (NULL when in inventory or container) |
 | `owner_id` | BIGINT (FK to users.id) | Player who owns this instance (NULL when in room) |
 | `discord_thread_id` | BIGINT | Discord thread ID when item is in inventory (NULL when in room) |
 | `created_at` | TIMESTAMPTZ NOT NULL | Instance creation timestamp |
+| `spawning_pool_id` | TEXT (FK to spawning_pools.id) | Spawning pool that created this instance (NULL for static instances) |
+| `player_dropped` | BOOLEAN NOT NULL DEFAULT false | Whether this item was dropped by a player (prevents respawn cleanup) |
+| `container_entity_id` | TEXT (FK to entities.id) | Container entity holding this item (NULL when in room or inventory) |
+| `is_world_instance` | BOOLEAN NOT NULL DEFAULT false | Marks canonical world instances that should be restored on sync |
 
 **Constraints:**
 - Mutual exclusivity: `(room IS NOT NULL AND owner_id IS NULL) OR (room IS NULL AND owner_id IS NOT NULL)`
-- Unique constraint on `(entity_id, room)` where room IS NOT NULL (enables idempotent sync)
+- Unique constraint on `(entity_id, room)` WHERE `is_world_instance = TRUE` (enables idempotent sync for world instances)
 - FK to entities.id with ON DELETE CASCADE (deleting an entity cascades to all its instances)
 - FK to users.id with ON DELETE CASCADE (deleting a user cascades to their inventory items)
 - FK to rooms.id with ON DELETE CASCADE (deleting a room cascades to entity instances in it)
 
 **Indexes:**
 - Primary key on `id`
-- Partial unique index on `(entity_id, room)` WHERE room IS NOT NULL (for idempotent sync)
+- Partial unique index on `(entity_id, room)` WHERE `is_world_instance = TRUE` (for idempotent sync of world instances)
 - Partial index on `room` (WHERE room IS NOT NULL) for room-based queries
 - Partial index on `owner_id` (WHERE owner_id IS NOT NULL) for inventory queries
 
@@ -136,6 +139,44 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 - Instances for entities with `Room` field in `.rec` files are created during `sync_entities()`
 - Uses `INSERT ON CONFLICT DO NOTHING` for idempotent sync (same entity+room = no-op)
 - Inventory instances (owner_id set) are NOT affected by sync - they persist independently
+
+### Entity Tags Table
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `entity_id` | TEXT NOT NULL (FK to entities.id) | Entity being tagged |
+| `tag` | TEXT NOT NULL | Tag value (e.g., "weapon", "key", "treasure") |
+
+**Constraints:**
+- PK on `(entity_id, tag)` (unique tag per entity)
+- FK to entities(id) with ON DELETE CASCADE
+
+**Purpose:**
+- Enables grouping entities by category for spawning pool queries
+- Tags are defined in `.rec` files with the `Tag` field (can have multiple Tag lines)
+- Used by spawning pools to select random entities matching tag criteria
+
+### Spawning Pools Table
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | TEXT (PK) | Unique spawning pool identifier |
+| `room` | TEXT NOT NULL (FK to rooms.id) | Room where spawned items appear |
+| `container_id` | TEXT (FK to entities.id) | Optional container to spawn items into |
+| `tag_query` | TEXT NOT NULL | Tag expression to match entities (e.g., "weapon", "treasure") |
+| `max_count` | INTEGER NOT NULL DEFAULT 1 | Maximum items this pool maintains |
+| `respawn_interval_minutes` | INTEGER NOT NULL DEFAULT 30 | Minimum time between spawns |
+| `last_spawn_at` | TIMESTAMPTZ | When the pool last spawned an item |
+
+**Purpose:**
+- Manages automatic item respawning in rooms
+- Selects random entities matching `tag_query` when below `max_count`
+- Respects `respawn_interval_minutes` between spawns
+- Can spawn directly into room or into a container
+
+**Constraints:**
+- FK to rooms(id) with ON DELETE CASCADE
+- FK to entities(id) with ON DELETE CASCADE (for container_id)
 
 ### User Inventory Forums Table
 
@@ -148,7 +189,7 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 
 **Purpose:**
 - Tracks per-user inventory forum channels
-- Each user gets a private forum channel named `<base62-user-id>-inventory`
+- Each user gets a private forum channel named `{braille_user_id}-inventory`
 - Items in inventory are represented as threads within the forum
 - Only the owner can see their inventory forum
 
@@ -184,8 +225,8 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 
 **Focus Lifecycle (ADR 0003):**
 - Established: When user executes ON_OPEN action on entity with `focus_mode != 'none'`
-- Cleared: Room movement, looking at unrelated entity, ON_CLOSE action, 5-minute timeout
-- Preserved: Looking at room, looking at/interacting with focused entity or its contents
+- Cleared: Room movement, looking at room, looking at unrelated entity, interacting with unrelated entity, ON_CLOSE action, 5-minute timeout
+- Preserved: Looking at focused entity or its contents, interacting with focused entity or its contents
 
 **Constraints:**
 - PK on `user_id` (one focus per user)
@@ -204,7 +245,7 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 | `verb` | TEXT (PK) | The verb word (e.g., 'smash', 'look') |
 | `action` | verb_action NOT NULL | The action handler type to invoke |
 
-**Verb Action Enum:** `on_look`, `on_touch`, `on_attack`, `on_use`, `on_take`, `on_open`, `on_close`
+**Verb Action Enum:** `on_look`, `on_touch`, `on_attack`, `on_use`, `on_take`, `on_open`, `on_close`, `on_drop`
 
 **Indexes:**
 - Primary key on `verb`
@@ -248,10 +289,8 @@ periodic_sync() [FIRST ITERATION]
     │    ├─ Fix channel topics
     │    └─ Return orphans + default_room
     │
-    ├─ init_visibility_service(default_room)
-    │
     ├─ visibility_service.sync_guild()
-    │    ├─ Build room cache
+    │    ├─ Build room cache (uses default_room)
     │    └─ Sync user permissions
     │
     └─ mark_startup_complete() ─→ UNBLOCK COMMANDS
@@ -334,15 +373,17 @@ This runs as part of the unified sync flow described above.
 
 ## Entity Service
 
-The `EntityService` provides cached runtime access to entity data. It follows the explicit singleton pattern.
+The `EntityService` provides cached runtime access to entity data.
 
-### Service Methods
+### Service Methods (Core)
 
 - `get_entity(entity_id)` - Get resolved entity by ID (cached)
 - `get_room_entities(room)` - Get all entity instances in a room with resolved properties
 - `get_entity_instance(instance_id)` - Get specific instance by UUID
 - `get_container_contents(container_id, room)` - Get direct children of a container in a room
 - `invalidate_cache()` - Clear cache (called by `sync_entities()`)
+
+Additional methods exist for specialized queries (inventory, visibility, random selection). See `mudd/services/entity.py` for the full interface.
 
 ### Caching Strategy
 
@@ -351,16 +392,18 @@ The `EntityService` provides cached runtime access to entity data. It follows th
 - Cache is invalidated entirely after `sync_entities()` completes
 - Instance queries always hit the database (instances can move to inventory)
 
-### Initialization
+### Usage
+
+Services are instantiated in `main.py:setup_hook()` and injected into cogs via constructor parameters:
 
 ```python
-# In main.py setup_hook(), after sync_entities():
-init_entity_service()
+# In main.py:
+entity_service = EntityService(pool)
+cog = InteractCog(bot, entity_service, ...)
+await bot.add_cog(cog)
 
-# In cogs:
-from mudd.services.entity import get_entity_service
-service = get_entity_service()
-entities = await service.get_room_entities(channel.name)
+# In cogs - use the injected service:
+entities = await self.entity_service.get_room_entities(channel.name)
 ```
 
 ### Data Flow
@@ -382,7 +425,7 @@ get_room_entities(room)
 
 ## Focus Context Service
 
-The `FocusContextService` manages per-user focus state for modal interactions (ADR 0003). It follows the explicit singleton pattern.
+The `FocusContextService` manages per-user focus state for modal interactions (ADR 0003).
 
 ### Service Methods
 
@@ -400,16 +443,18 @@ The `FocusContextService` manages per-user focus state for modal interactions (A
 - **Direct method calls**: Cogs call service methods directly (no pub/sub events)
 - **Optional messages**: `clear_focus()` returns on_close template for rendering
 
-### Initialization
+### Usage
+
+Services are instantiated in `main.py:setup_hook()` and injected into cogs via constructor parameters:
 
 ```python
-# In main.py setup_hook(), after init_entity_service():
-init_focus_context_service()
+# In main.py:
+focus_service = FocusContextService(pool, entity_service)
+cog = InteractCog(bot, entity_service, focus_service, ...)
+await bot.add_cog(cog)
 
-# In cogs:
-from mudd.services.focus_context import get_focus_context_service
-focus_service = get_focus_context_service()
-focus = await focus_service.get_focus(user_id, room)
+# In cogs - use the injected service:
+focus = await self.focus_service.get_focus(user_id, room)
 ```
 
 ### Focus-Aware Autocomplete
