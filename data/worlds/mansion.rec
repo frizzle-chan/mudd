@@ -182,6 +182,14 @@ Prototype: object
 OnUse: You pull {{ name }} from its sleeve, place it on the turntable, and drop the needle. Music fills the room.
 OnTake: You can't take the {{ name }}, but you can __play__ it.
 
+Id: item
+Name: item
+Prototype: object
+Rarity: common
+SpawnMode: move
+OnTake: You pick up the {{ name }}.
+OnDrop: {% if container %}You put the {{ name }} into the *{{ container.name }}*.{% else %}You drop the {{ name }}.{% endif %}{{ effects.drop() }}{{ effects.broadcast(user.name ~ " drops " ~ e.display_name ~ ".") }}
+
 # ----------------------------------------------------------------------------
 # Foyer entities
 # ----------------------------------------------------------------------------
@@ -576,6 +584,16 @@ DescriptionLong: A cardboard box with "TEST FIXTURES - DO NOT REMOVE" written on
 OnOpen: You open the {{ name }}.{% if contents %} Inside:{{ contents }}{% else %} It's empty.{% endif %}
 OnClose: You close the {{ name }}.
 
+Id: storeroom_crate
+Name: Wooden Crate
+Prototype: chest
+Room: store-room
+ContentsVisible: no
+DescriptionShort: a sturdy {{ name }}
+DescriptionLong: A wooden crate, slightly worn from use.
+OnOpen: You pry open the *{{ name }}*.{% if contents %} Inside:{{ contents }}{% else %} It's empty.{% endif %}
+OnClose: You close the *{{ name }}*.
+
 Id: test_orb
 Name: Test Orb
 Prototype: object
@@ -617,10 +635,11 @@ OnUse: TEST_EPHEMERAL_RESPONSE{{ effects.broadcast("TEST_BROADCAST_RESPONSE " ~ 
 
 Id: test_takeable
 Name: Test Takeable
-Prototype: object
+Prototype: item
 Room: store-room
 Container: storeroom_box
 SpawnMode: move
+Rarity: common
 DescriptionShort: a {{ name }} you can pick up
 DescriptionLong: A test item that can be picked up.
 OnTake: TEST_TAKE_MOVE_RESPONSE - You pick up the {{ name }}.
@@ -638,24 +657,25 @@ OnTake: TEST_TAKE_CLONE_RESPONSE - You copy the {{ name }}.
 
 Id: test_droppable
 Name: Test Droppable
-Prototype: object
+Prototype: item
 Room: store-room
 Container: storeroom_box
 SpawnMode: move
+Rarity: common
 DescriptionShort: a {{ name }} you can drop
 DescriptionLong: A test item that can be dropped.
-OnTake: You pick up the {{ name }}.
-OnDrop: TEST_DROP_RESPONSE - You drop the {{ name }}.{{ effects.drop() }}
+OnDrop: TEST_DROP_RESPONSE - You drop the {{ name }}.{{ effects.drop() }}{{ effects.broadcast(user.name ~ " drops " ~ e.display_name ~ ".") }}
 
 Id: test_sticky
 Name: Test Sticky
-Prototype: object
+Prototype: item
 Room: store-room
 Container: storeroom_box
 SpawnMode: move
+Rarity: common
 DescriptionShort: a {{ name }} that sticks to you
 DescriptionLong: A test item that cannot be dropped.
-OnTake: You pick up the {{ name }}.
+OnDrop: The {{ name }} is stuck to your hand! You can't drop it.
 
 Id: test_granting_key
 Name: Test Granting Key
@@ -684,7 +704,8 @@ OnOpen: TEST_RANDOM_GRANT_RESPONSE - You open the chest and find something insid
 
 Id: test_common_loot
 Name: Test Common Loot
-Prototype: object
+Prototype: item
+SpawnMode: move
 Rarity: common
 Tags: test_loot
 DescriptionShort: a {{ name }} of common quality
@@ -692,7 +713,8 @@ DescriptionLong: A common test item from the loot pool.
 
 Id: test_rare_loot
 Name: Test Rare Loot
-Prototype: object
+Prototype: item
+SpawnMode: move
 Rarity: rare
 Tags: test_loot
 DescriptionShort: a {{ name }} of rare quality
@@ -700,66 +722,100 @@ DescriptionLong: A rare test item from the loot pool.
 
 Id: test_droppable_2
 Name: Test Droppable 2
-Prototype: object
+Prototype: item
 Room: store-room
 Container: storeroom_box
 SpawnMode: move
+Rarity: common
 DescriptionShort: a {{ name }} you can drop
 DescriptionLong: A test item for floor clutter testing.
-OnTake: You pick up the {{ name }}.
-OnDrop: You drop the item.{{ effects.drop() }}
 
 Id: test_droppable_3
 Name: Test Droppable 3
-Prototype: object
+Prototype: item
 Room: store-room
 Container: storeroom_box
 SpawnMode: move
+Rarity: common
 DescriptionShort: a {{ name }} you can drop
 DescriptionLong: A test item for floor clutter testing.
-OnTake: You pick up the {{ name }}.
-OnDrop: You drop the item.{{ effects.drop() }}
 
 Id: test_droppable_4
 Name: Test Droppable 4
-Prototype: object
+Prototype: item
 Room: store-room
 Container: storeroom_box
 SpawnMode: move
+Rarity: common
 DescriptionShort: a {{ name }} you can drop
 DescriptionLong: A test item for floor clutter testing.
-OnTake: You pick up the {{ name }}.
-OnDrop: You drop the item.{{ effects.drop() }}
 
 Id: test_droppable_5
 Name: Test Droppable 5
-Prototype: object
+Prototype: item
 Room: store-room
 Container: storeroom_box
 SpawnMode: move
+Rarity: common
 DescriptionShort: a {{ name }} you can drop
 DescriptionLong: A test item for floor clutter testing.
-OnTake: You pick up the {{ name }}.
-OnDrop: You drop the item.{{ effects.drop() }}
 
 Id: test_droppable_6
 Name: Test Droppable 6
-Prototype: object
+Prototype: item
 Room: store-room
 Container: storeroom_box
 SpawnMode: move
+Rarity: common
 DescriptionShort: a {{ name }} you can drop
 DescriptionLong: A test item for floor clutter testing.
-OnTake: You pick up the {{ name }}.
-OnDrop: You drop the item.{{ effects.drop() }}
 
 Id: test_droppable_7
 Name: Test Droppable 7
-Prototype: object
+Prototype: item
 Room: store-room
 Container: storeroom_box
 SpawnMode: move
+Rarity: common
 DescriptionShort: a {{ name }} you can drop
 DescriptionLong: A test item for floor clutter testing.
-OnTake: You pick up the {{ name }}.
-OnDrop: You drop the item.{{ effects.drop() }}
+
+Id: test_droppable_8
+Name: Test Droppable 8
+Prototype: item
+Room: store-room
+Container: storeroom_box
+SpawnMode: move
+Rarity: common
+DescriptionShort: a {{ name }} you can drop
+DescriptionLong: A test item for floor clutter testing.
+
+Id: test_droppable_9
+Name: Test Droppable 9
+Prototype: item
+Room: store-room
+Container: storeroom_box
+SpawnMode: move
+Rarity: common
+DescriptionShort: a {{ name }} you can drop
+DescriptionLong: A test item for floor clutter testing.
+
+Id: test_droppable_10
+Name: Test Droppable 10
+Prototype: item
+Room: store-room
+Container: storeroom_box
+SpawnMode: move
+Rarity: common
+DescriptionShort: a {{ name }} you can drop
+DescriptionLong: A test item for floor clutter testing.
+
+Id: test_droppable_11
+Name: Test Droppable 11
+Prototype: item
+Room: store-room
+Container: storeroom_box
+SpawnMode: move
+Rarity: common
+DescriptionShort: a {{ name }} you can drop
+DescriptionLong: A test item for floor clutter testing.

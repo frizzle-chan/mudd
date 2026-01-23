@@ -166,6 +166,32 @@ In the context of **preventing griefing via item spam**, facing **the risk of pl
 
 The `.rec` format is optimized for ease of authorship. These definitions are converted to PostgreSQL during sync.
 
+### Item Prototype
+
+Pickupable items should use the `item` prototype, which provides sensible defaults:
+
+```rec
+Id: item
+Name: item
+Prototype: object
+Rarity: common
+SpawnMode: move
+OnTake: You pick up the {{ name }}.
+OnDrop: {% if container %}You put the {{ name }} into the *{{ container.name }}*.{% else %}You drop the {{ name }}.{% endif %}{{ effects.drop() }}{{ effects.broadcast(user.name ~ " drops " ~ e.display_name ~ ".") }}
+```
+
+**Key benefits:**
+- Items default to `common` rarity (displays ⚪ suffix, eligible for spawn pools)
+- Standard take/drop handlers with room broadcast on drop
+- Override any field as needed (e.g., `Rarity: rare` or custom `OnDrop`)
+
+**Note:** `SpawnMode` and `Rarity` must be explicitly set on each item as they do not inherit from prototypes (database schema defaults apply when omitted).
+
+**When to use `item` vs `object`:**
+- Use `item` for anything players can pick up and carry
+- Use `object` for static world fixtures (furniture, decorations, interactables that stay in place)
+- Items without `OnDrop` (or with `OnDrop` that doesn't call `effects.drop()`) cannot be dropped
+
 ### Entity Tags and Rarity
 
 ```rec
@@ -174,27 +200,29 @@ The `.rec` format is optimized for ease of authorship. These definitions are con
 
 Id: beer
 Name: Beer
+Prototype: item
 Tags: beverage alcoholic
-Rarity: common
-OnDrop: {{ effects.drop() }}{{ effects.broadcast(user.name ~ " places " ~ name ~ " on the floor.") }}You place the {{ name }} on the floor.
 
 Id: white_monster
 Name: White Monster
+Prototype: item
 Tags: beverage energy
 Rarity: uncommon
 
 Id: white_claw
 Name: White Claw
+Prototype: item
 Tags: beverage alcoholic
 Rarity: rare
 
 Id: mansion_map
 Name: Map of the Mansion
+Prototype: item
 Rarity: quest
 SpawnMode: clone
 ```
 
-- `Rarity`: One of `none`, `common`, `uncommon`, `rare`, `epic`, `legendary`, `mythic`, `quest` (default: `none`)
+- `Rarity`: One of `none`, `common`, `uncommon`, `rare`, `epic`, `legendary`, `mythic`, `quest` (default from prototype)
 
 ### Spawning Pools
 
@@ -310,3 +338,34 @@ In the context of **dropping items from inventory**, facing **the mismatch betwe
 - All inventory items shown, not just those with `on_drop` handler
 - Items without `on_drop` return "Nothing happens." when drop attempted
 - Users see full inventory context
+
+### Container-Aware Drop Targets
+
+In the context of **dropping items into containers**, facing **the need to support transferring items between containers**, we decided to **use the focus context to determine drop targets**, to achieve **intuitive item placement into currently-focused containers**, accepting **that players must open a container to drop items into it**.
+
+**Behavior:**
+- If user has active focus on a container (`focus_mode=container`), dropped items go into that container
+- If no container focus, dropped items go to the room floor
+- Items dropped into containers do not count toward floor clutter limit
+- Template has access to `{{ container }}` variable for customized drop messages
+
+**Template Context:**
+- `container`: The ResolvedEntity of the focused container (or `None` if dropping to floor)
+- Used in the `item` prototype's OnDrop template:
+  ```jinja
+  {% if container %}You put the {{ name }} into the *{{ container.name }}*.{% else %}You drop the {{ name }}.{% endif %}{{ effects.drop() }}
+  ```
+
+**Behavior Matrix:**
+
+| Action Sequence | Drop Target |
+|-----------------|-------------|
+| Take from box A, close A, drop | Room floor |
+| Take from box A, open box B, drop | Into box B |
+| Take from floor, open box, drop | Into box |
+| Take from anywhere, no container open, drop | Room floor |
+
+**Clutter Limit:**
+- Only items dropped on the floor count toward the 5-item clutter limit
+- Items in containers are exempt from this limit
+- Players can drop unlimited items into containers

@@ -132,6 +132,18 @@ class Interact(commands.Cog):
         await self.visibility_service.wait_for_startup()
 
         room = getattr(interaction.channel, "name", None)
+
+        # If interaction came from inventory thread, get user's actual room
+        # Cast is safe: get_thread_item checks isinstance(Thread) internally
+        channel = cast(
+            discord.abc.GuildChannel | discord.Thread | None, interaction.channel
+        )
+        if await self._inventory.get_thread_item(channel) is not None:
+            room = await self.pool.fetchval(
+                "SELECT current_room FROM users WHERE id = $1",
+                interaction.user.id,
+            )
+
         if not room:
             await interaction.response.send_message(
                 "You can't interact with anything here.", ephemeral=True
@@ -178,17 +190,19 @@ class Interact(commands.Cog):
         matched_instance = match_result.matches[0].instance
         entity = matched_instance.entity
 
-        # Check if target is in current focus (to decide whether to clear focus)
-        is_in_focus = await self.player_context.is_entity_in_focus(
-            user_id, room, entity.id
-        )
+        # Skip focus manipulation for inventory actions - they don't affect room focus
+        if action_type != VerbAction.ON_DROP:
+            # Check if target is in current focus (to decide whether to clear focus)
+            is_in_focus = await self.player_context.is_entity_in_focus(
+                user_id, room, entity.id
+            )
 
-        if is_in_focus:
-            # Update timestamp to prevent timeout when interacting with focused content
-            await self.player_context.update_focus_timestamp(user_id)
-        else:
-            # Clear focus when interacting with entity not in current focus
-            await self.player_context.clear_focus(user_id, reason="interaction")
+            if is_in_focus:
+                # Update timestamp to prevent timeout when interacting with focus
+                await self.player_context.update_focus_timestamp(user_id)
+            else:
+                # Clear focus when interacting with entity not in current focus
+                await self.player_context.clear_focus(user_id, reason="interaction")
 
         # Get handler text based on action
         handler_text = _get_handler_text(entity, action_type)
@@ -209,11 +223,18 @@ class Interact(commands.Cog):
             mention=interaction.user.mention,
         )
 
+        # For drop actions, look up focused container for template context
+        container: ResolvedEntity | None = None
+        if action_type == VerbAction.ON_DROP:
+            focus = await self.player_context.get_focus(user_id, room)
+            if focus and focus.focus_mode == "container":
+                container = await self.entity_service.get_entity(focus.entity_id)
+
         # Render template with entity and user context
         effects: TriggerEffects
         try:
             output, effects = self._rendering.render_with_effects(
-                handler_text, entity, user_context, contents_str
+                handler_text, entity, user_context, contents_str, container
             )
         except TemplateRenderError:
             logger.warning(
@@ -266,6 +287,9 @@ class Interact(commands.Cog):
                 output = drop_result
 
         await interaction.response.send_message(output, ephemeral=True)
+
+        # Execute cleanup operations (thread deletions, etc.)
+        await self._execute_cleanups(interaction, effects)
 
         # Execute broadcast side effects (public messages to user's current room)
         # Look up room from DB since interaction may come from inventory thread
@@ -352,13 +376,16 @@ class Interact(commands.Cog):
                 logger.warning("Failed to create thread for cloned item %s", entity.id)
                 # Item is still in inventory, just no Discord thread
 
+            # Invalidate autocomplete cache so the item no longer appears in room
+            self.player_context.invalidate_cache()
             return template_output
 
         elif entity.spawn_mode == "move":
             # Move the existing instance to the user's inventory
             result = await self.pool.execute(
                 """UPDATE entity_instances
-                SET room = NULL, owner_id = $1, player_dropped = FALSE
+                SET room = NULL, owner_id = $1, player_dropped = FALSE,
+                    container_entity_id = NULL
                 WHERE id = $2 AND room = $3""",
                 user_id,
                 instance_id,
@@ -375,6 +402,8 @@ class Interact(commands.Cog):
                 logger.warning("Failed to create thread for moved item %s", entity.id)
                 # Item is still in inventory, just no Discord thread
 
+            # Invalidate autocomplete cache so the item no longer appears in room
+            self.player_context.invalidate_cache()
             return template_output
 
         return None
@@ -408,31 +437,46 @@ class Interact(commands.Cog):
         if guild is None:
             return "You can't drop items outside a server."
 
-        # Check floor clutter limit (5 player-dropped items per room)
-        clutter_count = await self.pool.fetchval(
-            """SELECT COUNT(*) FROM entity_instances
-            WHERE room = $1 AND player_dropped = TRUE""",
-            room,
-        )
-        if clutter_count >= 5:
-            return "The floor is too cluttered. Pick something up first."
+        user_id = interaction.user.id
 
-        # Move instance from inventory to room
+        # Check for focus context to determine drop target
+        focus = await self.player_context.get_focus(user_id, room)
+        container_entity_id: str | None = None
+
+        if focus and focus.focus_mode == "container":
+            # Dropping into focused container - skip clutter check
+            container_entity_id = focus.entity_id
+        else:
+            # Dropping to floor - check clutter limit (only floor items)
+            clutter_count = await self.pool.fetchval(
+                """SELECT COUNT(*) FROM entity_instances
+                WHERE room = $1 AND player_dropped = TRUE
+                AND container_entity_id IS NULL""",
+                room,
+            )
+            if clutter_count >= 5:
+                return "The floor is too cluttered. Pick something up first."
+
+        # Move instance from inventory to room (or container)
         result = await self.pool.execute(
             """UPDATE entity_instances
-            SET room = $1, owner_id = NULL, player_dropped = TRUE
+            SET room = $1, owner_id = NULL, player_dropped = TRUE,
+                container_entity_id = $4
             WHERE id = $2 AND owner_id = $3""",
             room,
             instance_id,
-            interaction.user.id,
+            user_id,
+            container_entity_id,
         )
         if result == "UPDATE 0":
             return "You no longer have that item."
 
-        # Delete Discord inventory thread
-        deleted = await self._inventory.delete_item_thread(guild, instance_id)
-        if not deleted:
-            logger.warning("Failed to delete thread for dropped item %s", entity.id)
+        # Queue thread deletion to run after response is sent
+        # (avoids "Unknown Channel" error when dropping from inventory thread)
+        effects.queue_thread_deletion(instance_id, guild.id)
+
+        # Invalidate autocomplete cache so the dropped item appears in room
+        self.player_context.invalidate_cache()
 
         return None
 
@@ -544,6 +588,33 @@ class Interact(commands.Cog):
         )
         if thread is None:
             logger.warning("Failed to create thread for granted item %s", entity_id)
+
+    async def _execute_cleanups(
+        self, interaction: Interaction, effects: TriggerEffects
+    ) -> None:
+        """Execute cleanup operations after response sent.
+
+        Runs deferred operations like thread deletions that must happen
+        after the interaction response to avoid "Unknown Channel" errors.
+
+        Args:
+            interaction: Discord interaction
+            effects: TriggerEffects containing queued cleanup operations
+        """
+        guild = interaction.guild
+        if guild is None:
+            return
+
+        for cleanup in effects.cleanups:
+            if cleanup.operation_type == "delete_thread":
+                deleted = await self._inventory.delete_item_thread(
+                    guild, cleanup.instance_id
+                )
+                if not deleted:
+                    logger.warning(
+                        "Failed to delete thread for instance %s",
+                        cleanup.instance_id,
+                    )
 
 
 def _get_handler_text(entity: ResolvedEntity, action: VerbAction) -> str | None:

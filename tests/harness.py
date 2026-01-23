@@ -376,3 +376,42 @@ class TestClient:
             room,
         )
         return count or 0
+
+    async def count_floor_dropped_items(self, room: str) -> int:
+        """Count player-dropped items on the floor (not in containers).
+
+        Args:
+            room: The room ID to count floor items in.
+
+        Returns:
+            Number of player-dropped items on the floor (not in containers).
+        """
+        count = await self.pool.fetchval(
+            """SELECT COUNT(*) FROM entity_instances
+            WHERE room = $1 AND player_dropped = TRUE
+            AND container_entity_id IS NULL""",
+            room,
+        )
+        return count or 0
+
+    async def is_entity_in_container(
+        self, entity_id: str, container_id: str, room: str
+    ) -> bool:
+        """Check if entity instance is inside a container.
+
+        Args:
+            entity_id: The entity ID to check for.
+            container_id: The container entity ID.
+            room: The room ID where the container is.
+
+        Returns:
+            True if the entity has an instance inside the container.
+        """
+        row = await self.pool.fetchrow(
+            """SELECT id FROM entity_instances
+            WHERE entity_id = $1 AND container_entity_id = $2 AND room = $3""",
+            entity_id,
+            container_id,
+            room,
+        )
+        return row is not None
