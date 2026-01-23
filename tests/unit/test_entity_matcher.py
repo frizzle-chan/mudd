@@ -190,3 +190,27 @@ class TestMatchResult:
         """is_empty returns True for empty matches."""
         result = MatchResult(matches=[])
         assert result.is_empty()
+
+    def test_is_ambiguous_false_for_same_entity_type(self):
+        """Multiple instances of the same entity type is not ambiguous."""
+        beer = make_entity("beer", "Beer")
+        result = MatchResult(
+            matches=[
+                EntityMatch(instance=make_instance(beer), match_quality=0),
+                EntityMatch(instance=make_instance(beer), match_quality=0),
+                EntityMatch(instance=make_instance(beer), match_quality=0),
+            ]
+        )
+        assert not result.is_ambiguous()
+
+    def test_is_ambiguous_true_for_different_entity_types(self):
+        """Multiple instances of different entity types is ambiguous."""
+        beer = make_entity("beer", "Beer")
+        root_beer = make_entity("root_beer", "Root Beer")
+        result = MatchResult(
+            matches=[
+                EntityMatch(instance=make_instance(beer), match_quality=0),
+                EntityMatch(instance=make_instance(root_beer), match_quality=1),
+            ]
+        )
+        assert result.is_ambiguous()

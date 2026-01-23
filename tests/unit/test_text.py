@@ -2,40 +2,45 @@
 
 import pytest
 
-from mudd.utils.text import decode_braille, encode_braille
+from mudd.utils.text import (
+    RARITY_EMOJI,
+    decode_braille,
+    encode_braille,
+    strip_rarity_emojis,
+)
 
 
 class TestEncodeBraille:
     """Tests for Braille encoding of integers."""
 
     def test_encodes_zero(self):
-        """Zero encodes to blank braille pattern U+2800."""
+        """Zero encodes to U+2801 (not U+2800 which Discord strips)."""
         result = encode_braille(0)
-        assert result == "\u2800"
+        assert result == "\u2801"
         assert len(result) == 1
 
     def test_encodes_small_number(self):
         """Small numbers encode to single characters."""
-        # 1 should encode to U+2801
+        # 1 should encode to U+2802 (base + 1)
         result = encode_braille(1)
-        assert result == "\u2801"
+        assert result == "\u2802"
         assert len(result) == 1
 
-        # 255 should encode to U+28FF (max single byte)
+        # 255 should encode to U+2900 (base + 255 = 0x2801 + 0xFF)
         result = encode_braille(255)
-        assert result == "\u28ff"
+        assert result == "\u2900"
         assert len(result) == 1
 
     def test_encodes_multi_byte_number(self):
         """Multi-byte numbers encode to multiple characters."""
-        # 256 = 0x0100, should be 2 chars: U+2801 U+2800
+        # 256 = 0x0100, should be 2 chars: U+2802 U+2801
         result = encode_braille(256)
-        assert result == "\u2801\u2800"
+        assert result == "\u2802\u2801"
         assert len(result) == 2
 
-        # 65535 = 0xFFFF, should be 2 chars: U+28FF U+28FF
+        # 65535 = 0xFFFF, should be 2 chars: U+2900 U+2900
         result = encode_braille(65535)
-        assert result == "\u28ff\u28ff"
+        assert result == "\u2900\u2900"
         assert len(result) == 2
 
     def test_encodes_discord_user_id(self):
@@ -47,9 +52,9 @@ class TestEncodeBraille:
         # Should be <= 8 characters (64 bits / 8 bits per char)
         assert len(result) <= 8
 
-        # All characters should be in Braille Patterns block
+        # All characters should be in our Braille range (U+2801-U+2900)
         for char in result:
-            assert 0x2800 <= ord(char) <= 0x28FF
+            assert 0x2801 <= ord(char) <= 0x2900
 
     def test_encoding_is_deterministic(self):
         """Same input always produces same output."""
@@ -74,18 +79,18 @@ class TestDecodeBraille:
     """Tests for Braille decoding back to integers."""
 
     def test_decodes_zero(self):
-        """Blank braille pattern decodes to zero."""
-        assert decode_braille("\u2800") == 0
+        """U+2801 (our base) decodes to zero."""
+        assert decode_braille("\u2801") == 0
 
     def test_decodes_small_number(self):
         """Single braille characters decode correctly."""
-        assert decode_braille("\u2801") == 1
-        assert decode_braille("\u28ff") == 255
+        assert decode_braille("\u2802") == 1
+        assert decode_braille("\u2900") == 255
 
     def test_decodes_multi_byte_number(self):
         """Multi-character strings decode correctly."""
-        assert decode_braille("\u2801\u2800") == 256
-        assert decode_braille("\u28ff\u28ff") == 65535
+        assert decode_braille("\u2802\u2801") == 256
+        assert decode_braille("\u2900\u2900") == 65535
 
     def test_rejects_empty_string(self):
         """Empty string raises ValueError."""
@@ -116,3 +121,69 @@ class TestBrailleRoundTrip:
         """Maximum 64-bit value survives round-trip."""
         max_64bit = (1 << 64) - 1
         assert decode_braille(encode_braille(max_64bit)) == max_64bit
+
+
+class TestStripRarityEmojis:
+    """Tests for stripping rarity emojis from text."""
+
+    def test_strips_common_emoji(self):
+        """Strips common (white circle) emoji."""
+        result = strip_rarity_emojis("Test Item ⚪")
+        assert result == "Test Item"
+
+    def test_strips_uncommon_emoji(self):
+        """Strips uncommon (green circle) emoji."""
+        result = strip_rarity_emojis("Test Item 🟢")
+        assert result == "Test Item"
+
+    def test_strips_rare_emoji(self):
+        """Strips rare (blue circle) emoji."""
+        result = strip_rarity_emojis("Test Item 🔵")
+        assert result == "Test Item"
+
+    def test_strips_epic_emoji(self):
+        """Strips epic (purple circle) emoji."""
+        result = strip_rarity_emojis("Test Item 🟣")
+        assert result == "Test Item"
+
+    def test_strips_legendary_emoji(self):
+        """Strips legendary (orange circle) emoji."""
+        result = strip_rarity_emojis("Test Item 🟠")
+        assert result == "Test Item"
+
+    def test_strips_mythic_emoji(self):
+        """Strips mythic (Japanese secret) emoji."""
+        result = strip_rarity_emojis("Test Item ㊙️")
+        assert result == "Test Item"
+
+    def test_strips_quest_emoji(self):
+        """Strips quest (blue diamond) emoji."""
+        result = strip_rarity_emojis("Test Item 🔷")
+        assert result == "Test Item"
+
+    def test_preserves_text_without_emojis(self):
+        """Text without rarity emojis is preserved."""
+        result = strip_rarity_emojis("Wooden Table")
+        assert result == "Wooden Table"
+
+    def test_handles_empty_string(self):
+        """Empty string returns empty string."""
+        result = strip_rarity_emojis("")
+        assert result == ""
+
+    def test_strips_trailing_whitespace(self):
+        """Trailing whitespace is stripped after emoji removal."""
+        result = strip_rarity_emojis("Test Item 🟢  ")
+        assert result == "Test Item"
+
+    def test_strips_multiple_emojis(self):
+        """Multiple rarity emojis are all removed."""
+        result = strip_rarity_emojis("Test 🟢 Item 🔵")
+        assert result == "Test  Item"
+
+    @pytest.mark.parametrize("rarity,emoji", list(RARITY_EMOJI.items()))
+    def test_strips_all_defined_emojis(self, rarity, emoji):
+        """Every defined rarity emoji is stripped."""
+        if emoji:  # Skip "none" which has empty emoji
+            result = strip_rarity_emojis(f"Test Item {emoji}")
+            assert result == "Test Item"

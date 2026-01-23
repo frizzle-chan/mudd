@@ -1,14 +1,51 @@
 """Text encoding utilities."""
 
+from typing import Literal
+
+# Rarity type literal (must match entity.py's Rarity type)
+Rarity = Literal[
+    "none", "common", "uncommon", "rare", "epic", "legendary", "mythic", "quest"
+]
+
+# Rarity emoji for display names
+RARITY_EMOJI: dict[Rarity, str] = {
+    "none": "",  # No emoji for static world items
+    "common": "\u26aa",  # White circle
+    "uncommon": "\U0001f7e2",  # Green circle
+    "rare": "\U0001f535",  # Blue circle
+    "epic": "\U0001f7e3",  # Purple circle
+    "legendary": "\U0001f7e0",  # Orange circle
+    "mythic": "\u3299\ufe0f",  # Japanese "secret" symbol
+    "quest": "\U0001f537",  # Blue diamond
+}
+
+
+def strip_rarity_emojis(text: str) -> str:
+    """Strip rarity emoji suffixes from text.
+
+    Args:
+        text: Text that may contain rarity emojis
+
+    Returns:
+        Text with all rarity emojis removed and stripped of trailing whitespace
+    """
+    for emoji in RARITY_EMOJI.values():
+        if emoji:
+            text = text.replace(emoji, "")
+    return text.strip()
+
+
 # Braille encoding for compact, non-distracting forum names
-# U+2800 to U+28FF gives us 256 characters (base256)
-BRAILLE_BASE = 0x2800
+# U+2801 to U+2900 gives us 256 characters (base256)
+# NOTE: We start at U+2801 (not U+2800) because U+2800 is the blank Braille
+# pattern which Discord strips from channel names like whitespace.
+BRAILLE_BASE = 0x2801
 
 
 def encode_braille(num: int) -> str:
     """Encode an integer to a Braille pattern string (base256).
 
-    Uses Unicode Braille Patterns block (U+2800-U+28FF) to encode
+    Uses Unicode Braille Patterns block (U+2801-U+2900) to encode
     integers compactly. Each character represents one byte (0-255).
 
     Discord user IDs (64-bit) encode to 8 characters max.
@@ -23,7 +60,7 @@ def encode_braille(num: int) -> str:
     if num < 0:
         raise ValueError("Cannot encode negative numbers")
     if num == 0:
-        return chr(BRAILLE_BASE)  # ⠀ (blank braille pattern)
+        return chr(BRAILLE_BASE)  # ⠁ (single dot braille pattern)
     result = []
     while num:
         result.append(chr(BRAILLE_BASE + (num & 0xFF)))
@@ -34,7 +71,7 @@ def encode_braille(num: int) -> str:
 def decode_braille(encoded: str) -> int:
     """Decode a Braille pattern string back to an integer.
 
-    Reverses encode_braille(). Each Braille character (U+2800-U+28FF)
+    Reverses encode_braille(). Each Braille character (U+2801-U+2900)
     represents one byte (0-255).
 
     Args:

@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 
 from mudd.services.entity import EntityInstance
+from mudd.utils.text import strip_rarity_emojis
 
 
 @dataclass(frozen=True)
@@ -24,8 +25,12 @@ class MatchResult:
         return len(self.matches) == 1
 
     def is_ambiguous(self) -> bool:
-        """Check if multiple entities matched."""
-        return len(self.matches) > 1
+        """Check if multiple distinct entities matched."""
+        if len(self.matches) <= 1:
+            return False
+        # Not ambiguous if all matches are the same entity type
+        entity_ids = {m.instance.entity.id for m in self.matches}
+        return len(entity_ids) > 1
 
     def is_empty(self) -> bool:
         """Check if no entities matched."""
@@ -55,7 +60,7 @@ def match_entity_by_prefix(
     if not query:
         return MatchResult(matches=[])
 
-    query_lower = query.lower().strip()
+    query_lower = strip_rarity_emojis(query).lower()
     if not query_lower:
         return MatchResult(matches=[])
 
