@@ -267,21 +267,31 @@ class Interact(commands.Cog):
 
         await interaction.response.send_message(output, ephemeral=True)
 
-        # Execute broadcast side effects (public messages to channel)
-        channel = interaction.channel
-        if isinstance(channel, discord.TextChannel):
-            for broadcast_msg in effects.broadcasts:
-                await channel.send(broadcast_msg)
+        # Execute broadcast side effects (public messages to user's current room)
+        # Look up room from DB since interaction may come from inventory thread
+        guild = interaction.guild
+        if guild is not None:
+            user_room = await self.pool.fetchval(
+                "SELECT current_room FROM users WHERE id = $1",
+                interaction.user.id,
+            )
+            room_channel = discord.utils.get(guild.text_channels, name=user_room)
 
-            # Process grant_random effects
-            for grant_random_effect in effects.grant_randoms:
-                await self._handle_grant_random(
-                    interaction, grant_random_effect.tag, channel
-                )
+            if room_channel is not None:
+                for broadcast_msg in effects.broadcasts:
+                    await room_channel.send(broadcast_msg)
 
-            # Process grant effects
-            for grant_effect in effects.grants:
-                await self._handle_grant(interaction, grant_effect.entity_id, channel)
+                # Process grant_random effects
+                for grant_random_effect in effects.grant_randoms:
+                    await self._handle_grant_random(
+                        interaction, grant_random_effect.tag, room_channel
+                    )
+
+                # Process grant effects
+                for grant_effect in effects.grants:
+                    await self._handle_grant(
+                        interaction, grant_effect.entity_id, room_channel
+                    )
 
     async def _handle_pickup(
         self,
