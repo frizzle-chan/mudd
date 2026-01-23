@@ -187,9 +187,9 @@ async def sync_entities(pool: asyncpg.Pool, world_file: Path) -> int:
                     description_short, description_long,
                     on_look, on_touch, on_attack, on_use, on_take,
                     on_open, on_close, on_drop,
-                    contents_visible, spawn_mode, focus_mode, rarity
+                    contents_visible, focus_mode, rarity
                 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
-                          $13, $14, $15::spawn_mode, $16::focus_mode, $17::rarity)
+                          $13, $14, $15::focus_mode, $16::rarity)
                 ON CONFLICT (id) DO UPDATE SET
                     name = $2,
                     prototype_id = $3,
@@ -204,9 +204,8 @@ async def sync_entities(pool: asyncpg.Pool, world_file: Path) -> int:
                     on_close = $12,
                     on_drop = $13,
                     contents_visible = $14,
-                    spawn_mode = $15::spawn_mode,
-                    focus_mode = $16::focus_mode,
-                    rarity = $17::rarity
+                    focus_mode = $15::focus_mode,
+                    rarity = $16::rarity
                 """,
                 entity.id,
                 entity.name,
@@ -222,18 +221,16 @@ async def sync_entities(pool: asyncpg.Pool, world_file: Path) -> int:
                 entity.on_close,
                 entity.on_drop,
                 entity.contents_visible,
-                entity.spawn_mode,
                 entity.focus_mode,
                 entity.rarity,
             )
 
-        # Delete orphan room instances not in current rec files
-        # (Inventory instances with owner_id are preserved)
+        # Delete world instances no longer in rec files.
+        # Player instances (is_world_instance=FALSE) are preserved.
         if entities_with_room:
-            # Delete room instances for entity/room pairs not in rec files
             await conn.execute(
                 """DELETE FROM entity_instances
-                WHERE room IS NOT NULL
+                WHERE is_world_instance = TRUE
                   AND (entity_id, room) NOT IN (
                       SELECT * FROM unnest($1::text[], $2::text[])
                   )""",
@@ -241,16 +238,18 @@ async def sync_entities(pool: asyncpg.Pool, world_file: Path) -> int:
                 [e[1] for e in entities_with_room],
             )
         else:
-            # No entities with rooms - delete all room instances
-            await conn.execute("DELETE FROM entity_instances WHERE room IS NOT NULL")
+            await conn.execute(
+                "DELETE FROM entity_instances WHERE is_world_instance = TRUE"
+            )
 
-        # Create entity_instances for entities with Room field
+        # Upsert world instances from rec file
         # container_entity_id comes from Container field in rec file
         if entities_with_room:
             await conn.executemany(
-                """INSERT INTO entity_instances (entity_id, room, container_entity_id)
-                VALUES ($1, $2, $3)
-                ON CONFLICT (entity_id, room) WHERE room IS NOT NULL
+                """INSERT INTO entity_instances
+                       (entity_id, room, container_entity_id, is_world_instance)
+                VALUES ($1, $2, $3, TRUE)
+                ON CONFLICT (entity_id, room) WHERE is_world_instance = TRUE
                 DO UPDATE SET container_entity_id = $3""",
                 entities_with_room,
             )

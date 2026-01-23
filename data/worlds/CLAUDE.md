@@ -80,11 +80,12 @@ Description: A grand foyer with marble floors. To your right is a #hallway.
 %type: Container rec Entity
 %type: Room rec Room
 %type: ContentsVisible bool
-%type: SpawnMode enum none move clone
 %type: FocusMode enum none container
+%type: Rarity enum none common uncommon rare epic legendary mythic quest
 %mandatory: Id Name
-%allowed: Id Name Prototype Container Room ContentsVisible SpawnMode FocusMode DescriptionShort DescriptionLong
-%allowed: OnLook OnTouch OnAttack OnUse OnTake OnOpen OnClose
+%allowed: Id Name Prototype Container Room ContentsVisible FocusMode DescriptionShort DescriptionLong
+%allowed: OnLook OnTouch OnAttack OnUse OnTake OnOpen OnClose OnDrop
+%allowed: Tags Rarity
 
 Id: foyer_table
 Name: Wooden Table
@@ -102,16 +103,25 @@ ContentsVisible: yes
 - `Room` - Room where this entity spawns (omit for prototypes)
 - `Container` - Parent entity for containment (e.g., lamp on table)
 - `ContentsVisible` - Whether children auto-list (`yes` for tables, `no` for chests)
-- `SpawnMode` - Take behavior: `none` (default), `move` (one-time pickup), `clone` (infinite copies)
 - `FocusMode` - Focus behavior on open: `none` (default), `container` (establishes focus, prioritizes contents in autocomplete)
+- `Rarity` - Item rarity for loot pools: `none` (default, static items), `common`, `uncommon`, `rare`, `epic`, `legendary`, `mythic`, `quest`
+- `Tags` - Space-separated tags for categorization (used by spawning pools)
 - `DescriptionShort` - One-line description for `/look`
 - `DescriptionLong` - Detailed description
-- `On*` - Action handlers: `OnLook`, `OnTouch`, `OnAttack`, `OnUse`, `OnTake`, `OnOpen`, `OnClose`
+- `On*` - Action handlers: `OnLook`, `OnTouch`, `OnAttack`, `OnUse`, `OnTake`, `OnOpen`, `OnClose`, `OnDrop`
 
 **All text fields** (`DescriptionShort`, `DescriptionLong`, `On*`) are **Jinja2 templates** with access to:
 - `e`: The resolved entity with all properties
 - `name`: Entity name formatted with Discord italics (`*Name*`)
 - `contents`: Bullet list of container contents (only for entities with `ContentsVisible: yes`)
+- `user`: User context with `name` and `mention`
+- `effects`: Side effects object for scripting (see Pickup/Drop Behavior)
+
+**Pickup/Drop Behavior:**
+- Items are picked up when `OnTake` calls `{{ effects.pickup() }}`
+- Items are dropped when `OnDrop` calls `{{ effects.drop() }}`
+- If the effect isn't called, only the message is shown (item doesn't move)
+- Quest items (`Rarity: quest`) clone on pickup - original stays in room
 
 ### Templates
 

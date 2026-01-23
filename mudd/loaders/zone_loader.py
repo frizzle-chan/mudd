@@ -16,9 +16,6 @@ from mudd.services.entity import FocusMode, Rarity
 
 logger = logging.getLogger(__name__)
 
-# Valid spawn modes matching PostgreSQL enum
-SpawnMode = Literal["none", "move", "clone"]
-
 # Valid rarity values matching PostgreSQL enum
 VALID_RARITIES: set[str] = {
     "none",
@@ -63,7 +60,6 @@ class Entity:
     container_id: str | None = None
     room: str | None = None
     contents_visible: bool | None = None
-    spawn_mode: SpawnMode = "none"
     focus_mode: FocusMode | None = None  # None = inherit from prototype
     rarity: Rarity = "none"
     tags: list[str] | None = None  # Space-separated in rec files
@@ -172,15 +168,6 @@ def _parse_entity_row(row: dict[str, str]) -> Entity:
     elif contents_visible_str in ("no", "false", "0"):
         contents_visible = False
 
-    # Parse spawn_mode with default and validation
-    spawn_mode_raw = row.get("SpawnMode", "").lower() or "none"
-    if spawn_mode_raw not in ("none", "move", "clone"):
-        raise ValueError(
-            f"Entity '{row['Id']}' has invalid SpawnMode '{spawn_mode_raw}'. "
-            f"Valid values: none, move, clone"
-        )
-    spawn_mode = cast(SpawnMode, spawn_mode_raw)
-
     # Parse focus_mode - None means inherit from prototype
     focus_mode: FocusMode | None = None
     focus_mode_raw = row.get("FocusMode", "").lower()
@@ -212,7 +199,6 @@ def _parse_entity_row(row: dict[str, str]) -> Entity:
         container_id=row.get("Container") or None,
         room=row.get("Room") or None,
         contents_visible=contents_visible,
-        spawn_mode=spawn_mode,
         focus_mode=focus_mode,
         rarity=rarity,
         tags=tags,

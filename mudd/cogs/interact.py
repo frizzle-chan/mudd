@@ -272,7 +272,7 @@ class Interact(commands.Cog):
         # Handle item pickup for ON_TAKE action
         if action_type == VerbAction.ON_TAKE:
             pickup_result = await self._handle_pickup(
-                interaction, entity, matched_instance.instance_id, room, output
+                interaction, entity, matched_instance.instance_id, room, output, effects
             )
             if pickup_result is not None:
                 # pickup_result is either a modified output or an error message
@@ -324,8 +324,9 @@ class Interact(commands.Cog):
         instance_id: UUID,
         room: str,
         template_output: str,
+        effects: TriggerEffects,
     ) -> str | None:
-        """Handle item pickup based on spawn_mode.
+        """Handle item pickup based on effects.pickup() call.
 
         Args:
             interaction: Discord interaction
@@ -333,12 +334,13 @@ class Interact(commands.Cog):
             instance_id: UUID of the entity instance
             room: Current room name
             template_output: The rendered on_take template output
+            effects: TriggerEffects from template rendering
 
         Returns:
-            Modified output string if pickup happened, None if spawn_mode=none
+            Modified output string if pickup happened, None if pickup() not called
         """
-        if entity.spawn_mode == "none":
-            # Entity can't be taken - template already has the response
+        if not effects.has_pickup:
+            # Template didn't call pickup() - item stays in room
             return None
 
         user_id = interaction.user.id
@@ -346,7 +348,7 @@ class Interact(commands.Cog):
         if guild is None:
             return "You can't take items outside a server."
 
-        if entity.spawn_mode == "clone":
+        if entity.rarity == "quest":
             # Quest item - check if user already has this entity type
             existing = await self.pool.fetchval(
                 """SELECT id FROM entity_instances
@@ -357,7 +359,7 @@ class Interact(commands.Cog):
             if existing:
                 return "You already have this item."
 
-            # Create a new instance in the user's inventory
+            # Create a new instance in the user's inventory (clone behavior)
             new_instance_id = await self.pool.fetchval(
                 """INSERT INTO entity_instances (entity_id, owner_id)
                 VALUES ($1, $2) RETURNING id""",
@@ -380,33 +382,30 @@ class Interact(commands.Cog):
             self.player_context.invalidate_cache()
             return template_output
 
-        elif entity.spawn_mode == "move":
-            # Move the existing instance to the user's inventory
-            result = await self.pool.execute(
-                """UPDATE entity_instances
-                SET room = NULL, owner_id = $1, player_dropped = FALSE,
-                    container_entity_id = NULL
-                WHERE id = $2 AND room = $3""",
-                user_id,
-                instance_id,
-                room,
-            )
-            if result == "UPDATE 0":
-                return "The item is no longer there."
+        # Regular item - move the existing instance to the user's inventory
+        result = await self.pool.execute(
+            """UPDATE entity_instances
+            SET room = NULL, owner_id = $1, player_dropped = FALSE,
+                container_entity_id = NULL
+            WHERE id = $2 AND room = $3""",
+            user_id,
+            instance_id,
+            room,
+        )
+        if result == "UPDATE 0":
+            return "The item is no longer there."
 
-            # Create Discord thread for the item
-            thread = await self._inventory.create_item_thread(
-                guild, user_id, instance_id, entity.display_name, template_output
-            )
-            if thread is None:
-                logger.warning("Failed to create thread for moved item %s", entity.id)
-                # Item is still in inventory, just no Discord thread
+        # Create Discord thread for the item
+        thread = await self._inventory.create_item_thread(
+            guild, user_id, instance_id, entity.display_name, template_output
+        )
+        if thread is None:
+            logger.warning("Failed to create thread for moved item %s", entity.id)
+            # Item is still in inventory, just no Discord thread
 
-            # Invalidate autocomplete cache so the item no longer appears in room
-            self.player_context.invalidate_cache()
-            return template_output
-
-        return None
+        # Invalidate autocomplete cache so the item no longer appears in room
+        self.player_context.invalidate_cache()
+        return template_output
 
     async def _handle_drop(
         self,

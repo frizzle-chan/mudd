@@ -87,17 +87,17 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 | `on_close` | TEXT | Handler response for close action (NULL = inherit from prototype) |
 | `container_id` | TEXT (FK to entities.id) | Reference to containing entity |
 | `contents_visible` | BOOLEAN | Whether child entities appear in room descriptions (NULL = inherit, TRUE = auto-list, FALSE = hidden until examined). Note: This controls *visibility* only; interaction context is controlled by `focus_mode` |
-| `spawn_mode` | spawn_mode NOT NULL | Take behavior: `none` (can't take), `move` (one-time pickup), `clone` (infinite copies) |
 | `focus_mode` | focus_mode NOT NULL | Focus behavior: `none` (no focus), `container` (establish focus on open) |
 
 **Constraints:**
 - Self-reference prevention: `id != prototype_id`
 - Self-containment prevention: `id != container_id`
 
-**Spawn Mode Enum:**
-- `none`: Static decoration, cannot be taken (default)
-- `move`: One-time pickup, instance moves from room to inventory
-- `clone`: Infinite source, each take creates a new instance in inventory
+**Pickup Behavior:**
+- Controlled by `effects.pickup()` in `on_take` templates
+- If template calls `pickup()`: item moves to inventory
+- If template doesn't call `pickup()`: message shown, item stays
+- Quest items (`rarity=quest`): clone on pickup (original stays in room)
 
 **Focus Mode Enum:**
 - `none`: No focus established when opened (default)
@@ -219,10 +219,10 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 
 The `resolve_entity(target_id TEXT)` function resolves entity properties by walking up the prototype chain:
 - Returns merged properties where child values override parent values
-- First non-NULL value wins for each property (except `spawn_mode` which is always from the entity itself)
+- First non-NULL value wins for each property
 - Supports up to 10 levels of inheritance depth (prevents infinite loops from circular references)
 - Used to materialize the final entity state including inherited properties
-- Returns: `id`, `name`, `description_short`, `description_long`, `on_*` handlers (including `on_open`, `on_close`), `contents_visible`, `focus_mode`, `spawn_mode`
+- Returns: `id`, `name`, `description_short`, `description_long`, `on_*` handlers (including `on_open`, `on_close`), `contents_visible`, `focus_mode`, `rarity`
 
 ## Sync System
 
@@ -491,6 +491,24 @@ You examine the {{ name }}. {{ e.description_long }}
 
 Templates can trigger side effects that execute after the ephemeral response is sent. Currently supported:
 
+**`effects.pickup()`** - Signals that an item should be picked up (used in `on_take` handlers).
+
+```jinja
+{# Pickable item - calls pickup() to move to inventory #}
+{{ effects.pickup() }}You pick up the {{ name }}.
+```
+
+If `pickup()` is not called in the `on_take` handler, the item stays in the room and only the message is shown. Quest items (`rarity=quest`) clone on pickup - the original stays in the room.
+
+**`effects.drop()`** - Signals that an item should be dropped (used in `on_drop` handlers).
+
+```jinja
+{# Droppable item #}
+{{ effects.drop() }}You drop the {{ name }}.
+```
+
+If `drop()` is not called in the `on_drop` handler, the item stays in inventory.
+
 **`effects.broadcast(message)`** - Sends a public message to the channel after the ephemeral response.
 
 ```jinja
@@ -502,9 +520,9 @@ Result:
 - **Ephemeral to user**: "You slide the record onto the turntable. Music fills the room."
 - **Public to channel**: "**Frizzle** put on some music."
 
-The `broadcast()` function returns an empty string, allowing inline use without affecting output. Multiple broadcasts can be queued in a single template.
+All effect functions return an empty string, allowing inline use without affecting output.
 
 **Implementation:**
 - `TriggerEffects` dataclass collects side effects during rendering
 - `RenderingService.render_with_effects()` returns `(output, effects)` tuple
-- Interact cog executes `effects.broadcasts` after sending ephemeral response
+- Interact cog checks `effects.has_pickup`, `effects.has_drop`, and executes `effects.broadcasts`

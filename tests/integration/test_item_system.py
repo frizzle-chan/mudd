@@ -1,8 +1,8 @@
 """Scenario-driven tests for item pickup, drop, and granting systems.
 
-Tests the item system implemented per ADR 0004:
-- spawn_mode=move: items move from room to inventory
-- spawn_mode=clone: quest items clone on pickup
+Tests the item system:
+- effects.pickup(): items move from room to inventory when called
+- Quest items (rarity=quest): clone on pickup, originals stay in room
 - OnDrop with effects.drop(): items return to room
 - effects.grant(): grant specific items
 - effects.grant_random(): grant random items from tag pool
@@ -14,10 +14,10 @@ pytestmark = pytest.mark.asyncio(loop_scope="session")
 
 
 class TestItemPickup:
-    """Tests for taking items with different spawn modes."""
+    """Tests for taking items with effects.pickup()."""
 
-    async def test_take_spawn_mode_move_item(self, test_client):
-        """Taking an item with spawn_mode=move moves it to inventory."""
+    async def test_take_item_with_pickup_effect(self, test_client):
+        """Taking an item that calls effects.pickup() moves it to inventory."""
         user = await test_client.create_user(user_id=500001, room="store-room")
 
         # Verify item exists in room before taking
@@ -40,8 +40,8 @@ class TestItemPickup:
         # Item should no longer be in room
         assert not await test_client.is_entity_in_room("test_takeable", "store-room")
 
-    async def test_take_spawn_mode_clone_quest_item(self, test_client):
-        """Taking a quest item with spawn_mode=clone copies it to inventory."""
+    async def test_take_quest_item_creates_copy(self, test_client):
+        """Taking a quest item (rarity=quest) copies it to inventory, original stays."""
         user = await test_client.create_user(user_id=500002, room="store-room")
 
         # Verify item exists in room before taking
@@ -61,7 +61,7 @@ class TestItemPickup:
         entity_ids = [eid for eid, _ in inventory]
         assert "test_quest_map" in entity_ids
 
-        # Original item should still be in room (clone behavior)
+        # Original item should still be in room (quest items clone, don't move)
         assert await test_client.is_entity_in_room("test_quest_map", "store-room")
 
     async def test_cannot_take_quest_item_twice(self, test_client):
@@ -149,11 +149,11 @@ class TestItemDrop:
         look_response = await test_client.look(user, at="Room")
         assert "Test Droppable 11" in look_response
 
-    async def test_cannot_drop_item_with_non_dropping_handler(self, test_client):
+    async def test_item_without_drop_effect_stays_in_inventory(self, test_client):
         """Items with OnDrop that doesn't call effects.drop() stay in inventory."""
         user = await test_client.create_user(user_id=500011, room="store-room")
 
-        # Open the container and take the sticky item (has OnDrop but doesn't drop)
+        # Open the container and take the sticky item (OnDrop doesn't call drop())
         await test_client.interact(user, action="open", target="Cardboard Box")
         await test_client.interact(user, action="take", target="Test Sticky")
 

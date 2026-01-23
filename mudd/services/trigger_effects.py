@@ -1,6 +1,7 @@
 """Side effects collected during template rendering."""
 
 from dataclasses import dataclass, field
+from uuid import UUID
 
 
 @dataclass
@@ -18,6 +19,15 @@ class GrantRandomEffect:
 
 
 @dataclass
+class CleanupOperation:
+    """A deferred cleanup operation to run after response."""
+
+    operation_type: str  # "delete_thread"
+    instance_id: UUID
+    guild_id: int
+
+
+@dataclass
 class TriggerEffects:
     """Collects side effects during template rendering.
 
@@ -26,6 +36,7 @@ class TriggerEffects:
 
     - `broadcast(message)`: Queue a message to send publicly to the channel
     - `drop()`: Queue dropping the current item from inventory to room
+    - `pickup()`: Signal that item should be picked up (move from room to inventory)
     - `grant(entity_id)`: Queue granting a specific item to the user
     - `grant_random(tag)`: Queue granting a random item from a tag (broadcasts result)
 
@@ -40,8 +51,10 @@ class TriggerEffects:
 
     broadcasts: list[str] = field(default_factory=list)
     _drop_called: bool = False
+    _pickup_called: bool = False
     grants: list[GrantEffect] = field(default_factory=list)
     grant_randoms: list[GrantRandomEffect] = field(default_factory=list)
+    cleanups: list[CleanupOperation] = field(default_factory=list)
 
     def broadcast(self, message: str) -> str:
         """Queue a message to broadcast publicly to the channel.
@@ -66,6 +79,18 @@ class TriggerEffects:
             Empty string (allows inline use in templates without output)
         """
         self._drop_called = True
+        return ""
+
+    def pickup(self) -> str:
+        """Signal that this item should be picked up.
+
+        Must be called in an on_take handler. The item will be moved
+        from the room to the user's inventory.
+
+        Returns:
+            Empty string (allows inline use in templates without output)
+        """
+        self._pickup_called = True
         return ""
 
     def grant(self, entity_id: str) -> str:
@@ -107,3 +132,23 @@ class TriggerEffects:
     def has_drop(self) -> bool:
         """Whether drop() was called during template rendering."""
         return self._drop_called
+
+    @property
+    def has_pickup(self) -> bool:
+        """Whether pickup() was called during template rendering."""
+        return self._pickup_called
+
+    def queue_thread_deletion(self, instance_id: UUID, guild_id: int) -> None:
+        """Queue a thread deletion to run after response.
+
+        Args:
+            instance_id: UUID of the entity instance whose thread to delete
+            guild_id: Discord guild ID where the thread exists
+        """
+        self.cleanups.append(
+            CleanupOperation(
+                operation_type="delete_thread",
+                instance_id=instance_id,
+                guild_id=guild_id,
+            )
+        )

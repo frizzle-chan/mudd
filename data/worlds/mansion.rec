@@ -134,11 +134,10 @@ Description: A dimly lit lounge.
 %type: Container rec Entity
 %type: Room rec Room
 %type: ContentsVisible bool
-%type: SpawnMode enum none move clone
 %type: FocusMode enum none container
 %type: Rarity enum none common uncommon rare epic legendary mythic quest
 %mandatory: Id Name
-%allowed: Id Name Prototype Container Room ContentsVisible SpawnMode FocusMode DescriptionShort DescriptionLong
+%allowed: Id Name Prototype Container Room ContentsVisible FocusMode DescriptionShort DescriptionLong
 %allowed: OnLook OnTouch OnAttack OnUse OnTake OnOpen OnClose OnDrop
 %allowed: Tags Rarity
 
@@ -186,8 +185,7 @@ Id: item
 Name: item
 Prototype: object
 Rarity: common
-SpawnMode: move
-OnTake: You pick up the {{ name }}.
+OnTake: {{ effects.pickup() }}You pick up the {{ name }}.
 OnDrop: {% if container %}You put the {{ name }} into the *{{ container.name }}*.{% else %}You drop the {{ name }}.{% endif %}{{ effects.drop() }}{{ effects.broadcast(user.name ~ " drops " ~ e.display_name ~ ".") }}
 
 # ----------------------------------------------------------------------------
@@ -638,29 +636,26 @@ Name: Test Takeable
 Prototype: item
 Room: store-room
 Container: storeroom_box
-SpawnMode: move
 Rarity: common
 DescriptionShort: a {{ name }} you can pick up
 DescriptionLong: A test item that can be picked up.
-OnTake: TEST_TAKE_MOVE_RESPONSE - You pick up the {{ name }}.
+OnTake: {{ effects.pickup() }}TEST_TAKE_MOVE_RESPONSE - You pick up the {{ name }}.
 
 Id: test_quest_map
 Name: Test Quest Map
 Prototype: object
 Room: store-room
 Container: storeroom_box
-SpawnMode: clone
 Rarity: quest
 DescriptionShort: a {{ name }} for your quest
 DescriptionLong: A test quest item that can be cloned.
-OnTake: TEST_TAKE_CLONE_RESPONSE - You copy the {{ name }}.
+OnTake: {{ effects.pickup() }}TEST_TAKE_CLONE_RESPONSE - You copy the {{ name }}.
 
 Id: test_droppable
 Name: Test Droppable
 Prototype: item
 Room: store-room
 Container: storeroom_box
-SpawnMode: move
 Rarity: common
 DescriptionShort: a {{ name }} you can drop
 DescriptionLong: A test item that can be dropped.
@@ -671,7 +666,6 @@ Name: Test Sticky
 Prototype: item
 Room: store-room
 Container: storeroom_box
-SpawnMode: move
 Rarity: common
 DescriptionShort: a {{ name }} that sticks to you
 DescriptionLong: A test item that cannot be dropped.
@@ -705,7 +699,6 @@ OnOpen: TEST_RANDOM_GRANT_RESPONSE - You open the chest and find something insid
 Id: test_common_loot
 Name: Test Common Loot
 Prototype: item
-SpawnMode: move
 Rarity: common
 Tags: test_loot
 DescriptionShort: a {{ name }} of common quality
@@ -714,7 +707,6 @@ DescriptionLong: A common test item from the loot pool.
 Id: test_rare_loot
 Name: Test Rare Loot
 Prototype: item
-SpawnMode: move
 Rarity: rare
 Tags: test_loot
 DescriptionShort: a {{ name }} of rare quality
@@ -725,7 +717,6 @@ Name: Test Droppable 2
 Prototype: item
 Room: store-room
 Container: storeroom_box
-SpawnMode: move
 Rarity: common
 DescriptionShort: a {{ name }} you can drop
 DescriptionLong: A test item for floor clutter testing.
@@ -735,7 +726,6 @@ Name: Test Droppable 3
 Prototype: item
 Room: store-room
 Container: storeroom_box
-SpawnMode: move
 Rarity: common
 DescriptionShort: a {{ name }} you can drop
 DescriptionLong: A test item for floor clutter testing.
@@ -745,7 +735,6 @@ Name: Test Droppable 4
 Prototype: item
 Room: store-room
 Container: storeroom_box
-SpawnMode: move
 Rarity: common
 DescriptionShort: a {{ name }} you can drop
 DescriptionLong: A test item for floor clutter testing.
@@ -755,7 +744,6 @@ Name: Test Droppable 5
 Prototype: item
 Room: store-room
 Container: storeroom_box
-SpawnMode: move
 Rarity: common
 DescriptionShort: a {{ name }} you can drop
 DescriptionLong: A test item for floor clutter testing.
@@ -765,7 +753,6 @@ Name: Test Droppable 6
 Prototype: item
 Room: store-room
 Container: storeroom_box
-SpawnMode: move
 Rarity: common
 DescriptionShort: a {{ name }} you can drop
 DescriptionLong: A test item for floor clutter testing.
@@ -775,7 +762,6 @@ Name: Test Droppable 7
 Prototype: item
 Room: store-room
 Container: storeroom_box
-SpawnMode: move
 Rarity: common
 DescriptionShort: a {{ name }} you can drop
 DescriptionLong: A test item for floor clutter testing.
@@ -785,7 +771,6 @@ Name: Test Droppable 8
 Prototype: item
 Room: store-room
 Container: storeroom_box
-SpawnMode: move
 Rarity: common
 DescriptionShort: a {{ name }} you can drop
 DescriptionLong: A test item for floor clutter testing.
@@ -795,7 +780,6 @@ Name: Test Droppable 9
 Prototype: item
 Room: store-room
 Container: storeroom_box
-SpawnMode: move
 Rarity: common
 DescriptionShort: a {{ name }} you can drop
 DescriptionLong: A test item for floor clutter testing.
@@ -805,7 +789,6 @@ Name: Test Droppable 10
 Prototype: item
 Room: store-room
 Container: storeroom_box
-SpawnMode: move
 Rarity: common
 DescriptionShort: a {{ name }} you can drop
 DescriptionLong: A test item for floor clutter testing.
@@ -815,7 +798,6 @@ Name: Test Droppable 11
 Prototype: item
 Room: store-room
 Container: storeroom_box
-SpawnMode: move
 Rarity: common
 DescriptionShort: a {{ name }} you can drop
 DescriptionLong: A test item for floor clutter testing.

@@ -50,7 +50,6 @@ def make_entity(
         on_close=None,
         on_drop=None,
         contents_visible=None,
-        spawn_mode="none",
         focus_mode="none",
         rarity="none",
     )
@@ -93,7 +92,6 @@ class TestRender:
             on_close=None,
             on_drop=None,
             contents_visible=None,
-            spawn_mode="none",
             focus_mode="none",
             rarity="rare",
         )
@@ -143,7 +141,6 @@ class TestBuildContentsString:
             on_close=None,
             on_drop=None,
             contents_visible=None,
-            spawn_mode="none",
             focus_mode="none",
             rarity="none",
         )
@@ -172,7 +169,6 @@ class TestBuildContentsString:
             on_close=None,
             on_drop=None,
             contents_visible=None,
-            spawn_mode="none",
             focus_mode="none",
             rarity="none",
         )
@@ -190,7 +186,6 @@ class TestBuildContentsString:
             on_close=None,
             on_drop=None,
             contents_visible=None,
-            spawn_mode="none",
             focus_mode="none",
             rarity="none",
         )
@@ -223,7 +218,6 @@ class TestBuildContentsString:
             on_close=None,
             on_drop=None,
             contents_visible=None,
-            spawn_mode="none",
             focus_mode="none",
             rarity="none",
         )
@@ -241,7 +235,6 @@ class TestBuildContentsString:
             on_close=None,
             on_drop=None,
             contents_visible=None,
-            spawn_mode="none",
             focus_mode="none",
             rarity="none",
         )
@@ -259,7 +252,6 @@ class TestBuildContentsString:
             on_close=None,
             on_drop=None,
             contents_visible=None,
-            spawn_mode="none",
             focus_mode="none",
             rarity="none",
         )
@@ -294,7 +286,6 @@ class TestBuildContentsString:
             on_close=None,
             on_drop=None,
             contents_visible=None,
-            spawn_mode="none",
             focus_mode="none",
             rarity="none",
         )
@@ -312,7 +303,6 @@ class TestBuildContentsString:
             on_close=None,
             on_drop=None,
             contents_visible=None,
-            spawn_mode="none",
             focus_mode="none",
             rarity="none",
         )
@@ -349,7 +339,6 @@ class TestFormatEntityWithContents:
             on_close=None,
             on_drop=None,
             contents_visible=True,
-            spawn_mode="none",
             focus_mode="none",
             rarity="none",
         )
@@ -372,7 +361,6 @@ class TestFormatEntityWithContents:
             on_close=None,
             on_drop=None,
             contents_visible=True,
-            spawn_mode="none",
             focus_mode="none",
             rarity="none",
         )
@@ -395,7 +383,6 @@ class TestFormatEntityWithContents:
             on_close=None,
             on_drop=None,
             contents_visible=True,
-            spawn_mode="none",
             focus_mode="none",
             rarity="none",
         )
@@ -413,7 +400,6 @@ class TestFormatEntityWithContents:
             on_close=None,
             on_drop=None,
             contents_visible=None,
-            spawn_mode="none",
             focus_mode="none",
             rarity="none",
         )
@@ -431,7 +417,6 @@ class TestFormatEntityWithContents:
             on_close=None,
             on_drop=None,
             contents_visible=None,
-            spawn_mode="none",
             focus_mode="none",
             rarity="none",
         )
@@ -466,7 +451,6 @@ class TestFormatEntityWithContents:
             on_close=None,
             on_drop=None,
             contents_visible=True,
-            spawn_mode="none",
             focus_mode="none",
             rarity="none",
         )
@@ -489,7 +473,6 @@ class TestFormatEntityWithContents:
             on_close=None,
             on_drop=None,
             contents_visible=True,
-            spawn_mode="none",
             focus_mode="none",
             rarity="none",
         )
@@ -508,7 +491,6 @@ class TestFormatEntityWithContents:
             on_close=None,
             on_drop=None,
             contents_visible=None,
-            spawn_mode="none",
             focus_mode="none",
             rarity="none",
         )
@@ -550,7 +532,6 @@ class TestFormatRoomEntities:
             on_close=None,
             on_drop=None,
             contents_visible=False,  # Not visible
-            spawn_mode="none",
             focus_mode="none",
             rarity="none",
         )
@@ -584,7 +565,6 @@ class TestFormatRoomEntities:
             on_close=None,
             on_drop=None,
             contents_visible=True,
-            spawn_mode="none",
             focus_mode="none",
             rarity="none",
         )
@@ -602,7 +582,6 @@ class TestFormatRoomEntities:
             on_close=None,
             on_drop=None,
             contents_visible=None,
-            spawn_mode="none",
             focus_mode="none",
             rarity="none",
         )
@@ -647,7 +626,6 @@ class TestFormatRoomEntities:
             on_close=None,
             on_drop=None,
             contents_visible=False,
-            spawn_mode="none",
             focus_mode="none",
             rarity="none",
         )
@@ -665,7 +643,6 @@ class TestFormatRoomEntities:
             on_close=None,
             on_drop=None,
             contents_visible=None,
-            spawn_mode="none",
             focus_mode="none",
             rarity="none",
         )
@@ -704,7 +681,6 @@ class TestRenderEntityOnLook:
             on_close=None,
             on_drop=None,
             contents_visible=None,
-            spawn_mode="none",
             focus_mode="none",
             rarity="none",
         )
@@ -739,7 +715,6 @@ class TestRenderEntityOnLook:
             on_close=None,
             on_drop=None,
             contents_visible=None,
-            spawn_mode="none",
             focus_mode="none",
             rarity="none",
         )
@@ -771,7 +746,6 @@ class TestRenderEntityOnLook:
             on_close=None,
             on_drop=None,
             contents_visible=None,
-            spawn_mode="none",
             focus_mode="none",
             rarity="none",
         )
@@ -803,7 +777,6 @@ class TestRenderEntityOnLook:
             on_close=None,
             on_drop=None,
             contents_visible=None,
-            spawn_mode="none",
             focus_mode="none",
             rarity="none",
         )
@@ -839,7 +812,6 @@ class TestRenderEntityOnLook:
             on_close=None,
             on_drop=None,
             contents_visible=True,
-            spawn_mode="none",
             focus_mode="none",
             rarity="none",
         )
@@ -864,7 +836,6 @@ class TestRenderEntityOnLook:
             on_close=None,
             on_drop=None,
             contents_visible=None,
-            spawn_mode="none",
             focus_mode="none",
             rarity="none",
         )
@@ -901,7 +872,6 @@ class TestRenderEntityOnLook:
             on_close=None,
             on_drop=None,
             contents_visible=None,
-            spawn_mode="none",
             focus_mode="none",
             rarity="none",
         )
@@ -936,7 +906,6 @@ class TestRenderEntityOnLook:
             on_close=None,
             on_drop=None,
             contents_visible=True,
-            spawn_mode="none",
             focus_mode="none",
             rarity="none",
         )
@@ -962,7 +931,6 @@ class TestRenderEntityOnLook:
             on_close=None,
             on_drop=None,
             contents_visible=None,
-            spawn_mode="none",
             focus_mode="none",
             rarity="none",
         )

@@ -30,7 +30,6 @@ def make_entity(
         on_close=None,
         on_drop=None,
         contents_visible=None,
-        spawn_mode="none",
         focus_mode="none",
         rarity="common",
     )

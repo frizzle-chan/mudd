@@ -10,28 +10,11 @@ from uuid import UUID
 import asyncpg
 
 from mudd.utils.random import weighted_choice
+from mudd.utils.text import RARITY_EMOJI, Rarity
 
 logger = logging.getLogger(__name__)
 
-SpawnMode = Literal["none", "move", "clone"]
-
 FocusMode = Literal["none", "container"]
-
-Rarity = Literal[
-    "none", "common", "uncommon", "rare", "epic", "legendary", "mythic", "quest"
-]
-
-# Rarity emoji for display names
-RARITY_EMOJI: dict[Rarity, str] = {
-    "none": "",  # No emoji for static world items
-    "common": "\u26aa",  # White circle
-    "uncommon": "\U0001f7e2",  # Green circle
-    "rare": "\U0001f535",  # Blue circle
-    "epic": "\U0001f7e3",  # Purple circle
-    "legendary": "\U0001f7e0",  # Orange circle
-    "mythic": "\u3299\ufe0f",  # Japanese "secret" symbol
-    "quest": "\U0001f537",  # Blue diamond
-}
 
 # Rarity weights for spawning (sum to 1000, excluding none and quest)
 RARITY_WEIGHTS: dict[Rarity, int] = {
@@ -64,7 +47,6 @@ class ResolvedEntity:
     on_drop: str | None
     contents_visible: bool | None
     focus_mode: FocusMode
-    spawn_mode: SpawnMode
     rarity: Rarity
 
     @property
@@ -118,7 +100,6 @@ class EntityService:
             on_drop=row["on_drop"],
             contents_visible=row["contents_visible"],
             focus_mode=row["focus_mode"],
-            spawn_mode=row["spawn_mode"],
             rarity=row["rarity"],
         )
 

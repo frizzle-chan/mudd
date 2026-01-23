@@ -12,7 +12,6 @@ Tests:
 9. Entity instances created for entities with Room field
 10. Re-sync is idempotent (no duplicate instances)
 11. Orphan instances removed on re-sync
-12. Unique constraint prevents duplicate room instances
 """
 
 import pytest
@@ -89,13 +88,6 @@ class TestLoadEntitiesFromRec:
         obj = next((e for e in entities if e.id == "object"), None)
         assert obj is not None
         assert obj.room is None
-
-    def test_spawn_mode_defaults_to_none(self, world_file):
-        """spawn_mode defaults to 'none' when not specified."""
-        entities = load_entities_from_rec(world_file)
-        foyer_table = next((e for e in entities if e.id == "foyer_table"), None)
-        assert foyer_table is not None
-        assert foyer_table.spawn_mode == "none"
 
 
 class TestValidateEntities:
@@ -331,8 +323,8 @@ class TestSyncRemovesStaleEntities:
         async with test_db.acquire() as conn:
             # Insert a fake entity that should be deleted
             await conn.execute(
-                """INSERT INTO entities (id, name, spawn_mode)
-                   VALUES ($1, $2, 'none'::spawn_mode)
+                """INSERT INTO entities (id, name)
+                   VALUES ($1, $2)
                    ON CONFLICT (id) DO NOTHING""",
                 "fake-entity",
                 "Fake Entity",
@@ -393,16 +385,15 @@ class TestSyncEntityInstances:
 
         assert count_before == count_after
 
-    async def test_orphan_room_instances_removed_on_sync(self, test_db, world_file):
-        """Room instances not in rec files are removed on sync."""
+    async def test_orphan_world_instances_removed_on_sync(self, test_db, world_file):
+        """World instances not in rec files are removed on sync."""
         await sync_entities(test_db, world_file)
 
         async with test_db.acquire() as conn:
-            # Insert an orphan room instance
+            # Insert an orphan WORLD instance (not in rec files)
             await conn.execute(
-                """INSERT INTO entity_instances (entity_id, room)
-                   VALUES ($1, $2)
-                   ON CONFLICT DO NOTHING""",
+                """INSERT INTO entity_instances (entity_id, room, is_world_instance)
+                   VALUES ($1, $2, TRUE)""",
                 "object",  # 'object' has no Room field in rec file
                 "foyer",
             )
@@ -410,36 +401,110 @@ class TestSyncEntityInstances:
             # Verify orphan exists
             count = await conn.fetchval(
                 """SELECT COUNT(*) FROM entity_instances
-                   WHERE entity_id = $1 AND room = $2""",
+                   WHERE entity_id = $1 AND room = $2 AND is_world_instance = TRUE""",
                 "object",
                 "foyer",
             )
             assert count == 1
 
-        # Sync again - should remove orphan
+        # Sync again - should remove orphan world instance
         await sync_entities(test_db, world_file)
 
         async with test_db.acquire() as conn:
             count = await conn.fetchval(
                 """SELECT COUNT(*) FROM entity_instances
-                   WHERE entity_id = $1 AND room = $2""",
+                   WHERE entity_id = $1 AND room = $2 AND is_world_instance = TRUE""",
                 "object",
                 "foyer",
             )
             assert count == 0
 
-    async def test_unique_constraint_prevents_duplicate_room_instances(
-        self, test_db, world_file
-    ):
-        """Partial unique index prevents duplicate (entity_id, room) pairs."""
+    async def test_player_instances_preserved_on_sync(self, test_db, world_file):
+        """Player instances (is_world_instance=FALSE) are preserved on sync."""
         await sync_entities(test_db, world_file)
 
         async with test_db.acquire() as conn:
-            # Try to insert duplicate room instance - should fail
-            with pytest.raises(Exception, match="idx_entity_instances_entity_room"):
+            # Insert a player instance (dropped item)
+            await conn.execute(
+                """INSERT INTO entity_instances (entity_id, room, is_world_instance)
+                   VALUES ($1, $2, FALSE)""",
+                "object",  # 'object' has no Room field in rec file
+                "foyer",
+            )
+
+            # Verify instance exists
+            count = await conn.fetchval(
+                """SELECT COUNT(*) FROM entity_instances
+                   WHERE entity_id = $1 AND room = $2 AND is_world_instance = FALSE""",
+                "object",
+                "foyer",
+            )
+            assert count == 1
+
+        # Sync again - player instance should be preserved
+        await sync_entities(test_db, world_file)
+
+        async with test_db.acquire() as conn:
+            count = await conn.fetchval(
+                """SELECT COUNT(*) FROM entity_instances
+                   WHERE entity_id = $1 AND room = $2 AND is_world_instance = FALSE""",
+                "object",
+                "foyer",
+            )
+            assert count == 1  # Still exists!
+
+            # Clean up for other tests
+            await conn.execute(
+                """DELETE FROM entity_instances
+                   WHERE entity_id = $1 AND room = $2 AND is_world_instance = FALSE""",
+                "object",
+                "foyer",
+            )
+
+
+@pytest.mark.asyncio(loop_scope="session")
+class TestWorldInstanceConstraint:
+    """Test world instance vs player instance behavior."""
+
+    async def test_world_instances_have_unique_constraint(self, test_db, world_file):
+        """World instances cannot have duplicate (entity_id, room) pairs."""
+        await sync_entities(test_db, world_file)
+
+        async with test_db.acquire() as conn:
+            # Try to insert duplicate WORLD instance - should fail
+            with pytest.raises(Exception, match="idx_world_instances_entity_room"):
                 await conn.execute(
-                    """INSERT INTO entity_instances (entity_id, room)
-                       VALUES ($1, $2)""",
+                    """INSERT INTO entity_instances (entity_id, room, is_world_instance)
+                       VALUES ($1, $2, TRUE)""",
                     "foyer_table",
                     "foyer",
                 )
+
+    async def test_player_instances_allow_duplicates(self, test_db, world_file):
+        """Player instances (is_world_instance=FALSE) can have duplicates."""
+        await sync_entities(test_db, world_file)
+
+        async with test_db.acquire() as conn:
+            # Insert player instance with same entity/room - should succeed
+            await conn.execute(
+                """INSERT INTO entity_instances (entity_id, room, is_world_instance)
+                   VALUES ($1, $2, FALSE)""",
+                "foyer_table",
+                "foyer",
+            )
+
+            count = await conn.fetchval(
+                """SELECT COUNT(*) FROM entity_instances
+                   WHERE entity_id = $1 AND room = $2""",
+                "foyer_table",
+                "foyer",
+            )
+            assert count == 2  # One world, one player
+
+            # Clean up the player instance for other tests
+            await conn.execute(
+                """DELETE FROM entity_instances
+                   WHERE entity_id = $1 AND room = $2 AND is_world_instance = FALSE""",
+                "foyer_table",
+                "foyer",
+            )

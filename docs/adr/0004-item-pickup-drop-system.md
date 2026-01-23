@@ -6,10 +6,10 @@ Proposed
 
 ## Context
 
-ADR 0002 introduced a basic inventory system with a `spawn_mode` enum (`none`, `move`, `clone`) to control take behavior. However, several gameplay scenarios remain unsupported:
+ADR 0002 introduced a basic inventory system. However, several gameplay scenarios were unsupported:
 
-- **Quest items**: Items like a map in a treasure chest that every player can take once, but remain visible in the world for others. The current `clone` mode has no per-user limit.
-- **Respawning items**: Consumables like beverages in a fridge that are removed when taken but periodically respawn. The current `move` mode has no respawn mechanism.
+- **Quest items**: Items like a map in a treasure chest that every player can take once, but remain visible in the world for others.
+- **Respawning items**: Consumables like beverages in a fridge that are removed when taken but periodically respawn.
 - **Randomized spawns**: Spawn locations that draw from a pool of possible items with different rarities (common beer vs. rare champagne).
 - **Dropping items**: Players need to drop items from their inventory back into rooms, with control over which items can be dropped.
 - **Item granting**: Templates need to grant items as rewards (e.g., smashing a vase reveals a hidden key).
@@ -17,15 +17,24 @@ ADR 0002 introduced a basic inventory system with a `spawn_mode` enum (`none`, `
 
 ## Decisions
 
-### Quest Item Take Limit via Inventory Check
+### Pickup Behavior via Template Effects
 
-In the context of **quest items that should be takeable once per player**, facing **the need to prevent duplicate pickups while keeping items visible for others**, we decided to **check the player's inventory for an existing instance of the entity before allowing a clone**, to achieve **simple duplicate prevention using existing data structures**, accepting **that dropping and re-taking a quest item is allowed (inventory check, not historical tracking)**.
+In the context of **controlling whether items can be picked up**, facing **the need for flexible, template-driven pickup behavior**, we decided to **use `effects.pickup()` in `on_take` templates to signal pickup intent**, to achieve **full template control over pickup logic**, accepting **that all pickable items must explicitly call `effects.pickup()`**.
 
 **Behavior:**
-- On take attempt for `spawn_mode=clone` entity:
+- If `on_take` template calls `effects.pickup()`: item is picked up
+- If `on_take` template doesn't call `effects.pickup()`: only the message is shown, item stays in room
+- Quest items (`rarity=quest`) are cloned on pickup (original stays visible for other players)
+
+### Quest Item Take Limit via Inventory Check
+
+In the context of **quest items that should be takeable once per player**, facing **the need to prevent duplicate pickups while keeping items visible for others**, we decided to **check the player's inventory for an existing instance of the entity before allowing pickup**, to achieve **simple duplicate prevention using existing data structures**, accepting **that dropping and re-taking a quest item is allowed (inventory check, not historical tracking)**.
+
+**Behavior:**
+- On take attempt for `rarity=quest` entity:
   - Query `entity_instances` for `owner_id=user AND entity_id=target`
   - If found: "You already have this."
-  - If not found: Create new instance in inventory
+  - If not found: Create new instance in inventory (clone behavior)
 - Item remains visible in world for all users
 
 ### Entity Tags and Rarity
@@ -175,22 +184,21 @@ Id: item
 Name: item
 Prototype: object
 Rarity: common
-SpawnMode: move
-OnTake: You pick up the {{ name }}.
+OnTake: {{ effects.pickup() }}You pick up the {{ name }}.
 OnDrop: {% if container %}You put the {{ name }} into the *{{ container.name }}*.{% else %}You drop the {{ name }}.{% endif %}{{ effects.drop() }}{{ effects.broadcast(user.name ~ " drops " ~ e.display_name ~ ".") }}
 ```
 
 **Key benefits:**
 - Items default to `common` rarity (displays ⚪ suffix, eligible for spawn pools)
+- Calls `effects.pickup()` to actually pick up the item
 - Standard take/drop handlers with room broadcast on drop
 - Override any field as needed (e.g., `Rarity: rare` or custom `OnDrop`)
-
-**Note:** `SpawnMode` and `Rarity` must be explicitly set on each item as they do not inherit from prototypes (database schema defaults apply when omitted).
 
 **When to use `item` vs `object`:**
 - Use `item` for anything players can pick up and carry
 - Use `object` for static world fixtures (furniture, decorations, interactables that stay in place)
-- Items without `OnDrop` (or with `OnDrop` that doesn't call `effects.drop()`) cannot be dropped
+- Items without `OnTake` calling `effects.pickup()` cannot be picked up
+- Items without `OnDrop` calling `effects.drop()` cannot be dropped
 
 ### Entity Tags and Rarity
 
@@ -219,10 +227,10 @@ Id: mansion_map
 Name: Map of the Mansion
 Prototype: item
 Rarity: quest
-SpawnMode: clone
 ```
 
 - `Rarity`: One of `none`, `common`, `uncommon`, `rare`, `epic`, `legendary`, `mythic`, `quest` (default from prototype)
+- Quest items (`rarity=quest`) automatically clone on pickup - original stays in room
 
 ### Spawning Pools
 
