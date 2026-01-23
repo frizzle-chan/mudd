@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 FocusMode = Literal["none", "container"]
 
-# Rarity weights for spawning (sum to 1000, excluding none and quest)
+# Rarity weights for spawning (sum to 1000 for standard rarities)
 RARITY_WEIGHTS: dict[Rarity, int] = {
     "none": 0,  # Static world items never spawn
     "common": 600,
@@ -25,7 +25,7 @@ RARITY_WEIGHTS: dict[Rarity, int] = {
     "epic": 40,
     "legendary": 9,
     "mythic": 1,
-    "quest": 0,  # Never spawns from pools
+    "quest": 600,  # Same as common; use unique tags for dedicated spawning pools
 }
 
 
@@ -373,7 +373,7 @@ class EntityService:
     async def get_random_entity_by_tag(self, tag: str) -> ResolvedEntity | None:
         """Select random entity by tag with weighted rarity.
 
-        Queries entities matching the tag (excluding quest rarity),
+        Queries entities matching the tag (excluding 'none' rarity),
         does weighted random selection based on RARITY_WEIGHTS.
 
         Args:
@@ -387,7 +387,7 @@ class EntityService:
             SELECT DISTINCT e.id, e.rarity
             FROM entities e
             JOIN entity_tags et ON e.id = et.entity_id
-            WHERE et.tag = $1 AND e.rarity != 'quest'
+            WHERE et.tag = $1 AND e.rarity != 'none'
             """,
             tag,
         )

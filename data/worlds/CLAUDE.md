@@ -121,7 +121,7 @@ ContentsVisible: yes
 - Items are picked up when `OnTake` calls `{{ effects.pickup() }}`
 - Items are dropped when `OnDrop` calls `{{ effects.drop() }}`
 - If the effect isn't called, only the message is shown (item doesn't move)
-- Quest items (`Rarity: quest`) clone on pickup - original stays in room
+- Quest items (`Rarity: quest`) work like regular items; use spawning pools for respawn
 
 ### Templates
 

@@ -24,18 +24,15 @@ In the context of **controlling whether items can be picked up**, facing **the n
 **Behavior:**
 - If `on_take` template calls `effects.pickup()`: item is picked up
 - If `on_take` template doesn't call `effects.pickup()`: only the message is shown, item stays in room
-- Quest items (`rarity=quest`) are cloned on pickup (original stays visible for other players)
+- All items (including quest rarity) move to inventory on pickup; use spawning pools for respawn
 
 ### Quest Item Take Limit via Inventory Check
 
-In the context of **quest items that should be takeable once per player**, facing **the need to prevent duplicate pickups while keeping items visible for others**, we decided to **check the player's inventory for an existing instance of the entity before allowing pickup**, to achieve **simple duplicate prevention using existing data structures**, accepting **that dropping and re-taking a quest item is allowed (inventory check, not historical tracking)**.
+**Status: Superseded by spawning pool approach**
 
-**Behavior:**
-- On take attempt for `rarity=quest` entity:
-  - Query `entity_instances` for `owner_id=user AND entity_id=target`
-  - If found: "You already have this."
-  - If not found: Create new instance in inventory (clone behavior)
-- Item remains visible in world for all users
+~~In the context of **quest items that should be takeable once per player**, facing **the need to prevent duplicate pickups while keeping items visible for others**, we decided to **check the player's inventory for an existing instance of the entity before allowing pickup**, to achieve **simple duplicate prevention using existing data structures**, accepting **that dropping and re-taking a quest item is allowed (inventory check, not historical tracking)**.~~
+
+Quest items now work like regular items: they move to the player's inventory when picked up. For quest items that should respawn, use spawning pools with unique tags. This simplifies the codebase by eliminating special-case logic for quest items.
 
 ### Entity Tags and Rarity
 
@@ -57,11 +54,11 @@ In the context of **categorizing entities for spawning pools**, facing **the nee
 | 🟣 | Epic | 40 | 4% |
 | 🟠 | Legendary | 9 | 0.9% |
 | ㊙️ | Mythic | 1 | 0.1% |
-| 🔷 | Quest | — | Not spawned |
+| 🔷 | Quest | 600 | 60% (in dedicated pools) |
 
-- Weights sum to 1000 for precise probability calculation (excluding none and quest)
+- Weights sum to 1000 for precise probability calculation (excluding none)
 - **None**: Default for all entities. Static world items that cannot be picked up and shouldn't appear in spawning pools. Displays no emoji suffix.
-- Quest items never spawn from pools—placed deliberately or granted via `effects.grant()`
+- Quest items spawn via dedicated spawning pools with unique tags; use 600 weight (same as common)
 - Rarity indicates discovery difficulty only, not power level
 - No zone-based weight modifiers (same odds everywhere)
 
@@ -88,9 +85,9 @@ In the context of **respawning items in the world**, facing **the need for items
 1. Background task runs periodically
 2. For each spawning pool, count current instances
 3. If below `max_count` and `respawn_interval` elapsed since last spawn:
-   - Query entities matching `tag_query` (excluding `quest` rarity)
+   - Query entities matching `tag_query` (excluding `none` rarity)
    - Roll 0-999 for weighted random selection
-   - 0-599=Common, 600-849=Uncommon, 850-949=Rare, 950-989=Epic, 990-998=Legendary, 999=Mythic
+   - 0-599=Common/Quest, 600-849=Uncommon, 850-949=Rare, 950-989=Epic, 990-998=Legendary, 999=Mythic
    - Create instance linked to spawning pool
 
 **Example:** Fridge spawning pool
@@ -142,8 +139,8 @@ In the context of **rewarding players for interactions**, facing **the need to g
 
 **`effects.grant_random(tag)`** - Grant a random item from a tag:
 - Queues the grant; actual selection happens after template rendering
-- Queries entities matching the tag, excluding `quest` rarity
-- Weighted random selection using rarity weights (common=600, uncommon=250, rare=100, epic=40, legendary=9, mythic=1)
+- Queries entities matching the tag, excluding `none` rarity
+- Weighted random selection using rarity weights (common=600, uncommon=250, rare=100, epic=40, legendary=9, mythic=1, quest=600)
 - Creates instance in user's inventory
 - Broadcasts result to channel: "**{user.name}** picks up a *{item.display_name}*"
 - Returns empty string (allows inline use in templates)
@@ -230,7 +227,7 @@ Rarity: quest
 ```
 
 - `Rarity`: One of `none`, `common`, `uncommon`, `rare`, `epic`, `legendary`, `mythic`, `quest` (default from prototype)
-- Quest items (`rarity=quest`) automatically clone on pickup - original stays in room
+- Quest items (`rarity=quest`) work like regular items; use spawning pools for respawn
 
 ### Spawning Pools
 
@@ -253,7 +250,7 @@ RespawnIntervalMinutes: 30
 ```sql
 -- Entity rarity for weighted spawn selection (weights sum to 1000)
 -- none=0 (static world items, default), common=600, uncommon=250, rare=100, epic=40,
--- legendary=9, mythic=1, quest=0 (never spawns from pools)
+-- legendary=9, mythic=1, quest=600 (spawns from dedicated tag-specific pools)
 CREATE TYPE rarity AS ENUM ('none', 'common', 'uncommon', 'rare', 'epic', 'legendary', 'mythic', 'quest');
 ALTER TABLE entities ADD COLUMN rarity rarity NOT NULL DEFAULT 'none';
 

@@ -348,41 +348,7 @@ class Interact(commands.Cog):
         if guild is None:
             return "You can't take items outside a server."
 
-        if entity.rarity == "quest":
-            # Quest item - check if user already has this entity type
-            existing = await self.pool.fetchval(
-                """SELECT id FROM entity_instances
-                WHERE owner_id = $1 AND entity_id = $2""",
-                user_id,
-                entity.id,
-            )
-            if existing:
-                return "You already have this item."
-
-            # Create a new instance in the user's inventory (clone behavior)
-            new_instance_id = await self.pool.fetchval(
-                """INSERT INTO entity_instances (entity_id, owner_id)
-                VALUES ($1, $2) RETURNING id""",
-                entity.id,
-                user_id,
-            )
-            if new_instance_id is None:
-                logger.error("Failed to create clone instance for %s", entity.id)
-                return "Something went wrong picking up the item."
-
-            # Create Discord thread for the item
-            thread = await self._inventory.create_item_thread(
-                guild, user_id, new_instance_id, entity.display_name, template_output
-            )
-            if thread is None:
-                logger.warning("Failed to create thread for cloned item %s", entity.id)
-                # Item is still in inventory, just no Discord thread
-
-            # Invalidate autocomplete cache so the item no longer appears in room
-            self.player_context.invalidate_cache()
-            return template_output
-
-        # Regular item - move the existing instance to the user's inventory
+        # Move the item instance to the user's inventory
         result = await self.pool.execute(
             """UPDATE entity_instances
             SET room = NULL, owner_id = $1, player_dropped = FALSE,
