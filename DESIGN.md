@@ -568,6 +568,19 @@ Result:
 - **Ephemeral to user**: "You slide the record onto the turntable. Music fills the room."
 - **Public to channel**: "**Frizzle** put on some music."
 
+**`effects.destroy()`** - Signals that this entity instance should be destroyed after the response.
+
+```jinja
+{# Smashable vase that destroys itself and grants loot #}
+{{ effects.destroy() }}{{ effects.broadcast("**" ~ user.name ~ "** smashes the " ~ name ~ "!") }}You smash the {{ name }}! Shards scatter everywhere.{{ effects.grant_random("loot") }}
+```
+
+Result:
+- **Ephemeral to user**: "You smash the Flower Vase! Shards scatter everywhere."
+- **Public to channel**: "**Frizzle** smashes the *Flower Vase*!"
+- Entity instance is deleted from the database
+- If paired with a spawning pool, the entity will respawn
+
 All effect functions return an empty string, allowing inline use without affecting output.
 
 **Implementation:**
