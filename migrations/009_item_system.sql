@@ -8,10 +8,10 @@ SET statement_timeout = '5s';
 ALTER TYPE verb_action ADD VALUE 'on_drop';
 
 -- Rarity enum for weighted spawn selection
--- Weights sum to 1000 for precise probability calculation:
+-- Weights for standard rarities sum to 1000 (excluding none and quest):
 -- none=0 (static world items, default), common=600 (60%), uncommon=250 (25%),
 -- rare=100 (10%), epic=40 (4%), legendary=9 (0.9%), mythic=1 (0.1%),
--- quest=0 (never spawns from pools)
+-- quest=600 (spawns from dedicated tag-specific pools)
 CREATE TYPE rarity AS ENUM ('none', 'common', 'uncommon', 'rare', 'epic', 'legendary', 'mythic', 'quest');
 
 -- Entity tags for categorization (many-to-many)
