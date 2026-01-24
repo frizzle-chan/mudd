@@ -42,3 +42,24 @@ class TestTriggerEffectsBroadcast:
         """New TriggerEffects has empty broadcasts list."""
         effects = TriggerEffects()
         assert effects.broadcasts == []
+
+
+class TestTriggerEffectsDestroy:
+    """Tests for TriggerEffects.destroy() method."""
+
+    def test_destroy_sets_flag(self):
+        """destroy() sets the has_destroy flag."""
+        effects = TriggerEffects()
+        effects.destroy()
+        assert effects.has_destroy is True
+
+    def test_destroy_returns_empty_string(self):
+        """destroy() returns empty string for inline template use."""
+        effects = TriggerEffects()
+        result = effects.destroy()
+        assert result == ""
+
+    def test_has_destroy_false_by_default(self):
+        """has_destroy is False before destroy() is called."""
+        effects = TriggerEffects()
+        assert effects.has_destroy is False

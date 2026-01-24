@@ -1,6 +1,7 @@
 """Side effects collected during template rendering."""
 
 from dataclasses import dataclass, field
+from typing import Literal
 from uuid import UUID
 
 
@@ -22,7 +23,7 @@ class GrantRandomEffect:
 class CleanupOperation:
     """A deferred cleanup operation to run after response."""
 
-    operation_type: str  # "delete_thread"
+    operation_type: Literal["delete_thread"]
     instance_id: UUID
     guild_id: int
 
@@ -39,6 +40,7 @@ class TriggerEffects:
     - `pickup()`: Signal that item should be picked up (move from room to inventory)
     - `grant(entity_id)`: Queue granting a specific item to the user
     - `grant_random(tag)`: Queue granting a random item from a tag (broadcasts result)
+    - `destroy()`: Signal that this entity instance should be destroyed
 
     Example template:
         {{ effects.broadcast("**" ~ user.name ~ "** put on music.") }}
@@ -52,6 +54,7 @@ class TriggerEffects:
     broadcasts: list[str] = field(default_factory=list)
     _drop_called: bool = False
     _pickup_called: bool = False
+    _destroy_called: bool = False
     grants: list[GrantEffect] = field(default_factory=list)
     grant_randoms: list[GrantRandomEffect] = field(default_factory=list)
     cleanups: list[CleanupOperation] = field(default_factory=list)
@@ -112,8 +115,8 @@ class TriggerEffects:
         """Queue granting a random item from entities with the given tag.
 
         The actual selection and granting happens after template rendering.
-        Uses weighted random selection based on rarity. Quest items
-        are excluded from random selection.
+        Uses weighted random selection based on rarity. Items with
+        'none' rarity are excluded from random selection.
 
         If an item is granted, a broadcast message is sent to the channel
         so other players can see it.
@@ -137,6 +140,23 @@ class TriggerEffects:
     def has_pickup(self) -> bool:
         """Whether pickup() was called during template rendering."""
         return self._pickup_called
+
+    def destroy(self) -> str:
+        """Signal that this entity instance should be destroyed.
+
+        Must be called in an action handler (e.g., on_attack). The entity
+        instance will be deleted from the database after the response is sent.
+
+        Returns:
+            Empty string (allows inline use in templates without output)
+        """
+        self._destroy_called = True
+        return ""
+
+    @property
+    def has_destroy(self) -> bool:
+        """Whether destroy() was called during template rendering."""
+        return self._destroy_called
 
     def queue_thread_deletion(self, instance_id: UUID, guild_id: int) -> None:
         """Queue a thread deletion to run after response.
