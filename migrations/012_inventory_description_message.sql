@@ -1,4 +1,4 @@
--- Migration: 011_inventory_description_message
+-- Migration: 012_inventory_description_message
 -- Description: Track description message ID for inventory thread sync
 
 SET lock_timeout = '1s';
