@@ -291,6 +291,10 @@ class Interact(commands.Cog):
         # Execute cleanup operations (thread deletions, etc.)
         await self._execute_cleanups(interaction, effects)
 
+        # Handle entity destruction (before grants so spawning pool can respawn)
+        if effects.has_destroy:
+            await self._handle_destroy(matched_instance.instance_id)
+
         # Execute broadcast side effects (public messages to user's current room)
         # Look up room from DB since interaction may come from inventory thread
         guild = interaction.guild
@@ -611,6 +615,24 @@ class Interact(commands.Cog):
                         "Failed to delete thread for instance %s",
                         cleanup.instance_id,
                     )
+
+    async def _handle_destroy(self, instance_id: UUID) -> bool:
+        """Delete an entity instance from the database.
+
+        Args:
+            instance_id: UUID of the entity instance to destroy
+
+        Returns:
+            True if the instance was deleted, False otherwise
+        """
+        result = await self.pool.execute(
+            "DELETE FROM entity_instances WHERE id = $1",
+            instance_id,
+        )
+        if result == "DELETE 1":
+            self.player_context.invalidate_cache()
+            return True
+        return False
 
 
 def _get_handler_text(entity: ResolvedEntity, action: VerbAction) -> str | None:
