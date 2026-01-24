@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed
+Accepted
 
 ## Context
 
@@ -86,8 +86,8 @@ In the context of **respawning items in the world**, facing **the need for items
 2. For each spawning pool, count current instances
 3. If below `max_count` and `respawn_interval` elapsed since last spawn:
    - Query entities matching `tag_query` (excluding `none` rarity)
-   - Roll 0-999 for weighted random selection
-   - 0-599=Common/Quest, 600-849=Uncommon, 850-949=Rare, 950-989=Epic, 990-998=Legendary, 999=Mythic
+   - Perform weighted random selection using rarity weights (common=600, uncommon=250, rare=100, epic=40, legendary=9, mythic=1, quest=600)
+   - Items with 'none' rarity are excluded from selection
    - Create instance linked to spawning pool
 
 **Example:** Fridge spawning pool
@@ -120,7 +120,7 @@ In the context of **allowing players to drop items from inventory**, facing **th
 ```rec
 Id: beer
 Name: Beer
-OnDrop: {{ effects.drop() }}{{ effects.broadcast(user.name ~ " places " ~ name ~ " on the floor.") }}You place the {{ name }} on the floor.
+OnDrop: {{ effects.drop() }}{{ effects.broadcast(user.name ~ " places " ~ e.display_name ~ " on the floor.") }}You place the {{ e.display_name }} on the floor.
 ```
 
 ### Item Granting via Templates
