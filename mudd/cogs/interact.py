@@ -138,7 +138,8 @@ class Interact(commands.Cog):
         channel = cast(
             discord.abc.GuildChannel | discord.Thread | None, interaction.channel
         )
-        if await self._inventory.get_thread_item(channel) is not None:
+        thread_item = await self._inventory.get_thread_item(channel)
+        if thread_item is not None:
             room = await self.pool.fetchval(
                 "SELECT current_room FROM users WHERE id = $1",
                 interaction.user.id,
@@ -161,8 +162,8 @@ class Interact(commands.Cog):
             )
             return
 
-        # For drop actions, look up entity from user's inventory
-        if action_type == VerbAction.ON_DROP:
+        # For drop actions OR inventory thread context, look up from inventory
+        if action_type == VerbAction.ON_DROP or thread_item is not None:
             all_entities = await self.entity_service.get_user_inventory(user_id)
             not_found_msg = f"You don't have '{target}'."
         else:

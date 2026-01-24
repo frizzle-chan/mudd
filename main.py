@@ -90,7 +90,14 @@ async def setup_hook():
         )
     )
     await bot.add_cog(
-        Look(bot, entity_service, player_context, visibility_service, rendering_service)
+        Look(
+            bot,
+            entity_service,
+            player_context,
+            visibility_service,
+            rendering_service,
+            inventory_service,
+        )
     )
     await bot.add_cog(Ping(bot))
     await bot.add_cog(

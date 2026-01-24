@@ -98,6 +98,7 @@ class TestClient:
             player_context=self.player_context,
             visibility_service=visibility_service,
             rendering_service=self.rendering_service,
+            inventory_service=self.inventory_service,
         )
         self.interact_cog = Interact(
             bot=None,

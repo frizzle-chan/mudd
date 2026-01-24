@@ -1,9 +1,10 @@
 """Look command for viewing surroundings and examining entities."""
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import asyncpg
+import discord
 from discord import Interaction, app_commands
 from discord.ext import commands
 
@@ -12,6 +13,7 @@ from mudd.services.rendering import RenderingService, TemplateRenderError
 
 if TYPE_CHECKING:
     from mudd.services.entity import EntityService
+    from mudd.services.inventory import InventoryService
     from mudd.services.player_context import PlayerContextService
     from mudd.services.visibility import VisibilityServiceProtocol
 
@@ -26,12 +28,14 @@ class Look(commands.Cog):
         player_context: "PlayerContextService",
         visibility_service: "VisibilityServiceProtocol",
         rendering_service: RenderingService,
+        inventory_service: "InventoryService",
     ) -> None:
         self.bot = bot
         self.entity_service = entity_service
         self.player_context = player_context
         self.visibility_service = visibility_service
         self._rendering = rendering_service
+        self._inventory = inventory_service
 
     async def at_autocomplete(
         self, interaction: Interaction, current: str
@@ -42,9 +46,25 @@ class Look(commands.Cog):
         inside containers with contents_visible=False. When a user has an
         active focus (open container), shows only the focused contents with
         a "[Close {container}] Room" escape option at the top.
+
+        In inventory threads, only shows the thread's item (no Room option).
         """
         try:
             await self.visibility_service.wait_for_startup()
+
+            # Check if in inventory thread
+            channel = cast(
+                discord.abc.GuildChannel | discord.Thread | None, interaction.channel
+            )
+            thread_item = await self._inventory.get_thread_item(channel)
+            if thread_item is not None:
+                # Only show this thread's item (no Room option)
+                return [
+                    app_commands.Choice(
+                        name=thread_item.entity.display_name,
+                        value=thread_item.entity.name,
+                    )
+                ]
 
             room = getattr(interaction.channel, "name", None)
             if not room:
@@ -93,6 +113,35 @@ class Look(commands.Cog):
     async def look(self, interaction: Interaction, at: str):
         """Look at room or specific entity."""
         await self.visibility_service.wait_for_startup()
+
+        # Check if in inventory thread
+        channel = cast(
+            discord.abc.GuildChannel | discord.Thread | None, interaction.channel
+        )
+        thread_item = await self._inventory.get_thread_item(channel)
+
+        if thread_item is not None:
+            # In inventory thread: only allow looking at this item
+            if at == "Room" or not at:
+                # Show item description instead of "room" in inventory
+                detail_text = await self._rendering.render_entity_on_look(
+                    thread_item, self.entity_service, None
+                )
+                await interaction.response.send_message(detail_text, ephemeral=True)
+                return
+            # Match against just this item
+            match_result = match_entity_by_prefix(at, [thread_item])
+            if match_result.is_empty():
+                await interaction.response.send_message(
+                    f"You don't have '{at}'.", ephemeral=True
+                )
+                return
+            # Show item description
+            detail_text = await self._rendering.render_entity_on_look(
+                match_result.matches[0].instance, self.entity_service, None
+            )
+            await interaction.response.send_message(detail_text, ephemeral=True)
+            return
 
         room = getattr(interaction.channel, "name", None)
 
