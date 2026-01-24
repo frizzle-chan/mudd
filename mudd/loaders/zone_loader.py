@@ -7,7 +7,7 @@ import subprocess
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal, cast, overload
+from typing import Literal, cast, get_args, overload
 
 import asyncpg
 import discord
@@ -16,17 +16,8 @@ from mudd.services.entity import FocusMode, Rarity
 
 logger = logging.getLogger(__name__)
 
-# Valid rarity values matching PostgreSQL enum
-VALID_RARITIES: set[str] = {
-    "none",
-    "common",
-    "uncommon",
-    "rare",
-    "epic",
-    "legendary",
-    "mythic",
-    "quest",
-}
+# Valid rarity values - derived from the Rarity type to maintain single source of truth
+VALID_RARITIES: set[str] = set(get_args(Rarity))
 
 
 @dataclass
