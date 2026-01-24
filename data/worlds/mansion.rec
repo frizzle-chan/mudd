@@ -45,7 +45,7 @@ Description: A cozy sitting room.
 Id: hallway
 Name: Hallway
 Zone: floor-1
-Description: A hallway, if this was a counterstrike make people would call this connector
+Description: A hallway, if this was a counterstrike map people would call this connector
 +
 + to your north is the #banquet-hall
 + to your east is the #office
@@ -80,7 +80,7 @@ Id: screening-room
 Name: Screening Room
 Zone: floor-1
 HasVoice: yes
-Description: The room is dark, the lit only by the projector screen cast on the western wall. You can make out theater seats resembling giant lay-z-boy chairs. The room smells like popcorn. This is a certified kinography lair. Only the finest kinos are screened in this room.
+Description: The room is dark, lit only by the projector screen cast on the western wall. You can make out theater seats resembling giant lay-z-boy chairs. The room smells like popcorn. This is a certified kinography lair. Only the finest kinos are screened in this room.
 +
 + The only door leads back to the #library
 
@@ -214,7 +214,29 @@ Tags: foyer_vase
 Rarity: common
 DescriptionShort: A teal {{ name }} with yellow roses in it
 DescriptionLong: a teal ceramic vase with gold trim around the lip. A couple yellow roses sit inside.
-OnAttack: {{ effects.destroy() }}{{ effects.broadcast("**" ~ user.name ~ "** smashes the " ~ name ~ "!") }}You momentarily give in to your impulses and strike the {{ name }} as hard as you can with your fist. Shards of teal ceramic scatter across the floor. Among the debris, you notice something...{{ effects.grant_random("beverage") }}
+OnAttack: {{ effects.destroy() }}{{ effects.broadcast("**" ~ user.name ~ "** smashes the " ~ name ~ "!") }}You momentarily give in to your impulses and strike the {{ name }} as hard as you can with your fist. Shards of teal ceramic scatter across the floor. Among the debris, you notice something...{{ effects.grant_random("foyer_vase_loot") }}
+
+Id: foyer_yellow_rose
+Name: Yellow Rose
+Prototype: item
+Tags: foyer_vase_loot
+Rarity: common
+DescriptionShort: a {{ name }}
+DescriptionLong: A single yellow rose, slightly crushed but still vibrant.
+OnTouch: You gently touch the petals, they are soft. You touch the stem, it's thorny. You can't figure out if you are an optimist or a pessimist.
+OnAttack: {{ effects.destroy() }}{{ effects.broadcast("**" ~ user.name ~ "** drops a " ~ name ~ " on the floor and crushes it underfoot") }}You feel animosity towards the rose for some reason.
+OnUse: You smell the rose. It smells lovely! You feel a bit better now.
+
+Id: foyer_yellow_rose_exquisite
+Name: Exquisite Yellow Rose
+Prototype: item
+Tags: foyer_vase_loot
+Rarity: rare
+DescriptionShort: an {{ name }}
+DescriptionLong: A single yellow rose of uncanny beauty. It looks like something you'd see in a magazine.
+OnTouch: You gently stroke the petals, careful not to upset the beautiful symmetry of them. They are soft and slightly cold to the touch. You touch the stem, it's covered in extremely sharp thorns. The thorns are there to protect the beautiful flower from being picked, but I guess they failed.
+OnAttack: {{ effects.destroy() }}{{ effects.broadcast("**" ~ user.name ~ "** drops an " ~ name ~ " on the floor and crushes it underfoot") }}You feel like you have to destroy something beautiful.
+OnUse: You smell the rose. It reminds you of an expensive perfume but way more pleasant. You feel better now.
 
 Id: foyer_plaque
 Name: Inscribed Plaque
@@ -284,7 +306,7 @@ Id: lounge_white_claw_mango
 Name: White Claw Mango
 Prototype: beverage
 Rarity: rare
-Tags: beverage lounge_drink
+Tags: beverage lounge_drink foyer_vase_loot
 DescriptionShort: a chilled {{ name }}
 DescriptionLong: A slim can of White Claw Hard Seltzer, Mango flavor. 100 calories of refreshment.
 
@@ -432,7 +454,7 @@ Room: library
 Container: library_records
 DescriptionShort: A vinyl copy of {{ name }}
 DescriptionLong: 2000. Built from 3,500+ vinyl samples. Took years to clear them all.
-OnUse: You set {{ name }} on the turntable and hit play.{{ effects.broadcast(user.mention ~ " put on " ~ name ~ " on the record player. [Since I Left You](https://youtu.be/R2qYK2siDkE) fills the room.") }}
+OnUse: You set {{ name }} on the turntable and hit play.{{ effects.broadcast(user.mention ~ " put " ~ name ~ " on the record player. [Since I Left You](https://youtu.be/R2qYK2siDkE) fills the room.") }}
 
 Id: record_avalanches_wwaly
 Name: The Avalanches - We Will Always Love You
@@ -459,7 +481,7 @@ Room: library
 Container: library_records
 DescriptionShort: A vinyl copy of {{ name }}
 DescriptionLong: 2017. "Dreams Tonite" is a perfect shoegaze-pop song.
-OnUse: You unsleeve {{ name }} and put it on.{{ effects.broadcast(user.mention ~ " put on " ~ name ~ " on the record player. [In Undertow](https://youtu.be/T1n72aCdwdU) fills the room.") }}
+OnUse: You unsleeve {{ name }} and put it on.{{ effects.broadcast(user.mention ~ " put " ~ name ~ " on the record player. [In Undertow](https://youtu.be/T1n72aCdwdU) fills the room.") }}
 
 Id: record_first_aid_kit
 Name: First Aid Kit - Stay Gold
@@ -549,7 +571,7 @@ Room: library
 Container: library_records
 DescriptionShort: A vinyl copy of {{ name }}
 DescriptionLong: 1993. "Linger" and "Dreams".
-OnUse: You slide {{ name }} from its sleeve.{{ effects.broadcast(user.mention ~ " put on " ~ name ~ " on the record player. [I Still Do](https://youtu.be/vovVgQ2BsTo) comes on.") }}
+OnUse: You slide {{ name }} from its sleeve.{{ effects.broadcast(user.mention ~ " put " ~ name ~ " on the record player. [I Still Do](https://youtu.be/vovVgQ2BsTo) comes on.") }}
 
 Id: record_alvvays
 Name: Alvvays - Alvvays
