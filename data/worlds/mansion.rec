@@ -188,6 +188,12 @@ Rarity: common
 OnTake: {{ effects.pickup() }}You pick up the {{ name }}.
 OnDrop: {% if container %}You put the {{ name }} into the *{{ container.name }}*.{% else %}You drop the {{ name }}.{% endif %}{{ effects.drop() }}{{ effects.broadcast(user.name ~ " drops " ~ e.display_name ~ ".") }}
 
+Id: beverage
+Name: beverage
+Prototype: item
+OnUse: You crack open the {{ name }} and take a refreshing sip. It restores health.
+OnTake: {{ effects.pickup() }}You grab a {{ name }} from the fridge.
+
 # ----------------------------------------------------------------------------
 # Foyer entities
 # ----------------------------------------------------------------------------
@@ -255,12 +261,12 @@ Id: lounge_fridge
 Name: Drink Fridge
 Prototype: furniture
 Room: lounge
+FocusMode: container
 DescriptionShort: A windowed {{ name }} sits against the east wall.
-DescriptionLong: A glass-door mini fridge humming quietly. Through the window you can see it's full of White Claw and Lone Star tallboys.
-ContentsVisible: yes
+DescriptionLong: A glass-door mini fridge humming quietly. The glass is fogged with condensation. You can __open__ it to see what's inside.
 OnTouch: The glass is cold and slightly damp with condensation.
-OnUse: You take a drink from the fridge and crack it open. It restores health.
-OnTake: You take a drink from the fridge and crack it open. It restores health.
+OnOpen: You swing open the fridge door.{% if contents %} Inside:{{ contents }}{% else %} It's empty.{% endif %}
+OnClose: You close the fridge door.
 
 Id: lounge_chairs
 Name: Comfy Chairs
@@ -269,6 +275,56 @@ Room: lounge
 DescriptionShort: Several {{ name }} are scattered around the room.
 DescriptionLong: Plush leather armchairs that look like they've hosted many late-night conversations.
 OnUse: You sink into one of the leather chairs and close your eyes for a moment. You feel your health regenerating.
+
+# Lounge beverages (spawned by lounge_fridge_pool)
+
+Id: lounge_white_claw_mango
+Name: White Claw Mango
+Prototype: beverage
+Rarity: rare
+Tags: beverage lounge_drink
+DescriptionShort: a chilled {{ name }}
+DescriptionLong: A slim can of White Claw Hard Seltzer, Mango flavor. 100 calories of refreshment.
+
+Id: lounge_white_claw_lime
+Name: White Claw Lime
+Prototype: beverage
+Rarity: common
+Tags: beverage lounge_drink
+DescriptionShort: a chilled {{ name }}
+DescriptionLong: A slim can of White Claw Hard Seltzer, Natural Lime flavor. Crisp and clean.
+
+Id: lounge_white_claw_black_cherry
+Name: White Claw Black Cherry
+Prototype: beverage
+Rarity: common
+Tags: beverage lounge_drink
+DescriptionShort: a chilled {{ name }}
+DescriptionLong: A slim can of White Claw Hard Seltzer, Black Cherry flavor. Sweet with a hint of tart.
+
+Id: lounge_lone_star
+Name: Lone Star Tallboy
+Prototype: beverage
+Rarity: common
+Tags: beverage lounge_drink
+DescriptionShort: a cold {{ name }}
+DescriptionLong: A 16oz can of Lone Star, the National Beer of Texas. It's cheap and it's cold.
+
+Id: lounge_shiner_bock
+Name: Shiner Bock
+Prototype: beverage
+Rarity: rare
+Tags: beverage lounge_drink
+DescriptionShort: a frosty {{ name }}
+DescriptionLong: A bottle of Shiner Bock from the Spoetzl Brewery in Shiner, Texas. A proper Texas lager.
+
+Id: lounge_topo_chico
+Name: Topo Chico
+Prototype: beverage
+Rarity: common
+Tags: beverage lounge_drink
+DescriptionShort: a sparkling {{ name }}
+DescriptionLong: A glass bottle of Topo Chico mineral water. The bubbles are aggressive in the best way.
 
 # ----------------------------------------------------------------------------
 # Library entities
@@ -817,3 +873,10 @@ Container: storeroom_box
 TagQuery: test_quest_map_spawn
 MaxCount: 1
 RespawnIntervalMinutes: 1
+
+Id: lounge_fridge_pool
+Room: lounge
+Container: lounge_fridge
+TagQuery: lounge_drink
+MaxCount: 6
+RespawnIntervalMinutes: 15
