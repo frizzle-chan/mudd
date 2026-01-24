@@ -390,3 +390,43 @@ class TestContainerDrops:
         )
         assert "drop" in response.lower()
         assert "put" not in response.lower()
+
+
+class TestSmashableEntities:
+    """Tests for entities with effects.destroy()."""
+
+    async def test_smash_destroys_entity_and_grants_loot(self, test_client):
+        """Smashing a destroyable entity removes it and grants random loot."""
+        user = await test_client.create_user(user_id=500060, room="store-room")
+
+        # Spawn the smashable entity from its pool (no world instance exists)
+        spawned_id = await test_client.spawn_from_pool("test_smashable_pool")
+        assert spawned_id == "test_smashable"
+
+        # Verify the smashable entity exists in the room
+        assert await test_client.is_entity_in_room("test_smashable", "store-room")
+
+        # Open the container to access the smashable
+        await test_client.interact(user, action="open", target="Cardboard Box")
+
+        # Smash the entity
+        response, broadcasts = await test_client.interact_with_broadcasts(
+            user, action="smash", target="Test Smashable"
+        )
+
+        # Verify the response contains the expected text
+        assert "TEST_SMASH_RESPONSE" in response
+
+        # Entity should be destroyed (no longer in room)
+        assert not await test_client.is_entity_in_room("test_smashable", "store-room")
+
+        # User should have received loot in inventory
+        inventory = await test_client.get_inventory(user)
+        entity_ids = [eid for eid, _ in inventory]
+        loot_items = ["test_common_loot", "test_rare_loot"]
+        assert any(loot_id in entity_ids for loot_id in loot_items)
+
+        # Should have broadcasts for smash and loot pickup
+        assert len(broadcasts) >= 1
+        smash_broadcast = broadcasts[0]
+        assert "smashes" in smash_broadcast.lower()

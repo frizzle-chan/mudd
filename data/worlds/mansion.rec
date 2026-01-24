@@ -208,11 +208,13 @@ ContentsVisible: yes
 
 Id: foyer_flower_vase
 Name: Flower Vase
-Prototype: glass_object
-Room: foyer
+Prototype: item
 Container: foyer_table
+Tags: foyer_vase
+Rarity: common
 DescriptionShort: A teal {{ name }} with yellow roses in it
 DescriptionLong: a teal ceramic vase with gold trim around the lip. A couple yellow roses sit inside.
+OnAttack: {{ effects.destroy() }}{{ effects.broadcast("**" ~ user.name ~ "** smashes the " ~ name ~ "!") }}You momentarily give in to your impulses and strike the {{ name }} as hard as you can with your fist. Shards of teal ceramic scatter across the floor. Among the debris, you notice something...{{ effects.grant_random("beverage") }}
 
 Id: foyer_plaque
 Name: Inscribed Plaque
@@ -859,6 +861,16 @@ Rarity: common
 DescriptionShort: a {{ name }} you can drop
 DescriptionLong: A test item for floor clutter testing.
 
+Id: test_smashable
+Name: Test Smashable
+Prototype: glass_object
+Container: storeroom_box
+Tags: test_smashable_spawn
+Rarity: common
+DescriptionShort: a fragile {{ name }}
+DescriptionLong: A glass object used for testing destruction effects.
+OnAttack: {{ effects.destroy() }}{{ effects.broadcast("**" ~ user.name ~ "** smashes the " ~ name ~ "!") }}TEST_SMASH_RESPONSE - You smash it! Shards scatter everywhere.{{ effects.grant_random("test_loot") }}
+
 # ============================================================================
 # Spawning Pool record type
 # ============================================================================
@@ -874,9 +886,23 @@ TagQuery: test_quest_map_spawn
 MaxCount: 1
 RespawnIntervalMinutes: 1
 
+Id: test_smashable_pool
+Room: store-room
+Container: storeroom_box
+TagQuery: test_smashable_spawn
+MaxCount: 1
+RespawnIntervalMinutes: 1
+
 Id: lounge_fridge_pool
 Room: lounge
 Container: lounge_fridge
 TagQuery: lounge_drink
 MaxCount: 6
+RespawnIntervalMinutes: 15
+
+Id: foyer_vase_pool
+Room: foyer
+Container: foyer_table
+TagQuery: foyer_vase
+MaxCount: 1
 RespawnIntervalMinutes: 15

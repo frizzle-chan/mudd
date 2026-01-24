@@ -288,10 +288,11 @@ class TestSyncEntities:
         """Container references are stored on instances (not entities)."""
         async with synced_db.acquire() as conn:
             # Container is now stored on entity_instances, not entities
+            # Use foyer_plaque which has both Room and Container fields
             instance = await conn.fetchrow(
                 """SELECT * FROM entity_instances
                    WHERE entity_id = $1 AND room = $2""",
-                "foyer_flower_vase",
+                "foyer_plaque",
                 "foyer",
             )
             assert instance is not None
@@ -361,9 +362,9 @@ class TestSyncEntityInstances:
             )
             instance_entity_ids = {i["entity_id"] for i in instances}
 
-            # foyer_table, foyer_flower_vase, foyer_plaque have Room field
+            # foyer_table and foyer_plaque have Room field
+            # (foyer_flower_vase spawns via pool, not as world instance)
             assert "foyer_table" in instance_entity_ids
-            assert "foyer_flower_vase" in instance_entity_ids
             assert "foyer_plaque" in instance_entity_ids
 
     async def test_sync_is_idempotent(self, test_db, world_file):

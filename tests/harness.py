@@ -415,3 +415,48 @@ class TestClient:
             room,
         )
         return row is not None
+
+    async def spawn_from_pool(self, pool_id: str) -> str | None:
+        """Spawn an entity from a spawning pool.
+
+        Creates an entity instance from the specified spawning pool,
+        bypassing the normal respawn timer. Used for testing entities
+        that spawn via pools rather than world instances.
+
+        Args:
+            pool_id: The spawning pool ID to spawn from.
+
+        Returns:
+            The entity_id of the spawned entity, or None if spawn failed.
+        """
+        # Get pool configuration
+        pool_config = await self.pool.fetchrow(
+            """SELECT room, container_id, tag_query
+            FROM spawning_pools WHERE id = $1""",
+            pool_id,
+        )
+        if pool_config is None:
+            return None
+
+        # Get a random entity matching the tag (using weighted rarity)
+        entity = await self.entity_service.get_random_entity_by_tag(
+            pool_config["tag_query"]
+        )
+        if entity is None:
+            return None
+
+        # Create the instance
+        await self.pool.execute(
+            """INSERT INTO entity_instances
+                (entity_id, room, spawning_pool_id, container_entity_id)
+            VALUES ($1, $2, $3, $4)""",
+            entity.id,
+            pool_config["room"],
+            pool_id,
+            pool_config["container_id"],
+        )
+
+        # Invalidate cache
+        self.entity_service.invalidate_cache()
+
+        return entity.id
