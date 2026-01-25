@@ -35,6 +35,11 @@ python main.py
 
 Pre-commit hooks (lefthook) auto-run ruff and ty on staged files.
 
+**Query dev database**:
+```bash
+PGPASSWORD=mudd psql -h db -U mudd -d mudd -c "SELECT * FROM table_name"
+```
+
 ## Architecture
 
 **Entry point**: `main.py` - Async bot setup using `discord.py`, syncs slash commands on ready.
