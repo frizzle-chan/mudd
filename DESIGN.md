@@ -472,6 +472,100 @@ Gold Ring                                    <- Focused content
 
 Room entities are hidden while focused. Selecting the escape option clears focus and shows the room.
 
+## Entity Resolution Service
+
+The `EntityResolutionService` consolidates entity visibility, focus context, and autocomplete logic into a unified API. It provides source-prefixed autocomplete values for unambiguous entity resolution.
+
+### Service Methods
+
+**Context Building:**
+- `build_context(interaction, query)` - Build InteractionContext from Discord state (detects thread/prefix/room mode)
+- `get_autocomplete_choices(ctx, query)` - Get source-prefixed autocomplete choices
+
+**Entity Resolution:**
+- `resolve_target(ctx, encoded_value)` - Resolve encoded value to EntityInstance or error
+
+**Focus Operations (delegated):**
+- `get_focus(user_id, room)` - Get active focus
+- `set_focus(user_id, room, entity)` - Establish focus
+- `clear_focus(user_id, reason)` - Clear focus
+- `update_focus_timestamp(user_id)` - Refresh timeout
+- `is_entity_in_focus(user_id, room, entity_id)` - Check focus membership
+
+**Cache:**
+- `invalidate_cache()` - Clear autocomplete cache
+- `prepopulate_cache(rooms)` - Warm cache for rooms
+
+### InteractionContext
+
+Frozen dataclass capturing all context needed for resolution:
+
+```python
+class ViewMode(str, Enum):
+    ROOM = "room"           # Normal room view (with optional focus)
+    INVENTORY = "inventory" # Typed "i." prefix
+    INVENTORY_THREAD = "thread"  # In inventory forum thread
+
+@dataclass(frozen=True)
+class InteractionContext:
+    user_id: int
+    room: str                           # Always populated (for action execution)
+    view_mode: ViewMode
+    focus_entity_id: str | None = None  # Only for ROOM mode
+    thread_instance_id: UUID | None = None  # Only for INVENTORY_THREAD
+```
+
+### Autocomplete Value Encoding
+
+Autocomplete choices use source-prefixed values for unambiguous resolution:
+
+```
+{source}:{entity_name}
+
+Sources: room, inventory, container, escape
+
+Examples:
+- room:Wooden Table              # Room entity
+- inventory:Rusty Sword          # Inventory item
+- container:Gold Key             # Item inside focused container
+- escape:room                    # Special: close focus, show room
+```
+
+**Why human-readable names:**
+- Users can read and understand the value in the Discord UI
+- Source prefix adds helpful context ("this is from my inventory")
+- Exact name matching within scope is sufficient since autocomplete selected the name
+
+**Resolution strategy:**
+1. Parse source prefix to scope the search
+2. Try exact name match within that scope first
+3. Fallback to prefix matching if exact match fails (handles user edits)
+4. If no source prefix (legacy), use current behavior
+
+### Container Behavior
+
+**Recursive pickup:** When picking up a container, all its contents move to inventory with it. Contents retain their `container_entity_id` link.
+
+**Recursive drop:** When dropping a container, all its contents move to the room with it.
+
+**Implicit focus in container threads:** When in an inventory thread for a container (`focus_mode != 'none'`), the system implicitly focuses on that container's contents - autocomplete shows contents immediately.
+
+### Usage
+
+```python
+# In main.py:
+entity_resolution = EntityResolutionService(
+    entity_service, focus_service, inventory_service, pool
+)
+cog = InteractCog(bot, entity_service, entity_resolution, ...)
+await bot.add_cog(cog)
+
+# In cogs - use unified API:
+ctx = await self.entity_resolution.build_context(interaction, current)
+choices = await self.entity_resolution.get_autocomplete_choices(ctx, current)
+result = await self.entity_resolution.resolve_target(ctx, selected_value)
+```
+
 ## Template Rendering
 
 Entity action handlers (`on_look`, `on_touch`, `on_attack`, `on_use`, `on_take`, `on_open`, `on_close`) are Jinja2 templates rendered at runtime.

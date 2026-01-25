@@ -20,8 +20,8 @@ from mudd.loaders.entity_loader import sync_entities
 from mudd.loaders.verb_loader import sync_verbs
 from mudd.loaders.zone_loader import sync_zones_and_rooms
 from mudd.services.entity import EntityService
+from mudd.services.entity_resolution import EntityResolutionService
 from mudd.services.inventory import InventoryService
-from mudd.services.player_context import PlayerContextService
 from mudd.services.rendering import RenderingService
 from mudd.services.visibility import VisibilityService
 
@@ -44,7 +44,7 @@ class Sync(commands.Cog):
         self,
         bot: "MuddBot",
         entity_service: EntityService,
-        player_context: PlayerContextService,
+        entity_resolution: EntityResolutionService,
         visibility_service: VisibilityService,
         pool: asyncpg.Pool,
         rendering_service: RenderingService,
@@ -52,7 +52,7 @@ class Sync(commands.Cog):
     ) -> None:
         self.bot = bot
         self.entity_service = entity_service
-        self.player_context = player_context
+        self.entity_resolution = entity_resolution
         self.visibility_service = visibility_service
         self._pool = pool
         self._rendering = rendering_service
@@ -122,7 +122,7 @@ class Sync(commands.Cog):
             # Invalidate entity cache after sync
             self.entity_service.invalidate_cache()
             # Invalidate player context cache after entity sync
-            self.player_context.invalidate_cache()
+            self.entity_resolution.invalidate_cache()
             # Clear template cache to ensure fresh templates
             self._rendering.clear_cache()
         except Exception:
@@ -190,7 +190,7 @@ class Sync(commands.Cog):
                     # Invalidate entity cache after sync
                     self.entity_service.invalidate_cache()
                     # Invalidate player context cache after entity sync
-                    self.player_context.invalidate_cache()
+                    self.entity_resolution.invalidate_cache()
                     # Clear template cache to ensure fresh templates
                     self._rendering.clear_cache()
                 except Exception:
@@ -248,7 +248,7 @@ class Sync(commands.Cog):
         )
         rooms = [row["room"] for row in rows]
         if rooms:
-            count = await self.player_context.prepopulate_cache(rooms)
+            count = await self.entity_resolution.prepopulate_cache(rooms)
             logger.info(f"Prepopulated autocomplete cache for {count} rooms")
 
     @tasks.loop(minutes=1)
@@ -351,5 +351,5 @@ class Sync(commands.Cog):
         if spawned > 0:
             # Invalidate caches since entities changed
             self.entity_service.invalidate_cache()
-            self.player_context.invalidate_cache()
+            self.entity_resolution.invalidate_cache()
             logger.info(f"Spawned {spawned} items from spawning pools")

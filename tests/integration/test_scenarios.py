@@ -106,7 +106,8 @@ class TestUserDiscoversRecords:
         assert any("WLFGRL" in name for name in names)
 
         # Room option shows close hint when focused
-        room_option = next(r for r in results if r.value == "Room")
+        # Values are now source-prefixed (e.g., "escape:room")
+        room_option = next(r for r in results if r.value == "escape:room")
         assert room_option.name == "[Close Wooden Chest] Room"
 
         # User examines a record inside the chest

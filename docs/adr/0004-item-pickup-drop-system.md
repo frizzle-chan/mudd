@@ -26,14 +26,6 @@ In the context of **controlling whether items can be picked up**, facing **the n
 - If `on_take` template doesn't call `effects.pickup()`: only the message is shown, item stays in room
 - All items (including quest rarity) move to inventory on pickup; use spawning pools for respawn
 
-### Quest Item Take Limit via Inventory Check
-
-**Status: Superseded by spawning pool approach**
-
-~~In the context of **quest items that should be takeable once per player**, facing **the need to prevent duplicate pickups while keeping items visible for others**, we decided to **check the player's inventory for an existing instance of the entity before allowing pickup**, to achieve **simple duplicate prevention using existing data structures**, accepting **that dropping and re-taking a quest item is allowed (inventory check, not historical tracking)**.~~
-
-Quest items now work like regular items: they move to the player's inventory when picked up. For quest items that should respawn, use spawning pools with unique tags. This simplifies the codebase by eliminating special-case logic for quest items.
-
 ### Entity Tags and Rarity
 
 In the context of **categorizing entities for spawning pools**, facing **the need to group items by type and control spawn frequency**, we decided to **add a tags system and rarity enum to entities**, to achieve **flexible categorization and weighted random selection**, accepting **additional schema complexity and content authoring overhead**.
@@ -317,7 +309,7 @@ In the context of **dropping items from inventory**, facing **the mismatch betwe
 
 **Inventory Thread Context:**
 - When `/interact` is run from an inventory item's forum thread, autocomplete shows only that item
-- Detection via `InventoryService.get_thread_item(channel)` which queries `entity_instances.discord_thread_id`
+- Detection via `EntityResolutionService.build_context()` which returns `ViewMode.INVENTORY_THREAD`
 - This is the preferred workflow for dropping items
 
 **"i." Prefix Shortcut:**
@@ -325,19 +317,21 @@ In the context of **dropping items from inventory**, facing **the mismatch betwe
 - Example: `i.beer` shows inventory items matching "beer"
 - Case-insensitive prefix detection
 - Works from any room channel
+- Handled by `EntityResolutionService.build_context()` which returns `ViewMode.INVENTORY`
 
 **Display Format:**
 - Inventory items shown with `[Inventory]` prefix: `[Inventory] Beer ⚪`
 - Distinguishes from room items in mixed contexts
 - Rarity emoji preserved via `display_name`
+- Values are source-prefixed (e.g., `inventory:Beer`)
 
 **Behavior Matrix:**
 
-| Context | Query | Autocomplete Source |
-|---------|-------|---------------------|
-| Inventory thread | Any | That thread's item only |
-| Room channel | `i.beer` | User's inventory filtered by "beer" |
-| Room channel | `beer` | Room entities filtered by "beer" |
+| Context | Query | Autocomplete Source | Value Prefix |
+|---------|-------|---------------------|--------------|
+| Inventory thread | Any | That thread's item only | `inventory:` |
+| Room channel | `i.beer` | User's inventory filtered by "beer" | `inventory:` |
+| Room channel | `beer` | Room entities filtered by "beer" | `room:` |
 
 **No Droppability Filtering:**
 - All inventory items shown, not just those with `on_drop` handler
@@ -374,3 +368,82 @@ In the context of **dropping items into containers**, facing **the need to suppo
 - Only items dropped on the floor count toward the 5-item clutter limit
 - Items in containers are exempt from this limit
 - Players can drop unlimited items into containers
+
+### Recursive Container Pickup and Drop
+
+In the context of **picking up and dropping containers with contents**, facing **the need for intuitive behavior where container contents move with the container**, we decided to **recursively move all container contents when the container is picked up or dropped**, to achieve **natural container behavior without manual item-by-item transfers**, accepting **additional database queries during pickup/drop operations**.
+
+**Pickup Behavior:**
+- When picking up a container, all items inside move to the player's inventory
+- Contents retain their `container_entity_id` link, keeping them logically inside the container
+- Contents are accessible via the container's inventory thread (implicit focus)
+
+**Drop Behavior:**
+- When dropping a container, all contents move to the room with it
+- Contents retain their `container_entity_id` link
+- Contents appear inside the container in the room
+
+**SQL for recursive pickup:**
+```sql
+-- Move container contents to inventory with container
+UPDATE entity_instances
+SET room = NULL, owner_id = $user_id,
+    player_dropped = FALSE, is_world_instance = FALSE
+WHERE container_entity_id = $container_entity_id AND room = $room
+```
+
+### Entity Resolution Unification
+
+In the context of **entity resolution for autocomplete and command execution**, facing **scattered resolution logic across multiple cogs with three separate context detection mechanisms**, we decided to **create a unified EntityResolutionService with source-prefixed autocomplete values**, to achieve **consistent, unambiguous entity resolution across all interaction contexts**, accepting **a new encoding scheme for autocomplete values**.
+
+**EntityResolutionService:**
+
+The `EntityResolutionService` consolidates entity visibility, focus context, and autocomplete logic into a unified API with three key methods:
+
+```python
+class EntityResolutionService:
+    async def build_context(self, interaction, query) -> InteractionContext
+    async def get_autocomplete_choices(self, ctx, query) -> list[Choice]
+    async def resolve_target(self, ctx, encoded_value) -> ResolvedTarget | ResolutionError
+```
+
+**InteractionContext:**
+```python
+class ViewMode(str, Enum):
+    ROOM = "room"           # Normal room view (with optional focus)
+    INVENTORY = "inventory" # Typed "i." prefix
+    INVENTORY_THREAD = "thread"  # In inventory forum thread
+
+@dataclass(frozen=True)
+class InteractionContext:
+    user_id: int
+    room: str                           # Always populated
+    view_mode: ViewMode
+    focus_entity_id: str | None = None  # For ROOM mode focus
+    thread_instance_id: UUID | None = None  # For INVENTORY_THREAD
+```
+
+**Source-Prefixed Autocomplete Values:**
+
+Autocomplete choices now use source-prefixed values for unambiguous resolution:
+
+```
+{source}:{entity_name}
+
+Sources: room, inventory, container, escape
+
+Examples:
+- room:Wooden Table              # Room entity
+- inventory:Rusty Sword          # Inventory item
+- container:Gold Key             # Item inside focused container
+- escape:room                    # Close focus, show room
+```
+
+**Resolution Strategy:**
+1. Parse source prefix to scope the search
+2. Try exact name match within that scope
+3. Fallback to prefix matching if exact fails (handles user edits)
+
+**Implicit Focus in Container Threads:**
+
+When a player is in an inventory thread for a container (`focus_mode != 'none'`), the system implicitly focuses on that container's contents. Autocomplete shows the container plus all its contents immediately without requiring an explicit "open" action.

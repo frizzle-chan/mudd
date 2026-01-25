@@ -310,7 +310,7 @@ class EntityService:
         """Get visible entities for a room.
 
         Returns top-level entities + contents of visible containers.
-        Not cached here - PlayerContextService caches the processed results.
+        Not cached here - EntityResolutionService caches the processed results.
 
         Args:
             room: Room ID

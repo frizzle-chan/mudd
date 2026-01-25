@@ -14,9 +14,9 @@ from mudd.cogs.ping import Ping
 from mudd.cogs.sync import Sync
 from mudd.database import close_pool, get_pool, init_database
 from mudd.services.entity import EntityService
+from mudd.services.entity_resolution import EntityResolutionService
 from mudd.services.focus_context import FocusContextService
 from mudd.services.inventory import InventoryService
-from mudd.services.player_context import PlayerContextService
 from mudd.services.rendering import RenderingService
 from mudd.services.visibility import VisibilityService
 
@@ -72,17 +72,19 @@ async def setup_hook():
     # Create services with explicit dependencies
     entity_service = EntityService(pool)
     focus_service = FocusContextService(pool)
-    player_context = PlayerContextService(entity_service, focus_service)
     visibility_service = VisibilityService(pool)
     rendering_service = RenderingService()
     inventory_service = InventoryService(pool, entity_service)
+    entity_resolution = EntityResolutionService(
+        entity_service, focus_service, inventory_service, pool
+    )
 
     # Create cogs with explicit dependencies
     await bot.add_cog(
         Interact(
             bot,
             entity_service,
-            player_context,
+            entity_resolution,
             visibility_service,
             inventory_service,
             pool,
@@ -93,7 +95,7 @@ async def setup_hook():
         Look(
             bot,
             entity_service,
-            player_context,
+            entity_resolution,
             visibility_service,
             rendering_service,
             inventory_service,
@@ -101,13 +103,13 @@ async def setup_hook():
     )
     await bot.add_cog(Ping(bot))
     await bot.add_cog(
-        Movement(bot, visibility_service, player_context, inventory_service)
+        Movement(bot, visibility_service, entity_resolution, inventory_service)
     )
     await bot.add_cog(
         Sync(
             bot,
             entity_service,
-            player_context,
+            entity_resolution,
             visibility_service,
             pool,
             rendering_service,

@@ -1,7 +1,7 @@
 """Interact command for entity interactions."""
 
 import logging
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 import asyncpg
@@ -9,17 +9,17 @@ import discord
 from discord import Interaction, app_commands
 from discord.ext import commands
 
-from mudd.matching.entity_matcher import match_entity_by_prefix
 from mudd.matching.verb_matcher import match_verb
 from mudd.services.entity import ResolvedEntity
+from mudd.services.entity_resolution import ResolutionError
 from mudd.services.rendering import RenderingService, TemplateRenderError
 from mudd.services.trigger_effects import TriggerEffects
 from mudd.types import UserContext, VerbAction
 
 if TYPE_CHECKING:
-    from mudd.services.entity import EntityInstance, EntityService
+    from mudd.services.entity import EntityService
+    from mudd.services.entity_resolution import EntityResolutionService
     from mudd.services.inventory import InventoryService
-    from mudd.services.player_context import PlayerContextService
     from mudd.services.visibility import VisibilityServiceProtocol
 
 logger = logging.getLogger(__name__)
@@ -30,7 +30,7 @@ class Interact(commands.Cog):
         self,
         bot: commands.Bot | None,
         entity_service: "EntityService",
-        player_context: "PlayerContextService",
+        entity_resolution: "EntityResolutionService",
         visibility_service: "VisibilityServiceProtocol",
         inventory_service: "InventoryService",
         pool: asyncpg.Pool,
@@ -38,7 +38,7 @@ class Interact(commands.Cog):
     ) -> None:
         self.bot = bot
         self.entity_service = entity_service
-        self.player_context = player_context
+        self.entity_resolution = entity_resolution
         self.visibility_service = visibility_service
         self._inventory = inventory_service
         self.pool = pool
@@ -49,45 +49,17 @@ class Interact(commands.Cog):
     ) -> list[app_commands.Choice[str]]:
         """Autocomplete callback for target parameter.
 
-        Supports three contexts:
-        1. Inventory thread: Shows only that thread's item
+        Uses unified EntityResolutionService for all contexts:
+        1. Inventory thread: Shows thread's item (and contents if container)
         2. "i." prefix: Searches user's inventory
-        3. Default: Searches room entities
+        3. Default: Searches room entities with focus handling
         """
         try:
             await self.visibility_service.wait_for_startup()
-            user_id = interaction.user.id
 
-            # Feature 1: Check if in inventory thread
-            # Cast is safe: get_thread_item checks isinstance(Thread) and
-            # returns None otherwise
-            channel = cast(
-                discord.abc.GuildChannel | discord.Thread | None, interaction.channel
-            )
-            thread_item = await self._inventory.get_thread_item(channel)
-            if thread_item is not None:
-                return self._build_inventory_choices([thread_item])
-
-            # Feature 2: Check for "i." prefix
-            if current.lower().startswith("i."):
-                query = current[2:]  # Strip "i." prefix
-                return await self._autocomplete_inventory(user_id, query)
-
-            # Default: Room entities (existing behavior)
-            room = getattr(interaction.channel, "name", None)
-            if not room:
-                return []
-
-            choices = await self.player_context.get_visible_entities(
-                room, user_id, query=current
-            )
-            return [
-                app_commands.Choice(
-                    name=c.display_name,
-                    value=c.instance.entity.name,
-                )
-                for c in choices
-            ][:25]
+            # Build context and get choices using unified API
+            ctx = await self.entity_resolution.build_context(interaction, current)
+            return await self.entity_resolution.get_autocomplete_choices(ctx, current)
 
         except asyncpg.PostgresError:
             logger.exception("Database error in target autocomplete")
@@ -95,30 +67,6 @@ class Interact(commands.Cog):
         except Exception:
             logger.exception("Unexpected error in target autocomplete")
             return []
-
-    async def _autocomplete_inventory(
-        self, user_id: int, query: str
-    ) -> list[app_commands.Choice[str]]:
-        """Build autocomplete choices from user's inventory."""
-        inventory = await self.entity_service.get_user_inventory(user_id)
-
-        if query:
-            match_result = match_entity_by_prefix(query, inventory)
-            inventory = [m.instance for m in match_result.matches]
-
-        return self._build_inventory_choices(inventory)
-
-    def _build_inventory_choices(
-        self, instances: list["EntityInstance"]
-    ) -> list[app_commands.Choice[str]]:
-        """Build Discord choices with [Inventory] prefix."""
-        return [
-            app_commands.Choice(
-                name=f"[Inventory] {inst.entity.display_name}",
-                value=inst.entity.name,
-            )
-            for inst in instances
-        ][:25]
 
     @app_commands.command(name="interact", description="Interact with things")
     @app_commands.describe(
@@ -131,29 +79,9 @@ class Interact(commands.Cog):
         """Interact with an entity using a verb."""
         await self.visibility_service.wait_for_startup()
 
-        room = getattr(interaction.channel, "name", None)
-
-        # If interaction came from inventory thread, get user's actual room
-        # Cast is safe: get_thread_item checks isinstance(Thread) internally
-        channel = cast(
-            discord.abc.GuildChannel | discord.Thread | None, interaction.channel
-        )
-        thread_item = await self._inventory.get_thread_item(channel)
-        if thread_item is not None:
-            room = await self.pool.fetchval(
-                "SELECT current_room FROM users WHERE id = $1",
-                interaction.user.id,
-            )
-
-        if not room:
-            await interaction.response.send_message(
-                "You can't interact with anything here.", ephemeral=True
-            )
-            return
-
         user_id = interaction.user.id
 
-        # Match verb first to determine entity source (room vs inventory)
+        # Match verb first to determine context
         action_type = await match_verb(self.pool, action)
 
         if action_type is None:
@@ -162,48 +90,51 @@ class Interact(commands.Cog):
             )
             return
 
-        # For drop actions OR inventory thread context, look up from inventory
-        if action_type == VerbAction.ON_DROP or thread_item is not None:
-            all_entities = await self.entity_service.get_user_inventory(user_id)
-            not_found_msg = f"You don't have '{target}'."
-        else:
-            # Uses get_room_entities (not get_autocomplete_entities) intentionally:
-            # players can interact with hidden container contents if they know the name
-            all_entities = await self.entity_service.get_room_entities(room)
-            not_found_msg = f"You don't see '{target}' here."
+        # For drop actions, force inventory context by prefixing "i."
+        # This ensures the target is resolved from inventory
+        context_query = target
+        if action_type == VerbAction.ON_DROP and not target.startswith("i."):
+            context_query = f"i.{target}"
 
-        # Resolve target to entity
-        match_result = match_entity_by_prefix(target, all_entities)
+        # Build context for resolution
+        ctx = await self.entity_resolution.build_context(interaction, context_query)
+        room = ctx.room
 
-        if match_result.is_empty():
-            await interaction.response.send_message(not_found_msg, ephemeral=True)
-            return
-
-        if match_result.is_ambiguous():
-            names = [m.instance.entity.name for m in match_result.matches]
-            names_list = ", ".join(f"*{name}*" for name in names)
+        if not room:
             await interaction.response.send_message(
-                f"Which one? {names_list}", ephemeral=True
+                "You can't interact with anything here.", ephemeral=True
             )
             return
 
-        # Unique match
-        matched_instance = match_result.matches[0].instance
+        # Resolve target using unified API
+        result = await self.entity_resolution.resolve_target(ctx, target)
+
+        if isinstance(result, ResolutionError):
+            if result.error_type == "ambiguous":
+                await interaction.response.send_message(result.message, ephemeral=True)
+            else:
+                await interaction.response.send_message(result.message, ephemeral=True)
+            return
+
+        # Successfully resolved entity
+        matched_instance = result.instance
         entity = matched_instance.entity
+        source = result.source  # "room", "inventory", or "container"
 
         # Skip focus manipulation for inventory actions - they don't affect room focus
-        if action_type != VerbAction.ON_DROP:
+        is_inventory_source = source in ("inventory", "container")
+        if not is_inventory_source and action_type != VerbAction.ON_DROP:
             # Check if target is in current focus (to decide whether to clear focus)
-            is_in_focus = await self.player_context.is_entity_in_focus(
+            is_in_focus = await self.entity_resolution.is_entity_in_focus(
                 user_id, room, entity.id
             )
 
             if is_in_focus:
                 # Update timestamp to prevent timeout when interacting with focus
-                await self.player_context.update_focus_timestamp(user_id)
+                await self.entity_resolution.update_focus_timestamp(user_id)
             else:
                 # Clear focus when interacting with entity not in current focus
-                await self.player_context.clear_focus(user_id, reason="interaction")
+                await self.entity_resolution.clear_focus(user_id, reason="interaction")
 
         # Get handler text based on action
         handler_text = _get_handler_text(entity, action_type)
@@ -213,9 +144,17 @@ class Interact(commands.Cog):
             return
 
         # Fetch container contents for template (regardless of contents_visible)
-        container_contents = await self.entity_service.get_container_contents(
-            entity.id, room
-        )
+        # For inventory items, check inventory container contents
+        if is_inventory_source:
+            container_contents = (
+                await self.entity_resolution._get_inventory_container_contents(
+                    user_id, entity.id
+                )
+            )
+        else:
+            container_contents = await self.entity_service.get_container_contents(
+                entity.id, room
+            )
         contents_str = self._rendering.build_contents_string(container_contents)
 
         # Create user context for template
@@ -227,7 +166,7 @@ class Interact(commands.Cog):
         # For drop actions, look up focused container for template context
         container: ResolvedEntity | None = None
         if action_type == VerbAction.ON_DROP:
-            focus = await self.player_context.get_focus(user_id, room)
+            focus = await self.entity_resolution.get_focus(user_id, room)
             if focus and focus.focus_mode == "container":
                 container = await self.entity_service.get_entity(focus.entity_id)
 
@@ -250,11 +189,11 @@ class Interact(commands.Cog):
         # Handle focus changes based on action type
         if action_type == VerbAction.ON_OPEN and entity.focus_mode != "none":
             # Establish focus when opening a focusable entity (e.g., container)
-            await self.player_context.set_focus(user_id, room, entity)
+            await self.entity_resolution.set_focus(user_id, room, entity)
         elif action_type == VerbAction.ON_CLOSE:
             # Clear focus when explicitly closing
             # Get close message (template) before clearing
-            close_template = await self.player_context.clear_focus(
+            close_template = await self.entity_resolution.clear_focus(
                 user_id, reason="close"
             )
             if close_template:
@@ -333,6 +272,9 @@ class Interact(commands.Cog):
     ) -> str | None:
         """Handle item pickup based on effects.pickup() call.
 
+        Also handles recursive container pickup: when picking up a container,
+        all its contents move to inventory with it.
+
         Args:
             interaction: Discord interaction
             entity: The entity being taken
@@ -366,6 +308,19 @@ class Interact(commands.Cog):
         if result == "UPDATE 0":
             return "The item is no longer there."
 
+        # Recursive container pickup: move all contents with the container
+        # This keeps the container_entity_id link so contents are accessible
+        # via the container's inventory thread
+        await self.pool.execute(
+            """UPDATE entity_instances
+            SET room = NULL, owner_id = $1,
+                player_dropped = FALSE, is_world_instance = FALSE
+            WHERE container_entity_id = $2 AND room = $3""",
+            user_id,
+            entity.id,
+            room,
+        )
+
         # Get the entity instance for rendering description
         instance = await self.entity_service.get_entity_instance(instance_id)
         if instance is None:
@@ -386,7 +341,7 @@ class Interact(commands.Cog):
             # Item is still in inventory, just no Discord thread
 
         # Invalidate autocomplete cache so the item no longer appears in room
-        self.player_context.invalidate_cache()
+        self.entity_resolution.invalidate_cache()
         return template_output
 
     async def _handle_drop(
@@ -398,6 +353,9 @@ class Interact(commands.Cog):
         effects: TriggerEffects,
     ) -> str | None:
         """Handle item drop from inventory to room.
+
+        Also handles recursive container drop: when dropping a container,
+        all its contents move to the room with it.
 
         Args:
             interaction: Discord interaction
@@ -421,7 +379,7 @@ class Interact(commands.Cog):
         user_id = interaction.user.id
 
         # Check for focus context to determine drop target
-        focus = await self.player_context.get_focus(user_id, room)
+        focus = await self.entity_resolution.get_focus(user_id, room)
         container_entity_id: str | None = None
 
         if focus and focus.focus_mode == "container":
@@ -452,12 +410,23 @@ class Interact(commands.Cog):
         if result == "UPDATE 0":
             return "You no longer have that item."
 
+        # Recursive container drop: move all contents to room with the container
+        # Contents keep their container_entity_id link so they stay inside
+        await self.pool.execute(
+            """UPDATE entity_instances
+            SET room = $1, owner_id = NULL
+            WHERE container_entity_id = $2 AND owner_id = $3""",
+            room,
+            entity.id,
+            user_id,
+        )
+
         # Queue thread deletion to run after response is sent
         # (avoids "Unknown Channel" error when dropping from inventory thread)
         effects.queue_thread_deletion(instance_id, guild.id)
 
         # Invalidate autocomplete cache so the dropped item appears in room
-        self.player_context.invalidate_cache()
+        self.entity_resolution.invalidate_cache()
 
         return None
 
@@ -631,7 +600,7 @@ class Interact(commands.Cog):
             instance_id,
         )
         if result == "DELETE 1":
-            self.player_context.invalidate_cache()
+            self.entity_resolution.invalidate_cache()
             return True
         return False
 

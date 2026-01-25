@@ -1,20 +1,23 @@
 """Look command for viewing surroundings and examining entities."""
 
 import logging
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 import asyncpg
 import discord
 from discord import Interaction, app_commands
 from discord.ext import commands
 
-from mudd.matching.entity_matcher import match_entity_by_prefix
+from mudd.services.entity_resolution import ResolutionError, ViewMode
 from mudd.services.rendering import RenderingService, TemplateRenderError
 
 if TYPE_CHECKING:
     from mudd.services.entity import EntityService
+    from mudd.services.entity_resolution import (
+        EntityResolutionService,
+        InteractionContext,
+    )
     from mudd.services.inventory import InventoryService
-    from mudd.services.player_context import PlayerContextService
     from mudd.services.visibility import VisibilityServiceProtocol
 
 logger = logging.getLogger(__name__)
@@ -25,14 +28,14 @@ class Look(commands.Cog):
         self,
         bot: commands.Bot | None,
         entity_service: "EntityService",
-        player_context: "PlayerContextService",
+        entity_resolution: "EntityResolutionService",
         visibility_service: "VisibilityServiceProtocol",
         rendering_service: RenderingService,
         inventory_service: "InventoryService",
     ) -> None:
         self.bot = bot
         self.entity_service = entity_service
-        self.player_context = player_context
+        self.entity_resolution = entity_resolution
         self.visibility_service = visibility_service
         self._rendering = rendering_service
         self._inventory = inventory_service
@@ -52,48 +55,9 @@ class Look(commands.Cog):
         try:
             await self.visibility_service.wait_for_startup()
 
-            # Check if in inventory thread
-            channel = cast(
-                discord.abc.GuildChannel | discord.Thread | None, interaction.channel
-            )
-            thread_item = await self._inventory.get_thread_item(channel)
-            if thread_item is not None:
-                # Only show this thread's item (no Room option)
-                return [
-                    app_commands.Choice(
-                        name=thread_item.entity.display_name,
-                        value=thread_item.entity.name,
-                    )
-                ]
-
-            room = getattr(interaction.channel, "name", None)
-            if not room:
-                return []
-
-            # Get autocomplete choices with text filtering
-            choices = await self.player_context.get_visible_entities(
-                room, interaction.user.id, query=current
-            )
-
-            # Return as choices (limit 25 per Discord)
-            result = [
-                app_commands.Choice(
-                    name=c.display_name,
-                    value=c.instance.entity.name,  # Use actual name for matching
-                )
-                for c in choices
-            ]
-
-            # Get focus to determine Room option display
-            focus = await self.player_context.get_focus(interaction.user.id, room)
-            room_display = f"[Close {focus.entity_name}] Room" if focus else "Room"
-
-            # Add "Room" option at top if it matches current input
-            if not current or "room".startswith(current.lower()):
-                room_choice = app_commands.Choice(name=room_display, value="Room")
-                return [room_choice] + result[:24]
-
-            return result[:25]
+            # Build context and get choices using unified API
+            ctx = await self.entity_resolution.build_context(interaction, current)
+            return await self.entity_resolution.get_autocomplete_choices(ctx, current)
         except asyncpg.PostgresError:
             logger.exception(
                 "Database error in at autocomplete for room '%s'",
@@ -114,153 +78,147 @@ class Look(commands.Cog):
         """Look at room or specific entity."""
         await self.visibility_service.wait_for_startup()
 
-        # Check if in inventory thread
-        channel = cast(
-            discord.abc.GuildChannel | discord.Thread | None, interaction.channel
-        )
-        thread_item = await self._inventory.get_thread_item(channel)
+        # Build context for resolution
+        ctx = await self.entity_resolution.build_context(interaction, at)
+        user_id = interaction.user.id
+        room = ctx.room
 
-        if thread_item is not None:
-            # In inventory thread: only allow looking at this item
-            if at == "Room" or not at:
-                # Show item description instead of "room" in inventory
-                detail_text = await self._rendering.render_entity_on_look(
-                    thread_item, self.entity_service, None
-                )
-                await interaction.response.send_message(detail_text, ephemeral=True)
-                return
-            # Match against just this item
-            match_result = match_entity_by_prefix(at, [thread_item])
-            if match_result.is_empty():
-                await interaction.response.send_message(
-                    f"You don't have '{at}'.", ephemeral=True
-                )
-                return
-            # Show item description
-            detail_text = await self._rendering.render_entity_on_look(
-                match_result.matches[0].instance, self.entity_service, None
-            )
-            await interaction.response.send_message(detail_text, ephemeral=True)
+        # Handle "Room" and empty input as escape (show room description)
+        # This supports both legacy calls with at="Room" and new escape:room values
+        if not at or at == "Room":
+            await self._handle_escape(interaction, ctx)
             return
 
-        room = getattr(interaction.channel, "name", None)
+        # Resolve target using unified API
+        result = await self.entity_resolution.resolve_target(ctx, at)
 
-        if not at or at == "Room":
-            # Clear focus when explicitly selecting "Room" from autocomplete
-            # This is the escape mechanism per user request
-            close_msg = None
-            if at == "Room":
-                # Get focus to capture entity before clearing (for template rendering)
-                if room:
-                    focus = await self.player_context.get_focus(
-                        interaction.user.id, room
+        if isinstance(result, ResolutionError):
+            if result.error_type == "escape":
+                # Handle escape - clear focus and show room/item
+                await self._handle_escape(interaction, ctx)
+                return
+            elif result.error_type == "ambiguous":
+                # Disambiguation prompt
+                await interaction.response.send_message(result.message, ephemeral=True)
+                return
+            else:
+                # Not found
+                if ctx.view_mode == ViewMode.INVENTORY_THREAD:
+                    await interaction.response.send_message(
+                        result.message, ephemeral=True
                     )
-                    focused_entity = None
-                    if focus:
-                        focused_entity = await self.entity_service.get_entity(
-                            focus.entity_id
-                        )
-
-                    # Clear focus with "close" reason to get on_close template
-                    close_template = await self.player_context.clear_focus(
-                        interaction.user.id, reason="close"
-                    )
-
-                    # Render close message if we have template and entity
-                    if close_template and focused_entity:
-                        try:
-                            close_msg = self._rendering.render(
-                                close_template, focused_entity, ""
-                            )
-                        except TemplateRenderError:
-                            logger.warning(
-                                "Template error rendering on_close for entity '%s'",
-                                focused_entity.id,
-                                exc_info=True,
-                            )
-                            entity_name = focused_entity.name
-                            close_msg = f"You step away from the *{entity_name}*."
                 else:
-                    await self.player_context.clear_focus(
-                        interaction.user.id, reason="close"
+                    # Show room description on not found
+                    topic = getattr(interaction.channel, "topic", None)
+                    room_description = topic or "You see nothing special."
+                    await interaction.response.send_message(
+                        f"{result.message}\n\n{room_description}",
+                        ephemeral=True,
                     )
-
-            # Show room description + top-level entities
-            room_name = (
-                await self.visibility_service.get_room_name(room) if room else None
-            )
-            topic = getattr(interaction.channel, "topic", None)
-            room_description = topic or "You see nothing special."
-
-            entity_text = ""
-            if room:
-                entities = await self.entity_service.get_top_level_room_entities(room)
-                entity_text = await self._rendering.format_room_entities(
-                    entities, self.entity_service, room
-                )
-
-            # Build message, prepending close message if present
-            parts = []
-            if close_msg:
-                parts.append(close_msg)
-            if room_name:
-                parts.append(f"### {room_name}")
-            parts.append(room_description)
-            if entity_text:
-                parts.append(entity_text)
-
-            message = "\n\n".join(parts)
-
-            await interaction.response.send_message(message, ephemeral=True)
-        else:
-            # Look at specific entity
-            if not room:
-                await interaction.response.send_message(
-                    "You can't look at anything here.", ephemeral=True
-                )
                 return
 
-            user_id = interaction.user.id
+        # Successfully resolved entity
+        matched_instance = result.instance
+        entity = matched_instance.entity
 
-            all_entities = await self.entity_service.get_room_entities(room)
+        # Handle focus for room entities only
+        if ctx.view_mode == ViewMode.ROOM:
+            # Check if looking at entity that is NOT in current focus
+            is_in_focus = await self.entity_resolution.is_entity_in_focus(
+                user_id, room, entity.id
+            )
 
-            match_result = match_entity_by_prefix(at, all_entities)
-
-            if match_result.is_empty():
-                # No match - show room description
-                topic = getattr(interaction.channel, "topic", None)
-                room_description = topic or "You see nothing special."
-                await interaction.response.send_message(
-                    f"You don't see '{at}' here.\n\n{room_description}",
-                    ephemeral=True,
-                )
-            elif match_result.is_ambiguous():
-                # Disambiguation prompt
-                names = [m.instance.entity.name for m in match_result.matches]
-                names_list = ", ".join(f"*{name}*" for name in names)
-                await interaction.response.send_message(
-                    f"Which one? {names_list}", ephemeral=True
-                )
+            # Clear focus if looking at unrelated entity
+            # (per ADR 0003: "focus follows attention")
+            if not is_in_focus:
+                await self.entity_resolution.clear_focus(user_id, reason="interaction")
             else:
-                # Unique match: check if should clear focus
-                matched_instance = match_result.matches[0].instance
-                entity = matched_instance.entity
+                # Update timestamp to prevent timeout
+                await self.entity_resolution.update_focus_timestamp(user_id)
 
-                # Check if looking at entity that is NOT in current focus
-                is_in_focus = await self.player_context.is_entity_in_focus(
-                    user_id, room, entity.id
+        # Render on_look template
+        # Use room=None for inventory items
+        render_room = room if result.source == "room" else None
+        detail_text = await self._rendering.render_entity_on_look(
+            matched_instance, self.entity_service, render_room
+        )
+        await interaction.response.send_message(detail_text, ephemeral=True)
+
+    async def _handle_escape(
+        self, interaction: Interaction, ctx: "InteractionContext"
+    ) -> None:
+        """Handle escape action (close focus, show room or thread item)."""
+        user_id = interaction.user.id
+        room = ctx.room
+
+        if ctx.view_mode == ViewMode.INVENTORY_THREAD and ctx.thread_instance_id:
+            # In inventory thread container - close focus and show the container
+            await self.entity_resolution.clear_focus(user_id, reason="close")
+
+            # Get thread item and show it
+            channel = interaction.channel
+            if isinstance(channel, (discord.abc.GuildChannel, discord.Thread)):
+                thread_item = await self._inventory.get_thread_item(channel)
+                if thread_item:
+                    detail_text = await self._rendering.render_entity_on_look(
+                        thread_item, self.entity_service, None
+                    )
+                    await interaction.response.send_message(detail_text, ephemeral=True)
+                    return
+
+            await interaction.response.send_message(
+                "You see nothing special.", ephemeral=True
+            )
+            return
+
+        # Room escape - clear focus and show room
+        close_msg = None
+
+        # Get focus to capture entity before clearing (for template rendering)
+        focus = await self.entity_resolution.get_focus(user_id, room)
+        focused_entity = None
+        if focus:
+            focused_entity = await self.entity_service.get_entity(focus.entity_id)
+
+        # Clear focus with "close" reason to get on_close template
+        close_template = await self.entity_resolution.clear_focus(
+            user_id, reason="close"
+        )
+
+        # Render close message if we have template and entity
+        if close_template and focused_entity:
+            try:
+                close_msg = self._rendering.render(close_template, focused_entity, "")
+            except TemplateRenderError:
+                logger.warning(
+                    "Template error rendering on_close for entity '%s'",
+                    focused_entity.id,
+                    exc_info=True,
                 )
+                entity_name = focused_entity.name
+                close_msg = f"You step away from the *{entity_name}*."
 
-                # Clear focus if looking at unrelated entity
-                # (per ADR 0003: "focus follows attention")
-                if not is_in_focus:
-                    await self.player_context.clear_focus(user_id, reason="interaction")
-                else:
-                    # Update timestamp to prevent timeout
-                    await self.player_context.update_focus_timestamp(user_id)
+        # Show room description + top-level entities
+        room_name = await self.visibility_service.get_room_name(room) if room else None
+        topic = getattr(interaction.channel, "topic", None)
+        room_description = topic or "You see nothing special."
 
-                # Render on_look template
-                detail_text = await self._rendering.render_entity_on_look(
-                    matched_instance, self.entity_service, room
-                )
-                await interaction.response.send_message(detail_text, ephemeral=True)
+        entity_text = ""
+        if room:
+            entities = await self.entity_service.get_top_level_room_entities(room)
+            entity_text = await self._rendering.format_room_entities(
+                entities, self.entity_service, room
+            )
+
+        # Build message, prepending close message if present
+        parts = []
+        if close_msg:
+            parts.append(close_msg)
+        if room_name:
+            parts.append(f"### {room_name}")
+        parts.append(room_description)
+        if entity_text:
+            parts.append(entity_text)
+
+        message = "\n\n".join(parts)
+        await interaction.response.send_message(message, ephemeral=True)

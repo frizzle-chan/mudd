@@ -15,9 +15,9 @@ from mudd.cogs.interact import Interact
 from mudd.cogs.look import Look
 from mudd.cogs.movement import Movement
 from mudd.services.entity import EntityService
+from mudd.services.entity_resolution import EntityResolutionService
 from mudd.services.focus_context import FocusContextService
 from mudd.services.inventory import InventoryService
-from mudd.services.player_context import PlayerContextService
 from mudd.services.rendering import RenderingService
 from tests.mocks.discord import (
     MockGuild,
@@ -77,12 +77,12 @@ class TestClient:
         # Create real services with test database
         self.entity_service = EntityService(pool)
         self.focus_service = FocusContextService(pool)
-        self.player_context = PlayerContextService(
-            self.entity_service, self.focus_service
-        )
         self._stub_visibility_service = StubVisibilityService()
         self.rendering_service = RenderingService()
         self.inventory_service = InventoryService(pool, self.entity_service)
+        self.entity_resolution = EntityResolutionService(
+            self.entity_service, self.focus_service, self.inventory_service, pool
+        )
 
         # Cast stub to VisibilityServiceProtocol for type checking
         # (StubVisibilityService implements the protocol interface)
@@ -95,7 +95,7 @@ class TestClient:
         self.look_cog = Look(
             bot=None,
             entity_service=self.entity_service,
-            player_context=self.player_context,
+            entity_resolution=self.entity_resolution,
             visibility_service=visibility_service,
             rendering_service=self.rendering_service,
             inventory_service=self.inventory_service,
@@ -103,7 +103,7 @@ class TestClient:
         self.interact_cog = Interact(
             bot=None,
             entity_service=self.entity_service,
-            player_context=self.player_context,
+            entity_resolution=self.entity_resolution,
             visibility_service=visibility_service,
             inventory_service=self.inventory_service,
             pool=pool,
@@ -112,7 +112,7 @@ class TestClient:
         self.movement_cog = Movement(
             bot=None,
             visibility_service=visibility_service,
-            player_context=self.player_context,
+            entity_resolution=self.entity_resolution,
             inventory_service=self.inventory_service,
         )
 
