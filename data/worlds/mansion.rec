@@ -192,7 +192,7 @@ Id: beverage
 Name: beverage
 Prototype: item
 OnUse: You crack open the {{ name }} and take a refreshing sip. It restores health.
-OnTake: {{ effects.pickup() }}You grab a {{ name }} from the fridge.
+OnTake: {{ effects.pickup() }}You grab a {{ name }}.
 
 # ----------------------------------------------------------------------------
 # Foyer entities
