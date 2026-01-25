@@ -296,10 +296,12 @@ class Interact(commands.Cog):
             return "You can't take items outside a server."
 
         # Move the item instance to the user's inventory
+        # Clear spawning_pool_id so the pool can spawn a replacement
         result = await self.pool.execute(
             """UPDATE entity_instances
             SET room = NULL, owner_id = $1, player_dropped = FALSE,
-                container_entity_id = NULL, is_world_instance = FALSE
+                container_entity_id = NULL, is_world_instance = FALSE,
+                spawning_pool_id = NULL
             WHERE id = $2 AND room = $3""",
             user_id,
             instance_id,
@@ -314,7 +316,8 @@ class Interact(commands.Cog):
         await self.pool.execute(
             """UPDATE entity_instances
             SET room = NULL, owner_id = $1,
-                player_dropped = FALSE, is_world_instance = FALSE
+                player_dropped = FALSE, is_world_instance = FALSE,
+                spawning_pool_id = NULL
             WHERE container_entity_id = $2 AND room = $3""",
             user_id,
             entity.id,
