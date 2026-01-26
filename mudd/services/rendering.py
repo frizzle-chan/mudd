@@ -185,7 +185,7 @@ class RenderingService:
         """
         if template is None:
             return ""
-        name_formatted = f"*{entity.name}*"
+        name_formatted = f"*{entity.display_name}*"
         return self._renderer.render_template(
             template, entity, name_formatted, contents
         )
@@ -196,6 +196,7 @@ class RenderingService:
         entity: ResolvedEntity,
         user: UserContext,
         contents: str = "",
+        container: ResolvedEntity | None = None,
     ) -> tuple[str, TriggerEffects]:
         """Render a template and collect side effects.
 
@@ -205,6 +206,7 @@ class RenderingService:
             - `contents`: Pre-formatted bullet list of container contents
             - `user`: UserContext with name and mention
             - `effects`: TriggerEffects for queuing side effects
+            - `container`: Optional ResolvedEntity for focused container (drop target)
 
         Example template:
             {{ effects.broadcast("**" ~ user.name ~ "** put on some music.") }}
@@ -215,6 +217,7 @@ class RenderingService:
             entity: The entity providing context
             user: User context with name and mention
             contents: Pre-formatted bullet list of contents (default: "")
+            container: Optional container entity for drop context (default: None)
 
         Returns:
             Tuple of (rendered output, collected effects)
@@ -225,12 +228,13 @@ class RenderingService:
         effects = TriggerEffects()
         if template is None:
             return "", effects
-        context = {
+        context: dict[str, Any] = {
             "e": entity,
-            "name": f"*{entity.name}*",
+            "name": f"*{entity.display_name}*",
             "contents": contents,
             "user": user,
             "effects": effects,
+            "container": container,  # Always include, may be None
         }
         output = self._renderer.render_with_context(template, context, entity.id)
         return output, effects
@@ -266,7 +270,7 @@ class RenderingService:
                     "using name fallback",
                     c.entity.id,
                 )
-                descriptions.append(f"*{c.entity.name}*")
+                descriptions.append(f"*{c.entity.display_name}*")
 
         if not descriptions:
             return ""
@@ -345,7 +349,7 @@ class RenderingService:
         self,
         instance: EntityInstance,
         entity_service: ContainerContentsFetcher,
-        room: str,
+        room: str | None,
     ) -> str:
         """Render entity on_look template for /look at:<entity>.
 
@@ -360,17 +364,17 @@ class RenderingService:
         Args:
             instance: Entity instance to render
             entity_service: Service to fetch container contents
-            room: Room ID for querying contents
+            room: Room ID for querying contents (None for inventory items)
 
         Returns:
             Rendered on_look output
         """
         entity = instance.entity
-        parts: list[str] = [f"### {entity.name}"]
+        parts: list[str] = [f"### {entity.display_name}"]
 
-        # Fetch and format container contents
+        # Fetch and format container contents (skip for inventory items with no room)
         contents_str = ""
-        if entity.contents_visible:
+        if entity.contents_visible and room is not None:
             contents = await entity_service.get_container_contents(entity.id, room)
             contents_str = self.build_contents_string(contents)
 

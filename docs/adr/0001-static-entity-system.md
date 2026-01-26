@@ -235,7 +235,7 @@ In the context of **resolving `/interact` commands**, facing **multiple entities
 4. If no matches: respond with "You don't see that here"
 
 **Example disambiguation response:**
-> User: /interact do:smash target:vase
+> User: /interact with:vase action:smash
 > Bot: Which one? *Fancy Vase*, *Cracked Vase*
 
 ### Verb and Target Selection (Autocomplete-First)
@@ -244,7 +244,7 @@ In the context of **parsing `/interact` commands**, facing **the complexity of n
 
 **Command format:**
 ```
-/interact do:<verb> target:<entity>
+/interact with:<entity> action:<verb>
 ```
 
 **Benefits over freeform parsing:**
@@ -265,7 +265,7 @@ In the context of **parsing `/interact` commands**, facing **the complexity of n
 - *Superseded by ADR 0003*: Entity autocomplete is now controlled by focus context, not `contents_visible`
 
 **Example:**
-> User types: `/interact do:smash target:va`
+> User types: `/interact with:va action:smash`
 > Autocomplete suggests: "Fancy Vase", "Cracked Vase"
 > User selects: "Fancy Vase"
 > Bot executes: attack handler for Fancy Vase

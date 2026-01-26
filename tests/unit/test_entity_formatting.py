@@ -48,9 +48,10 @@ def make_entity(
         on_take=None,
         on_open=None,
         on_close=None,
+        on_drop=None,
         contents_visible=None,
-        spawn_mode="none",
         focus_mode="none",
+        rarity="none",
     )
 
 
@@ -74,6 +75,28 @@ class TestRender:
         entity = make_entity(name="Flower Vase")
         result = rendering_service.render("the {{ name }} is a nice {{ name }}", entity)
         assert result == "the *Flower Vase* is a nice *Flower Vase*"
+
+    def test_renders_rarity_emoji_in_name(self, rendering_service):
+        """Entity name includes rarity emoji when rarity is not 'none'."""
+        entity = ResolvedEntity(
+            id="gem",
+            name="Ruby",
+            description_short="a {{ name }}",
+            description_long=None,
+            on_look=None,
+            on_touch=None,
+            on_attack=None,
+            on_use=None,
+            on_take=None,
+            on_open=None,
+            on_close=None,
+            on_drop=None,
+            contents_visible=None,
+            focus_mode="none",
+            rarity="rare",
+        )
+        result = rendering_service.render("You found {{ name }}!", entity)
+        assert result == "You found *Ruby 🔵*!"
 
     def test_handles_no_template_variables(self, rendering_service):
         """Template without variables is returned unchanged."""
@@ -116,9 +139,10 @@ class TestBuildContentsString:
             on_take=None,
             on_open=None,
             on_close=None,
+            on_drop=None,
             contents_visible=None,
-            spawn_mode="none",
             focus_mode="none",
+            rarity="none",
         )
         contents = [
             EntityInstance(
@@ -143,9 +167,10 @@ class TestBuildContentsString:
             on_take=None,
             on_open=None,
             on_close=None,
+            on_drop=None,
             contents_visible=None,
-            spawn_mode="none",
             focus_mode="none",
+            rarity="none",
         )
         plaque = ResolvedEntity(
             id="plaque",
@@ -159,9 +184,10 @@ class TestBuildContentsString:
             on_take=None,
             on_open=None,
             on_close=None,
+            on_drop=None,
             contents_visible=None,
-            spawn_mode="none",
             focus_mode="none",
+            rarity="none",
         )
         contents = [
             EntityInstance(
@@ -190,9 +216,10 @@ class TestBuildContentsString:
             on_take=None,
             on_open=None,
             on_close=None,
+            on_drop=None,
             contents_visible=None,
-            spawn_mode="none",
             focus_mode="none",
+            rarity="none",
         )
         plaque = ResolvedEntity(
             id="plaque",
@@ -206,9 +233,10 @@ class TestBuildContentsString:
             on_take=None,
             on_open=None,
             on_close=None,
+            on_drop=None,
             contents_visible=None,
-            spawn_mode="none",
             focus_mode="none",
+            rarity="none",
         )
         book = ResolvedEntity(
             id="book",
@@ -222,9 +250,10 @@ class TestBuildContentsString:
             on_take=None,
             on_open=None,
             on_close=None,
+            on_drop=None,
             contents_visible=None,
-            spawn_mode="none",
             focus_mode="none",
+            rarity="none",
         )
         contents = [
             EntityInstance(
@@ -255,9 +284,10 @@ class TestBuildContentsString:
             on_take=None,
             on_open=None,
             on_close=None,
+            on_drop=None,
             contents_visible=None,
-            spawn_mode="none",
             focus_mode="none",
+            rarity="none",
         )
         vase = ResolvedEntity(
             id="vase",
@@ -271,9 +301,10 @@ class TestBuildContentsString:
             on_take=None,
             on_open=None,
             on_close=None,
+            on_drop=None,
             contents_visible=None,
-            spawn_mode="none",
             focus_mode="none",
+            rarity="none",
         )
         contents = [
             EntityInstance(
@@ -306,9 +337,10 @@ class TestFormatEntityWithContents:
             on_take=None,
             on_open=None,
             on_close=None,
+            on_drop=None,
             contents_visible=True,
-            spawn_mode="none",
             focus_mode="none",
+            rarity="none",
         )
         result = rendering_service.format_entity_with_contents(entity, None)
         assert result == "a *Wooden Table* sits here"
@@ -327,9 +359,10 @@ class TestFormatEntityWithContents:
             on_take=None,
             on_open=None,
             on_close=None,
+            on_drop=None,
             contents_visible=True,
-            spawn_mode="none",
             focus_mode="none",
+            rarity="none",
         )
         result = rendering_service.format_entity_with_contents(entity, [])
         assert result == "a *Wooden Table* sits here"
@@ -348,9 +381,10 @@ class TestFormatEntityWithContents:
             on_take=None,
             on_open=None,
             on_close=None,
+            on_drop=None,
             contents_visible=True,
-            spawn_mode="none",
             focus_mode="none",
+            rarity="none",
         )
         vase = ResolvedEntity(
             id="vase",
@@ -364,9 +398,10 @@ class TestFormatEntityWithContents:
             on_take=None,
             on_open=None,
             on_close=None,
+            on_drop=None,
             contents_visible=None,
-            spawn_mode="none",
             focus_mode="none",
+            rarity="none",
         )
         plaque = ResolvedEntity(
             id="plaque",
@@ -380,9 +415,10 @@ class TestFormatEntityWithContents:
             on_take=None,
             on_open=None,
             on_close=None,
+            on_drop=None,
             contents_visible=None,
-            spawn_mode="none",
             focus_mode="none",
+            rarity="none",
         )
         contents = [
             EntityInstance(
@@ -413,9 +449,10 @@ class TestFormatEntityWithContents:
             on_take=None,
             on_open=None,
             on_close=None,
+            on_drop=None,
             contents_visible=True,
-            spawn_mode="none",
             focus_mode="none",
+            rarity="none",
         )
         result = rendering_service.format_entity_with_contents(entity, [])
         assert result == "a *Wooden Table*[]"
@@ -434,9 +471,10 @@ class TestFormatEntityWithContents:
             on_take=None,
             on_open=None,
             on_close=None,
+            on_drop=None,
             contents_visible=True,
-            spawn_mode="none",
             focus_mode="none",
+            rarity="none",
         )
         # Vase has broken template
         vase = ResolvedEntity(
@@ -451,9 +489,10 @@ class TestFormatEntityWithContents:
             on_take=None,
             on_open=None,
             on_close=None,
+            on_drop=None,
             contents_visible=None,
-            spawn_mode="none",
             focus_mode="none",
+            rarity="none",
         )
         contents = [
             EntityInstance(
@@ -491,9 +530,10 @@ class TestFormatRoomEntities:
             on_take=None,
             on_open=None,
             on_close=None,
+            on_drop=None,
             contents_visible=False,  # Not visible
-            spawn_mode="none",
             focus_mode="none",
+            rarity="none",
         )
         entities = [
             EntityInstance(
@@ -523,9 +563,10 @@ class TestFormatRoomEntities:
             on_take=None,
             on_open=None,
             on_close=None,
+            on_drop=None,
             contents_visible=True,
-            spawn_mode="none",
             focus_mode="none",
+            rarity="none",
         )
         vase = ResolvedEntity(
             id="vase",
@@ -539,9 +580,10 @@ class TestFormatRoomEntities:
             on_take=None,
             on_open=None,
             on_close=None,
+            on_drop=None,
             contents_visible=None,
-            spawn_mode="none",
             focus_mode="none",
+            rarity="none",
         )
         entities = [
             EntityInstance(
@@ -582,9 +624,10 @@ class TestFormatRoomEntities:
             on_take=None,
             on_open=None,
             on_close=None,
+            on_drop=None,
             contents_visible=False,
-            spawn_mode="none",
             focus_mode="none",
+            rarity="none",
         )
         chair = ResolvedEntity(
             id="chair",
@@ -598,9 +641,10 @@ class TestFormatRoomEntities:
             on_take=None,
             on_open=None,
             on_close=None,
+            on_drop=None,
             contents_visible=None,
-            spawn_mode="none",
             focus_mode="none",
+            rarity="none",
         )
         entities = [
             EntityInstance(
@@ -635,9 +679,10 @@ class TestRenderEntityOnLook:
             on_take=None,
             on_open=None,
             on_close=None,
+            on_drop=None,
             contents_visible=None,
-            spawn_mode="none",
             focus_mode="none",
+            rarity="none",
         )
         instance = EntityInstance(
             instance_id=uuid4(),
@@ -668,9 +713,10 @@ class TestRenderEntityOnLook:
             on_take=None,
             on_open=None,
             on_close=None,
+            on_drop=None,
             contents_visible=None,
-            spawn_mode="none",
             focus_mode="none",
+            rarity="none",
         )
         instance = EntityInstance(
             instance_id=uuid4(),
@@ -698,9 +744,10 @@ class TestRenderEntityOnLook:
             on_take=None,
             on_open=None,
             on_close=None,
+            on_drop=None,
             contents_visible=None,
-            spawn_mode="none",
             focus_mode="none",
+            rarity="none",
         )
         instance = EntityInstance(
             instance_id=uuid4(),
@@ -728,9 +775,10 @@ class TestRenderEntityOnLook:
             on_take=None,
             on_open=None,
             on_close=None,
+            on_drop=None,
             contents_visible=None,
-            spawn_mode="none",
             focus_mode="none",
+            rarity="none",
         )
         instance = EntityInstance(
             instance_id=uuid4(),
@@ -762,9 +810,10 @@ class TestRenderEntityOnLook:
             on_take=None,
             on_open=None,
             on_close=None,
+            on_drop=None,
             contents_visible=True,
-            spawn_mode="none",
             focus_mode="none",
+            rarity="none",
         )
         table_instance = EntityInstance(
             instance_id=uuid4(),
@@ -785,9 +834,10 @@ class TestRenderEntityOnLook:
             on_take=None,
             on_open=None,
             on_close=None,
+            on_drop=None,
             contents_visible=None,
-            spawn_mode="none",
             focus_mode="none",
+            rarity="none",
         )
         vase_instance = EntityInstance(
             instance_id=uuid4(),
@@ -820,9 +870,10 @@ class TestRenderEntityOnLook:
             on_take=None,
             on_open=None,
             on_close=None,
+            on_drop=None,
             contents_visible=None,
-            spawn_mode="none",
             focus_mode="none",
+            rarity="none",
         )
         instance = EntityInstance(
             instance_id=uuid4(),
@@ -853,9 +904,10 @@ class TestRenderEntityOnLook:
             on_take=None,
             on_open=None,
             on_close=None,
+            on_drop=None,
             contents_visible=True,
-            spawn_mode="none",
             focus_mode="none",
+            rarity="none",
         )
         table_instance = EntityInstance(
             instance_id=uuid4(),
@@ -877,9 +929,10 @@ class TestRenderEntityOnLook:
             on_take=None,
             on_open=None,
             on_close=None,
+            on_drop=None,
             contents_visible=None,
-            spawn_mode="none",
             focus_mode="none",
+            rarity="none",
         )
         vase_instance = EntityInstance(
             instance_id=uuid4(),

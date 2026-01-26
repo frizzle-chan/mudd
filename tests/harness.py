@@ -15,9 +15,9 @@ from mudd.cogs.interact import Interact
 from mudd.cogs.look import Look
 from mudd.cogs.movement import Movement
 from mudd.services.entity import EntityService
+from mudd.services.entity_resolution import EntityResolutionService
 from mudd.services.focus_context import FocusContextService
 from mudd.services.inventory import InventoryService
-from mudd.services.player_context import PlayerContextService
 from mudd.services.rendering import RenderingService
 from tests.mocks.discord import (
     MockGuild,
@@ -77,12 +77,12 @@ class TestClient:
         # Create real services with test database
         self.entity_service = EntityService(pool)
         self.focus_service = FocusContextService(pool)
-        self.player_context = PlayerContextService(
-            self.entity_service, self.focus_service
-        )
         self._stub_visibility_service = StubVisibilityService()
         self.rendering_service = RenderingService()
         self.inventory_service = InventoryService(pool, self.entity_service)
+        self.entity_resolution = EntityResolutionService(
+            self.entity_service, self.focus_service, self.inventory_service, pool
+        )
 
         # Cast stub to VisibilityServiceProtocol for type checking
         # (StubVisibilityService implements the protocol interface)
@@ -95,22 +95,24 @@ class TestClient:
         self.look_cog = Look(
             bot=None,
             entity_service=self.entity_service,
-            player_context=self.player_context,
+            entity_resolution=self.entity_resolution,
             visibility_service=visibility_service,
             rendering_service=self.rendering_service,
+            inventory_service=self.inventory_service,
         )
         self.interact_cog = Interact(
             bot=None,
             entity_service=self.entity_service,
-            player_context=self.player_context,
+            entity_resolution=self.entity_resolution,
             visibility_service=visibility_service,
+            inventory_service=self.inventory_service,
             pool=pool,
             rendering_service=self.rendering_service,
         )
         self.movement_cog = Movement(
             bot=None,
             visibility_service=visibility_service,
-            player_context=self.player_context,
+            entity_resolution=self.entity_resolution,
             inventory_service=self.inventory_service,
         )
 
@@ -330,3 +332,132 @@ class TestClient:
             )
 
         return interaction.last_response
+
+    async def get_inventory(self, user: TestUser) -> list[tuple[str, str]]:
+        """Get items in user's inventory.
+
+        Args:
+            user: The test user whose inventory to check.
+
+        Returns:
+            List of (entity_id, entity_name) tuples.
+        """
+        instances = await self.entity_service.get_user_inventory(user.id)
+        return [(inst.entity.id, inst.entity.name) for inst in instances]
+
+    async def is_entity_in_room(self, entity_id: str, room: str) -> bool:
+        """Check if an entity instance exists in a room.
+
+        Args:
+            entity_id: The entity ID to check for.
+            room: The room ID to search in.
+
+        Returns:
+            True if the entity has an instance in the room.
+        """
+        row = await self.pool.fetchrow(
+            "SELECT id FROM entity_instances WHERE entity_id = $1 AND room = $2",
+            entity_id,
+            room,
+        )
+        return row is not None
+
+    async def count_player_dropped_items(self, room: str) -> int:
+        """Count player-dropped items in a room.
+
+        Args:
+            room: The room ID to count dropped items in.
+
+        Returns:
+            Number of player-dropped items in the room.
+        """
+        count = await self.pool.fetchval(
+            """SELECT COUNT(*) FROM entity_instances
+            WHERE room = $1 AND player_dropped = TRUE""",
+            room,
+        )
+        return count or 0
+
+    async def count_floor_dropped_items(self, room: str) -> int:
+        """Count player-dropped items on the floor (not in containers).
+
+        Args:
+            room: The room ID to count floor items in.
+
+        Returns:
+            Number of player-dropped items on the floor (not in containers).
+        """
+        count = await self.pool.fetchval(
+            """SELECT COUNT(*) FROM entity_instances
+            WHERE room = $1 AND player_dropped = TRUE
+            AND container_entity_id IS NULL""",
+            room,
+        )
+        return count or 0
+
+    async def is_entity_in_container(
+        self, entity_id: str, container_id: str, room: str
+    ) -> bool:
+        """Check if entity instance is inside a container.
+
+        Args:
+            entity_id: The entity ID to check for.
+            container_id: The container entity ID.
+            room: The room ID where the container is.
+
+        Returns:
+            True if the entity has an instance inside the container.
+        """
+        row = await self.pool.fetchrow(
+            """SELECT id FROM entity_instances
+            WHERE entity_id = $1 AND container_entity_id = $2 AND room = $3""",
+            entity_id,
+            container_id,
+            room,
+        )
+        return row is not None
+
+    async def spawn_from_pool(self, pool_id: str) -> str | None:
+        """Spawn an entity from a spawning pool.
+
+        Creates an entity instance from the specified spawning pool,
+        bypassing the normal respawn timer. Used for testing entities
+        that spawn via pools rather than world instances.
+
+        Args:
+            pool_id: The spawning pool ID to spawn from.
+
+        Returns:
+            The entity_id of the spawned entity, or None if spawn failed.
+        """
+        # Get pool configuration
+        pool_config = await self.pool.fetchrow(
+            """SELECT room, container_id, tag_query
+            FROM spawning_pools WHERE id = $1""",
+            pool_id,
+        )
+        if pool_config is None:
+            return None
+
+        # Get a random entity matching the tag (using weighted rarity)
+        entity = await self.entity_service.get_random_entity_by_tag(
+            pool_config["tag_query"]
+        )
+        if entity is None:
+            return None
+
+        # Create the instance
+        await self.pool.execute(
+            """INSERT INTO entity_instances
+                (entity_id, room, spawning_pool_id, container_entity_id)
+            VALUES ($1, $2, $3, $4)""",
+            entity.id,
+            pool_config["room"],
+            pool_id,
+            pool_config["container_id"],
+        )
+
+        # Invalidate cache
+        self.entity_service.invalidate_cache()
+
+        return entity.id

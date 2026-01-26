@@ -20,17 +20,21 @@ class TestUserExploresFoyer:
         """User looks around the foyer and examines objects."""
         user = await test_client.create_user(user_id=300000001, room="foyer")
 
-        # Autocomplete shows room entities
+        # Spawn the flower vase from its pool (no world instance exists)
+        await test_client.spawn_from_pool("foyer_vase_pool")
+
+        # Autocomplete shows room entities (display names include rarity emoji)
         results = await test_client.look_autocomplete(user)
         names = [r.name for r in results]
         assert "Room" in names
-        assert "Wooden Table" in names
+        # Entity names now include rarity emoji suffix (e.g., "Wooden Table ⚪")
+        assert any("Wooden Table" in n for n in names)
 
         # Autocomplete filters by prefix
         results = await test_client.interact_autocomplete(user, current="Wood")
         names = [r.name for r in results]
-        assert "Wooden Table" in names
-        assert "Flower Vase" not in names
+        assert any("Wooden Table" in n for n in names)
+        assert not any("Flower Vase" in n for n in names)
 
         # User looks around the room
         response = await test_client.look(user)
@@ -45,11 +49,12 @@ class TestUserExploresFoyer:
         response = await test_client.look(user, at="Flower Vase")
         assert "teal ceramic" in response.lower() or "gold trim" in response.lower()
 
-        # User tries to smash the vase (attack verb)
+        # User smashes the vase (attack verb) - destroys it and grants beverage
         response = await test_client.interact(
             user, action="smash", target="Flower Vase"
         )
-        assert "intrusive thought" in response.lower()
+        assert "strike" in response.lower()
+        assert "shards" in response.lower()
 
     async def test_user_touches_table(self, test_client):
         """User touches the table and gets a response."""
@@ -101,7 +106,8 @@ class TestUserDiscoversRecords:
         assert any("WLFGRL" in name for name in names)
 
         # Room option shows close hint when focused
-        room_option = next(r for r in results if r.value == "Room")
+        # Values are now source-prefixed (e.g., "escape:room")
+        room_option = next(r for r in results if r.value == "escape:room")
         assert room_option.name == "[Close Wooden Chest] Room"
 
         # User examines a record inside the chest

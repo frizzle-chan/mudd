@@ -7,6 +7,7 @@ perform full syncs every 15 minutes.
 
 import logging
 import os
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 import asyncpg
@@ -19,8 +20,8 @@ from mudd.loaders.entity_loader import sync_entities
 from mudd.loaders.verb_loader import sync_verbs
 from mudd.loaders.zone_loader import sync_zones_and_rooms
 from mudd.services.entity import EntityService
+from mudd.services.entity_resolution import EntityResolutionService
 from mudd.services.inventory import InventoryService
-from mudd.services.player_context import PlayerContextService
 from mudd.services.rendering import RenderingService
 from mudd.services.visibility import VisibilityService
 
@@ -43,7 +44,7 @@ class Sync(commands.Cog):
         self,
         bot: "MuddBot",
         entity_service: EntityService,
-        player_context: PlayerContextService,
+        entity_resolution: EntityResolutionService,
         visibility_service: VisibilityService,
         pool: asyncpg.Pool,
         rendering_service: RenderingService,
@@ -51,7 +52,7 @@ class Sync(commands.Cog):
     ) -> None:
         self.bot = bot
         self.entity_service = entity_service
-        self.player_context = player_context
+        self.entity_resolution = entity_resolution
         self.visibility_service = visibility_service
         self._pool = pool
         self._rendering = rendering_service
@@ -59,9 +60,11 @@ class Sync(commands.Cog):
         self._seen_orphans: set[tuple[int, str, str]] = set()
         self._console_channel = os.environ.get("MUDD_CONSOLE_CHANNEL", "console")
         self.periodic_sync.start()
+        self.respawn_task.start()
 
     def cog_unload(self):
         self.periodic_sync.cancel()
+        self.respawn_task.cancel()
 
     @tasks.loop(minutes=15)
     async def periodic_sync(self):
@@ -119,7 +122,7 @@ class Sync(commands.Cog):
             # Invalidate entity cache after sync
             self.entity_service.invalidate_cache()
             # Invalidate player context cache after entity sync
-            self.player_context.invalidate_cache()
+            self.entity_resolution.invalidate_cache()
             # Clear template cache to ensure fresh templates
             self._rendering.clear_cache()
         except Exception:
@@ -187,7 +190,7 @@ class Sync(commands.Cog):
                     # Invalidate entity cache after sync
                     self.entity_service.invalidate_cache()
                     # Invalidate player context cache after entity sync
-                    self.player_context.invalidate_cache()
+                    self.entity_resolution.invalidate_cache()
                     # Clear template cache to ensure fresh templates
                     self._rendering.clear_cache()
                 except Exception:
@@ -213,6 +216,22 @@ class Sync(commands.Cog):
                     logger.exception(f"Failed inventory sync for {guild.name}")
                     # Non-fatal: continue operation
 
+                # Sync inventory thread descriptions (update first post if changed)
+                try:
+                    desc_stats = (
+                        await self.inventory_service.sync_inventory_descriptions(
+                            guild, self._rendering
+                        )
+                    )
+                    logger.info(
+                        f"Inventory description sync for {guild.name}: {desc_stats}"
+                    )
+                except Exception:
+                    logger.exception(
+                        f"Failed inventory description sync for {guild.name}"
+                    )
+                    # Non-fatal: continue operation
+
             except Exception:
                 logger.exception(f"Periodic sync failed for {guild.name}")
 
@@ -229,5 +248,108 @@ class Sync(commands.Cog):
         )
         rooms = [row["room"] for row in rows]
         if rooms:
-            count = await self.player_context.prepopulate_cache(rooms)
+            count = await self.entity_resolution.prepopulate_cache(rooms)
             logger.info(f"Prepopulated autocomplete cache for {count} rooms")
+
+    @tasks.loop(minutes=1)
+    async def respawn_task(self):
+        """Process spawning pools for item respawns.
+
+        Runs every minute. For each pool:
+        1. Check current instance count vs max_count
+        2. Check if respawn_interval has elapsed
+        3. If spawning needed, select weighted random entity by tag
+        4. Create instance with spawning_pool_id
+        """
+        # Wait for startup to complete
+        await self.visibility_service.wait_for_startup()
+
+        try:
+            await self._process_spawning_pools()
+        except Exception:
+            logger.exception("Failed to process spawning pools")
+
+    @respawn_task.before_loop
+    async def before_respawn_task(self):
+        """Wait for bot to be ready before starting respawn task."""
+        await self.bot.wait_until_ready()
+
+    async def _process_spawning_pools(self) -> None:
+        """Check and process all spawning pools."""
+        pool = self._pool
+        now = datetime.now(UTC)
+
+        # Get all spawning pools with current instance counts
+        pools = await pool.fetch(
+            """
+            SELECT
+                sp.id,
+                sp.room,
+                sp.container_id,
+                sp.tag_query,
+                sp.max_count,
+                sp.respawn_interval_minutes,
+                sp.last_spawn_at,
+                COUNT(ei.id) AS current_count
+            FROM spawning_pools sp
+            LEFT JOIN entity_instances ei ON ei.spawning_pool_id = sp.id
+            GROUP BY sp.id
+            """
+        )
+
+        spawned = 0
+        for sp in pools:
+            # Check if at capacity
+            if sp["current_count"] >= sp["max_count"]:
+                continue
+
+            # Check if interval has elapsed
+            last_spawn = sp["last_spawn_at"]
+            if last_spawn is not None:
+                elapsed_minutes = (now - last_spawn).total_seconds() / 60
+                if elapsed_minutes < sp["respawn_interval_minutes"]:
+                    continue
+
+            # Select random entity by tag with weighted rarity
+            entity = await self.entity_service.get_random_entity_by_tag(sp["tag_query"])
+            if entity is None:
+                logger.warning(
+                    "No entities found for spawning pool '%s' with tag '%s'",
+                    sp["id"],
+                    sp["tag_query"],
+                )
+                continue
+
+            # Create instance (with container if spawning pool has one)
+            await pool.execute(
+                """
+                INSERT INTO entity_instances
+                    (entity_id, room, spawning_pool_id, container_entity_id)
+                VALUES ($1, $2, $3, $4)
+                """,
+                entity.id,
+                sp["room"],
+                sp["id"],
+                sp["container_id"],
+            )
+
+            # Update last_spawn_at
+            await pool.execute(
+                "UPDATE spawning_pools SET last_spawn_at = $1 WHERE id = $2",
+                now,
+                sp["id"],
+            )
+
+            spawned += 1
+            logger.debug(
+                "Spawned '%s' in room '%s' from pool '%s'",
+                entity.name,
+                sp["room"],
+                sp["id"],
+            )
+
+        if spawned > 0:
+            # Invalidate caches since entities changed
+            self.entity_service.invalidate_cache()
+            self.entity_resolution.invalidate_cache()
+            logger.info(f"Spawned {spawned} items from spawning pools")

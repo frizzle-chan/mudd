@@ -45,7 +45,7 @@ Description: A cozy sitting room.
 Id: hallway
 Name: Hallway
 Zone: floor-1
-Description: A hallway, if this was a counterstrike make people would call this connector
+Description: A hallway, if this was a counterstrike map people would call this connector
 +
 + to your north is the #banquet-hall
 + to your east is the #office
@@ -80,7 +80,7 @@ Id: screening-room
 Name: Screening Room
 Zone: floor-1
 HasVoice: yes
-Description: The room is dark, the lit only by the projector screen cast on the western wall. You can make out theater seats resembling giant lay-z-boy chairs. The room smells like popcorn. This is a certified kinography lair. Only the finest kinos are screened in this room.
+Description: The room is dark, lit only by the projector screen cast on the western wall. You can make out theater seats resembling giant lay-z-boy chairs. The room smells like popcorn. This is a certified kinography lair. Only the finest kinos are screened in this room.
 +
 + The only door leads back to the #library
 
@@ -134,11 +134,12 @@ Description: A dimly lit lounge.
 %type: Container rec Entity
 %type: Room rec Room
 %type: ContentsVisible bool
-%type: SpawnMode enum none move clone
 %type: FocusMode enum none container
+%type: Rarity enum none common uncommon rare epic legendary mythic quest
 %mandatory: Id Name
-%allowed: Id Name Prototype Container Room ContentsVisible SpawnMode FocusMode DescriptionShort DescriptionLong
-%allowed: OnLook OnTouch OnAttack OnUse OnTake OnOpen OnClose
+%allowed: Id Name Prototype Container Room ContentsVisible FocusMode DescriptionShort DescriptionLong
+%allowed: OnLook OnTouch OnAttack OnUse OnTake OnOpen OnClose OnDrop
+%allowed: Tags Rarity
 
 # ----------------------------------------------------------------------------
 # Base prototypes (no Room field - these are templates, not instances)
@@ -146,6 +147,7 @@ Description: A dimly lit lounge.
 
 Id: object
 Name: object
+Rarity: none
 DescriptionShort: A {{ name }}.
 OnLook: {{ e.description_long or e.description_short or "You see nothing special." }}{{ contents }}
 OnTouch: You touch the {{ name }}. Nothing happens.
@@ -179,6 +181,19 @@ Prototype: object
 OnUse: You pull {{ name }} from its sleeve, place it on the turntable, and drop the needle. Music fills the room.
 OnTake: You can't take the {{ name }}, but you can __play__ it.
 
+Id: item
+Name: item
+Prototype: object
+Rarity: common
+OnTake: {{ effects.pickup() }}You pick up the {{ name }}.
+OnDrop: {% if container %}You put the {{ name }} into the *{{ container.name }}*.{% else %}You drop the {{ name }}.{% endif %}{{ effects.drop() }}{{ effects.broadcast(user.name ~ " drops " ~ e.display_name ~ ".") }}
+
+Id: beverage
+Name: beverage
+Prototype: item
+OnUse: You crack open the {{ name }} and take a refreshing sip. It restores health.
+OnTake: {{ effects.pickup() }}You grab a {{ name }}.
+
 # ----------------------------------------------------------------------------
 # Foyer entities
 # ----------------------------------------------------------------------------
@@ -193,11 +208,35 @@ ContentsVisible: yes
 
 Id: foyer_flower_vase
 Name: Flower Vase
-Prototype: glass_object
-Room: foyer
+Prototype: item
 Container: foyer_table
+Tags: foyer_vase
+Rarity: common
 DescriptionShort: A teal {{ name }} with yellow roses in it
 DescriptionLong: a teal ceramic vase with gold trim around the lip. A couple yellow roses sit inside.
+OnAttack: {{ effects.destroy() }}{{ effects.broadcast("**" ~ user.name ~ "** smashes the " ~ name ~ "!") }}You momentarily give in to your impulses and strike the {{ name }} as hard as you can with your fist. Shards of teal ceramic scatter across the floor. Among the debris, you notice something...{{ effects.grant_random("foyer_vase_loot") }}
+
+Id: foyer_yellow_rose
+Name: Yellow Rose
+Prototype: item
+Tags: foyer_vase_loot
+Rarity: common
+DescriptionShort: a {{ name }}
+DescriptionLong: A single yellow rose, slightly crushed but still vibrant.
+OnTouch: You gently touch the petals, they are soft. You touch the stem, it's thorny. You can't figure out if you are an optimist or a pessimist.
+OnAttack: {{ effects.destroy() }}{{ effects.broadcast("**" ~ user.name ~ "** drops a " ~ name ~ " on the floor and crushes it underfoot") }}You feel animosity towards the rose for some reason.
+OnUse: You smell the rose. It smells lovely! You feel a bit better now.
+
+Id: foyer_yellow_rose_exquisite
+Name: Exquisite Yellow Rose
+Prototype: item
+Tags: foyer_vase_loot
+Rarity: rare
+DescriptionShort: an {{ name }}
+DescriptionLong: A single yellow rose of uncanny beauty. It looks like something you'd see in a magazine.
+OnTouch: You gently stroke the petals, careful not to upset the beautiful symmetry of them. They are soft and slightly cold to the touch. You touch the stem, it's covered in extremely sharp thorns. The thorns are there to protect the beautiful flower from being picked, but I guess they failed.
+OnAttack: {{ effects.destroy() }}{{ effects.broadcast("**" ~ user.name ~ "** drops an " ~ name ~ " on the floor and crushes it underfoot") }}You feel like you have to destroy something beautiful.
+OnUse: You smell the rose. It reminds you of an expensive perfume but way more pleasant. You feel better now.
 
 Id: foyer_plaque
 Name: Inscribed Plaque
@@ -246,12 +285,12 @@ Id: lounge_fridge
 Name: Drink Fridge
 Prototype: furniture
 Room: lounge
+FocusMode: container
 DescriptionShort: A windowed {{ name }} sits against the east wall.
-DescriptionLong: A glass-door mini fridge humming quietly. Through the window you can see it's full of White Claw and Lone Star tallboys.
-ContentsVisible: yes
+DescriptionLong: A glass-door mini fridge humming quietly. The glass is fogged with condensation. You can __open__ it to see what's inside.
 OnTouch: The glass is cold and slightly damp with condensation.
-OnUse: You take a drink from the fridge and crack it open. It restores health.
-OnTake: You take a drink from the fridge and crack it open. It restores health.
+OnOpen: You swing open the fridge door.{% if contents %} Inside:{{ contents }}{% else %} It's empty.{% endif %}
+OnClose: You close the fridge door.
 
 Id: lounge_chairs
 Name: Comfy Chairs
@@ -260,6 +299,56 @@ Room: lounge
 DescriptionShort: Several {{ name }} are scattered around the room.
 DescriptionLong: Plush leather armchairs that look like they've hosted many late-night conversations.
 OnUse: You sink into one of the leather chairs and close your eyes for a moment. You feel your health regenerating.
+
+# Lounge beverages (spawned by lounge_fridge_pool)
+
+Id: lounge_white_claw_mango
+Name: White Claw Mango
+Prototype: beverage
+Rarity: rare
+Tags: beverage lounge_drink foyer_vase_loot
+DescriptionShort: a chilled {{ name }}
+DescriptionLong: A slim can of White Claw Hard Seltzer, Mango flavor. 100 calories of refreshment.
+
+Id: lounge_white_claw_lime
+Name: White Claw Lime
+Prototype: beverage
+Rarity: common
+Tags: beverage lounge_drink
+DescriptionShort: a chilled {{ name }}
+DescriptionLong: A slim can of White Claw Hard Seltzer, Natural Lime flavor. Crisp and clean.
+
+Id: lounge_white_claw_black_cherry
+Name: White Claw Black Cherry
+Prototype: beverage
+Rarity: common
+Tags: beverage lounge_drink
+DescriptionShort: a chilled {{ name }}
+DescriptionLong: A slim can of White Claw Hard Seltzer, Black Cherry flavor. Sweet with a hint of tart.
+
+Id: lounge_lone_star
+Name: Lone Star Tallboy
+Prototype: beverage
+Rarity: common
+Tags: beverage lounge_drink
+DescriptionShort: a cold {{ name }}
+DescriptionLong: A 16oz can of Lone Star, the National Beer of Texas. It's cheap and it's cold.
+
+Id: lounge_shiner_bock
+Name: Shiner Bock
+Prototype: beverage
+Rarity: rare
+Tags: beverage lounge_drink
+DescriptionShort: a frosty {{ name }}
+DescriptionLong: A bottle of Shiner Bock from the Spoetzl Brewery in Shiner, Texas. A proper Texas lager.
+
+Id: lounge_topo_chico
+Name: Topo Chico
+Prototype: beverage
+Rarity: common
+Tags: beverage lounge_drink
+DescriptionShort: a sparkling {{ name }}
+DescriptionLong: A glass bottle of Topo Chico mineral water. The bubbles are aggressive in the best way.
 
 # ----------------------------------------------------------------------------
 # Library entities
@@ -290,20 +379,254 @@ DescriptionLong: Floor-to-ceiling bookshelves stuffed with books that look brand
 
 Id: library_desk
 Name: Writing Desk
+Prototype: chest
+Room: library
+DescriptionShort: A {{ name }} sits in the southern half of the room.
+DescriptionLong: An antique writing desk with a worn leather top. There's a drawer you can __open__.
+ContentsVisible: no
+OnOpen: You pull open the drawer.{% if contents %} Inside:{{ contents }}{% else %} It's empty.{% endif %}
+OnClose: You slide the drawer shut.
+
+Id: library_side_table
+Name: Side Table
 Prototype: furniture
 Room: library
-DescriptionShort: A {{ name }} sits in the southern half of the room{% if contents %}. On it:{{ contents }}{% endif %}
-DescriptionLong: An antique writing desk with a worn leather top.
+DescriptionShort: A small {{ name }} stands by the bookshelves{% if contents %}. On it:{{ contents }}{% endif %}
+DescriptionLong: A narrow wooden side table with turned legs, tucked between the bookshelves.
 ContentsVisible: yes
 
 Id: library_record_player
 Name: Record Player
 Prototype: object
 Room: library
-Container: library_desk
+Container: library_side_table
 DescriptionShort: An Audio Technica {{ name }}
 DescriptionLong: An Audio Technica AT-LP60XBT turntable. Not the fanciest record player by any means, but gets the job done. There is a record ready to play.
 OnUse: You press the play button and the automatic mechanism spins the record and drops the needle. Music fills the room. You like this song!
+
+# Desk drawer spawnable items
+
+Id: desk_avatar_bluray
+Name: Avatar Blu-ray
+Prototype: item
+Tags: desk_drawer_loot
+Rarity: rare
+DescriptionShort: a {{ name }} in pristine condition
+DescriptionLong: A Blu-ray copy of James Cameron's Avatar (2009). The case is immaculate, still sealed in plastic. The back promises "A journey to Pandora you'll never forget." At the time it was the highest-grossing film ever made, a technical marvel that pushed the boundaries of 3D cinema. The blue Na'vi faces stare back at you from the cover art.
+OnTouch: You run your fingers across the smooth plastic wrap. Still sealed after all these years.
+OnAttack: You bend the case slightly but think better of destroying this piece of cinema history.
+OnUse: You hold the disc up to the light. Without a Blu-ray player, you can only imagine the bioluminescent forests of Pandora. *I see you.*
+
+Id: desk_avatar_bluray_extended
+Name: Avatar Extended Collector's Edition
+Prototype: item
+Tags: desk_drawer_loot
+Rarity: epic
+DescriptionShort: a {{ name }} in a slipcase
+DescriptionLong: The Avatar Extended Collector's Edition Blu-ray (2010). A three-disc set in an embossed slipcase featuring exclusive artwork of the Hallelujah Mountains. Contains the original theatrical cut, the Special Edition with 8 additional minutes, and the Extended Collector's Edition with 16 minutes of new footage. Includes a family archive, production materials, and over three hours of documentaries on the making of Pandora. The discs gleam with an iridescent coating that shifts between blue and green like bioluminescence.
+OnTouch: The embossed Na'vi on the slipcase feels raised under your fingertips. Premium packaging.
+OnAttack: This is too valuable to destroy. James Cameron spent 15 years making this film.
+OnUse: You reverently open the case. Three pristine discs await. The extended cut adds the full Sturmbeest hunt sequence and an alternate opening on a dystopian Earth. Someday you'll find a Blu-ray player worthy of this artifact.
+
+Id: desk_note_prototype
+Name: Dev Note - Prototype Inheritance
+Prototype: item
+Tags: desk_drawer_loot
+Rarity: uncommon
+DescriptionShort: a crumpled {{ name }}
+DescriptionLong: A handwritten note on yellow legal paper. It reads:
++
++ "PROTOTYPE INHERITANCE SYSTEM
++
++ Entities use prototypical inheritance just like JavaScript objects. A 'vase' entity can inherit from 'glass_object' which inherits from 'object'. When you look up a property like OnAttack, we walk up the prototype chain until we find a non-NULL value.
++
++ This is resolved at QUERY TIME using a recursive CTE in PostgreSQL. The resolve_entity() function walks up to 10 levels of inheritance, returning the first non-NULL value for each property. This means you can override just one handler while inheriting everything else.
++
++ The beauty is DRY definitions - hundreds of vases can inherit the same 'you smash the glass' response from glass_object without repeating it."
+OnTouch: The paper is slightly greasy, as if someone was eating chips while writing this.
+OnUse: You read it again and feel slightly smarter about database design.
+
+Id: desk_note_recfiles
+Name: Dev Note - Recfiles
+Prototype: item
+Tags: desk_drawer_loot
+Rarity: uncommon
+DescriptionShort: a folded {{ name }}
+DescriptionLong: A typed note with coffee stains. It reads:
++
++ "GNU RECUTILS - THE WORLD FORMAT
++
++ All world data lives in .rec files - a plain text database format from GNU. It's human-readable, version-controllable, and has schema validation built in.
++
++ The %rec descriptor defines record types, %key ensures unique IDs, %type validates foreign keys between records, and %mandatory enforces required fields. You can query .rec files directly with recsel, or load them into PostgreSQL.
++
++ Why not JSON or YAML? Because recfiles are designed for records. Multi-line strings use continuation (+), and the format is self-documenting. A world designer can edit mansion.rec in Notepad and the bot validates it on startup.
++
++ The tradeoff: we need a sync step to load recfiles into Postgres. But that's fine - world data doesn't change at runtime."
+OnTouch: The coffee stains form a ring, suggesting someone used this as a coaster.
+OnUse: You nod approvingly at the elegance of plain text databases.
+
+Id: desk_note_flyweight
+Name: Dev Note - Flyweight Pattern
+Prototype: item
+Tags: desk_drawer_loot
+Rarity: uncommon
+DescriptionShort: a {{ name }} with diagrams
+DescriptionLong: A note covered in boxes and arrows. It reads:
++
++ "THE FLYWEIGHT PATTERN
++
++ Entity definitions are stored once in the 'entities' table. Instances are stored separately in 'entity_instances' with just a reference back to the entity.
++
++ This means 50 beer bottles in the fridge share ONE entity definition ('beer') but have 50 instance rows with unique UUIDs. Each instance tracks WHERE it is (room or inventory) but shares all the text, handlers, and properties.
++
++ Memory efficiency? Yes. But more importantly: when you fix a typo in beer's description, all 50 instances update instantly. No need to sync instance data.
++
++ The pattern is named for boxing - a flyweight is the lightest class. Our instances are as light as possible: just an ID, location, and a pointer to the heavyweight definition."
+OnTouch: The diagram arrows are surprisingly neat for a handwritten note.
+OnUse: You trace the arrows with your finger, following the reference from instance to definition.
+
+Id: desk_note_focus
+Name: Dev Note - Focus Context
+Prototype: item
+Tags: desk_drawer_loot
+Rarity: uncommon
+DescriptionShort: a sticky {{ name }}
+DescriptionLong: A Post-it note with tiny handwriting. It reads:
++
++ "FOCUS CONTEXT SYSTEM
++
++ The original design was stateless - containers had no 'opened' state. But opening a chest with 20 items meant a wall of text and no autocomplete help.
++
++ Solution: track what the user is 'focused' on. When you open a container with FocusMode='container', we store that focus in the database. Now autocomplete shows ONLY the container contents, plus an escape option to close it.
++
++ Focus persists across bot restarts (stored in PostgreSQL), clears on room movement or 5-minute timeout, and is per-user. Looking at things doesn't affect focus - only explicit open/close/interact actions do.
++
++ This transforms the UX from 'guess the item name' to 'select from dropdown'."
+OnTouch: The adhesive is still slightly sticky.
+OnUse: You stick it to your forehead for a moment, absorbing its wisdom.
+
+Id: desk_note_fog
+Name: Dev Note - Fog of War
+Prototype: item
+Tags: desk_drawer_loot
+Rarity: uncommon
+DescriptionShort: a torn {{ name }}
+DescriptionLong: A note torn from a spiral notebook. It reads:
++
++ "DISCORD AS FOG OF WAR
++
++ The key insight: Discord channel permissions ARE the fog of war. Each room is a channel. You can only see channels you have view_channel permission for. When you move rooms, we revoke permission on the old channel and grant it on the new one.
++
++ This means users literally cannot see rooms they haven't visited. The Discord UI enforces exploration - no peeking at #secret-vault until you find the entrance.
++
++ Channel topics store room descriptions. Zone categories group rooms. The Discord server IS the game map, rendered natively in the client users already have installed.
++
++ The bot just manages permissions. Discord does the rest."
+OnTouch: The torn edge is jagged, ripped out in a hurry.
+OnUse: You hold it up and squint at the excited handwriting.
+
+Id: desk_note_inventory
+Name: Dev Note - Inventory Forums
+Prototype: item
+Tags: desk_drawer_loot
+Rarity: uncommon
+DescriptionShort: a laminated {{ name }}
+DescriptionLong: A laminated card with bullet points. It reads:
++
++ "INVENTORY AS DISCORD FORUMS
++
++ Each player gets a private forum channel for their inventory. Items become threads. Only you can see your forum.
++
++ Why forums? Threads are perfect for items - each thread has a name (item name), a first post (item description), and can hold conversation (future: item interactions). Forums naturally organize threads by activity.
++
++ The forum name uses Braille encoding of your user ID so it's unique but not human-readable. Discord doesn't normalize Braille characters, avoiding the base62 case-collision bug we hit earlier.
++
++ Pickup creates a thread. Drop deletes it. The database tracks thread IDs for sync. If Discord and DB drift, periodic sync repairs the state."
+OnTouch: The lamination is slightly cloudy with age.
+OnUse: You flip it over. The back says 'REMEMBER: CASCADE DELETE ON USER.'
+
+Id: desk_note_templates
+Name: Dev Note - Jinja2 Templates
+Prototype: item
+Tags: desk_drawer_loot
+Rarity: uncommon
+DescriptionShort: a colorful {{ name }}
+DescriptionLong: A note written in multiple colored pens. It reads:
++
++ "JINJA2 TEMPLATES FOR EVERYTHING
++
++ All text fields - descriptions, handlers, everything - are Jinja2 templates. The context includes 'name' (with Discord italics), 'e' (the resolved entity), 'contents' (child items), and 'user'.
++
++ Templates can call side effects: effects.pickup() moves items to inventory, effects.broadcast() sends public messages, effects.destroy() deletes the instance, effects.grant() creates new items.
++
++ The template returns TEXT to the user. Side effects are collected during rendering and executed AFTER. This means '{{ effects.destroy() }}BOOM!' shows 'BOOM!' then deletes the item.
++
++ Error handling: if a template fails, we fall back to description_long or description_short and append an error note. The game keeps working even with broken templates."
+OnTouch: The different colored sections are surprisingly well-organized.
+OnUse: You appreciate the rainbow of ink colors. Someone really cared about this note.
+
+Id: desk_note_spawning
+Name: Dev Note - Spawning Pools
+Prototype: item
+Tags: desk_drawer_loot
+Rarity: uncommon
+DescriptionShort: a damp {{ name }}
+DescriptionLong: A slightly water-damaged note. It reads:
++
++ "SPAWNING POOL SYSTEM
++
++ Static items are boring. Spawning pools create variety. Each pool has a tag query ('beverage'), a location (room or container), a max count, and a respawn interval.
++
++ When the pool is below max_count and enough time has passed, it queries entities matching the tag and picks one randomly. But not uniformly - rarity weights the selection. Common items (weight 600) appear 60% of the time. Mythic items (weight 1) appear 0.1% of the time.
++
++ The fridge always has drinks, but WHICH drinks varies. Sometimes you get Lone Star (common). Rarely, you find Shiner Bock (rare). This turns mundane container-checking into a mini loot game.
++
++ Instances track their spawning_pool_id so we know what to count."
+OnTouch: The paper is wrinkled from water damage but still legible.
+OnUse: You calculate the odds of finding a mythic item: 1 in 1000.
+
+Id: desk_note_sync
+Name: Dev Note - Sync System
+Prototype: item
+Tags: desk_drawer_loot
+Rarity: uncommon
+DescriptionShort: a {{ name }} with flowcharts
+DescriptionLong: A note covered in flowchart symbols. It reads:
++
++ "THE SYNC SYSTEM
++
++ Everything syncs on startup and every 15 minutes. Zones and rooms sync from .rec files to Postgres to Discord. Entities sync from .rec to Postgres. Permissions sync from Postgres to Discord.
++
++ The key insight: the database is the source of truth for LOCATIONS. Recfiles are the source of truth for DEFINITIONS. Discord is the rendered output.
++
++ If someone deletes a Discord channel, next sync recreates it. If someone edits a channel topic, next sync fixes it. If the database loses track of a forum, next sync recovers it by searching Discord.
++
++ Commands block until the first sync completes. This ensures the visibility cache is populated before anyone tries to move rooms. The system is eventually consistent with a 15-minute maximum drift."
+OnTouch: You trace the flowchart arrows from 'Bot Startup' to 'Commands Unblocked'.
+OnUse: You appreciate how sync handles every drift scenario you can imagine.
+
+Id: desk_note_resolution
+Name: Dev Note - Entity Resolution
+Prototype: item
+Tags: desk_drawer_loot
+Rarity: uncommon
+DescriptionShort: a dense {{ name }}
+DescriptionLong: A note with dense text and no margins. It reads:
++
++ "ENTITY RESOLUTION SERVICE
++
++ Users type partial names. 'tab' should match 'Wooden Table'. 'beer' should match multiple drinks. The resolution service handles this mess.
++
++ For autocomplete, we detect context: Are you in a room? An inventory thread? Typing 'i.' prefix? Have focus on a container? Each context shows different entities.
++
++ Autocomplete values are source-prefixed: 'room:Wooden Table', 'inventory:Beer', 'container:Gold Key'. This makes resolution unambiguous - we know WHERE to look based on the prefix.
++
++ Word-prefix matching: 'tab' matches 'Wooden Table' because 'Table' starts with 'tab'. Exact matches rank higher than prefix matches. Multiple matches trigger disambiguation.
++
++ The complexity is hidden. Users just type and select from dropdowns."
+OnTouch: Your eyes glaze over slightly at the density of information.
+OnUse: You slowly parse each paragraph, gaining insight into the autocomplete magic.
 
 Id: library_records
 Name: Wooden Chest
@@ -365,7 +688,7 @@ Room: library
 Container: library_records
 DescriptionShort: A vinyl copy of {{ name }}
 DescriptionLong: 2000. Built from 3,500+ vinyl samples. Took years to clear them all.
-OnUse: You set {{ name }} on the turntable and hit play.{{ effects.broadcast(user.mention ~ " put on " ~ name ~ " on the record player. [Since I Left You](https://youtu.be/R2qYK2siDkE) fills the room.") }}
+OnUse: You set {{ name }} on the turntable and hit play.{{ effects.broadcast(user.mention ~ " put " ~ name ~ " on the record player. [Since I Left You](https://youtu.be/R2qYK2siDkE) fills the room.") }}
 
 Id: record_avalanches_wwaly
 Name: The Avalanches - We Will Always Love You
@@ -392,7 +715,7 @@ Room: library
 Container: library_records
 DescriptionShort: A vinyl copy of {{ name }}
 DescriptionLong: 2017. "Dreams Tonite" is a perfect shoegaze-pop song.
-OnUse: You unsleeve {{ name }} and put it on.{{ effects.broadcast(user.mention ~ " put on " ~ name ~ " on the record player. [In Undertow](https://youtu.be/T1n72aCdwdU) fills the room.") }}
+OnUse: You unsleeve {{ name }} and put it on.{{ effects.broadcast(user.mention ~ " put " ~ name ~ " on the record player. [In Undertow](https://youtu.be/T1n72aCdwdU) fills the room.") }}
 
 Id: record_first_aid_kit
 Name: First Aid Kit - Stay Gold
@@ -482,7 +805,7 @@ Room: library
 Container: library_records
 DescriptionShort: A vinyl copy of {{ name }}
 DescriptionLong: 1993. "Linger" and "Dreams".
-OnUse: You slide {{ name }} from its sleeve.{{ effects.broadcast(user.mention ~ " put on " ~ name ~ " on the record player. [I Still Do](https://youtu.be/vovVgQ2BsTo) comes on.") }}
+OnUse: You slide {{ name }} from its sleeve.{{ effects.broadcast(user.mention ~ " put " ~ name ~ " on the record player. [I Still Do](https://youtu.be/vovVgQ2BsTo) comes on.") }}
 
 Id: record_alvvays
 Name: Alvvays - Alvvays
@@ -573,6 +896,16 @@ DescriptionLong: A cardboard box with "TEST FIXTURES - DO NOT REMOVE" written on
 OnOpen: You open the {{ name }}.{% if contents %} Inside:{{ contents }}{% else %} It's empty.{% endif %}
 OnClose: You close the {{ name }}.
 
+Id: storeroom_crate
+Name: Wooden Crate
+Prototype: chest
+Room: store-room
+ContentsVisible: no
+DescriptionShort: a sturdy {{ name }}
+DescriptionLong: A wooden crate, slightly worn from use.
+OnOpen: You pry open the *{{ name }}*.{% if contents %} Inside:{{ contents }}{% else %} It's empty.{% endif %}
+OnClose: You close the *{{ name }}*.
+
 Id: test_orb
 Name: Test Orb
 Prototype: object
@@ -611,3 +944,228 @@ Container: storeroom_box
 DescriptionShort: a {{ name }} for testing
 DescriptionLong: A test record.
 OnUse: TEST_EPHEMERAL_RESPONSE{{ effects.broadcast("TEST_BROADCAST_RESPONSE " ~ user.mention) }}
+
+Id: test_takeable
+Name: Test Takeable
+Prototype: item
+Room: store-room
+Container: storeroom_box
+Rarity: common
+DescriptionShort: a {{ name }} you can pick up
+DescriptionLong: A test item that can be picked up.
+OnTake: {{ effects.pickup() }}TEST_TAKE_MOVE_RESPONSE - You pick up the {{ name }}.
+
+Id: test_quest_map
+Name: Test Quest Map
+Prototype: item
+Room: store-room
+Container: storeroom_box
+Rarity: quest
+Tags: test_quest_map_spawn
+DescriptionShort: a {{ name }} for your quest
+DescriptionLong: A test quest item that moves to inventory and respawns via spawning pool.
+OnTake: {{ effects.pickup() }}TEST_TAKE_MOVE_RESPONSE - You pick up the {{ name }}.
+
+Id: test_droppable
+Name: Test Droppable
+Prototype: item
+Room: store-room
+Container: storeroom_box
+Rarity: common
+DescriptionShort: a {{ name }} you can drop
+DescriptionLong: A test item that can be dropped.
+OnDrop: TEST_DROP_RESPONSE - You drop the {{ name }}.{{ effects.drop() }}{{ effects.broadcast(user.name ~ " drops " ~ e.display_name ~ ".") }}
+
+Id: test_sticky
+Name: Test Sticky
+Prototype: item
+Room: store-room
+Container: storeroom_box
+Rarity: common
+DescriptionShort: a {{ name }} that sticks to you
+DescriptionLong: A test item that cannot be dropped.
+OnDrop: The {{ name }} is stuck to your hand! You can't drop it.
+
+Id: test_granting_key
+Name: Test Granting Key
+Prototype: object
+Room: store-room
+Container: storeroom_box
+DescriptionShort: a {{ name }} that grants an item
+DescriptionLong: A test key that grants a specific item when used.
+OnUse: TEST_GRANT_RESPONSE - The key glows and grants you an item!{{ effects.grant("test_granted_item") }}
+
+Id: test_granted_item
+Name: Test Granted Item
+Prototype: item
+Rarity: quest
+DescriptionShort: a {{ name }} received from a key
+DescriptionLong: A test item that is granted by the test key.
+
+Id: test_random_grantor
+Name: Test Random Grantor
+Prototype: chest
+Room: store-room
+Container: storeroom_box
+DescriptionShort: a {{ name }} that grants random loot
+DescriptionLong: A test chest that grants random loot when opened.
+OnOpen: TEST_RANDOM_GRANT_RESPONSE - You open the chest and find something inside!{{ effects.grant_random("test_loot") }}
+
+Id: test_common_loot
+Name: Test Common Loot
+Prototype: item
+Rarity: common
+Tags: test_loot
+DescriptionShort: a {{ name }} of common quality
+DescriptionLong: A common test item from the loot pool.
+
+Id: test_rare_loot
+Name: Test Rare Loot
+Prototype: item
+Rarity: rare
+Tags: test_loot
+DescriptionShort: a {{ name }} of rare quality
+DescriptionLong: A rare test item from the loot pool.
+
+Id: test_droppable_2
+Name: Test Droppable 2
+Prototype: item
+Room: store-room
+Container: storeroom_box
+Rarity: common
+DescriptionShort: a {{ name }} you can drop
+DescriptionLong: A test item for floor clutter testing.
+
+Id: test_droppable_3
+Name: Test Droppable 3
+Prototype: item
+Room: store-room
+Container: storeroom_box
+Rarity: common
+DescriptionShort: a {{ name }} you can drop
+DescriptionLong: A test item for floor clutter testing.
+
+Id: test_droppable_4
+Name: Test Droppable 4
+Prototype: item
+Room: store-room
+Container: storeroom_box
+Rarity: common
+DescriptionShort: a {{ name }} you can drop
+DescriptionLong: A test item for floor clutter testing.
+
+Id: test_droppable_5
+Name: Test Droppable 5
+Prototype: item
+Room: store-room
+Container: storeroom_box
+Rarity: common
+DescriptionShort: a {{ name }} you can drop
+DescriptionLong: A test item for floor clutter testing.
+
+Id: test_droppable_6
+Name: Test Droppable 6
+Prototype: item
+Room: store-room
+Container: storeroom_box
+Rarity: common
+DescriptionShort: a {{ name }} you can drop
+DescriptionLong: A test item for floor clutter testing.
+
+Id: test_droppable_7
+Name: Test Droppable 7
+Prototype: item
+Room: store-room
+Container: storeroom_box
+Rarity: common
+DescriptionShort: a {{ name }} you can drop
+DescriptionLong: A test item for floor clutter testing.
+
+Id: test_droppable_8
+Name: Test Droppable 8
+Prototype: item
+Room: store-room
+Container: storeroom_box
+Rarity: common
+DescriptionShort: a {{ name }} you can drop
+DescriptionLong: A test item for floor clutter testing.
+
+Id: test_droppable_9
+Name: Test Droppable 9
+Prototype: item
+Room: store-room
+Container: storeroom_box
+Rarity: common
+DescriptionShort: a {{ name }} you can drop
+DescriptionLong: A test item for floor clutter testing.
+
+Id: test_droppable_10
+Name: Test Droppable 10
+Prototype: item
+Room: store-room
+Container: storeroom_box
+Rarity: common
+DescriptionShort: a {{ name }} you can drop
+DescriptionLong: A test item for floor clutter testing.
+
+Id: test_droppable_11
+Name: Test Droppable 11
+Prototype: item
+Room: store-room
+Container: storeroom_box
+Rarity: common
+DescriptionShort: a {{ name }} you can drop
+DescriptionLong: A test item for floor clutter testing.
+
+Id: test_smashable
+Name: Test Smashable
+Prototype: glass_object
+Container: storeroom_box
+Tags: test_smashable_spawn
+Rarity: common
+DescriptionShort: a fragile {{ name }}
+DescriptionLong: A glass object used for testing destruction effects.
+OnAttack: {{ effects.destroy() }}{{ effects.broadcast("**" ~ user.name ~ "** smashes the " ~ name ~ "!") }}TEST_SMASH_RESPONSE - You smash it! Shards scatter everywhere.{{ effects.grant_random("test_loot") }}
+
+# ============================================================================
+# Spawning Pool record type
+# ============================================================================
+%rec: SpawningPool
+%key: Id
+%mandatory: Id Room TagQuery
+%allowed: Id Room Container TagQuery MaxCount RespawnIntervalMinutes
+
+Id: test_quest_map_pool
+Room: store-room
+Container: storeroom_box
+TagQuery: test_quest_map_spawn
+MaxCount: 1
+RespawnIntervalMinutes: 1
+
+Id: test_smashable_pool
+Room: store-room
+Container: storeroom_box
+TagQuery: test_smashable_spawn
+MaxCount: 1
+RespawnIntervalMinutes: 1
+
+Id: lounge_fridge_pool
+Room: lounge
+Container: lounge_fridge
+TagQuery: lounge_drink
+MaxCount: 6
+RespawnIntervalMinutes: 15
+
+Id: foyer_vase_pool
+Room: foyer
+Container: foyer_table
+TagQuery: foyer_vase
+MaxCount: 1
+RespawnIntervalMinutes: 15
+
+Id: library_desk_drawer_pool
+Room: library
+Container: library_desk
+TagQuery: desk_drawer_loot
+MaxCount: 2
+RespawnIntervalMinutes: 30

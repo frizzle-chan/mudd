@@ -64,15 +64,20 @@ CREATE INDEX idx_user_focus_updated ON user_focus(updated_at);
 
 In the context of **managing per-user focus state**, facing **the need for global access to focus contexts across cogs**, we decided to **create a FocusContextService singleton following the pattern of VisibilityService and EntityService**, to achieve **consistent state management with familiar patterns**, accepting **database persistence with in-memory caching for performance**.
 
+> **Note:** *Superseded by ADR 0004 "Entity Resolution Unification"*: The `FocusContextService` still exists but is now wrapped by `EntityResolutionService`, which provides unified entity resolution including focus management. Cogs should use `EntityResolutionService` rather than `FocusContextService` directly.
+
 **Service interface:**
+
+~~The standalone `FocusContextService` interface is now accessed through `EntityResolutionService`:~~
+
 ```python
-class FocusContextService:
+class EntityResolutionService:
+    # Focus operations (delegated to FocusContextService internally)
     async def get_focus(self, user_id: int, room: str) -> FocusContext | None
     async def set_focus(self, user_id: int, room: str, entity: ResolvedEntity) -> str | None
     async def clear_focus(self, user_id: int, reason: str = "interaction") -> str | None
     async def update_focus_timestamp(self, user_id: int) -> None
     async def is_entity_in_focus(self, user_id: int, room: str, entity_id: str) -> bool
-    async def get_focused_contents(self, user_id: int, room: str) -> list[str]
 ```
 
 - `get_focus`: Returns None if no focus, stale (different room), or expired (>5 min). Stale/expired focus is lazily cleaned up.
@@ -80,7 +85,7 @@ class FocusContextService:
 - `clear_focus`: Clears focus. When `reason="close"`, returns the `on_close` template for rendering.
 - `update_focus_timestamp`: Refreshes the timestamp to prevent timeout when interacting with focused content.
 - `is_entity_in_focus`: Checks if an entity is the focused container or contained within it.
-- `get_focused_contents`: Returns entity IDs accessible through current focus (container + contents).
+- ~~`get_focused_contents`: Returns entity IDs accessible through current focus (container + contents).~~ *Removed: Container contents are now resolved via `EntityResolutionService.get_autocomplete_choices()`*
 
 ### Focus Establishment Rules
 
@@ -123,11 +128,10 @@ CREATE TYPE focus_mode AS ENUM ('none', 'container');
 
 ### Focus Lifecycle
 
-In the context of **managing when focus contexts are destroyed**, facing **the need for intuitive, predictable behavior**, we decided to **clear focus when looking at or interacting with unrelated entities, changing rooms, or after 5 minutes of inactivity**, to achieve **a simple mental model where focus follows attention**, accepting **that users must re-open containers after switching context**.
+In the context of **managing when focus contexts are destroyed**, facing **the need for intuitive, predictable behavior**, we decided to **clear focus when interacting with unrelated entities, changing rooms, or after 5 minutes of inactivity**, to achieve **a simple mental model where focus follows interaction**, accepting **that users must re-open containers after switching context**.
 
 **Focus is cleared when:**
 - User interacts with a different entity NOT in current focus contents
-- User looks at (`/look at:`) a different entity NOT in current focus contents
 - User selects "Room" from autocomplete (the `[Close <container>] Room` option)
 - User moves to a different room
 - 5 minutes pass without interaction
@@ -135,11 +139,8 @@ In the context of **managing when focus contexts are destroyed**, facing **the n
 
 **Focus is NOT cleared when:**
 - User interacts with an item inside the focused container
-- User looks at an item inside the focused container
+- User looks at any entity (looking is read-only and doesn't affect focus)
 - User looks at the room itself (`/look` with no target)
-- User looks at the focused container itself
-
-**Why does looking break focus?** If you're looking at something across the room, you're no longer standing at the open chest. The physical metaphor is that you've walked away.
 
 ### OnOpen and OnClose Handlers
 
@@ -190,6 +191,8 @@ You walk through the {{ name }}.
 
 In the context of **helping users interact with focused container contents**, facing **autocomplete showing all room entities equally**, we decided to **show only focused contents when a container is open, with an escape option to close it**, to achieve **clean autocomplete that prioritizes contextually relevant items**, accepting **that room entities are hidden while focused**.
 
+> **Note:** *Superseded by ADR 0004 "Entity Resolution Unification"*: Autocomplete values are now source-prefixed (e.g., `room:Wooden Table`, `container:Gold Key`, `escape:room`) for unambiguous resolution. The display names remain the same but the underlying values encode the source context.
+
 **Behavior:**
 - When focused on a container, autocomplete shows only the container's contents
 - A special `[Close {container}] Room` option appears at the top as the escape mechanism
@@ -197,18 +200,18 @@ In the context of **helping users interact with focused container contents**, fa
 
 **Example autocomplete when focused on "Wooden Chest":**
 ```
-[Close Wooden Chest] Room        <- escape option (clears focus)
-Vinyl Record - Abbey Road        <- focused content
-Vinyl Record - Dark Side         <- focused content
-Gold Ring                        <- focused content
+[Close Wooden Chest] Room        <- escape option (value: escape:room)
+Vinyl Record - Abbey Road        <- focused content (value: container:Vinyl Record - Abbey Road)
+Vinyl Record - Dark Side         <- focused content (value: container:Vinyl Record - Dark Side)
+Gold Ring                        <- focused content (value: container:Gold Ring)
 ```
 
 **Example autocomplete with no focus:**
 ```
-Room                             <- view room description
-Wooden Chest                     <- room entity
-Wooden Table                     <- room entity
-Brass Lamp                       <- room entity
+Room                             <- view room description (value: escape:room)
+Wooden Chest                     <- room entity (value: room:Wooden Chest)
+Wooden Table                     <- room entity (value: room:Wooden Table)
+Brass Lamp                       <- room entity (value: room:Brass Lamp)
 ```
 
 ### Focus-Aware Interaction Flow
@@ -226,15 +229,13 @@ In the context of **the /interact command flow**, facing **the need to check and
 
 ### Focus-Aware Look Flow
 
-In the context of **the /look command flow**, facing **the need to clear focus when attention shifts**, we decided to **clear focus when looking at unrelated entities**, to achieve **consistent "attention follows gaze" behavior**, accepting **additional service calls in the look cog**.
+**Current implementation:** The `/look` command does NOT clear focus. Focus is only cleared by:
+- Room movement
+- `/interact` with an unrelated entity
+- Explicit close action (`/interact close <container>`)
+- 5-minute timeout
 
-**Updated flow:**
-1. **NEW:** If looking at specific entity (`/look at:<target>`)
-2. **NEW:** Check if target is in current focus or is the focused container
-3. **NEW:** If target is unrelated -> clear focus
-4. Execute look (unchanged)
-
-**Note:** `/look` with no target (view room) does NOT clear focus.
+**Note:** `/look` with no target (view room) does NOT clear focus. Looking at entities also does not clear focus - only explicit interaction does.
 
 ### Entity Schema Changes
 

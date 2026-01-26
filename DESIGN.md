@@ -85,19 +85,18 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 | `on_take` | TEXT | Handler response for take action (NULL = inherit from prototype) |
 | `on_open` | TEXT | Handler response for open action (NULL = inherit from prototype) |
 | `on_close` | TEXT | Handler response for close action (NULL = inherit from prototype) |
-| `container_id` | TEXT (FK to entities.id) | Reference to containing entity |
+| `on_drop` | TEXT | Handler response for drop action (NULL = inherit from prototype) |
 | `contents_visible` | BOOLEAN | Whether child entities appear in room descriptions (NULL = inherit, TRUE = auto-list, FALSE = hidden until examined). Note: This controls *visibility* only; interaction context is controlled by `focus_mode` |
-| `spawn_mode` | spawn_mode NOT NULL | Take behavior: `none` (can't take), `move` (one-time pickup), `clone` (infinite copies) |
-| `focus_mode` | focus_mode NOT NULL | Focus behavior: `none` (no focus), `container` (establish focus on open) |
+| `focus_mode` | focus_mode | Focus behavior: `none` (no focus), `container` (establish focus on open). NULL = inherit from prototype |
+| `rarity` | rarity NOT NULL DEFAULT 'none' | Item rarity affecting name display and pickup behavior |
 
 **Constraints:**
 - Self-reference prevention: `id != prototype_id`
-- Self-containment prevention: `id != container_id`
 
-**Spawn Mode Enum:**
-- `none`: Static decoration, cannot be taken (default)
-- `move`: One-time pickup, instance moves from room to inventory
-- `clone`: Infinite source, each take creates a new instance in inventory
+**Pickup Behavior:**
+- Controlled by `effects.pickup()` in `on_take` templates
+- If template calls `pickup()`: item moves to inventory
+- If template doesn't call `pickup()`: message shown, item stays
 
 **Focus Mode Enum:**
 - `none`: No focus established when opened (default)
@@ -114,21 +113,26 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 |--------|------|-------------|
 | `id` | UUID (PK) | Auto-generated unique instance identifier |
 | `entity_id` | TEXT NOT NULL (FK to entities.id) | Reference to entity definition |
-| `room` | TEXT (FK to rooms.id) | Logical room name (NULL when in inventory) |
+| `room` | TEXT (FK to rooms.id) | Logical room name (NULL when in inventory or container) |
 | `owner_id` | BIGINT (FK to users.id) | Player who owns this instance (NULL when in room) |
 | `discord_thread_id` | BIGINT | Discord thread ID when item is in inventory (NULL when in room) |
+| `discord_description_msg_id` | BIGINT | Message ID of the description post in thread (for sync updates) |
 | `created_at` | TIMESTAMPTZ NOT NULL | Instance creation timestamp |
+| `spawning_pool_id` | TEXT (FK to spawning_pools.id) | Spawning pool that created this instance (NULL for static instances) |
+| `player_dropped` | BOOLEAN NOT NULL DEFAULT false | Whether this item was dropped by a player (prevents respawn cleanup) |
+| `container_entity_id` | TEXT (FK to entities.id) | Container entity holding this item (NULL when in room or inventory) |
+| `is_world_instance` | BOOLEAN NOT NULL DEFAULT false | Marks canonical world instances that should be restored on sync |
 
 **Constraints:**
 - Mutual exclusivity: `(room IS NOT NULL AND owner_id IS NULL) OR (room IS NULL AND owner_id IS NOT NULL)`
-- Unique constraint on `(entity_id, room)` where room IS NOT NULL (enables idempotent sync)
+- Unique constraint on `(entity_id, room)` WHERE `is_world_instance = TRUE` (enables idempotent sync for world instances)
 - FK to entities.id with ON DELETE CASCADE (deleting an entity cascades to all its instances)
 - FK to users.id with ON DELETE CASCADE (deleting a user cascades to their inventory items)
 - FK to rooms.id with ON DELETE CASCADE (deleting a room cascades to entity instances in it)
 
 **Indexes:**
 - Primary key on `id`
-- Partial unique index on `(entity_id, room)` WHERE room IS NOT NULL (for idempotent sync)
+- Partial unique index on `(entity_id, room)` WHERE `is_world_instance = TRUE` (for idempotent sync of world instances)
 - Partial index on `room` (WHERE room IS NOT NULL) for room-based queries
 - Partial index on `owner_id` (WHERE owner_id IS NOT NULL) for inventory queries
 
@@ -136,6 +140,44 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 - Instances for entities with `Room` field in `.rec` files are created during `sync_entities()`
 - Uses `INSERT ON CONFLICT DO NOTHING` for idempotent sync (same entity+room = no-op)
 - Inventory instances (owner_id set) are NOT affected by sync - they persist independently
+
+### Entity Tags Table
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `entity_id` | TEXT NOT NULL (FK to entities.id) | Entity being tagged |
+| `tag` | TEXT NOT NULL | Tag value (e.g., "weapon", "key", "treasure") |
+
+**Constraints:**
+- PK on `(entity_id, tag)` (unique tag per entity)
+- FK to entities(id) with ON DELETE CASCADE
+
+**Purpose:**
+- Enables grouping entities by category for spawning pool queries
+- Tags are defined in `.rec` files with the `Tag` field (can have multiple Tag lines)
+- Used by spawning pools to select random entities matching tag criteria
+
+### Spawning Pools Table
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | TEXT (PK) | Unique spawning pool identifier |
+| `room` | TEXT NOT NULL (FK to rooms.id) | Room where spawned items appear |
+| `container_id` | TEXT (FK to entities.id) | Optional container to spawn items into |
+| `tag_query` | TEXT NOT NULL | Tag expression to match entities (e.g., "weapon", "treasure") |
+| `max_count` | INTEGER NOT NULL DEFAULT 1 | Maximum items this pool maintains |
+| `respawn_interval_minutes` | INTEGER NOT NULL DEFAULT 30 | Minimum time between spawns |
+| `last_spawn_at` | TIMESTAMPTZ | When the pool last spawned an item |
+
+**Purpose:**
+- Manages automatic item respawning in rooms
+- Selects random entities matching `tag_query` when below `max_count`
+- Respects `respawn_interval_minutes` between spawns
+- Can spawn directly into room or into a container
+
+**Constraints:**
+- FK to rooms(id) with ON DELETE CASCADE
+- FK to entities(id) with ON DELETE CASCADE (for container_id)
 
 ### User Inventory Forums Table
 
@@ -148,7 +190,7 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 
 **Purpose:**
 - Tracks per-user inventory forum channels
-- Each user gets a private forum channel named `<base62-user-id>-inventory`
+- Each user gets a private forum channel named `{braille_user_id}-inventory`
 - Items in inventory are represented as threads within the forum
 - Only the owner can see their inventory forum
 
@@ -164,9 +206,11 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 
 **Entity Instances Extension:**
 - `discord_thread_id BIGINT` column added to entity_instances
+- `discord_description_msg_id BIGINT` stores the first message ID (item description)
 - Stores the Discord thread ID when an item is in a user's inventory
 - NULL when item is in a room (not in inventory)
 - Indexed for quick thread → instance lookups
+- Thread first post contains rendered `on_look` description, edited during sync to stay current
 
 ### User Focus Table
 
@@ -184,8 +228,8 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 
 **Focus Lifecycle (ADR 0003):**
 - Established: When user executes ON_OPEN action on entity with `focus_mode != 'none'`
-- Cleared: Room movement, looking at unrelated entity, ON_CLOSE action, 5-minute timeout
-- Preserved: Looking at room, looking at/interacting with focused entity or its contents
+- Cleared: Room movement, looking at room, looking at unrelated entity, interacting with unrelated entity, ON_CLOSE action, 5-minute timeout
+- Preserved: Looking at focused entity or its contents, interacting with focused entity or its contents
 
 **Constraints:**
 - PK on `user_id` (one focus per user)
@@ -204,7 +248,7 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 | `verb` | TEXT (PK) | The verb word (e.g., 'smash', 'look') |
 | `action` | verb_action NOT NULL | The action handler type to invoke |
 
-**Verb Action Enum:** `on_look`, `on_touch`, `on_attack`, `on_use`, `on_take`, `on_open`, `on_close`
+**Verb Action Enum:** `on_look`, `on_touch`, `on_attack`, `on_use`, `on_take`, `on_open`, `on_close`, `on_drop`
 
 **Indexes:**
 - Primary key on `verb`
@@ -219,10 +263,10 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 
 The `resolve_entity(target_id TEXT)` function resolves entity properties by walking up the prototype chain:
 - Returns merged properties where child values override parent values
-- First non-NULL value wins for each property (except `spawn_mode` which is always from the entity itself)
+- First non-NULL value wins for each property
 - Supports up to 10 levels of inheritance depth (prevents infinite loops from circular references)
 - Used to materialize the final entity state including inherited properties
-- Returns: `id`, `name`, `description_short`, `description_long`, `on_*` handlers (including `on_open`, `on_close`), `contents_visible`, `focus_mode`, `spawn_mode`
+- Returns: `id`, `name`, `description_short`, `description_long`, `on_*` handlers (including `on_open`, `on_close`), `contents_visible`, `focus_mode`, `rarity`
 
 ## Sync System
 
@@ -248,10 +292,8 @@ periodic_sync() [FIRST ITERATION]
     │    ├─ Fix channel topics
     │    └─ Return orphans + default_room
     │
-    ├─ init_visibility_service(default_room)
-    │
     ├─ visibility_service.sync_guild()
-    │    ├─ Build room cache
+    │    ├─ Build room cache (uses default_room)
     │    └─ Sync user permissions
     │
     └─ mark_startup_complete() ─→ UNBLOCK COMMANDS
@@ -334,15 +376,17 @@ This runs as part of the unified sync flow described above.
 
 ## Entity Service
 
-The `EntityService` provides cached runtime access to entity data. It follows the explicit singleton pattern.
+The `EntityService` provides cached runtime access to entity data.
 
-### Service Methods
+### Service Methods (Core)
 
 - `get_entity(entity_id)` - Get resolved entity by ID (cached)
 - `get_room_entities(room)` - Get all entity instances in a room with resolved properties
 - `get_entity_instance(instance_id)` - Get specific instance by UUID
 - `get_container_contents(container_id, room)` - Get direct children of a container in a room
 - `invalidate_cache()` - Clear cache (called by `sync_entities()`)
+
+Additional methods exist for specialized queries (inventory, visibility, random selection). See `mudd/services/entity.py` for the full interface.
 
 ### Caching Strategy
 
@@ -351,16 +395,18 @@ The `EntityService` provides cached runtime access to entity data. It follows th
 - Cache is invalidated entirely after `sync_entities()` completes
 - Instance queries always hit the database (instances can move to inventory)
 
-### Initialization
+### Usage
+
+Services are instantiated in `main.py:setup_hook()` and injected into cogs via constructor parameters:
 
 ```python
-# In main.py setup_hook(), after sync_entities():
-init_entity_service()
+# In main.py:
+entity_service = EntityService(pool)
+cog = InteractCog(bot, entity_service, ...)
+await bot.add_cog(cog)
 
-# In cogs:
-from mudd.services.entity import get_entity_service
-service = get_entity_service()
-entities = await service.get_room_entities(channel.name)
+# In cogs - use the injected service:
+entities = await self.entity_service.get_room_entities(channel.name)
 ```
 
 ### Data Flow
@@ -382,7 +428,7 @@ get_room_entities(room)
 
 ## Focus Context Service
 
-The `FocusContextService` manages per-user focus state for modal interactions (ADR 0003). It follows the explicit singleton pattern.
+The `FocusContextService` manages per-user focus state for modal interactions (ADR 0003).
 
 ### Service Methods
 
@@ -400,16 +446,18 @@ The `FocusContextService` manages per-user focus state for modal interactions (A
 - **Direct method calls**: Cogs call service methods directly (no pub/sub events)
 - **Optional messages**: `clear_focus()` returns on_close template for rendering
 
-### Initialization
+### Usage
+
+Services are instantiated in `main.py:setup_hook()` and injected into cogs via constructor parameters:
 
 ```python
-# In main.py setup_hook(), after init_entity_service():
-init_focus_context_service()
+# In main.py:
+focus_service = FocusContextService(pool, entity_service)
+cog = InteractCog(bot, entity_service, focus_service, ...)
+await bot.add_cog(cog)
 
-# In cogs:
-from mudd.services.focus_context import get_focus_context_service
-focus_service = get_focus_context_service()
-focus = await focus_service.get_focus(user_id, room)
+# In cogs - use the injected service:
+focus = await self.focus_service.get_focus(user_id, room)
 ```
 
 ### Focus-Aware Autocomplete
@@ -423,6 +471,100 @@ Gold Ring                                    <- Focused content
 ```
 
 Room entities are hidden while focused. Selecting the escape option clears focus and shows the room.
+
+## Entity Resolution Service
+
+The `EntityResolutionService` consolidates entity visibility, focus context, and autocomplete logic into a unified API. It provides source-prefixed autocomplete values for unambiguous entity resolution.
+
+### Service Methods
+
+**Context Building:**
+- `build_context(interaction, query)` - Build InteractionContext from Discord state (detects thread/prefix/room mode)
+- `get_autocomplete_choices(ctx, query)` - Get source-prefixed autocomplete choices
+
+**Entity Resolution:**
+- `resolve_target(ctx, encoded_value)` - Resolve encoded value to EntityInstance or error
+
+**Focus Operations (delegated):**
+- `get_focus(user_id, room)` - Get active focus
+- `set_focus(user_id, room, entity)` - Establish focus
+- `clear_focus(user_id, reason)` - Clear focus
+- `update_focus_timestamp(user_id)` - Refresh timeout
+- `is_entity_in_focus(user_id, room, entity_id)` - Check focus membership
+
+**Cache:**
+- `invalidate_cache()` - Clear autocomplete cache
+- `prepopulate_cache(rooms)` - Warm cache for rooms
+
+### InteractionContext
+
+Frozen dataclass capturing all context needed for resolution:
+
+```python
+class ViewMode(str, Enum):
+    ROOM = "room"           # Normal room view (with optional focus)
+    INVENTORY = "inventory" # Typed "i." prefix
+    INVENTORY_THREAD = "thread"  # In inventory forum thread
+
+@dataclass(frozen=True)
+class InteractionContext:
+    user_id: int
+    room: str                           # Always populated (for action execution)
+    view_mode: ViewMode
+    focus_entity_id: str | None = None  # Only for ROOM mode
+    thread_instance_id: UUID | None = None  # Only for INVENTORY_THREAD
+```
+
+### Autocomplete Value Encoding
+
+Autocomplete choices use source-prefixed values for unambiguous resolution:
+
+```
+{source}:{entity_name}
+
+Sources: room, inventory, container, escape
+
+Examples:
+- room:Wooden Table              # Room entity
+- inventory:Rusty Sword          # Inventory item
+- container:Gold Key             # Item inside focused container
+- escape:room                    # Special: close focus, show room
+```
+
+**Why human-readable names:**
+- Users can read and understand the value in the Discord UI
+- Source prefix adds helpful context ("this is from my inventory")
+- Exact name matching within scope is sufficient since autocomplete selected the name
+
+**Resolution strategy:**
+1. Parse source prefix to scope the search
+2. Try exact name match within that scope first
+3. Fallback to prefix matching if exact match fails (handles user edits)
+4. If no source prefix (legacy), use current behavior
+
+### Container Behavior
+
+**Recursive pickup:** When picking up a container, all its contents move to inventory with it. Contents retain their `container_entity_id` link.
+
+**Recursive drop:** When dropping a container, all its contents move to the room with it.
+
+**Implicit focus in container threads:** When in an inventory thread for a container (`focus_mode != 'none'`), the system implicitly focuses on that container's contents - autocomplete shows contents immediately.
+
+### Usage
+
+```python
+# In main.py:
+entity_resolution = EntityResolutionService(
+    entity_service, focus_service, inventory_service, pool
+)
+cog = InteractCog(bot, entity_service, entity_resolution, ...)
+await bot.add_cog(cog)
+
+# In cogs - use unified API:
+ctx = await self.entity_resolution.build_context(interaction, current)
+choices = await self.entity_resolution.get_autocomplete_choices(ctx, current)
+result = await self.entity_resolution.resolve_target(ctx, selected_value)
+```
 
 ## Template Rendering
 
@@ -448,7 +590,7 @@ Templates have access to:
         │       └─ Append "-# (error rendering template)" warning
         └─ Append container contents (if contents_visible)
 
-/interact do:<verb> target:<entity>
+/interact with:<entity> action:<verb>
     ├─ Match target using word-prefix matching (entity_matcher.py)
     │   ├─ No match → "You don't see '{target}' here."
     │   └─ Multiple matches → "Which one? *Entity1*, *Entity2*"
@@ -491,6 +633,24 @@ You examine the {{ name }}. {{ e.description_long }}
 
 Templates can trigger side effects that execute after the ephemeral response is sent. Currently supported:
 
+**`effects.pickup()`** - Signals that an item should be picked up (used in `on_take` handlers).
+
+```jinja
+{# Pickable item - calls pickup() to move to inventory #}
+{{ effects.pickup() }}You pick up the {{ name }}.
+```
+
+If `pickup()` is not called in the `on_take` handler, the item stays in the room and only the message is shown. Quest items (`rarity=quest`) clone on pickup - the original stays in the room.
+
+**`effects.drop()`** - Signals that an item should be dropped (used in `on_drop` handlers).
+
+```jinja
+{# Droppable item #}
+{{ effects.drop() }}You drop the {{ name }}.
+```
+
+If `drop()` is not called in the `on_drop` handler, the item stays in inventory.
+
 **`effects.broadcast(message)`** - Sends a public message to the channel after the ephemeral response.
 
 ```jinja
@@ -502,9 +662,22 @@ Result:
 - **Ephemeral to user**: "You slide the record onto the turntable. Music fills the room."
 - **Public to channel**: "**Frizzle** put on some music."
 
-The `broadcast()` function returns an empty string, allowing inline use without affecting output. Multiple broadcasts can be queued in a single template.
+**`effects.destroy()`** - Signals that this entity instance should be destroyed after the response.
+
+```jinja
+{# Smashable vase that destroys itself and grants loot #}
+{{ effects.destroy() }}{{ effects.broadcast("**" ~ user.name ~ "** smashes the " ~ name ~ "!") }}You smash the {{ name }}! Shards scatter everywhere.{{ effects.grant_random("loot") }}
+```
+
+Result:
+- **Ephemeral to user**: "You smash the Flower Vase! Shards scatter everywhere."
+- **Public to channel**: "**Frizzle** smashes the *Flower Vase*!"
+- Entity instance is deleted from the database
+- If paired with a spawning pool, the entity will respawn
+
+All effect functions return an empty string, allowing inline use without affecting output.
 
 **Implementation:**
 - `TriggerEffects` dataclass collects side effects during rendering
 - `RenderingService.render_with_effects()` returns `(output, effects)` tuple
-- Interact cog executes `effects.broadcasts` after sending ephemeral response
+- Interact cog checks `effects.has_pickup`, `effects.has_drop`, and executes `effects.broadcasts`

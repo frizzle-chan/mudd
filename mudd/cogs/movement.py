@@ -9,8 +9,8 @@ from discord import Interaction, app_commands
 from discord.ext import commands
 
 if TYPE_CHECKING:
+    from mudd.services.entity_resolution import EntityResolutionService
     from mudd.services.inventory import InventoryService
-    from mudd.services.player_context import PlayerContextService
     from mudd.services.visibility import VisibilityServiceProtocol
 
 logger = logging.getLogger(__name__)
@@ -69,12 +69,12 @@ class Movement(commands.Cog):
         self,
         bot: commands.Bot | None,
         visibility_service: "VisibilityServiceProtocol",
-        player_context: "PlayerContextService",
+        entity_resolution: "EntityResolutionService",
         inventory_service: "InventoryService",
     ) -> None:
         self.bot = bot
         self.visibility_service = visibility_service
-        self.player_context = player_context
+        self.entity_resolution = entity_resolution
         self.inventory_service = inventory_service
 
     async def destination_autocomplete(
@@ -150,7 +150,7 @@ class Movement(commands.Cog):
 
             if moved:
                 # Clear focus when moving rooms (per ADR 0003)
-                await self.player_context.clear_focus(member.id, reason="movement")
+                await self.entity_resolution.clear_focus(member.id, reason="movement")
 
                 await interaction.response.send_message(
                     f"You moved! Click {target.mention} to enter.", ephemeral=True
@@ -224,6 +224,6 @@ class Movement(commands.Cog):
             await self.visibility_service.delete_user_location(member.id)
 
             # Clean up focus context
-            await self.player_context.clear_focus(member.id, reason="interaction")
+            await self.entity_resolution.clear_focus(member.id, reason="interaction")
         except Exception:
             logger.exception("Failed to clean up for member %s", member.id)

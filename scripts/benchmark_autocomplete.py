@@ -10,7 +10,7 @@
 
 Measures:
 - focus_service.get_focus() latency
-- player_context.get_visible_entities() end-to-end latency (cold and warm cache)
+- entity_resolution.get_visible_entities() end-to-end latency (cold and warm cache)
 
 Run before and after optimization to quantify improvement.
 """
@@ -29,8 +29,9 @@ from dotenv import load_dotenv
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from mudd.services.entity import EntityService
+from mudd.services.entity_resolution import EntityResolutionService
 from mudd.services.focus_context import FocusContextService
-from mudd.services.player_context import PlayerContextService
+from mudd.services.inventory import InventoryService
 
 
 async def benchmark_function(name: str, func, iterations: int = 20) -> dict:
@@ -104,7 +105,10 @@ async def main() -> int:
     # Create services
     entity_service = EntityService(pool)
     focus_service = FocusContextService(pool)
-    player_context = PlayerContextService(entity_service, focus_service)
+    inventory_service = InventoryService(pool, entity_service)
+    entity_resolution = EntityResolutionService(
+        entity_service, focus_service, inventory_service, pool
+    )
 
     # Use a fake user ID that won't have focus state
     user_id = 999999999
@@ -120,26 +124,26 @@ async def main() -> int:
     )
     print_results(results1)
 
-    # Benchmark 2: player_context.get_visible_entities - empty query (cold cache)
-    player_context.invalidate_cache()
+    # Benchmark 2: prepopulate_cache (cold cache)
+    entity_resolution.invalidate_cache()
     results2 = await benchmark_function(
-        "player_context.get_visible_entities('') [cold then warm cache]",
-        lambda: player_context.get_visible_entities(room, user_id, query=""),
+        "prepopulate_cache([room]) [cold cache]",
+        lambda: entity_resolution.prepopulate_cache([room]),
     )
     print_results(results2)
 
-    # Benchmark 3: player_context.get_visible_entities - warm cache with empty query
-    await player_context.get_visible_entities(room, user_id, query="")
+    # Benchmark 3: prepopulate_cache (warm cache - should be no-op)
     results3 = await benchmark_function(
-        "player_context.get_visible_entities('') [warm cache only]",
-        lambda: player_context.get_visible_entities(room, user_id, query=""),
+        "prepopulate_cache([room]) [warm cache - no-op]",
+        lambda: entity_resolution.prepopulate_cache([room]),
     )
     print_results(results3)
 
-    # Benchmark 4: player_context.get_visible_entities - warm cache with query filter
+    # Benchmark 4: _build_candidates directly (bypasses cache)
+    focus = await focus_service.get_focus(user_id, room)
     results4 = await benchmark_function(
-        "player_context.get_visible_entities('tab') [warm cache + query filter]",
-        lambda: player_context.get_visible_entities(room, user_id, query="tab"),
+        "_build_candidates(room, focus) [direct, no cache]",
+        lambda: entity_resolution._build_candidates(room, focus),
     )
     print_results(results4)
 
@@ -148,8 +152,8 @@ async def main() -> int:
     print("=" * 60)
     print(f"Room tested: {room}")
     print(f"Focus check overhead: ~{results1['mean_ms']:.2f}ms")
-    print(f"Full autocomplete, empty query (warm): ~{results3['mean_ms']:.2f}ms")
-    print(f"Full autocomplete, with query filter (warm): ~{results4['mean_ms']:.2f}ms")
+    print(f"Cache prepopulation (cold): ~{results2['first_ms']:.2f}ms")
+    print(f"Build candidates (no cache): ~{results4['mean_ms']:.2f}ms")
 
     await pool.close()
     return 0
