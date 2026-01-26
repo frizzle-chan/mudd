@@ -428,6 +428,59 @@ DescriptionShort: Several {{ name }} are scattered around the room.
 DescriptionLong: Plush leather armchairs that look like they've hosted many late-night conversations.
 OnUse: You sink into one of the leather chairs and close your eyes for a moment. You feel your health regenerating.
 
+Id: lounge_slot_machine
+Name: Slot Machine
+Prototype: furniture
+Room: lounge
+ContentsVisible: no
+DescriptionShort: A vintage {{ name }} stands against the wall.
+DescriptionLong: A classic one-armed bandit with three spinning reels. The chrome handle gleams invitingly. __Pull__ the handle to try your luck!
+OnTouch: The cold metal handle vibrates slightly.
+OnUse: {{ effects.dispense() }}{{ effects.broadcast("**" ~ user.name ~ "** spins the slot machine...") }}The wheels spin... click click click...
+OnAttack: You kick the machine in frustration. It remains unmoved.
+
+# Slot machine prizes (spawned by lounge_slot_machine_pool)
+
+Id: slot_lucky_chip
+Name: Lucky Chip
+Prototype: item
+Tags: slot_prize
+Rarity: common
+DescriptionShort: a {{ name }}
+DescriptionLong: A worn casino chip with a four-leaf clover embossed on it.
+
+Id: slot_golden_token
+Name: Golden Token
+Prototype: item
+Tags: slot_prize
+Rarity: uncommon
+DescriptionShort: a shiny {{ name }}
+DescriptionLong: A heavy gold token stamped with a crown.
+
+Id: slot_jackpot_coin
+Name: Jackpot Coin
+Prototype: item
+Tags: slot_prize
+Rarity: rare
+DescriptionShort: a glittering {{ name }}
+DescriptionLong: A platinum coin with "JACKPOT" inscribed around the edge.
+
+Id: slot_diamond_chip
+Name: Diamond Chip
+Prototype: item
+Tags: slot_prize
+Rarity: epic
+DescriptionShort: a sparkling {{ name }}
+DescriptionLong: A translucent chip with a real diamond embedded in the center.
+
+Id: slot_lucky_sevens
+Name: Lucky Sevens Token
+Prototype: item
+Tags: slot_prize
+Rarity: legendary
+DescriptionShort: a {{ name }} radiating luck
+DescriptionLong: A mystical token with three sevens arranged in a triangle.
+
 # Lounge beverages (spawned by lounge_fridge_pool)
 
 Id: lounge_white_claw_mango
@@ -1306,3 +1359,10 @@ TagQuery: gallery_painting
 MaxCount: 4
 RespawnIntervalMinutes: 30
 NoDuplicates: yes
+
+Id: lounge_slot_machine_pool
+Room: lounge
+Container: lounge_slot_machine
+TagQuery: slot_prize
+MaxCount: 1
+RespawnIntervalMinutes: 60

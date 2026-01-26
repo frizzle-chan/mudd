@@ -1,6 +1,7 @@
 """Interact command for entity interactions."""
 
 import logging
+import random
 from typing import TYPE_CHECKING
 from uuid import UUID
 
@@ -260,6 +261,71 @@ class Interact(commands.Cog):
                     await self._handle_grant(
                         interaction, grant_effect.entity_id, room_channel
                     )
+
+                # Process dispense effect
+                if effects.has_dispense:
+                    await self._handle_dispense(
+                        interaction, matched_instance.entity, room_channel
+                    )
+
+    async def _move_item_to_inventory(
+        self,
+        interaction: Interaction,
+        entity: ResolvedEntity,
+        instance_id: UUID,
+    ) -> bool:
+        """Move an item instance to user's inventory.
+
+        Updates entity_instance to set owner_id, clears room/container/spawning_pool_id.
+        Renders the item description and creates a Discord thread for the item.
+
+        Args:
+            interaction: Discord interaction
+            entity: The resolved entity being moved
+            instance_id: UUID of the entity instance
+
+        Returns:
+            True on success, False on failure
+        """
+        user_id = interaction.user.id
+        guild = interaction.guild
+        if guild is None:
+            return False
+
+        # Move the item instance to the user's inventory
+        # Clear spawning_pool_id so the pool can spawn a replacement
+        await self.pool.execute(
+            """UPDATE entity_instances
+            SET room = NULL, owner_id = $1, player_dropped = FALSE,
+                container_entity_id = NULL, is_world_instance = FALSE,
+                spawning_pool_id = NULL
+            WHERE id = $2""",
+            user_id,
+            instance_id,
+        )
+
+        # Get the entity instance for rendering description
+        instance = await self.entity_service.get_entity_instance(instance_id)
+        if instance is None:
+            logger.error("Entity instance %s not found after move", instance_id)
+            description = f"### {entity.display_name}\n\nYou see nothing special."
+        else:
+            # Render on_look as the thread description
+            description = await self._rendering.render_entity_on_look(
+                instance, self.entity_service, None
+            )
+
+        # Create Discord thread for the item
+        thread = await self._inventory.create_item_thread(
+            guild, user_id, instance_id, entity.display_name, description
+        )
+        if thread is None:
+            logger.warning("Failed to create thread for moved item %s", entity.id)
+            # Item is still in inventory, just no Discord thread
+
+        # Invalidate autocomplete cache so the item no longer appears in room
+        self.entity_resolution.invalidate_cache()
+        return True
 
     async def _handle_pickup(
         self,
@@ -606,6 +672,64 @@ class Interact(commands.Cog):
             self.entity_resolution.invalidate_cache()
             return True
         return False
+
+    async def _handle_dispense(
+        self,
+        interaction: Interaction,
+        container_entity: ResolvedEntity,
+        channel: discord.TextChannel,
+    ) -> None:
+        """Handle dispensing an item from a container to the user.
+
+        Queries the container's contents and picks one randomly, then
+        moves it to the user's inventory.
+
+        Args:
+            interaction: Discord interaction
+            container_entity: The container entity dispensing items
+            channel: Channel to broadcast result to
+        """
+        # Query container contents (items inside this container in the room)
+        user_room = await self.pool.fetchval(
+            "SELECT current_room FROM users WHERE id = $1",
+            interaction.user.id,
+        )
+        if user_room is None:
+            return
+
+        # Get items inside the container
+        contents = await self.pool.fetch(
+            """SELECT ei.id, ei.entity_id
+            FROM entity_instances ei
+            WHERE ei.container_entity_id = $1 AND ei.room = $2""",
+            container_entity.id,
+            user_room,
+        )
+
+        if not contents:
+            # Container is empty
+            await channel.send("The slot machine is waiting to be refilled.")
+            return
+
+        # Pick one randomly
+        item_row = random.choice(contents)
+        item_instance_id = item_row["id"]
+        item_entity_id = item_row["entity_id"]
+
+        # Get the entity for display name
+        item_entity = await self.entity_service.get_entity(item_entity_id)
+        if item_entity is None:
+            logger.error("Entity %s not found for dispense", item_entity_id)
+            return
+
+        # Move item to inventory using shared helper
+        success = await self._move_item_to_inventory(
+            interaction, item_entity, item_instance_id
+        )
+
+        if success:
+            user_name = interaction.user.display_name
+            await channel.send(f"**{user_name}** got a *{item_entity.display_name}*!")
 
 
 def _get_handler_text(entity: ResolvedEntity, action: VerbAction) -> str | None:
