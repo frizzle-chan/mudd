@@ -279,7 +279,7 @@ class Sync(commands.Cog):
         pool = self._pool
         now = datetime.now(UTC)
 
-        # Get all spawning pools with current instance counts
+        # Get all spawning pools with current instance counts and spawned entity IDs
         pools = await pool.fetch(
             """
             SELECT
@@ -290,7 +290,9 @@ class Sync(commands.Cog):
                 sp.max_count,
                 sp.respawn_interval_minutes,
                 sp.last_spawn_at,
-                COUNT(ei.id) AS current_count
+                sp.no_duplicates,
+                COUNT(ei.id) AS current_count,
+                ARRAY_REMOVE(ARRAY_AGG(ei.entity_id), NULL) AS spawned_entity_ids
             FROM spawning_pools sp
             LEFT JOIN entity_instances ei ON ei.spawning_pool_id = sp.id
             GROUP BY sp.id
@@ -311,14 +313,30 @@ class Sync(commands.Cog):
                     continue
 
             # Select random entity by tag with weighted rarity
-            entity = await self.entity_service.get_random_entity_by_tag(sp["tag_query"])
-            if entity is None:
-                logger.warning(
-                    "No entities found for spawning pool '%s' with tag '%s'",
-                    sp["id"],
-                    sp["tag_query"],
+            if sp["no_duplicates"]:
+                # Exclude already-spawned entity types
+                exclude_ids = set(sp["spawned_entity_ids"] or [])
+                entity = await self.entity_service.get_random_entity_by_tag_excluding(
+                    sp["tag_query"], exclude_ids
                 )
-                continue
+                if entity is None:
+                    # All entity types already spawned - skip silently
+                    logger.debug(
+                        "Pool '%s': all entity types already spawned (no_duplicates)",
+                        sp["id"],
+                    )
+                    continue
+            else:
+                entity = await self.entity_service.get_random_entity_by_tag(
+                    sp["tag_query"]
+                )
+                if entity is None:
+                    logger.warning(
+                        "No entities found for spawning pool '%s' with tag '%s'",
+                        sp["id"],
+                        sp["tag_query"],
+                    )
+                    continue
 
             # Create instance (with container if spawning pool has one)
             await pool.execute(

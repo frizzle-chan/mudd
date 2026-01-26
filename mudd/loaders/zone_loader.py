@@ -76,6 +76,7 @@ class SpawningPool:
     container_id: str | None = None
     max_count: int = 1
     respawn_interval_minutes: int = 30
+    no_duplicates: bool = False
 
 
 def _load_records_from_rec[T](
@@ -233,6 +234,10 @@ def _parse_spawning_pool_row(row: dict[str, str]) -> SpawningPool:
             f"'{interval_str}'. Must be an integer."
         ) from e
 
+    # Parse no_duplicates boolean
+    no_duplicates_str = row.get("NoDuplicates", "").lower()
+    no_duplicates = no_duplicates_str in ("yes", "true", "1")
+
     return SpawningPool(
         id=row["Id"],
         room=row["Room"],
@@ -240,6 +245,7 @@ def _parse_spawning_pool_row(row: dict[str, str]) -> SpawningPool:
         container_id=row.get("Container") or None,
         max_count=max_count,
         respawn_interval_minutes=respawn_interval_minutes,
+        no_duplicates=no_duplicates,
     )
 
 

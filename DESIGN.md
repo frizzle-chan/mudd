@@ -168,12 +168,14 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 | `max_count` | INTEGER NOT NULL DEFAULT 1 | Maximum items this pool maintains |
 | `respawn_interval_minutes` | INTEGER NOT NULL DEFAULT 30 | Minimum time between spawns |
 | `last_spawn_at` | TIMESTAMPTZ | When the pool last spawned an item |
+| `no_duplicates` | BOOLEAN NOT NULL DEFAULT FALSE | When TRUE, won't spawn an entity type already spawned by this pool |
 
 **Purpose:**
 - Manages automatic item respawning in rooms
 - Selects random entities matching `tag_query` when below `max_count`
 - Respects `respawn_interval_minutes` between spawns
 - Can spawn directly into room or into a container
+- With `no_duplicates`, ensures variety by preventing duplicate entity types
 
 **Constraints:**
 - FK to rooms(id) with ON DELETE CASCADE
