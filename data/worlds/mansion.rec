@@ -440,6 +440,97 @@ DescriptionLong: ```
 + [2026-01-12 03:33:37] Marking for manual review.
 + ```
 
+Id: terminal_inbox_kickoff
+Name: INBOX - Project Kickoff
+Prototype: terminal_document
+Room: office
+Container: office_terminal
+DescriptionLong: ```
++ FROM: frizzle@mudd.local
++ TO: team@mudd.local
++ SUBJECT: Project Kickoff
++ DATE: 2025-12-29
++ ----------------------------------------
++
++ The Discord MUD is officially underway.
++
++ The idea: use Discord channels as physical rooms. Players can only
++ see the channel they're currently in - "fog of war" via permissions.
++
++ Movement, exploration, entities coming up next
++
++ -Frizzle
++ ```
+
+Id: terminal_inbox_movement
+Name: INBOX - We Have Movement!
+Prototype: terminal_document
+Room: office
+Container: office_terminal
+DescriptionLong: ```
++ FROM: frizzle@mudd.local
++ TO: team@mudd.local
++ SUBJECT: We Have Movement!
++ DATE: 2025-12-30
++ ----------------------------------------
++
++ /move now hides the old channel and reveals the new one.
++ You can actually explore the mansion now without seeing
++ everything at once.
++ 
++ Discord's UI hates the idea of yanking permissions from users and refuses to redraw the UI.
++ So I had to have users click on the channel name in the movement message. It's not a deal breaker.
++
++ -Frizzle
++ ```
+
+Id: terminal_inbox_entities
+Name: INBOX - Entities Are Alive
+Prototype: terminal_document
+Room: office
+Container: office_terminal
+DescriptionLong: ```
++ FROM: frizzle@mudd.local
++ TO: team@mudd.local
++ SUBJECT: Entities Are Alive
++ DATE: 2026-01-14
++ ----------------------------------------
++
++ I implemented a prototype based entity system so we can start filling rooms with stuff.
++ I'm starting with just static entities for now. Later I'll add dynamic spawning and destroyable entities etc.
++
++ /look now shows what's in the room. Tables, vases, furniture.
++ /interact lets you poke things. Jinja templates for responses.
++
++ -Frizzle
++ ```
+
+Id: terminal_inbox_loot
+Name: INBOX - Inventory and Loot
+Prototype: terminal_document
+Room: office
+Container: office_terminal
+DescriptionLong: ```
++ FROM: frizzle@mudd.local
++ TO: team@mudd.local
++ SUBJECT: Inventory and Loot
++ DATE: 2026-01-25
++ ----------------------------------------
++
++ I added an inventory system that gives each user a unique forum channel where all their items are modeled as threads.
++ Users can interact with the items in the item's thead.
++ 
++ So players can pick stuff up, drop things, destroy things.
++
++ Spawning pools, rarity tiers, scripted item grants.
++ The whole item lifecycle is done.
++
++ Next up is adding dumb stuff like slot machines, fishing, clay pots to smash.
++ Then I'm thinking we need to add a currency system.
++
++ -Frizzle
++ ```
+
 # ----------------------------------------------------------------------------
 # Gallery entities
 # ----------------------------------------------------------------------------
