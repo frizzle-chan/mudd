@@ -16,6 +16,7 @@ from mudd.services.entity_resolution import ResolutionError
 from mudd.services.rendering import RenderingService, TemplateRenderError
 from mudd.services.trigger_effects import TriggerEffects
 from mudd.types import UserContext, VerbAction
+from mudd.utils.text import indefinite_article
 
 if TYPE_CHECKING:
     from mudd.services.entity import EntityService
@@ -729,7 +730,9 @@ class Interact(commands.Cog):
 
         if success:
             user_name = interaction.user.display_name
-            await channel.send(f"**{user_name}** got a *{item_entity.display_name}*!")
+            article = indefinite_article(item_entity.display_name)
+            name = item_entity.display_name
+            await channel.send(f"**{user_name}** got {article} *{name}*!")
 
 
 def _get_handler_text(entity: ResolvedEntity, action: VerbAction) -> str | None:
