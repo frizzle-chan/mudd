@@ -247,26 +247,154 @@ DescriptionShort: An {{ name }}
 DescriptionLong: A wooden plaque with a shiny brass plate. The inscription reads: "Welcome to my mansion! You can usually find us in the office down the hall. -Frizzle"
 
 # ----------------------------------------------------------------------------
+# Hallway
+# ----------------------------------------------------------------------------
+
+Id: hallway_map
+Name: Mansion Map
+Prototype: object
+Room: hallway
+DescriptionShort: A rough {{ name }} hangs on the wall.
+DescriptionLong: A hand-drawn map of the mansion in a simple wooden frame. The sketchy lines show the layout of the ground floor with annotations:
++ • Office: down the hall
++ • Library: west from here through the foyer, past the gallery
++ • Screening Room: through the library, in the northern corner
+
+# ----------------------------------------------------------------------------
 # Gallery entities
 # ----------------------------------------------------------------------------
 
-Id: gallery_map
-Name: Mansion Map
-Prototype: object
+Id: gallery_wall
+Name: Gallery Wall
+Prototype: furniture
 Room: gallery
-DescriptionShort: A rough {{ name }} hangs on the wall.
-DescriptionLong: A hand-drawn map of the mansion in a simple wooden frame. The sketchy lines show the layout of the ground floor with annotations:
-+ • Library: west from here
-+ • Screening Room: through the library, in the northern corner
-+ • Office: east to foyer, east to hallway, then east again
-+ • Banquet Hall: east to foyer, east to hallway, then north
+FocusMode: container
+DescriptionShort: A section of {{ name }} displays rotating artwork{% if contents %}:{{ contents }}{% endif %}
+DescriptionLong: A dedicated wall space where the curator rotates pieces from the collection. A small placard reads "Featured Works - Selection changes periodically. All artwork drawn by real human beings."
+ContentsVisible: yes
+OnOpen: You step closer to examine the {{ name }}.{% if contents %} Currently on display:{{ contents }}{% else %} The wall is bare.{% endif %}
+OnClose: You step back from the {{ name }}.
 
-Id: gallery_portrait
-Name: Portrait of Two Dogs
-Prototype: object
-Room: gallery
-DescriptionShort: A {{ name }} hangs prominently on the wall.
-DescriptionLong: A formal oil portrait in an ornate gilded frame. Two goldendoodles pose regally against a deep burgundy backdrop. The smaller one on the left has fluffy apricot fur and bright curious eyes - her brass nametag reads "Lulu". The larger one on the right has a dignified bearing with wavy golden fur - her nametag reads "Ruby". They look like very good girls.
+# Gallery wall paintings (spawned by gallery_wall_pool)
+
+Id: painting
+Name: painting
+Prototype: item
+DescriptionShort: a {{ name }}
+OnTake: {{ effects.pickup() }}You carefully lift the {{ name }} from its hook.{{ effects.broadcast(user.name ~ " takes " ~ e.display_name ~ " from the wall.") }}
+OnDrop: {% if container %}You hang the {{ name }} on the *{{ container.name }}*.{% else %}You set the {{ name }} down, leaning it against the wall.{% endif %}{{ effects.drop() }}{{ effects.broadcast(user.name ~ " places " ~ e.display_name ~ ".") }}
+OnTouch: You run your fingers along the frame. The paint is dry and textured.
+OnAttack: {{ effects.destroy() }}{{ effects.broadcast("**" ~ user.name ~ "** slashes " ~ e.display_name ~ " with a knife!") }}You drag your blade across the canvas. The painting is ruined.
+
+Id: frizzle_artsylyds_the_scream_png
+Name: The Scream
+Prototype: painting
+Tags: gallery_painting
+Rarity: uncommon
+DescriptionShort: {{ name }} (artsylyds)
+DescriptionLong: [Art by artsylyds.](https://img.frizzle.dev/mudd/frizzle_artsylyds_the_scream.png)
+
+Id: frizzle_tattie_3up_png
+Name: It's Frizzle
+Prototype: painting
+Tags: gallery_painting
+Rarity: common
+DescriptionShort: {{ name }} (tattie)
+DescriptionLong: [Art by tattie.](https://img.frizzle.dev/mudd/frizzle_tattie_3up.png)
+
+Id: frizzle_nebula_nyafriz_png
+Name: Frizzle on the Phone
+Prototype: painting
+Tags: gallery_painting
+Rarity: uncommon
+DescriptionShort: {{ name }} (nebula)
+DescriptionLong: [Art by nebula.](https://img.frizzle.dev/mudd/frizzle_nebula_nyafriz.png) Frizzle on da phone fo today
+
+Id: frizzle_applekouhai_chair_jpg
+Name: Frizzle Chair
+Prototype: painting
+Tags: gallery_painting
+Rarity: uncommon
+DescriptionShort: {{ name }} (applekouhai)
+DescriptionLong: [Art by applekouhai.](https://img.frizzle.dev/mudd/frizzle_applekouhai_chair.jpg)
+
+Id: frizzle_nebula_maid_png
+Name: Maid Portrait
+Prototype: painting
+Tags: gallery_painting
+Rarity: common
+DescriptionShort: {{ name }} (nebula)
+DescriptionLong: [Art by nebula.](https://img.frizzle.dev/mudd/frizzle_nebula_maid.png)
+
+Id: frizzle_nebula_maid_shiny_gif
+Name: Maid Portrait (Holographic)
+Prototype: painting
+Tags: gallery_painting
+Rarity: rare
+DescriptionShort: {{ name }} (nebula)
+DescriptionLong: [Art by nebula.](https://img.frizzle.dev/mudd/frizzle_nebula_maid_shiny.gif) It's shiny!
+OnTouch: The surface shimmers under your fingertips, the glitter catching the light.
+
+Id: frizzle_nebula_maid_all4s_png
+Name: Maid on All Fours
+Prototype: painting
+Tags: gallery_painting
+Rarity: rare
+DescriptionShort: {{ name }} (nebula)
+DescriptionLong: [Art by nebula.](https://img.frizzle.dev/mudd/frizzle_nebula_maid_all4s.png)
+
+Id: frizzle_nebula_maid_all4s_shiny_gif
+Name: Maid on All Fours (Holographic)
+Prototype: painting
+Tags: gallery_painting
+Rarity: epic
+DescriptionShort: {{ name }} (nebula)
+DescriptionLong: [Art by nebula.](https://img.frizzle.dev/mudd/frizzle_nebula_maid_all4s_shiny.gif) 
+OnTouch: The glitter seems to swirl under your touch. You've never seen anything so sparkly.
+OnLook: {{ e.description_long }} It's mesmerizing.
+
+Id: frizzle_applekouhai_kon_png
+Name: Kyoani Frizzle
+Prototype: painting
+Tags: gallery_painting
+Rarity: uncommon
+DescriptionShort: {{ name }} (applekouhai)
+DescriptionLong: [Art by applekouhai.](https://img.frizzle.dev/mudd/frizzle_applekouhai_kon.png)
+
+Id: frizzle_neomory_painting_png
+Name: Sunset with Ruby
+Prototype: painting
+Tags: gallery_painting
+Rarity: uncommon
+DescriptionShort: {{ name }} (neomory)
+DescriptionLong: [Art by neomory.](https://img.frizzle.dev/mudd/frizzle_neomory_painting.png)
+
+Id: frizzle_been_drool_jpg
+Name: Seltzer Pour
+Prototype: painting
+Tags: gallery_painting
+Rarity: rare
+DescriptionShort: {{ name }} (been)
+DescriptionLong: [Art by been.](https://img.frizzle.dev/mudd/frizzle_been_drool.jpg)
+
+Id: frizzle_sanamaru1827_png
+Name: Frizzle Jump
+Prototype: painting
+Tags: gallery_painting
+Rarity: epic
+DescriptionShort: {{ name }} (sanamaru1827)
+DescriptionLong: [Art by sanamaru1827.](https://img.frizzle.dev/mudd/frizzle_sanamaru1827.png)
+
+Id: frizzle_applekouhai_garfield_jpg
+Name: Garfield Frizzle
+Prototype: painting
+Tags: gallery_painting
+Rarity: legendary
+DescriptionShort: {{ name }} (applekouhai)
+DescriptionLong: [Art by applekouhai.](https://img.frizzle.dev/mudd/frizzle_applekouhai_garfield.jpg)
+OnUse: You begin to hate mondays.
+OnLook: {{ e.description_long }} The longer you stare, the more it stares back.
+OnTouch: The paint feels warm. Too warm.
 
 # ----------------------------------------------------------------------------
 # Lounge entities
@@ -1168,5 +1296,13 @@ Room: library
 Container: library_desk
 TagQuery: desk_drawer_loot
 MaxCount: 2
+RespawnIntervalMinutes: 30
+NoDuplicates: yes
+
+Id: gallery_wall_pool
+Room: gallery
+Container: gallery_wall
+TagQuery: gallery_painting
+MaxCount: 4
 RespawnIntervalMinutes: 30
 NoDuplicates: yes
