@@ -428,13 +428,90 @@ DescriptionShort: Several {{ name }} are scattered around the room.
 DescriptionLong: Plush leather armchairs that look like they've hosted many late-night conversations.
 OnUse: You sink into one of the leather chairs and close your eyes for a moment. You feel your health regenerating.
 
+Id: lounge_slot_machine
+Name: Slot Machine
+Prototype: furniture
+Room: lounge
+ContentsVisible: no
+DescriptionShort: A vintage {{ name }} stands against the wall.
+DescriptionLong: A classic one-armed bandit with three spinning reels. The chrome handle gleams invitingly. __Pull__ the handle to try your luck!
+OnTouch: The cold metal handle vibrates slightly.
+OnUse: {{ effects.dispense() }}{{ effects.broadcast("**" ~ user.name ~ "** spins the slot machine...") }}The wheels spin... click click click...
+OnAttack: You kick the machine in frustration. It remains unmoved.
+
+# Slot machine prizes (spawned by lounge_slot_machine_pool)
+# Also includes White Claws (via tag) and Avatar Blu-rays (via tag)
+
+Id: slot_participation_coupon
+Name: Participation Coupon
+Prototype: item
+Tags: slot_prize
+Rarity: common
+DescriptionShort: a crumpled {{ name }}
+DescriptionLong: A small slip of paper printed on cheap stock. It reads: "Dear Valued Patron, Thank you for your interest in winning at the Slot Machine. After careful consideration of all candidates, we regret to inform you that we have decided to move forward with other applicants whose qualifications more closely match our current jackpot needs. We were impressed by your enthusiasm for pulling the handle, and we encourage you to apply again in the future. We wish you the best in your future gambling endeavors. Sincerely, The Slot Machine."
+OnUse: You read the coupon again. It doesn't get any better the second time.
+
+Id: ringpop_cherry
+Name: Sour Cherry Ring Pop
+Prototype: item
+Tags: slot_prize
+Rarity: common
+DescriptionShort: a {{ name }}
+DescriptionLong: A bright red Ring Pop. The gem-shaped candy sits on a plastic ring.
+OnUse: You lick the Ring Pop. Sour cherry.
+
+Id: ringpop_lemonade
+Name: Sour Lemonade Ring Pop
+Prototype: item
+Tags: slot_prize
+Rarity: common
+DescriptionShort: a {{ name }}
+DescriptionLong: A pale yellow Ring Pop coated in sour crystals.
+OnUse: You lick the Ring Pop. Your face puckers.
+
+Id: ringpop_green_apple
+Name: Sour Green Apple Ring Pop
+Prototype: item
+Tags: slot_prize
+Rarity: uncommon
+DescriptionShort: a {{ name }}
+DescriptionLong: A green Ring Pop that smells like Granny Smith apples.
+OnUse: You lick the Ring Pop. Tart and sweet.
+
+Id: ringpop_cherry_berry
+Name: Sour Cherry Berry Ring Pop
+Prototype: item
+Tags: slot_prize
+Rarity: uncommon
+DescriptionShort: a {{ name }}
+DescriptionLong: A deep purple Ring Pop combining cherry and mixed berry.
+OnUse: You lick the Ring Pop. Berry medley.
+
+Id: ringpop_raspberry_lemonade
+Name: Sour Raspberry Lemonade Ring Pop
+Prototype: item
+Tags: slot_prize
+Rarity: rare
+DescriptionShort: a {{ name }}
+DescriptionLong: A pink and yellow swirled Ring Pop.
+OnUse: You lick the Ring Pop. Raspberry lemonade.
+
+Id: ringpop_watermelon
+Name: Sour Watermelon Ring Pop
+Prototype: item
+Tags: slot_prize
+Rarity: legendary
+DescriptionShort: a {{ name }}
+DescriptionLong: A pink-green Ring Pop. Watermelon flavor. Hard to find.
+OnUse: You lick the Ring Pop. Watermelon.
+
 # Lounge beverages (spawned by lounge_fridge_pool)
 
 Id: lounge_white_claw_mango
 Name: White Claw Mango
 Prototype: beverage
 Rarity: rare
-Tags: beverage lounge_drink foyer_vase_loot
+Tags: beverage lounge_drink foyer_vase_loot slot_prize
 DescriptionShort: a chilled {{ name }}
 DescriptionLong: A slim can of White Claw Hard Seltzer, Mango flavor. 100 calories of refreshment.
 
@@ -442,7 +519,7 @@ Id: lounge_white_claw_lime
 Name: White Claw Lime
 Prototype: beverage
 Rarity: common
-Tags: beverage lounge_drink
+Tags: beverage lounge_drink slot_prize
 DescriptionShort: a chilled {{ name }}
 DescriptionLong: A slim can of White Claw Hard Seltzer, Natural Lime flavor. Crisp and clean.
 
@@ -450,7 +527,7 @@ Id: lounge_white_claw_black_cherry
 Name: White Claw Black Cherry
 Prototype: beverage
 Rarity: common
-Tags: beverage lounge_drink
+Tags: beverage lounge_drink slot_prize
 DescriptionShort: a chilled {{ name }}
 DescriptionLong: A slim can of White Claw Hard Seltzer, Black Cherry flavor. Sweet with a hint of tart.
 
@@ -537,7 +614,7 @@ OnUse: You press the play button and the automatic mechanism spins the record an
 Id: desk_avatar_bluray
 Name: Avatar Blu-ray
 Prototype: item
-Tags: desk_drawer_loot
+Tags: desk_drawer_loot slot_prize
 Rarity: rare
 DescriptionShort: a {{ name }} in pristine condition
 DescriptionLong: A Blu-ray copy of James Cameron's Avatar (2009). The case is immaculate, still sealed in plastic. The back promises "A journey to Pandora you'll never forget." At the time it was the highest-grossing film ever made, a technical marvel that pushed the boundaries of 3D cinema. The blue Na'vi faces stare back at you from the cover art.
@@ -548,7 +625,7 @@ OnUse: You hold the disc up to the light. Without a Blu-ray player, you can only
 Id: desk_avatar_bluray_extended
 Name: Avatar Extended Collector's Edition
 Prototype: item
-Tags: desk_drawer_loot
+Tags: desk_drawer_loot slot_prize
 Rarity: epic
 DescriptionShort: a {{ name }} in a slipcase
 DescriptionLong: The Avatar Extended Collector's Edition Blu-ray (2010). A three-disc set in an embossed slipcase featuring exclusive artwork of the Hallelujah Mountains. Contains the original theatrical cut, the Special Edition with 8 additional minutes, and the Extended Collector's Edition with 16 minutes of new footage. Includes a family archive, production materials, and over three hours of documentaries on the making of Pandora. The discs gleam with an iridescent coating that shifts between blue and green like bioluminescence.
@@ -1306,3 +1383,10 @@ TagQuery: gallery_painting
 MaxCount: 4
 RespawnIntervalMinutes: 30
 NoDuplicates: yes
+
+Id: lounge_slot_machine_pool
+Room: lounge
+Container: lounge_slot_machine
+TagQuery: slot_prize
+MaxCount: 1
+RespawnIntervalMinutes: 60

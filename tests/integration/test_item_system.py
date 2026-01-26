@@ -392,6 +392,61 @@ class TestContainerDrops:
         assert "put" not in response.lower()
 
 
+class TestDispenseEffect:
+    """Tests for effects.dispense() - dispensing items from containers."""
+
+    async def test_slot_machine_dispenses_item_to_inventory(self, test_client):
+        """Using slot machine with effects.dispense() gives item to user."""
+        user = await test_client.create_user(user_id=500070, room="lounge")
+
+        # Spawn a prize in the slot machine
+        await test_client.spawn_from_pool("lounge_slot_machine_pool")
+
+        # Verify user starts with empty inventory
+        inventory = await test_client.get_inventory(user)
+        assert len(inventory) == 0
+
+        # Use (pull) the slot machine
+        response, broadcasts = await test_client.interact_with_broadcasts(
+            user, action="pull", target="Slot Machine"
+        )
+
+        # User should see the ephemeral spin message
+        assert "wheels spin" in response.lower()
+
+        # Should have broadcast about spinning and getting item
+        assert len(broadcasts) >= 2
+        assert "spins the slot machine" in broadcasts[0].lower()
+        assert "got a" in broadcasts[1].lower()
+
+        # User should have something in inventory
+        inventory = await test_client.get_inventory(user)
+        assert len(inventory) == 1
+
+    async def test_slot_machine_empty_shows_refill_message(self, test_client):
+        """Using empty slot machine broadcasts refill message."""
+        user = await test_client.create_user(user_id=500071, room="lounge")
+
+        # Don't spawn anything - slot machine starts empty
+
+        # Use the slot machine
+        response, broadcasts = await test_client.interact_with_broadcasts(
+            user, action="pull", target="Slot Machine"
+        )
+
+        # User should see the spin message
+        assert "wheels spin" in response.lower()
+
+        # Should have broadcast about spinning and empty machine
+        assert len(broadcasts) >= 2
+        assert "spins the slot machine" in broadcasts[0].lower()
+        assert "waiting to be refilled" in broadcasts[1].lower()
+
+        # User should still have empty inventory
+        inventory = await test_client.get_inventory(user)
+        assert len(inventory) == 0
+
+
 class TestSmashableEntities:
     """Tests for entities with effects.destroy()."""
 

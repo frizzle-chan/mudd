@@ -41,6 +41,7 @@ class TriggerEffects:
     - `grant(entity_id)`: Queue granting a specific item to the user
     - `grant_random(tag)`: Queue granting a random item from a tag (broadcasts result)
     - `destroy()`: Signal that this entity instance should be destroyed
+    - `dispense()`: Signal that an item should be dispensed from this container
 
     Example template:
         {{ effects.broadcast("**" ~ user.name ~ "** put on music.") }}
@@ -55,6 +56,7 @@ class TriggerEffects:
     _drop_called: bool = False
     _pickup_called: bool = False
     _destroy_called: bool = False
+    _dispense_called: bool = False
     grants: list[GrantEffect] = field(default_factory=list)
     grant_randoms: list[GrantRandomEffect] = field(default_factory=list)
     cleanups: list[CleanupOperation] = field(default_factory=list)
@@ -157,6 +159,23 @@ class TriggerEffects:
     def has_destroy(self) -> bool:
         """Whether destroy() was called during template rendering."""
         return self._destroy_called
+
+    def dispense(self) -> str:
+        """Signal that an item should be dispensed from this container.
+
+        Must be called in an action handler (e.g., on_use). The container
+        will transfer a random item from its contents to the user's inventory.
+
+        Returns:
+            Empty string (allows inline use in templates without output)
+        """
+        self._dispense_called = True
+        return ""
+
+    @property
+    def has_dispense(self) -> bool:
+        """Whether dispense() was called during template rendering."""
+        return self._dispense_called
 
     def queue_thread_deletion(self, instance_id: UUID, guild_id: int) -> None:
         """Queue a thread deletion to run after response.

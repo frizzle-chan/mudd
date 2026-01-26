@@ -6,6 +6,7 @@ from mudd.utils.text import (
     RARITY_EMOJI,
     decode_braille,
     encode_braille,
+    indefinite_article,
     strip_rarity_emojis,
 )
 
@@ -187,3 +188,36 @@ class TestStripRarityEmojis:
         if emoji:  # Skip "none" which has empty emoji
             result = strip_rarity_emojis(f"Test Item {emoji}")
             assert result == "Test Item"
+
+
+class TestIndefiniteArticle:
+    """Tests for indefinite article helper."""
+
+    def test_returns_a_for_consonant(self):
+        """Words starting with consonants get 'a'."""
+        assert indefinite_article("Ring Pop") == "a"
+        assert indefinite_article("Balloon") == "a"
+
+    def test_returns_an_for_vowel(self):
+        """Words starting with vowels get 'an'."""
+        assert indefinite_article("Apple") == "an"
+        assert indefinite_article("Orange Soda") == "an"
+        assert indefinite_article("ice cream") == "an"
+
+    def test_handles_empty_string(self):
+        """Empty string returns 'a' as default."""
+        assert indefinite_article("") == "a"
+
+    def test_strips_rarity_emoji_prefix(self):
+        """Rarity emojis are ignored when determining article."""
+        # Item with rare emoji prefix starting with vowel
+        assert indefinite_article("🔵 Apple") == "an"
+        # Item with common emoji prefix starting with consonant
+        assert indefinite_article("⚪ Ring Pop") == "a"
+
+    def test_case_insensitive(self):
+        """Works regardless of case."""
+        assert indefinite_article("apple") == "an"
+        assert indefinite_article("APPLE") == "an"
+        assert indefinite_article("Ring") == "a"
+        assert indefinite_article("RING") == "a"

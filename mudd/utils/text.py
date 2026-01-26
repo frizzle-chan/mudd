@@ -35,6 +35,26 @@ def strip_rarity_emojis(text: str) -> str:
     return text.strip()
 
 
+def indefinite_article(word: str) -> str:
+    """Return 'a' or 'an' based on the word's starting sound.
+
+    Uses simple vowel detection. Works for most common nouns.
+
+    Args:
+        word: The word to determine the article for
+
+    Returns:
+        'a' or 'an' depending on the starting letter
+    """
+    if not word:
+        return "a"
+    # Strip rarity emojis that might prefix the display name
+    clean = strip_rarity_emojis(word).lstrip()
+    if not clean:
+        return "a"
+    return "an" if clean[0].lower() in "aeiou" else "a"
+
+
 # Braille encoding for compact, non-distracting forum names
 # U+2801 to U+2900 gives us 256 characters (base256)
 # NOTE: We start at U+2801 (not U+2800) because U+2800 is the blank Braille
