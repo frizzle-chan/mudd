@@ -1133,7 +1133,7 @@ OnAttack: {{ effects.destroy() }}{{ effects.broadcast("**" ~ user.name ~ "** sma
 %rec: SpawningPool
 %key: Id
 %mandatory: Id Room TagQuery
-%allowed: Id Room Container TagQuery MaxCount RespawnIntervalMinutes
+%allowed: Id Room Container TagQuery MaxCount RespawnIntervalMinutes NoDuplicates
 
 Id: test_quest_map_pool
 Room: store-room
@@ -1169,3 +1169,4 @@ Container: library_desk
 TagQuery: desk_drawer_loot
 MaxCount: 2
 RespawnIntervalMinutes: 30
+NoDuplicates: yes

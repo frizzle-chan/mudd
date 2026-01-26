@@ -406,6 +406,51 @@ class EntityService:
 
         return await self.get_entity(selected_id)
 
+    async def get_random_entity_by_tag_excluding(
+        self, tag: str, exclude_entity_ids: set[str]
+    ) -> ResolvedEntity | None:
+        """Select random entity by tag, excluding specified entity IDs.
+
+        Like get_random_entity_by_tag but filters out entities with IDs
+        in exclude_entity_ids before weighted random selection.
+        Used by spawning pools with no_duplicates=True.
+
+        Args:
+            tag: Tag to filter entities by
+            exclude_entity_ids: Entity IDs to exclude from selection
+
+        Returns:
+            ResolvedEntity with weighted random selection, or None if no matches
+        """
+        candidates = await self._pool.fetch(
+            """
+            SELECT DISTINCT e.id, e.rarity
+            FROM entities e
+            JOIN entity_tags et ON e.id = et.entity_id
+            WHERE et.tag = $1 AND e.rarity != 'none'
+            """,
+            tag,
+        )
+
+        if not candidates:
+            return None
+
+        # Filter out excluded entity IDs
+        items = [
+            (candidate["id"], RARITY_WEIGHTS.get(candidate["rarity"], 0))
+            for candidate in candidates
+            if candidate["id"] not in exclude_entity_ids
+        ]
+
+        if not items:
+            return None
+
+        selected_id = weighted_choice(items)
+        if selected_id is None:
+            return None
+
+        return await self.get_entity(selected_id)
+
     def invalidate_cache(self) -> None:
         """Clear entity resolution cache.
 

@@ -347,14 +347,16 @@ async def _sync_spawning_pools(
     for pool in pools:
         await conn.execute(
             """INSERT INTO spawning_pools (
-                id, room, container_id, tag_query, max_count, respawn_interval_minutes
-            ) VALUES ($1, $2, $3, $4, $5, $6)
+                id, room, container_id, tag_query, max_count,
+                respawn_interval_minutes, no_duplicates
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7)
             ON CONFLICT (id) DO UPDATE SET
                 room = $2,
                 container_id = $3,
                 tag_query = $4,
                 max_count = $5,
-                respawn_interval_minutes = $6
+                respawn_interval_minutes = $6,
+                no_duplicates = $7
             """,
             pool.id,
             pool.room,
@@ -362,6 +364,7 @@ async def _sync_spawning_pools(
             pool.tag_query,
             pool.max_count,
             pool.respawn_interval_minutes,
+            pool.no_duplicates,
         )
 
     logger.info(f"Synced {len(pools)} spawning pools")
