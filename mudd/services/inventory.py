@@ -10,7 +10,6 @@ import discord
 
 from mudd.services.entity import EntityInstance, EntityService
 from mudd.services.rendering import RenderingService
-from mudd.utils.text import encode_braille
 
 logger = logging.getLogger(__name__)
 
@@ -47,9 +46,9 @@ def _find_inventory_forums_by_name(
     return matches
 
 
-def get_inventory_forum_name(user_id: int) -> str:
+def get_inventory_forum_name(username: str) -> str:
     """Get the forum channel name for a user's inventory."""
-    return f"inventory-{encode_braille(user_id)}"
+    return f"{username}-inventory"
 
 
 # Legacy base62 encoding for migration
@@ -205,7 +204,7 @@ class InventoryService:
 
         # Ensure category exists first (needed for both recovery and creation)
         category = await self.ensure_inventory_category(guild)
-        forum_name = get_inventory_forum_name(user_id)
+        forum_name = get_inventory_forum_name(member.name)
 
         # Check database first
         forum_data = await self.get_user_forum_from_db(user_id)
@@ -435,7 +434,7 @@ class InventoryService:
                     channel = guild.get_channel(forum_data.forum_id)
                     if channel and isinstance(channel, discord.ForumChannel):
                         forum = channel
-                        forum_name = get_inventory_forum_name(member.id)
+                        forum_name = get_inventory_forum_name(member.name)
 
                         # Migrate legacy name to Braille if needed
                         if forum.name != forum_name:
@@ -466,7 +465,7 @@ class InventoryService:
 
                 if forum is None:
                     # Check if forum exists in Discord but not DB (recovery case)
-                    forum_name = get_inventory_forum_name(member.id)
+                    forum_name = get_inventory_forum_name(member.name)
                     existing_forums = _find_inventory_forums_by_name(
                         guild, category, forum_name
                     )
