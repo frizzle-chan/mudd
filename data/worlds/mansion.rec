@@ -327,7 +327,7 @@ DescriptionShort: {{ name }} (nebula)
 DescriptionLong: [Art by nebula.](https://img.frizzle.dev/mudd/frizzle_nebula_maid.png)
 
 Id: frizzle_nebula_maid_shiny_gif
-Name: Maid Portrait (Holograpic)
+Name: Maid Portrait (Holographic)
 Prototype: painting
 Tags: gallery_painting
 Rarity: rare
