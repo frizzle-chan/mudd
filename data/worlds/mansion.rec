@@ -451,6 +451,60 @@ DescriptionShort: a crumpled {{ name }}
 DescriptionLong: A small slip of paper printed on cheap stock. It reads: "Dear Valued Patron, Thank you for your interest in winning at the Slot Machine. After careful consideration of all candidates, we regret to inform you that we have decided to move forward with other applicants whose qualifications more closely match our current jackpot needs. We were impressed by your enthusiasm for pulling the handle, and we encourage you to apply again in the future. We wish you the best in your future gambling endeavors. Sincerely, The Slot Machine."
 OnUse: You read the coupon again. It doesn't get any better the second time.
 
+Id: ringpop_cherry
+Name: Sour Cherry Ring Pop
+Prototype: item
+Tags: slot_prize
+Rarity: common
+DescriptionShort: a {{ name }}
+DescriptionLong: A bright red Ring Pop. The gem-shaped candy sits on a plastic ring.
+OnUse: You lick the Ring Pop. Sour cherry.
+
+Id: ringpop_lemonade
+Name: Sour Lemonade Ring Pop
+Prototype: item
+Tags: slot_prize
+Rarity: common
+DescriptionShort: a {{ name }}
+DescriptionLong: A pale yellow Ring Pop coated in sour crystals.
+OnUse: You lick the Ring Pop. Your face puckers.
+
+Id: ringpop_green_apple
+Name: Sour Green Apple Ring Pop
+Prototype: item
+Tags: slot_prize
+Rarity: uncommon
+DescriptionShort: a {{ name }}
+DescriptionLong: A green Ring Pop that smells like Granny Smith apples.
+OnUse: You lick the Ring Pop. Tart and sweet.
+
+Id: ringpop_cherry_berry
+Name: Sour Cherry Berry Ring Pop
+Prototype: item
+Tags: slot_prize
+Rarity: uncommon
+DescriptionShort: a {{ name }}
+DescriptionLong: A deep purple Ring Pop combining cherry and mixed berry.
+OnUse: You lick the Ring Pop. Berry medley.
+
+Id: ringpop_raspberry_lemonade
+Name: Sour Raspberry Lemonade Ring Pop
+Prototype: item
+Tags: slot_prize
+Rarity: rare
+DescriptionShort: a {{ name }}
+DescriptionLong: A pink and yellow swirled Ring Pop.
+OnUse: You lick the Ring Pop. Raspberry lemonade.
+
+Id: ringpop_watermelon
+Name: Sour Watermelon Ring Pop
+Prototype: item
+Tags: slot_prize
+Rarity: legendary
+DescriptionShort: a {{ name }}
+DescriptionLong: A pink-green Ring Pop. Watermelon flavor. Hard to find.
+OnUse: You lick the Ring Pop. Watermelon.
+
 # Lounge beverages (spawned by lounge_fridge_pool)
 
 Id: lounge_white_claw_mango
