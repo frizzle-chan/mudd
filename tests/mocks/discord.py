@@ -74,6 +74,7 @@ class MockMember:
 
     def __init__(self, user_id: int, display_name: str | None = None) -> None:
         self.id = user_id
+        self.name = f"testuser{user_id}"  # Discord username (lowercased)
         self.display_name = display_name or f"TestUser{user_id}"
         self.bot = False
 
