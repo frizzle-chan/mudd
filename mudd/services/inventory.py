@@ -33,7 +33,7 @@ def _find_inventory_forums_by_name(
     Args:
         guild: The Discord guild to search
         category: The Inventory category to filter by
-        forum_name: Expected forum name (e.g., "{braille_user_id}-inventory")
+        forum_name: Expected forum name (e.g., "inventory-{braille_user_id}")
 
     Returns:
         List of matching forums sorted by ID (oldest first).
@@ -49,7 +49,7 @@ def _find_inventory_forums_by_name(
 
 def get_inventory_forum_name(user_id: int) -> str:
     """Get the forum channel name for a user's inventory."""
-    return f"{encode_braille(user_id)}-inventory"
+    return f"inventory-{encode_braille(user_id)}"
 
 
 # Legacy base62 encoding for migration
@@ -69,7 +69,7 @@ def _encode_base62_legacy(num: int) -> str:
 
 def _get_legacy_forum_name(user_id: int) -> str:
     """Get the legacy base62 forum name for migration."""
-    return f"{_encode_base62_legacy(user_id)}-inventory"
+    return f"inventory-{_encode_base62_legacy(user_id)}"
 
 
 def _find_legacy_forums(
