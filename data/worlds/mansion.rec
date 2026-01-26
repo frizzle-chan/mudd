@@ -440,46 +440,16 @@ OnUse: {{ effects.dispense() }}{{ effects.broadcast("**" ~ user.name ~ "** spins
 OnAttack: You kick the machine in frustration. It remains unmoved.
 
 # Slot machine prizes (spawned by lounge_slot_machine_pool)
+# Also includes White Claws (via tag) and Avatar Blu-rays (via tag)
 
-Id: slot_lucky_chip
-Name: Lucky Chip
+Id: slot_participation_coupon
+Name: Participation Coupon
 Prototype: item
 Tags: slot_prize
 Rarity: common
-DescriptionShort: a {{ name }}
-DescriptionLong: A worn casino chip with a four-leaf clover embossed on it.
-
-Id: slot_golden_token
-Name: Golden Token
-Prototype: item
-Tags: slot_prize
-Rarity: uncommon
-DescriptionShort: a shiny {{ name }}
-DescriptionLong: A heavy gold token stamped with a crown.
-
-Id: slot_jackpot_coin
-Name: Jackpot Coin
-Prototype: item
-Tags: slot_prize
-Rarity: rare
-DescriptionShort: a glittering {{ name }}
-DescriptionLong: A platinum coin with "JACKPOT" inscribed around the edge.
-
-Id: slot_diamond_chip
-Name: Diamond Chip
-Prototype: item
-Tags: slot_prize
-Rarity: epic
-DescriptionShort: a sparkling {{ name }}
-DescriptionLong: A translucent chip with a real diamond embedded in the center.
-
-Id: slot_lucky_sevens
-Name: Lucky Sevens Token
-Prototype: item
-Tags: slot_prize
-Rarity: legendary
-DescriptionShort: a {{ name }} radiating luck
-DescriptionLong: A mystical token with three sevens arranged in a triangle.
+DescriptionShort: a crumpled {{ name }}
+DescriptionLong: A small slip of paper printed on cheap stock. It reads: "Dear Valued Patron, Thank you for your interest in winning at the Slot Machine. After careful consideration of all candidates, we regret to inform you that we have decided to move forward with other applicants whose qualifications more closely match our current jackpot needs. We were impressed by your enthusiasm for pulling the handle, and we encourage you to apply again in the future. We wish you the best in your future gambling endeavors. Sincerely, The Slot Machine."
+OnUse: You read the coupon again. It doesn't get any better the second time.
 
 # Lounge beverages (spawned by lounge_fridge_pool)
 
@@ -487,7 +457,7 @@ Id: lounge_white_claw_mango
 Name: White Claw Mango
 Prototype: beverage
 Rarity: rare
-Tags: beverage lounge_drink foyer_vase_loot
+Tags: beverage lounge_drink foyer_vase_loot slot_prize
 DescriptionShort: a chilled {{ name }}
 DescriptionLong: A slim can of White Claw Hard Seltzer, Mango flavor. 100 calories of refreshment.
 
@@ -495,7 +465,7 @@ Id: lounge_white_claw_lime
 Name: White Claw Lime
 Prototype: beverage
 Rarity: common
-Tags: beverage lounge_drink
+Tags: beverage lounge_drink slot_prize
 DescriptionShort: a chilled {{ name }}
 DescriptionLong: A slim can of White Claw Hard Seltzer, Natural Lime flavor. Crisp and clean.
 
@@ -503,7 +473,7 @@ Id: lounge_white_claw_black_cherry
 Name: White Claw Black Cherry
 Prototype: beverage
 Rarity: common
-Tags: beverage lounge_drink
+Tags: beverage lounge_drink slot_prize
 DescriptionShort: a chilled {{ name }}
 DescriptionLong: A slim can of White Claw Hard Seltzer, Black Cherry flavor. Sweet with a hint of tart.
 
@@ -590,7 +560,7 @@ OnUse: You press the play button and the automatic mechanism spins the record an
 Id: desk_avatar_bluray
 Name: Avatar Blu-ray
 Prototype: item
-Tags: desk_drawer_loot
+Tags: desk_drawer_loot slot_prize
 Rarity: rare
 DescriptionShort: a {{ name }} in pristine condition
 DescriptionLong: A Blu-ray copy of James Cameron's Avatar (2009). The case is immaculate, still sealed in plastic. The back promises "A journey to Pandora you'll never forget." At the time it was the highest-grossing film ever made, a technical marvel that pushed the boundaries of 3D cinema. The blue Na'vi faces stare back at you from the cover art.
@@ -601,7 +571,7 @@ OnUse: You hold the disc up to the light. Without a Blu-ray player, you can only
 Id: desk_avatar_bluray_extended
 Name: Avatar Extended Collector's Edition
 Prototype: item
-Tags: desk_drawer_loot
+Tags: desk_drawer_loot slot_prize
 Rarity: epic
 DescriptionShort: a {{ name }} in a slipcase
 DescriptionLong: The Avatar Extended Collector's Edition Blu-ray (2010). A three-disc set in an embossed slipcase featuring exclusive artwork of the Hallelujah Mountains. Contains the original theatrical cut, the Special Edition with 8 additional minutes, and the Extended Collector's Edition with 16 minutes of new footage. Includes a family archive, production materials, and over three hours of documentaries on the making of Pandora. The discs gleam with an iridescent coating that shifts between blue and green like bioluminescence.
