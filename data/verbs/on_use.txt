@@ -1,5 +1,6 @@
 activate
 apply
+bet
 crank
 cue
 depress
@@ -11,6 +12,7 @@ energize
 engage
 fire
 flip
+gamble
 hoist
 launch
 lever
@@ -37,8 +39,11 @@ switch
 toggle
 trigger
 trip
+tug
 turn
 uncover
 use
+wager
 wind
 work
+yank
