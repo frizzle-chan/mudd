@@ -70,10 +70,13 @@ USER root
 RUN apt-get update \
  && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
        curl \
+       gifsicle \
        git \
+       jpegoptim \
        jq \
        just \
        libpq5 \
+       pngquant \
        postgresql-client \
        procps \
        ripgrep \

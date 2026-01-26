@@ -190,3 +190,7 @@ data/verbs/.lock
 
 # PR review files
 review.md
+
+# Image optimization directories
+img-src/
+img-dist/
