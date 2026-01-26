@@ -1,4 +1,9 @@
 close
+disconnect
 lock
+log off
+log out
+logoff
+logout
 seal
 shut

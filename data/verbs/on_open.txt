@@ -1,3 +1,9 @@
+access
+boot
+log in
+log on
+login
+logon
 open
 pry
 unlock

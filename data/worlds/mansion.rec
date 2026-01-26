@@ -330,6 +330,117 @@ DescriptionLong: A hand-drawn map of the mansion in a simple wooden frame. The s
 + • Screening Room: through the library, in the northern corner
 
 # ----------------------------------------------------------------------------
+# Office entities
+# ----------------------------------------------------------------------------
+
+# Terminal document prototype (base for readable files)
+Id: terminal_document
+Name: terminal document
+Prototype: object
+DescriptionShort: {{ name }}
+OnLook: {{ e.description_long or "ERROR: FILE NOT FOUND" }}
+OnUse: {{ e.description_long or "ERROR: FILE NOT FOUND" }}
+
+Id: office_terminal
+Name: MUDD-OS Terminal
+Prototype: object
+Room: office
+FocusMode: container
+ContentsVisible: no
+DescriptionShort: An old {{ name }} hums on the desk.
+DescriptionLong: A bulky CRT monitor displaying green text on black. The case is beige plastic, yellowed with age. A small sticker reads "MUDD-OS v0.2.1".
+OnOpen: ```
++ ███╗   ███╗██╗   ██╗██████╗ ██████╗        ██████╗ ███████╗
++ ████╗ ████║██║   ██║██╔══██╗██╔══██╗      ██╔═══██╗██╔════╝
++ ██╔████╔██║██║   ██║██║  ██║██║  ██║█████╗██║   ██║███████╗
++ ██║╚██╔╝██║██║   ██║██║  ██║██║  ██║╚════╝██║   ██║╚════██║
++ ██║ ╚═╝ ██║╚██████╔╝██████╔╝██████╔╝      ╚██████╔╝███████║
++ ╚═╝     ╚═╝ ╚═════╝ ╚═════╝ ╚═════╝        ╚═════╝ ╚══════╝
++ ```
++ *MUDD-OS v0.2.1 — Multi-User Dungeon (Discord)*
++ Welcome, GUEST. You have access to the following files:{% if contents %}{{ contents }}{% else %} (none){% endif %}
+OnClose: ```
++ LOGGING OUT...
++
++ GOODBYE, GUEST.
++ ```
+
+Id: terminal_inbox_welcome
+Name: INBOX - Welcome to the Team
+Prototype: terminal_document
+Room: office
+Container: office_terminal
+DescriptionLong: ```
++ FROM: frizzle@mudd.local
++ TO: team@mudd.local
++ SUBJECT: Welcome to the Team
++ DATE: 2026-01-03
++ ----------------------------------------
++
++ Hey there!
++
++ Welcome to the MUDD project - a Discord-based Multi-User Dungeon (MUD) text based adventure!
++
++ The source for the bot is available at https://github.com/frizzle-chan/mudd
++
++ There are dev notes scattered around the world that explain how the various systems work.
++
++ Make yourself at home!
++
++ -Frizzle
++ ```
+
+Id: terminal_inbox_bugs
+Name: INBOX - RE: The Vase
+Prototype: terminal_document
+Room: office
+Container: office_terminal
+DescriptionLong: ```
++ FROM: qa@mudd.local
++ TO: frizzle@mudd.local
++ SUBJECT: RE: The Vase
++ DATE: 2026-01-08
++ ----------------------------------------
++
++ So I smashed the flower vase in the foyer. Again. For testing.
++
++ And I SWEAR there was a White Claw Mango inside it this time?
++
++ Is that... intended? I thought it was supposed to drop roses.
++ The loot tables are getting weird. Also the roses keep coming
++ back. The vase keeps coming back. Everything keeps coming back.
++
++ I'm starting to think the mansion might be haunted.
++
++ Marking this as "works as intended" I guess?
++
++ -QA
++ ```
+
+Id: terminal_logs_anomaly
+Name: LOGS - Anomaly Detected
+Prototype: terminal_document
+Room: office
+Container: office_terminal
+DescriptionLong: ```
++ [2026-01-12 03:33:33] ANOMALY DETECTED
++ [2026-01-12 03:33:33] Location: freezer
++ [2026-01-12 03:33:33] Type: PRESENCE_WITHOUT_ENTRY
++ [2026-01-12 03:33:34]
++ [2026-01-12 03:33:34] User presence detected in #freezer but no
++ [2026-01-12 03:33:34] movement command was issued. No permission
++ [2026-01-12 03:33:34] grants in audit log. User ID: [REDACTED]
++ [2026-01-12 03:33:35]
++ [2026-01-12 03:33:35] This should not be possible.
++ [2026-01-12 03:33:35]
++ [2026-01-12 03:33:36] Investigating...
++ [2026-01-12 03:33:36] ERROR: User not found in database
++ [2026-01-12 03:33:36] ERROR: Unable to revoke permissions
++ [2026-01-12 03:33:37]
++ [2026-01-12 03:33:37] Marking for manual review.
++ ```
+
+# ----------------------------------------------------------------------------
 # Gallery entities
 # ----------------------------------------------------------------------------
 
