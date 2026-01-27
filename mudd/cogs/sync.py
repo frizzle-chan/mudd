@@ -410,9 +410,8 @@ class Sync(commands.Cog):
         """
         stats = {"created": 0, "existing": 0, "errors": 0}
 
-        # Get wallet entity (must exist after entity sync)
-        wallet_entity = await self.entity_service.get_entity("wallet")
-        if wallet_entity is None:
+        # Verify wallet entity exists (must exist after entity sync)
+        if await self.entity_service.get_entity("wallet") is None:
             logger.error("Wallet entity not found - cannot bootstrap wallets")
             return stats
 
@@ -444,62 +443,24 @@ class Sync(commands.Cog):
                         stats["existing"] += 1
                         continue
 
-                # Ensure user has an inventory forum first
-                forum = await self.inventory_service.ensure_user_forum(guild, member.id)
-                if forum is None:
-                    stats["errors"] += 1
-                    continue
-
-                # Create currency account (idempotent)
+                # Create currency account (idempotent) - must exist before thread
+                # creation so balance can be fetched
                 await self.currency_service.ensure_account(member.id)
 
-                # Create wallet entity instance in inventory
-                row = await self._pool.fetchrow(
-                    """
-                    INSERT INTO entity_instances (entity_id, owner_id)
-                    VALUES ($1, $2)
-                    RETURNING id
-                    """,
-                    "wallet",
-                    member.id,
+                # Create wallet in inventory (handles forum, instance, thread)
+                result = await self.inventory_service.grant_item(
+                    guild, member.id, "wallet", pinned=True
                 )
-                instance_id = row["id"]
-
-                # Get the instance for rendering
-                wallet_instance = await self.entity_service.get_entity_instance(
-                    instance_id
-                )
-                if wallet_instance is None:
-                    logger.error(f"Failed to fetch wallet instance {instance_id}")
-                    stats["errors"] += 1
-                    continue
-
-                # Render wallet description with balance
-                balance = await self.currency_service.get_balance(member.id)
-                balance_str = f"\u00a5{balance:,}" if balance is not None else "\u00a50"
-                description = await self._rendering.render_entity_on_look(
-                    wallet_instance,
-                    self.entity_service,
-                    None,  # room is None for inventory items
-                    extra_context={"balance": balance_str},
-                )
-
-                # Create inventory thread for wallet (pinned for easy access)
-                thread = await self.inventory_service.create_item_thread(
-                    guild,
-                    member.id,
-                    instance_id,
-                    wallet_entity.display_name,
-                    description,
-                    pinned=True,
-                )
-                if thread is None:
-                    logger.error(f"Failed to create wallet thread for user {member.id}")
+                if not result.success:
+                    logger.error(
+                        f"Failed to create wallet for user {member.id}: {result.error}"
+                    )
                     stats["errors"] += 1
                     continue
 
                 # Link wallet instance to currency account
-                await self.currency_service.link_wallet(member.id, str(instance_id))
+                instance_id = str(result.instance_id)
+                await self.currency_service.link_wallet(member.id, instance_id)
 
                 stats["created"] += 1
                 logger.info(f"Created wallet for user {member.id} ({member.name})")

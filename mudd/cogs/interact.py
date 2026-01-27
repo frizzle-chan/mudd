@@ -13,6 +13,7 @@ from discord.ext import commands
 from mudd.matching.verb_matcher import match_verb
 from mudd.services.entity import ResolvedEntity
 from mudd.services.entity_resolution import ResolutionError
+from mudd.services.inventory import DropTarget
 from mudd.services.rendering import RenderingService, TemplateRenderError
 from mudd.services.trigger_effects import TriggerEffects
 from mudd.types import UserContext, VerbAction
@@ -238,7 +239,7 @@ class Interact(commands.Cog):
 
         # Handle entity destruction (before grants so spawning pool can respawn)
         if effects.has_destroy:
-            await self._handle_destroy(matched_instance.instance_id)
+            await self._handle_destroy(interaction.guild, matched_instance.instance_id)
 
         # Execute broadcast side effects (public messages to user's current room)
         # Look up room from DB since interaction may come from inventory thread
@@ -279,65 +280,6 @@ class Interact(commands.Cog):
                     guild, interaction.user.id, currency_grant.amount
                 )
 
-    async def _move_item_to_inventory(
-        self,
-        interaction: Interaction,
-        entity: ResolvedEntity,
-        instance_id: UUID,
-    ) -> bool:
-        """Move an item instance to user's inventory.
-
-        Updates entity_instance to set owner_id, clears room/container/spawning_pool_id.
-        Renders the item description and creates a Discord thread for the item.
-
-        Args:
-            interaction: Discord interaction
-            entity: The resolved entity being moved
-            instance_id: UUID of the entity instance
-
-        Returns:
-            True on success, False on failure
-        """
-        user_id = interaction.user.id
-        guild = interaction.guild
-        if guild is None:
-            return False
-
-        # Move the item instance to the user's inventory
-        # Clear spawning_pool_id so the pool can spawn a replacement
-        await self.pool.execute(
-            """UPDATE entity_instances
-            SET room = NULL, owner_id = $1, player_dropped = FALSE,
-                container_entity_id = NULL, is_world_instance = FALSE,
-                spawning_pool_id = NULL
-            WHERE id = $2""",
-            user_id,
-            instance_id,
-        )
-
-        # Get the entity instance for rendering description
-        instance = await self.entity_service.get_entity_instance(instance_id)
-        if instance is None:
-            logger.error("Entity instance %s not found after move", instance_id)
-            description = f"### {entity.display_name}\n\nYou see nothing special."
-        else:
-            # Render on_look as the thread description
-            description = await self._rendering.render_entity_on_look(
-                instance, self.entity_service, None
-            )
-
-        # Create Discord thread for the item
-        thread = await self._inventory.create_item_thread(
-            guild, user_id, instance_id, entity.display_name, description
-        )
-        if thread is None:
-            logger.warning("Failed to create thread for moved item %s", entity.id)
-            # Item is still in inventory, just no Discord thread
-
-        # Invalidate autocomplete cache so the item no longer appears in room
-        self.entity_resolution.invalidate_cache()
-        return True
-
     async def _handle_pickup(
         self,
         interaction: Interaction,
@@ -349,12 +291,9 @@ class Interact(commands.Cog):
     ) -> str | None:
         """Handle item pickup based on effects.pickup() call.
 
-        Also handles recursive container pickup: when picking up a container,
-        all its contents move to inventory with it.
-
         Args:
             interaction: Discord interaction
-            entity: The entity being taken
+            entity: The entity being taken (unused, kept for signature)
             instance_id: UUID of the entity instance
             room: Current room name
             template_output: The rendered on_take template output
@@ -364,63 +303,18 @@ class Interact(commands.Cog):
             Modified output string if pickup happened, None if pickup() not called
         """
         if not effects.has_pickup:
-            # Template didn't call pickup() - item stays in room
             return None
 
-        user_id = interaction.user.id
         guild = interaction.guild
         if guild is None:
             return "You can't take items outside a server."
 
-        # Move the item instance to the user's inventory
-        # Clear spawning_pool_id so the pool can spawn a replacement
-        result = await self.pool.execute(
-            """UPDATE entity_instances
-            SET room = NULL, owner_id = $1, player_dropped = FALSE,
-                container_entity_id = NULL, is_world_instance = FALSE,
-                spawning_pool_id = NULL
-            WHERE id = $2 AND room = $3""",
-            user_id,
-            instance_id,
-            room,
+        result = await self._inventory.add_to_inventory(
+            guild, interaction.user.id, instance_id, source_room=room
         )
-        if result == "UPDATE 0":
-            return "The item is no longer there."
+        if not result.success:
+            return result.error or "The item is no longer there."
 
-        # Recursive container pickup: move all contents with the container
-        # This keeps the container_entity_id link so contents are accessible
-        # via the container's inventory thread
-        await self.pool.execute(
-            """UPDATE entity_instances
-            SET room = NULL, owner_id = $1,
-                player_dropped = FALSE, is_world_instance = FALSE,
-                spawning_pool_id = NULL
-            WHERE container_entity_id = $2 AND room = $3""",
-            user_id,
-            entity.id,
-            room,
-        )
-
-        # Get the entity instance for rendering description
-        instance = await self.entity_service.get_entity_instance(instance_id)
-        if instance is None:
-            logger.error("Entity instance %s not found after pickup", instance_id)
-            description = f"### {entity.display_name}\n\nYou see nothing special."
-        else:
-            # Render on_look as the thread description
-            description = await self._rendering.render_entity_on_look(
-                instance, self.entity_service, None
-            )
-
-        # Create Discord thread for the item
-        thread = await self._inventory.create_item_thread(
-            guild, user_id, instance_id, entity.display_name, description
-        )
-        if thread is None:
-            logger.warning("Failed to create thread for moved item %s", entity.id)
-            # Item is still in inventory, just no Discord thread
-
-        # Invalidate autocomplete cache so the item no longer appears in room
         self.entity_resolution.invalidate_cache()
         return template_output
 
@@ -434,9 +328,6 @@ class Interact(commands.Cog):
     ) -> str | None:
         """Handle item drop from inventory to room.
 
-        Also handles recursive container drop: when dropping a container,
-        all its contents move to the room with it.
-
         Args:
             interaction: Discord interaction
             entity: The entity being dropped
@@ -447,9 +338,7 @@ class Interact(commands.Cog):
         Returns:
             Error message if drop failed, None if successful
         """
-        # Check if template called effects.drop()
         if not effects.has_drop:
-            # Template didn't call drop() - item stays in inventory
             return None
 
         guild = interaction.guild
@@ -463,10 +352,9 @@ class Interact(commands.Cog):
         container_entity_id: str | None = None
 
         if focus and focus.focus_mode == "container":
-            # Dropping into focused container - skip clutter check
             container_entity_id = focus.entity_id
         else:
-            # Dropping to floor - check clutter limit (only floor items)
+            # Dropping to floor - check clutter limit
             clutter_count = await self.pool.fetchval(
                 """SELECT COUNT(*) FROM entity_instances
                 WHERE room = $1 AND player_dropped = TRUE
@@ -476,38 +364,17 @@ class Interact(commands.Cog):
             if clutter_count >= 5:
                 return "The floor is too cluttered. Pick something up first."
 
-        # Move instance from inventory to room (or container)
-        result = await self.pool.execute(
-            """UPDATE entity_instances
-            SET room = $1, owner_id = NULL, player_dropped = TRUE,
-                container_entity_id = $4, is_world_instance = FALSE
-            WHERE id = $2 AND owner_id = $3""",
-            room,
-            instance_id,
-            user_id,
-            container_entity_id,
+        target = DropTarget(room=room, container_entity_id=container_entity_id)
+        result = await self._inventory.remove_from_inventory(
+            guild, user_id, instance_id, entity.id, target
         )
-        if result == "UPDATE 0":
-            return "You no longer have that item."
-
-        # Recursive container drop: move all contents to room with the container
-        # Contents keep their container_entity_id link so they stay inside
-        await self.pool.execute(
-            """UPDATE entity_instances
-            SET room = $1, owner_id = NULL
-            WHERE container_entity_id = $2 AND owner_id = $3""",
-            room,
-            entity.id,
-            user_id,
-        )
+        if not result.success:
+            return result.error or "You no longer have that item."
 
         # Queue thread deletion to run after response is sent
-        # (avoids "Unknown Channel" error when dropping from inventory thread)
         effects.queue_thread_deletion(instance_id, guild.id)
 
-        # Invalidate autocomplete cache so the dropped item appears in room
         self.entity_resolution.invalidate_cache()
-
         return None
 
     async def _handle_grant_random(
@@ -536,46 +403,14 @@ class Interact(commands.Cog):
             logger.warning("No entities found for grant_random with tag '%s'", tag)
             return
 
-        # Create instance in user's inventory
-        user_id = interaction.user.id
-        new_instance_id = await self.pool.fetchval(
-            """INSERT INTO entity_instances (entity_id, owner_id)
-            VALUES ($1, $2) RETURNING id""",
-            entity.id,
-            user_id,
-        )
-        if new_instance_id is None:
-            logger.error("Failed to create grant_random instance for %s", entity.id)
+        result = await self._inventory.grant_item(guild, interaction.user.id, entity.id)
+        if not result.success:
+            logger.warning("Grant random failed: %s", result.error)
             return
-
-        display_name = entity.display_name
-
-        # Get the instance for rendering description
-        instance = await self.entity_service.get_entity_instance(new_instance_id)
-        if instance is None:
-            logger.error("Entity instance %s not found after grant", new_instance_id)
-            description = f"### {display_name}\n\nYou see nothing special."
-        else:
-            description = await self._rendering.render_entity_on_look(
-                instance, self.entity_service, None
-            )
-
-        # Create Discord thread for the item
-        thread = await self._inventory.create_item_thread(
-            guild,
-            user_id,
-            new_instance_id,
-            display_name,
-            description,
-        )
-        if thread is None:
-            logger.warning(
-                "Failed to create thread for grant_random item %s", entity.id
-            )
 
         # Broadcast the granted item to the channel
         user_name = interaction.user.display_name
-        await channel.send(f"**{user_name}** picks up a *{display_name}*.")
+        await channel.send(f"**{user_name}** picks up a *{entity.display_name}*.")
 
     async def _handle_grant(
         self,
@@ -597,47 +432,9 @@ class Interact(commands.Cog):
         if guild is None:
             return
 
-        user_id = interaction.user.id
-
-        # Verify entity exists and get display_name
-        entity = await self.entity_service.get_entity(entity_id)
-        if entity is None:
-            logger.warning("Entity '%s' not found for grant()", entity_id)
-            return
-
-        display_name = entity.display_name
-
-        # Create instance in user's inventory
-        new_instance_id = await self.pool.fetchval(
-            """INSERT INTO entity_instances (entity_id, owner_id)
-            VALUES ($1, $2) RETURNING id""",
-            entity_id,
-            user_id,
-        )
-        if new_instance_id is None:
-            logger.error("Failed to create grant instance for %s", entity_id)
-            return
-
-        # Get the instance for rendering description
-        instance = await self.entity_service.get_entity_instance(new_instance_id)
-        if instance is None:
-            logger.error("Entity instance %s not found after grant", new_instance_id)
-            description = f"### {display_name}\n\nYou see nothing special."
-        else:
-            description = await self._rendering.render_entity_on_look(
-                instance, self.entity_service, None
-            )
-
-        # Create Discord thread for the item
-        thread = await self._inventory.create_item_thread(
-            guild,
-            user_id,
-            new_instance_id,
-            display_name,
-            description,
-        )
-        if thread is None:
-            logger.warning("Failed to create thread for granted item %s", entity_id)
+        result = await self._inventory.grant_item(guild, interaction.user.id, entity_id)
+        if not result.success:
+            logger.warning("Grant failed: %s", result.error)
 
     async def _execute_cleanups(
         self, interaction: Interaction, effects: TriggerEffects
@@ -666,23 +463,25 @@ class Interact(commands.Cog):
                         cleanup.instance_id,
                     )
 
-    async def _handle_destroy(self, instance_id: UUID) -> bool:
-        """Delete an entity instance from the database.
+    async def _handle_destroy(
+        self, guild: discord.Guild | None, instance_id: UUID
+    ) -> bool:
+        """Delete an entity instance and its inventory thread.
 
         Args:
+            guild: Discord guild (needed for thread deletion)
             instance_id: UUID of the entity instance to destroy
 
         Returns:
             True if the instance was deleted, False otherwise
         """
-        result = await self.pool.execute(
-            "DELETE FROM entity_instances WHERE id = $1",
-            instance_id,
-        )
-        if result == "DELETE 1":
+        if guild is None:
+            return False
+
+        deleted = await self._inventory.destroy_instance(guild, instance_id)
+        if deleted:
             self.entity_resolution.invalidate_cache()
-            return True
-        return False
+        return deleted
 
     async def _handle_dispense(
         self,
@@ -733,12 +532,15 @@ class Interact(commands.Cog):
             logger.error("Entity %s not found for dispense", item_entity_id)
             return
 
-        # Move item to inventory using shared helper
-        success = await self._move_item_to_inventory(
-            interaction, item_entity, item_instance_id
-        )
+        guild = interaction.guild
+        if guild is None:
+            return
 
-        if success:
+        result = await self._inventory.add_to_inventory(
+            guild, interaction.user.id, item_instance_id
+        )
+        if result.success:
+            self.entity_resolution.invalidate_cache()
             user_name = interaction.user.display_name
             article = indefinite_article(item_entity.display_name)
             name = item_entity.display_name

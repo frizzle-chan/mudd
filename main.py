@@ -76,7 +76,7 @@ async def setup_hook():
     focus_service = FocusContextService(pool)
     visibility_service = VisibilityService(pool)
     rendering_service = RenderingService()
-    inventory_service = InventoryService(pool, entity_service)
+    inventory_service = InventoryService(pool, entity_service, rendering_service)
     currency_service = CurrencyService(pool)
     entity_resolution = EntityResolutionService(
         entity_service, focus_service, inventory_service, pool
