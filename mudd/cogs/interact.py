@@ -2,7 +2,7 @@
 
 import logging
 import random
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal, cast
 from uuid import UUID
 
 import asyncpg
@@ -10,6 +10,7 @@ import discord
 from discord import Interaction, app_commands
 from discord.ext import commands
 
+from mudd.commands import ActionContext, create_command
 from mudd.matching.verb_matcher import match_verb
 from mudd.services.entity import ResolvedEntity
 from mudd.services.entity_resolution import ResolutionError
@@ -121,7 +122,8 @@ class Interact(commands.Cog):
         # Successfully resolved entity
         matched_instance = result.instance
         entity = matched_instance.entity
-        source = result.source  # "room", "inventory", or "container"
+        # source is "room", "inventory", or "container" - cast for type safety
+        source = cast(Literal["room", "inventory", "container"], result.source)
 
         # Skip focus manipulation for inventory actions - they don't affect room focus
         is_inventory_source = source in ("inventory", "container")
@@ -137,13 +139,6 @@ class Interact(commands.Cog):
             else:
                 # Clear focus when interacting with entity not in current focus
                 await self.entity_resolution.clear_focus(user_id, reason="interaction")
-
-        # Get handler text based on action
-        handler_text = _get_handler_text(entity, action_type)
-
-        if handler_text is None:
-            await interaction.response.send_message("Nothing happens.", ephemeral=True)
-            return
 
         # Fetch container contents for template (regardless of contents_visible)
         # For inventory items, check inventory container contents
@@ -179,12 +174,22 @@ class Interact(commands.Cog):
             if balance is not None:
                 balance_str = f"¥{balance:,}"
 
-        # Render template with entity and user context
-        effects: TriggerEffects
+        # Build action context and execute command
+        action_ctx = ActionContext(
+            interaction=interaction,
+            entity=entity,
+            instance_id=matched_instance.instance_id,
+            room=room,
+            source=source,
+            user_context=user_context,
+            container_contents=contents_str,
+            balance_str=balance_str,
+            focused_container=container,
+        )
+
+        command = create_command(action_type, self._rendering)
         try:
-            output, effects = self._rendering.render_with_effects(
-                handler_text, entity, user_context, contents_str, container, balance_str
-            )
+            cmd_result = command.execute(action_ctx)
         except TemplateRenderError:
             logger.warning(
                 "Template error rendering '%s' handler for entity '%s'",
@@ -194,29 +199,34 @@ class Interact(commands.Cog):
             )
             output = f"*{entity.name}* responds, but something went wrong."
             effects = TriggerEffects()
+        else:
+            output = cmd_result.output
+            effects = cmd_result.effects
 
-        # Handle focus changes based on action type
-        if action_type == VerbAction.ON_OPEN and entity.focus_mode != "none":
-            # Establish focus when opening a focusable entity (e.g., container)
-            await self.entity_resolution.set_focus(user_id, room, entity)
-        elif action_type == VerbAction.ON_CLOSE:
-            # Clear focus when explicitly closing
-            # Get close message (template) before clearing
-            close_template = await self.entity_resolution.clear_focus(
-                user_id, reason="close"
-            )
-            if close_template:
-                # Render the close template and append
-                try:
-                    close_output = self._rendering.render(close_template, entity, "")
-                    output = f"{output}\n\n{close_output}"
-                except TemplateRenderError:
-                    logger.warning(
-                        "Template error rendering on_close for entity '%s'",
-                        entity.id,
-                        exc_info=True,
-                    )
-                    output = f"{output}\n\nYou step away from the *{entity.name}*."
+            # Handle focus changes from command result
+            if cmd_result.set_focus:
+                focus_entity = cmd_result.set_focus
+                await self.entity_resolution.set_focus(user_id, room, focus_entity)
+            if cmd_result.clear_focus:
+                # Clear focus when explicitly closing
+                # Get close message (template) before clearing
+                close_template = await self.entity_resolution.clear_focus(
+                    user_id, reason="close"
+                )
+                if close_template:
+                    # Render the close template and append
+                    try:
+                        close_output = self._rendering.render(
+                            close_template, entity, ""
+                        )
+                        output = f"{output}\n\n{close_output}"
+                    except TemplateRenderError:
+                        logger.warning(
+                            "Template error rendering on_close for entity '%s'",
+                            entity.id,
+                            exc_info=True,
+                        )
+                        output = f"{output}\n\nYou step away from the *{entity.name}*."
 
         # Handle item pickup for ON_TAKE action
         if action_type == VerbAction.ON_TAKE:
@@ -658,26 +668,3 @@ class Interact(commands.Cog):
 
         except Exception:
             logger.exception(f"Failed to update wallet thread for user {user_id}")
-
-
-def _get_handler_text(entity: ResolvedEntity, action: VerbAction) -> str | None:
-    """Get handler text from entity based on action.
-
-    Args:
-        entity: The resolved entity
-        action: The verb action (on_look, on_attack, etc.)
-
-    Returns:
-        Handler text or None if no handler defined
-    """
-    handler_map = {
-        VerbAction.ON_LOOK: entity.on_look,
-        VerbAction.ON_TOUCH: entity.on_touch,
-        VerbAction.ON_ATTACK: entity.on_attack,
-        VerbAction.ON_USE: entity.on_use,
-        VerbAction.ON_TAKE: entity.on_take,
-        VerbAction.ON_OPEN: entity.on_open,
-        VerbAction.ON_CLOSE: entity.on_close,
-        VerbAction.ON_DROP: entity.on_drop,
-    }
-    return handler_map.get(action)
