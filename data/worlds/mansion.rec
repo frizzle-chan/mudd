@@ -330,6 +330,258 @@ DescriptionLong: A hand-drawn map of the mansion in a simple wooden frame. The s
 + • Screening Room: through the library, in the northern corner
 
 # ----------------------------------------------------------------------------
+# Office entities
+# ----------------------------------------------------------------------------
+
+# Terminal document prototype (base for readable files)
+Id: terminal_document
+Name: terminal document
+Prototype: object
+DescriptionShort: {{ name }}
+OnLook: {{ e.description_long or "ERROR: FILE NOT FOUND" }}
+OnUse: {{ e.description_long or "ERROR: FILE NOT FOUND" }}
+
+Id: office_terminal
+Name: MUDD-OS Terminal
+Prototype: object
+Room: office
+FocusMode: container
+ContentsVisible: no
+DescriptionShort: An old {{ name }} hums on the desk.
+DescriptionLong: A bulky CRT monitor displaying green text on black. The case is beige plastic, yellowed with age. A small sticker reads "MUDD-OS v0.2.1".
+OnOpen: ```
++ ███╗   ███╗██╗   ██╗██████╗ ██████╗        ██████╗ ███████╗
++ ████╗ ████║██║   ██║██╔══██╗██╔══██╗      ██╔═══██╗██╔════╝
++ ██╔████╔██║██║   ██║██║  ██║██║  ██║█████╗██║   ██║███████╗
++ ██║╚██╔╝██║██║   ██║██║  ██║██║  ██║╚════╝██║   ██║╚════██║
++ ██║ ╚═╝ ██║╚██████╔╝██████╔╝██████╔╝      ╚██████╔╝███████║
++ ╚═╝     ╚═╝ ╚═════╝ ╚═════╝ ╚═════╝        ╚═════╝ ╚══════╝
++ ```
++ *MUDD-OS v0.2.1 — Multi-User Dungeon (Discord)*
++ Welcome, GUEST. You have access to the following files:{% if contents %}{{ contents }}{% else %} (none){% endif %}
+OnClose: ```
++ LOGGING OUT...
++
++ GOODBYE, GUEST.
++ ```
+
+Id: terminal_inbox_welcome
+Name: INBOX - Welcome to the Team
+Prototype: terminal_document
+Room: office
+Container: office_terminal
+DescriptionLong: ```
++ FROM: frizzle@mudd.local
++ TO: team@mudd.local
++ SUBJECT: Welcome to the Team
++ DATE: 2026-01-03
++ ----------------------------------------
++
++ Hey there!
++
++ Welcome to the MUDD project - a Discord-based Multi-User Dungeon (MUD) text based adventure!
++
++ The source for the bot is available at https://github.com/frizzle-chan/mudd
++
++ There are dev notes scattered around the world that explain how the various systems work.
++
++ Make yourself at home!
++
++ -Frizzle
++ ```
+
+Id: terminal_inbox_bugs
+Name: INBOX - RE: The Vase
+Prototype: terminal_document
+Room: office
+Container: office_terminal
+DescriptionLong: ```
++ FROM: qa@mudd.local
++ TO: frizzle@mudd.local
++ SUBJECT: RE: The Vase
++ DATE: 2026-01-08
++ ----------------------------------------
++
++ So I smashed the flower vase in the foyer. Again. For testing.
++
++ And I SWEAR there was a White Claw Mango inside it this time?
++
++ Is that... intended? I thought it was supposed to drop roses.
++ The loot tables are getting weird. Also the roses keep coming
++ back. The vase keeps coming back. Everything keeps coming back.
++
++ I'm starting to think the mansion might be haunted.
++
++ Marking this as "works as intended" I guess?
++
++ -QA
++ ```
+
+Id: terminal_logs_anomaly
+Name: LOGS - Anomaly Detected
+Prototype: terminal_document
+Room: office
+Container: office_terminal
+DescriptionLong: ```
++ [2026-01-12 03:33:33] ANOMALY DETECTED
++ [2026-01-12 03:33:33] Location: freezer
++ [2026-01-12 03:33:33] Type: PRESENCE_WITHOUT_ENTRY
++ [2026-01-12 03:33:34]
++ [2026-01-12 03:33:34] User presence detected in #freezer but no
++ [2026-01-12 03:33:34] movement command was issued. No permission
++ [2026-01-12 03:33:34] grants in audit log. User ID: [REDACTED]
++ [2026-01-12 03:33:35]
++ [2026-01-12 03:33:35] This should not be possible.
++ [2026-01-12 03:33:35]
++ [2026-01-12 03:33:36] Investigating...
++ [2026-01-12 03:33:36] ERROR: User not found in database
++ [2026-01-12 03:33:36] ERROR: Unable to revoke permissions
++ [2026-01-12 03:33:37]
++ [2026-01-12 03:33:37] Marking for manual review.
++ ```
+
+Id: terminal_inbox_kickoff
+Name: INBOX - Project Kickoff
+Prototype: terminal_document
+Room: office
+Container: office_terminal
+DescriptionLong: ```
++ FROM: frizzle@mudd.local
++ TO: team@mudd.local
++ SUBJECT: Project Kickoff
++ DATE: 2025-12-29
++ ----------------------------------------
++
++ The Discord MUD is officially underway.
++
++ The idea: use Discord channels as physical rooms. Players can only
++ see the channel they're currently in - "fog of war" via permissions.
++
++ Movement, exploration, entities coming up next
++
++ -Frizzle
++ ```
+
+Id: terminal_inbox_movement
+Name: INBOX - We Have Movement!
+Prototype: terminal_document
+Room: office
+Container: office_terminal
+DescriptionLong: ```
++ FROM: frizzle@mudd.local
++ TO: team@mudd.local
++ SUBJECT: We Have Movement!
++ DATE: 2025-12-30
++ ----------------------------------------
++
++ /move now hides the old channel and reveals the new one.
++ You can actually explore the mansion now without seeing
++ everything at once.
++ 
++ Discord's UI hates the idea of yanking permissions from users and refuses to redraw the UI.
++ So I had to have users click on the channel name in the movement message. It's not a deal breaker.
++
++ -Frizzle
++ ```
+
+Id: terminal_inbox_entities
+Name: INBOX - Entities Are Alive
+Prototype: terminal_document
+Room: office
+Container: office_terminal
+DescriptionLong: ```
++ FROM: frizzle@mudd.local
++ TO: team@mudd.local
++ SUBJECT: Entities Are Alive
++ DATE: 2026-01-14
++ ----------------------------------------
++
++ I implemented a prototype based entity system so we can start filling rooms with stuff.
++ I'm starting with just static entities for now. Later I'll add dynamic spawning and destroyable entities etc.
++
++ /look now shows what's in the room. Tables, vases, furniture.
++ /interact lets you poke things. Jinja templates for responses.
++
++ -Frizzle
++ ```
+
+Id: terminal_inbox_loot
+Name: INBOX - Inventory and Loot
+Prototype: terminal_document
+Room: office
+Container: office_terminal
+DescriptionLong: ```
++ FROM: frizzle@mudd.local
++ TO: team@mudd.local
++ SUBJECT: Inventory and Loot
++ DATE: 2026-01-25
++ ----------------------------------------
++
++ (update as of 16436296f13f91bde99f1568d32e8ba2f11cea38)
++
++ I added an inventory system that gives each user a unique forum channel where all their items are modeled as threads.
++ Users can interact with the items in the item's thead.
++
++ So players can pick stuff up, drop things, destroy things.
++
++ Spawning pools, rarity tiers, scripted item grants.
++ The whole item lifecycle is done.
++
++ Next up is adding dumb stuff like slot machines, fishing, clay pots to smash.
++ Then I'm thinking we need to add a currency system.
++
++ -Frizzle
++ ```
+
+Id: terminal_inbox_currency
+Name: INBOX - Money Makes the World Go Round
+Prototype: terminal_document
+Room: office
+Container: office_terminal
+DescriptionLong: ```
++ FROM: frizzle@mudd.local
++ TO: team@mudd.local
++ SUBJECT: Money Makes the World Go Round
++ DATE: 2026-01-27
++ ----------------------------------------
++
++ (update as of 31f1993add6a5ce79186a15b3d18ac3f6e48c0c2)
++
++ Big update! We now have an economy.
++
++ CURRENCY SYSTEM
++ Every player starts with ¥1,000 and gets a wallet pinned in their
++ inventory. Use /pay to send yen to other players in the same room.
++ There's a house account with 1 billion yen that funds all the loot.
++ Double-entry ledger for full auditability.
++
++ SLOT MACHINE
++ Added a one-armed bandit to the lounge. Pull the handle to win prizes!
++ New effects.dispense() transfers random items from containers to your
++ inventory. Prizes include Ring Pops (common to legendary), White Claws,
++ Avatar Blu-rays, and currency pickups.
++
++ CURRENCY PICKUPS
++ New item type that grants yen directly without clogging inventory:
++ - loose_coins: ¥100 (common)
++ - bundle_of_bills: ¥1,000 (uncommon)
++ - money_clip: ¥5,000 (rare)
++ - cash_envelope: ¥25,000 (epic)
++ - briefcase_of_cash: ¥100,000 (legendary)
++ - gold_brick: ¥500,000 (mythic)
++
++ GALLERY
++ The gallery now has a rotating wall of paintings that spawn from
++ a pool. Each is real art from community members. Take them, hang
++ them on the wall, or... destroy them if you're a monster.
++
++ Also added no_duplicates option to spawning pools so the desk
++ drawer and gallery don't spawn the same item twice.
++
++ -Frizzle
++ ```
+
+# ----------------------------------------------------------------------------
 # Gallery entities
 # ----------------------------------------------------------------------------
 

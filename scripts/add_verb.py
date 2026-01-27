@@ -12,8 +12,12 @@ from contextlib import contextmanager
 from pathlib import Path
 
 VERBS_DIR = Path(__file__).parent.parent / "data" / "verbs"
-VALID_ACTIONS = ["on_look", "on_touch", "on_attack", "on_use", "on_take"]
 LOCK_FILE = VERBS_DIR / ".lock"
+
+
+def get_valid_actions() -> list[str]:
+    """Discover valid actions by globbing for on_*.txt files."""
+    return sorted(p.stem for p in VERBS_DIR.glob("on_*.txt"))
 
 
 @contextmanager
@@ -29,13 +33,18 @@ def verb_lock() -> Iterator[None]:
 
 
 def main() -> None:
+    valid_actions = get_valid_actions()
+    if not valid_actions:
+        print("Error: no on_*.txt files found in data/verbs/", file=sys.stderr)
+        sys.exit(1)
+
     parser = argparse.ArgumentParser(
         description="Add a verb to a word list, ensuring no duplicates."
     )
     parser.add_argument(
         "--action",
         required=True,
-        choices=VALID_ACTIONS,
+        choices=valid_actions,
         help="The action category to add the verb to",
     )
     parser.add_argument("--verb", required=True, help="The verb to add")
@@ -48,7 +57,7 @@ def main() -> None:
 
     with verb_lock():
         # Check all files for duplicates
-        for action in VALID_ACTIONS:
+        for action in valid_actions:
             path = VERBS_DIR / f"{action}.txt"
             if path.exists():
                 verbs = [v.strip() for v in path.read_text().splitlines() if v.strip()]
