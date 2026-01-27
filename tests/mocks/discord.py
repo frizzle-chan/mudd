@@ -81,14 +81,17 @@ class MockMember(discord.Member):
     but doesn't call super().__init__() since we're a test mock.
     """
 
+    _display_name: str  # Set via object.__setattr__ to bypass read-only properties
+
     def __init__(
         self, user_id: int, display_name: str | None = None, bot: bool = False
     ) -> None:
         # Don't call super().__init__() - we're a test mock
-        self.id = user_id
-        self.name = f"testuser{user_id}"  # Discord username (lowercased)
-        self._display_name = display_name or f"TestUser{user_id}"
-        self.bot = bot
+        # Use object.__setattr__ to bypass read-only properties from discord.Member
+        object.__setattr__(self, "id", user_id)
+        object.__setattr__(self, "name", f"testuser{user_id}")
+        object.__setattr__(self, "bot", bot)
+        object.__setattr__(self, "_display_name", display_name or f"TestUser{user_id}")
 
     @property
     def display_name(self) -> str:
