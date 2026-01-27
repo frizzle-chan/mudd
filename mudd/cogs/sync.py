@@ -196,6 +196,14 @@ class Sync(commands.Cog):
         await self.bot.wait_until_ready()
         logger.info("Sync task ready - starting first sync")
 
+    @periodic_sync.error
+    async def on_periodic_sync_error(self, error: BaseException) -> None:
+        """Handle periodic sync errors."""
+        logger.exception("Periodic sync failed", exc_info=error)
+        if not self._first_sync_done:
+            logger.critical("Initial sync failed - shutting down")
+            await self.bot.close()
+
     async def _prepopulate_autocomplete_cache(self, pool) -> None:
         """Prepopulate autocomplete cache for all rooms with entities."""
         rows = await pool.fetch(
@@ -216,7 +224,7 @@ class Sync(commands.Cog):
         3. If spawning needed, select weighted random entity by tag
         4. Create instance with spawning_pool_id
         """
-        # Wait for first sync to complete
+        # Skip respawns until the initial sync has completed
         if not self._first_sync_done:
             return
 

@@ -168,7 +168,10 @@ class Look(commands.Cog):
                 thread_item = await self._inventory.get_thread_item(channel)
                 if thread_item:
                     detail_text = await self._rendering.render_entity_on_look(
-                        thread_item, self.entity_service, None
+                        thread_item,
+                        self.entity_service,
+                        None,
+                        include_heading=False,  # Thread title shows the item name
                     )
                     await interaction.response.send_message(detail_text, ephemeral=True)
                     return
