@@ -876,6 +876,33 @@ Tags: beverage lounge_drink
 DescriptionShort: a sparkling {{ name }}
 DescriptionLong: A glass bottle of Topo Chico mineral water. The bubbles are aggressive in the best way.
 
+Id: lounge_makers_mark
+Name: Maker's Mark Bourbon
+Prototype: beverage
+Rarity: uncommon
+Tags: beverage globe_minibar_liquor
+DescriptionShort: a bottle of {{ name }}
+DescriptionLong: A bottle of Maker's Mark Kentucky Straight Bourbon Whisky. The iconic red wax seal drips down the neck.
+OnUse: You pour yourself a glass of {{ name }}. The caramel and vanilla notes warm your throat. It restores health.
+
+Id: lounge_yamazaki_12
+Name: Yamazaki 12 Year
+Prototype: beverage
+Rarity: rare
+Tags: beverage globe_minibar_liquor
+DescriptionShort: a bottle of {{ name }}
+DescriptionLong: A bottle of Suntory Yamazaki 12 Year Single Malt Japanese Whisky. Aged in a combination of American, Spanish, and Japanese oak casks.
+OnUse: You pour yourself a dram of {{ name }}. Delicate notes of peach, vanilla, and Mizunara oak. It restores health.
+
+Id: lounge_nikka_yoichi_20
+Name: Nikka Yoichi 20-Year Limited Edition
+Prototype: beverage
+Rarity: legendary
+Tags: beverage globe_minibar_liquor
+DescriptionShort: a bottle of {{ name }}
+DescriptionLong: A bottle of Nikka Yoichi Limited Edition Final Version 20-Year-Old Single Malt Japanese Whisky. One of the last bottles ever produced before the age-statement line was discontinued. Peated barley, coastal air, decades of patience.
+OnUse: You pour yourself a reverent measure of {{ name }}. Smoke, sea salt, dried fruit, and a finish that lasts forever. You feel blessed. It restores health.
+
 # ----------------------------------------------------------------------------
 # Library entities
 # ----------------------------------------------------------------------------
@@ -1715,6 +1742,13 @@ Container: lounge_slot_machine
 TagQuery: slot_prize
 MaxCount: 1
 RespawnIntervalMinutes: 60
+
+Id: lounge_globe_minibar_pool
+Room: lounge
+Container: lounge_globe_minibar
+TagQuery: globe_minibar_liquor
+MaxCount: 1
+RespawnIntervalMinutes: 1440
 
 Id: sitting_room_cushion_pool
 Room: sitting-room
