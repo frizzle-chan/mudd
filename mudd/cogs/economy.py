@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from mudd.services.entity import EntityService
     from mudd.services.inventory import InventoryService
     from mudd.services.rendering import RenderingService
-    from mudd.services.visibility import VisibilityService
+    from mudd.services.visibility import VisibilityServiceProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -26,9 +26,9 @@ class Economy(commands.Cog):
 
     def __init__(
         self,
-        bot: commands.Bot,
+        bot: commands.Bot | None,
         currency_service: "CurrencyService",
-        visibility_service: "VisibilityService",
+        visibility_service: "VisibilityServiceProtocol",
         inventory_service: "InventoryService",
         entity_service: "EntityService",
         rendering_service: "RenderingService",

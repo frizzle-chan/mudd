@@ -11,6 +11,7 @@ from unittest.mock import MagicMock
 import asyncpg
 import discord
 
+from mudd.cogs.economy import Economy
 from mudd.cogs.interact import Interact
 from mudd.cogs.look import Look
 from mudd.cogs.movement import Movement
@@ -23,6 +24,7 @@ from mudd.services.rendering import RenderingService
 from tests.mocks.discord import (
     MockGuild,
     MockInteraction,
+    MockMember,
     MockTextChannel,
     StubVisibilityService,
 )
@@ -119,6 +121,15 @@ class TestClient:
             entity_resolution=self.entity_resolution,
             inventory_service=self.inventory_service,
         )
+        self.economy_cog = Economy(
+            bot=None,
+            currency_service=self.currency_service,
+            visibility_service=visibility_service,
+            inventory_service=self.inventory_service,
+            entity_service=self.entity_service,
+            rendering_service=self.rendering_service,
+            pool=pool,
+        )
 
         # Cached mock guild (built lazily from DB room data)
         self._mock_guild: MockGuild | None = None
@@ -138,6 +149,8 @@ class TestClient:
             user_id,
             room,
         )
+        # Set room in visibility stub for same-room checks
+        self._stub_visibility_service.set_user_room(user_id, room)
         return TestUser(user_id, room)
 
     async def _get_room_topic(self, room: str) -> str | None:
@@ -220,6 +233,23 @@ class TestClient:
             "SELECT * FROM user_focus WHERE user_id = $1", user.id
         )
         return dict(row) if row else None
+
+    async def add_guild_member(
+        self, user_id: int, display_name: str | None = None, bot: bool = False
+    ) -> None:
+        """Add a member to the mock guild.
+
+        This is useful for testing scenarios involving bot users or
+        customizing member display names.
+
+        Args:
+            user_id: Discord user ID
+            display_name: Optional custom display name
+            bot: Whether this is a bot user
+        """
+        guild = await self._build_mock_guild()
+        member = MockMember(user_id, display_name, bot)
+        guild.add_member(member)
 
     async def _build_mock_guild(self) -> MockGuild:
         """Build MockGuild from database room data.
@@ -465,3 +495,93 @@ class TestClient:
         self.entity_service.invalidate_cache()
 
         return entity.id
+
+    def _setup_user_channel_location(self, user_id: int, guild: MockGuild) -> None:
+        """Set up user's channel location from their room for same-room checks.
+
+        Uses the stub's room data (set by create_user) to find the matching
+        channel and set the channel location.
+
+        Args:
+            user_id: The user's ID.
+            guild: The mock guild.
+        """
+        room = self._stub_visibility_service._user_rooms.get(user_id)
+        if room:
+            channel = next((ch for ch in guild.text_channels if ch.name == room), None)
+            if channel:
+                self._stub_visibility_service.set_user_location(user_id, channel.id)
+
+    def _ensure_guild_member(self, user_id: int, guild: MockGuild) -> None:
+        """Ensure a user is in the guild's member list.
+
+        Args:
+            user_id: The user's ID.
+            guild: The mock guild.
+        """
+        if user_id not in guild._members:
+            guild.add_member(MockMember(user_id))
+
+    async def pay(self, user: TestUser, recipient: str, amount: int) -> str:
+        """Execute /pay command.
+
+        Args:
+            user: The test user executing the command.
+            recipient: The recipient user ID (as string).
+            amount: Amount to pay in yen.
+
+        Returns:
+            The response message from the command.
+        """
+        guild = await self._build_mock_guild()
+        topic = await self._get_room_topic(user.room)
+
+        # Create a mock member that passes isinstance(member, discord.Member)
+        mock_member = MagicMock(spec=discord.Member)
+        mock_member.id = user.id
+        mock_member.display_name = f"TestUser{user.id}"
+
+        interaction = MockInteraction(user.id, user.room, topic, guild=guild)
+        interaction.user = mock_member
+
+        # Set up channel locations for same-room check
+        self._setup_user_channel_location(user.id, guild)
+        try:
+            recipient_id = int(recipient)
+            self._setup_user_channel_location(recipient_id, guild)
+            self._ensure_guild_member(recipient_id, guild)
+        except (ValueError, TypeError):
+            pass  # Invalid recipient ID - let the command handle it
+
+        await self.economy_cog.pay.callback(
+            self.economy_cog, interaction, recipient=recipient, amount=amount
+        )
+        return interaction.last_response
+
+    async def recipient_autocomplete(
+        self, user: TestUser, current: str = ""
+    ) -> list[AutocompleteResult]:
+        """Get autocomplete suggestions for /pay recipient: parameter.
+
+        Args:
+            user: The test user executing the autocomplete.
+            current: The current input text for filtering.
+
+        Returns:
+            List of autocomplete suggestions.
+        """
+        guild = await self._build_mock_guild()
+        topic = await self._get_room_topic(user.room)
+
+        # Create a mock member that passes isinstance(member, discord.Member)
+        mock_member = MagicMock(spec=discord.Member)
+        mock_member.id = user.id
+        mock_member.display_name = f"TestUser{user.id}"
+
+        mock_interaction = MockInteraction(user.id, user.room, topic, guild=guild)
+        mock_interaction.user = mock_member
+
+        # Cast for type checker (MockInteraction provides needed interface)
+        interaction = cast("Interaction[Any]", mock_interaction)
+        choices = await self.economy_cog.recipient_autocomplete(interaction, current)
+        return [AutocompleteResult(name=c.name, value=c.value) for c in choices]

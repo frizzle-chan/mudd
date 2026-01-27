@@ -6,9 +6,13 @@ database connections in integration tests.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
 from unittest.mock import MagicMock
 
 import discord
+
+if TYPE_CHECKING:
+    pass
 
 
 class MockResponse:
@@ -70,13 +74,19 @@ class MockTextChannel(discord.TextChannel):
 
 
 class MockMember:
-    """Mock Discord member for testing."""
+    """Mock Discord member for testing.
 
-    def __init__(self, user_id: int, display_name: str | None = None) -> None:
+    This is a lightweight mock that provides the attributes needed by tests.
+    For isinstance(x, discord.Member) checks, use MagicMock(spec=discord.Member).
+    """
+
+    def __init__(
+        self, user_id: int, display_name: str | None = None, bot: bool = False
+    ) -> None:
         self.id = user_id
-        self.name = f"testuser{user_id}"  # Discord username (lowercased)
+        self.name = f"testuser{user_id}"
+        self.bot = bot
         self.display_name = display_name or f"TestUser{user_id}"
-        self.bot = False
 
     @property
     def mention(self) -> str:
@@ -263,6 +273,14 @@ class MockGuild:
             self._members[user_id] = MockMember(user_id)
         return self._members[user_id]
 
+    async def fetch_member(self, user_id: int) -> MockMember:
+        """Fetch a member, raising discord.NotFound if not in guild."""
+        member = self._members.get(user_id)
+        if member is None:
+            # Mirror real Discord behavior: raise NotFound for non-members.
+            raise discord.NotFound(MagicMock(), "Member not found")
+        return member
+
     def add_member(self, member: MockMember) -> None:
         """Add a member to the guild."""
         self._members[member.id] = member
@@ -338,6 +356,7 @@ class StubVisibilityService:
         self._default_room = default_room
         self._room_names: dict[str, str] = {}
         self._user_locations: dict[int, int] = {}
+        self._user_rooms: dict[int, str] = {}  # user_id -> room name
 
     @property
     def startup_complete(self) -> bool:
@@ -382,6 +401,10 @@ class StubVisibilityService:
             return None
         return self._room_names.get(room_id)
 
+    async def get_user_room(self, user_id: int) -> str | None:
+        """Get the room name of the user's current location."""
+        return self._user_rooms.get(user_id)
+
     async def sync_guild(self, guild) -> dict[str, int]:
         """No-op in tests - returns empty stats."""
         return {}
@@ -392,8 +415,12 @@ class StubVisibilityService:
         self._room_names[room] = name
 
     def set_user_location(self, user_id: int, channel_id: int) -> None:
-        """Set user location directly for testing."""
+        """Set user location (channel ID) directly for testing."""
         self._user_locations[user_id] = channel_id
+
+    def set_user_room(self, user_id: int, room: str) -> None:
+        """Set user room (room name) directly for testing."""
+        self._user_rooms[user_id] = room
 
 
 def make_mock_channel(
