@@ -517,9 +517,11 @@ DescriptionLong: ```
 + DATE: 2026-01-25
 + ----------------------------------------
 +
++ (update as of 16436296f13f91bde99f1568d32e8ba2f11cea38)
++
 + I added an inventory system that gives each user a unique forum channel where all their items are modeled as threads.
 + Users can interact with the items in the item's thead.
-+ 
++
 + So players can pick stuff up, drop things, destroy things.
 +
 + Spawning pools, rarity tiers, scripted item grants.
@@ -527,6 +529,54 @@ DescriptionLong: ```
 +
 + Next up is adding dumb stuff like slot machines, fishing, clay pots to smash.
 + Then I'm thinking we need to add a currency system.
++
++ -Frizzle
++ ```
+
+Id: terminal_inbox_currency
+Name: INBOX - Money Makes the World Go Round
+Prototype: terminal_document
+Room: office
+Container: office_terminal
+DescriptionLong: ```
++ FROM: frizzle@mudd.local
++ TO: team@mudd.local
++ SUBJECT: Money Makes the World Go Round
++ DATE: 2026-01-27
++ ----------------------------------------
++
++ (update as of 31f1993add6a5ce79186a15b3d18ac3f6e48c0c2)
++
++ Big update! We now have an economy.
++
++ CURRENCY SYSTEM
++ Every player starts with ¥1,000 and gets a wallet pinned in their
++ inventory. Use /pay to send yen to other players in the same room.
++ There's a house account with 1 billion yen that funds all the loot.
++ Double-entry ledger for full auditability.
++
++ SLOT MACHINE
++ Added a one-armed bandit to the lounge. Pull the handle to win prizes!
++ New effects.dispense() transfers random items from containers to your
++ inventory. Prizes include Ring Pops (common to legendary), White Claws,
++ Avatar Blu-rays, and currency pickups.
++
++ CURRENCY PICKUPS
++ New item type that grants yen directly without clogging inventory:
++ - loose_coins: ¥100 (common)
++ - bundle_of_bills: ¥1,000 (uncommon)
++ - money_clip: ¥5,000 (rare)
++ - cash_envelope: ¥25,000 (epic)
++ - briefcase_of_cash: ¥100,000 (legendary)
++ - gold_brick: ¥500,000 (mythic)
++
++ GALLERY
++ The gallery now has a rotating wall of paintings that spawn from
++ a pool. Each is real art from community members. Take them, hang
++ them on the wall, or... destroy them if you're a monster.
++
++ Also added no_duplicates option to spawning pools so the desk
++ drawer and gallery don't spawn the same item twice.
 +
 + -Frizzle
 + ```
