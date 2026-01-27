@@ -37,7 +37,6 @@ class Sync(commands.Cog):
     Responsibilities:
     - Zone/room sync: Create missing channels, fix topics, detect orphans
     - Visibility sync: Sync user permissions to match database state
-    - Startup initialization: Mark VisibilityService ready on first sync
     - Orphan tracking: Only report NEW orphans to console (not previously seen)
     """
 
@@ -64,6 +63,7 @@ class Sync(commands.Cog):
         self.currency_service = currency_service
         self._seen_orphans: set[tuple[int, str, str]] = set()
         self._console_channel = os.environ.get("MUDD_CONSOLE_CHANNEL", "console")
+        self._first_sync_done = False
         self.periodic_sync.start()
         self.respawn_task.start()
 
@@ -78,7 +78,6 @@ class Sync(commands.Cog):
         On first iteration:
         - Sync zones/rooms from rec files to database and Discord
         - Sync user permissions
-        - Mark startup complete (unblocks commands)
 
         On subsequent iterations:
         - Full zone/room sync (recreates deleted channels, fixes topics)
@@ -86,175 +85,90 @@ class Sync(commands.Cog):
         - Sync user permissions
         """
         pool = self._pool
-        is_first_sync = not self.visibility_service.startup_complete
+        is_first = not self._first_sync_done
+        await self._sync(pool, fail_fast=is_first)
+        self._first_sync_done = True
 
-        if is_first_sync:
-            await self._initial_sync(pool)
-        else:
-            await self._periodic_sync(pool)
+    async def _sync(self, pool, *, fail_fast: bool) -> None:
+        """Sync all data.
 
-    async def _initial_sync(self, pool) -> None:
-        """First sync: sync all data and mark visibility service ready."""
-        logger.info("Starting initial sync (first run)")
+        Args:
+            pool: Database connection pool
+            fail_fast: If True, raise on critical errors. If False, log and continue.
+        """
+        if fail_fast:
+            logger.info("Starting initial sync (first run)")
 
-        # Sync verb word lists (no dependencies, can run first)
+        # Sync verb word lists (global)
         try:
             await sync_verbs(pool)
         except Exception:
             logger.exception("Failed to sync verbs")
-            raise
-
-        # Access world_file from bot (set in main.py)
-        world_file = self.bot.world_file
-
-        for guild in self.bot.guilds:
-            try:
-                stats, _, orphans = await sync_zones_and_rooms(
-                    pool, guild, world_file, self._console_channel, self._seen_orphans
-                )
-                logger.info(f"Initial zone sync for {guild.name}: {stats}")
-
-                # Track all orphans from first sync
-                self._seen_orphans.update(orphans)
-
-            except Exception:
-                logger.exception(f"Failed initial zone sync for {guild.name}")
+            if fail_fast:
                 raise
 
-        # Sync entity definitions and instances to database
+        world_file = self.bot.world_file
+
+        # Sync entity definitions and instances (global, once per sync)
         try:
             await sync_entities(pool, world_file)
-            # Invalidate entity cache after sync
             self.entity_service.invalidate_cache()
-            # Invalidate player context cache after entity sync
             self.entity_resolution.invalidate_cache()
-            # Clear template cache to ensure fresh templates
             self._rendering.clear_cache()
         except Exception:
             logger.exception("Failed to sync entities")
-            raise
+            if fail_fast:
+                raise
 
-        # Prepopulate autocomplete cache for all rooms with entities
+        # Prepopulate autocomplete cache (non-fatal)
         try:
             await self._prepopulate_autocomplete_cache(pool)
         except Exception:
             logger.exception("Failed to prepopulate autocomplete cache")
-            # Non-fatal: continue operation
-
-        # Sync user permissions and inventory forums
-        for guild in self.bot.guilds:
-            try:
-                stats = await self.visibility_service.sync_guild(guild)
-                logger.info(f"Initial visibility sync for {guild.name}: {stats}")
-            except Exception:
-                logger.exception(f"Failed initial visibility sync for {guild.name}")
-                raise
-
-            # Sync inventory forums for all members
-            try:
-                inv_stats = await self.inventory_service.sync_user_forums(guild)
-                logger.info(f"Initial inventory sync for {guild.name}: {inv_stats}")
-            except Exception:
-                logger.exception(f"Failed initial inventory sync for {guild.name}")
-                # Non-fatal: continue operation
-
-            # Bootstrap wallets for all members
-            try:
-                wallet_stats = await self.sync_wallets(guild)
-                logger.info(f"Initial wallet sync for {guild.name}: {wallet_stats}")
-            except Exception:
-                logger.exception(f"Failed initial wallet sync for {guild.name}")
-                # Non-fatal: continue operation
-
-        # Mark startup complete - unblocks commands
-        self.visibility_service.mark_startup_complete()
-        logger.info("Initial sync complete - bot ready for commands")
-
-    async def _periodic_sync(self, pool) -> None:
-        """Subsequent syncs: full zone/room/permission sync."""
-        # Wait for startup to complete (in case we're racing with initial sync)
-        await self.visibility_service.wait_for_startup()
-
-        # Sync verb word lists
-        try:
-            await sync_verbs(pool)
-        except Exception:
-            logger.exception("Failed to sync verbs")
-            # Don't raise - allow continued operation
-
-        # Access world_file from bot (set in main.py)
-        world_file = self.bot.world_file
 
         for guild in self.bot.guilds:
-            logger.info(f"Starting periodic sync for {guild.name}")
+            logger.info(f"Starting sync for {guild.name}")
             try:
-                # Zone/room sync (recreates deleted channels, fixes topics)
+                # Zone/room sync
                 stats, _, orphans = await sync_zones_and_rooms(
                     pool, guild, world_file, self._console_channel, self._seen_orphans
                 )
                 logger.info(f"Zone sync for {guild.name}: {stats}")
-
-                # Track new orphans (reporting handled by zone_loader)
                 self._seen_orphans.update(orphans)
 
-                # Sync entity definitions and instances
-                try:
-                    await sync_entities(pool, world_file)
-                    # Invalidate entity cache after sync
-                    self.entity_service.invalidate_cache()
-                    # Invalidate player context cache after entity sync
-                    self.entity_resolution.invalidate_cache()
-                    # Clear template cache to ensure fresh templates
-                    self._rendering.clear_cache()
-                except Exception:
-                    logger.exception("Failed to sync entities")
-                    # Don't raise - allow continued operation
-
-                # Prepopulate autocomplete cache for all rooms with entities
-                try:
-                    await self._prepopulate_autocomplete_cache(pool)
-                except Exception:
-                    logger.exception("Failed to prepopulate autocomplete cache")
-                    # Non-fatal: continue operation
-
-                # Permission sync
-                perm_stats = await self.visibility_service.sync_guild(guild)
-                logger.info(f"Permission sync for {guild.name}: {perm_stats}")
-
-                # Inventory forum sync
-                try:
-                    inv_stats = await self.inventory_service.sync_user_forums(guild)
-                    logger.info(f"Inventory sync for {guild.name}: {inv_stats}")
-                except Exception:
-                    logger.exception(f"Failed inventory sync for {guild.name}")
-                    # Non-fatal: continue operation
-
-                # Bootstrap wallets for new members
-                try:
-                    wallet_stats = await self.sync_wallets(guild)
-                    logger.info(f"Wallet sync for {guild.name}: {wallet_stats}")
-                except Exception:
-                    logger.exception(f"Failed wallet sync for {guild.name}")
-                    # Non-fatal: continue operation
-
-                # Sync inventory thread descriptions (update first post if changed)
-                try:
-                    desc_stats = (
-                        await self.inventory_service.sync_inventory_descriptions(
-                            guild, self._rendering, self.currency_service
-                        )
-                    )
-                    logger.info(
-                        f"Inventory description sync for {guild.name}: {desc_stats}"
-                    )
-                except Exception:
-                    logger.exception(
-                        f"Failed inventory description sync for {guild.name}"
-                    )
-                    # Non-fatal: continue operation
-
+                # Visibility sync
+                vis_stats = await self.visibility_service.sync_guild(guild)
+                logger.info(f"Visibility sync for {guild.name}: {vis_stats}")
             except Exception:
-                logger.exception(f"Periodic sync failed for {guild.name}")
+                logger.exception(f"Failed sync for {guild.name}")
+                if fail_fast:
+                    raise
+
+            # Inventory forum sync (non-fatal)
+            try:
+                inv_stats = await self.inventory_service.sync_user_forums(guild)
+                logger.info(f"Inventory sync for {guild.name}: {inv_stats}")
+            except Exception:
+                logger.exception(f"Failed inventory sync for {guild.name}")
+
+            # Wallet sync (non-fatal)
+            try:
+                wallet_stats = await self.sync_wallets(guild)
+                logger.info(f"Wallet sync for {guild.name}: {wallet_stats}")
+            except Exception:
+                logger.exception(f"Failed wallet sync for {guild.name}")
+
+            # Inventory description sync (non-fatal)
+            try:
+                desc_stats = await self.inventory_service.sync_inventory_descriptions(
+                    guild, self._rendering, self.currency_service
+                )
+                logger.info(f"Inventory desc sync for {guild.name}: {desc_stats}")
+            except Exception:
+                logger.exception(f"Failed inventory description sync for {guild.name}")
+
+        if fail_fast:
+            logger.info("Initial sync complete")
 
     @periodic_sync.before_loop
     async def before_periodic_sync(self):
@@ -282,8 +196,9 @@ class Sync(commands.Cog):
         3. If spawning needed, select weighted random entity by tag
         4. Create instance with spawning_pool_id
         """
-        # Wait for startup to complete
-        await self.visibility_service.wait_for_startup()
+        # Wait for first sync to complete
+        if not self._first_sync_done:
+            return
 
         try:
             await self._process_spawning_pools()

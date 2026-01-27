@@ -334,23 +334,9 @@ class StubVisibilityService:
     """
 
     def __init__(self, default_room: str = "foyer") -> None:
-        self._startup_complete = True  # Tests start ready
         self._default_room = default_room
         self._room_names: dict[str, str] = {}
         self._user_locations: dict[int, int] = {}
-
-    @property
-    def startup_complete(self) -> bool:
-        """Check if startup sync has completed."""
-        return self._startup_complete
-
-    async def wait_for_startup(self) -> None:
-        """No-op for tests - immediately returns."""
-        pass
-
-    def mark_startup_complete(self) -> None:
-        """Mark startup as complete."""
-        self._startup_complete = True
 
     async def get_default_room(self) -> str:
         """Get the default room name."""

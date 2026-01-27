@@ -1,6 +1,5 @@
 """Channel visibility management service."""
 
-import asyncio
 import logging
 from typing import TYPE_CHECKING, Protocol
 
@@ -19,19 +18,6 @@ class VisibilityServiceProtocol(Protocol):
     Real implementation: VisibilityService (requires Discord guild)
     Test implementation: StubVisibilityService (no Discord required)
     """
-
-    @property
-    def startup_complete(self) -> bool:
-        """Check if startup sync has completed (non-blocking)."""
-        ...
-
-    async def wait_for_startup(self) -> None:
-        """Block until startup sync is complete."""
-        ...
-
-    def mark_startup_complete(self) -> None:
-        """Signal that initial startup sync is complete."""
-        ...
 
     async def get_default_room(self) -> str:
         """Get the default room ID."""
@@ -73,7 +59,6 @@ class VisibilityService:
     def __init__(self, pool: asyncpg.Pool) -> None:
         self._pool = pool
         self._default_room: str | None = None  # Cache for lazy loading from DB
-        self._startup_complete = asyncio.Event()
         # Room name caches (rebuilt on each sync)
         self._room_to_channel: dict[str, int] = {}
         self._channel_to_room: dict[int, str] = {}
@@ -81,15 +66,6 @@ class VisibilityService:
         self._zone_to_category: dict[str, int] = {}
         self._category_to_zone: dict[int, str] = {}
         self._room_to_zone: dict[str, str] = {}
-
-    @property
-    def startup_complete(self) -> bool:
-        """Check if startup sync has completed (non-blocking)."""
-        return self._startup_complete.is_set()
-
-    async def wait_for_startup(self) -> None:
-        """Block until startup sync is complete."""
-        await self._startup_complete.wait()
 
     async def _build_room_cache(self, guild: discord.Guild) -> None:
         """Build the room name <-> channel ID caches from database and Discord."""
@@ -505,7 +481,3 @@ class VisibilityService:
 
         logger.info(f"Guild sync complete for {guild.name}: {stats}")
         return stats
-
-    def mark_startup_complete(self) -> None:
-        """Signal that initial startup sync is complete."""
-        self._startup_complete.set()

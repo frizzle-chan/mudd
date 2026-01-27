@@ -61,8 +61,6 @@ class Interact(commands.Cog):
         3. Default: Searches room entities with focus handling
         """
         try:
-            await self.visibility_service.wait_for_startup()
-
             # Build context and get choices using unified API
             ctx = await self.entity_resolution.build_context(interaction, current)
             return await self.entity_resolution.get_autocomplete_choices(ctx, current)
@@ -83,8 +81,6 @@ class Interact(commands.Cog):
     @app_commands.autocomplete(target=target_autocomplete)
     async def interact(self, interaction: Interaction, target: str, action: str):
         """Interact with an entity using a verb."""
-        await self.visibility_service.wait_for_startup()
-
         user_id = interaction.user.id
 
         # Match verb first to determine context

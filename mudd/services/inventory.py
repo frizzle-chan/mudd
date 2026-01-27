@@ -720,9 +720,10 @@ class InventoryService:
                 self._entity_service,
                 None,
                 balance_str,
+                include_heading=False,
             )
         else:
-            description = f"### {entity.display_name}\n\nYou see nothing special."
+            description = "You see nothing special."
 
         thread = await self.create_item_thread(
             guild, user_id, instance_id, entity.display_name, description, pinned
@@ -1029,9 +1030,14 @@ class InventoryService:
                     balance = await currency_service.get_balance(instance.owner_id)
                     balance_str = f"¥{balance:,}" if balance else "¥0"
 
-                # Render current description (room=None for inventory items)
+                # Render description (room=None for inventory, no heading since title
+                # already shows item name)
                 new_description = await rendering_service.render_entity_on_look(
-                    instance, self._entity_service, None, balance_str
+                    instance,
+                    self._entity_service,
+                    None,
+                    balance_str,
+                    include_heading=False,
                 )
 
                 # Fetch and compare message

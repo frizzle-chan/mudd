@@ -104,8 +104,6 @@ class Movement(commands.Cog):
     @app_commands.autocomplete(destination=destination_autocomplete)
     async def move(self, interaction: Interaction, destination: str):
         """Move to a different location."""
-        await self.visibility_service.wait_for_startup()
-
         if not interaction.guild:
             await interaction.response.send_message(
                 "This command must be used in a server.", ephemeral=True
@@ -179,7 +177,6 @@ class Movement(commands.Cog):
             return
 
         try:
-            await self.visibility_service.wait_for_startup()
             default_channel_id = await self.visibility_service.get_default_channel_id()
             if default_channel_id:
                 await self.visibility_service.move_user_to_channel(
