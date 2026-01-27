@@ -20,6 +20,13 @@ class GrantRandomEffect:
 
 
 @dataclass
+class CurrencyGrantEffect:
+    """A queued currency grant."""
+
+    amount: int
+
+
+@dataclass
 class CleanupOperation:
     """A deferred cleanup operation to run after response."""
 
@@ -40,6 +47,7 @@ class TriggerEffects:
     - `pickup()`: Signal that item should be picked up (move from room to inventory)
     - `grant(entity_id)`: Queue granting a specific item to the user
     - `grant_random(tag)`: Queue granting a random item from a tag (broadcasts result)
+    - `grant_currency(amount)`: Queue granting currency from house account
     - `destroy()`: Signal that this entity instance should be destroyed
     - `dispense()`: Signal that an item should be dispensed from this container
 
@@ -59,6 +67,7 @@ class TriggerEffects:
     _dispense_called: bool = False
     grants: list[GrantEffect] = field(default_factory=list)
     grant_randoms: list[GrantRandomEffect] = field(default_factory=list)
+    currency_grants: list[CurrencyGrantEffect] = field(default_factory=list)
     cleanups: list[CleanupOperation] = field(default_factory=list)
 
     def broadcast(self, message: str) -> str:
@@ -131,6 +140,19 @@ class TriggerEffects:
         """
         if tag:
             self.grant_randoms.append(GrantRandomEffect(tag=tag))
+        return ""
+
+    def grant_currency(self, amount: int) -> str:
+        """Queue granting currency to the user.
+
+        Args:
+            amount: Amount of yen to grant (from house account)
+
+        Returns:
+            Empty string (allows inline use in templates)
+        """
+        if amount > 0:
+            self.currency_grants.append(CurrencyGrantEffect(amount=amount))
         return ""
 
     @property

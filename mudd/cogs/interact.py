@@ -19,6 +19,7 @@ from mudd.types import UserContext, VerbAction
 from mudd.utils.text import indefinite_article
 
 if TYPE_CHECKING:
+    from mudd.services.currency import CurrencyService
     from mudd.services.entity import EntityService
     from mudd.services.entity_resolution import EntityResolutionService
     from mudd.services.inventory import InventoryService
@@ -37,6 +38,7 @@ class Interact(commands.Cog):
         inventory_service: "InventoryService",
         pool: asyncpg.Pool,
         rendering_service: RenderingService,
+        currency_service: "CurrencyService",
     ) -> None:
         self.bot = bot
         self.entity_service = entity_service
@@ -45,6 +47,7 @@ class Interact(commands.Cog):
         self._inventory = inventory_service
         self.pool = pool
         self._rendering = rendering_service
+        self._currency = currency_service
 
     async def target_autocomplete(
         self, interaction: Interaction, current: str
@@ -262,6 +265,13 @@ class Interact(commands.Cog):
                     await self._handle_grant(
                         interaction, grant_effect.entity_id, room_channel
                     )
+
+        # Process currency grants (outside room_channel check - doesn't need channel)
+        if guild is not None:
+            for currency_grant in effects.currency_grants:
+                await self._handle_currency_grant(
+                    guild, interaction.user.id, currency_grant.amount
+                )
 
                 # Process dispense effect
                 if effects.has_dispense:
@@ -733,6 +743,115 @@ class Interact(commands.Cog):
             article = indefinite_article(item_entity.display_name)
             name = item_entity.display_name
             await channel.send(f"**{user_name}** got {article} *{name}*!")
+
+    async def _handle_currency_grant(
+        self,
+        guild: discord.Guild,
+        user_id: int,
+        amount: int,
+    ) -> None:
+        """Grant currency to user from house account.
+
+        Args:
+            guild: Discord guild
+            user_id: Discord user ID to grant currency to
+            amount: Amount of yen to grant
+        """
+        # Transfer from house account (user_id=0)
+        result = await self._currency.transfer(
+            sender_id=0,
+            recipient_id=user_id,
+            amount=amount,
+            memo="Item pickup",
+        )
+
+        if not result.success:
+            logger.warning(f"Currency grant failed for user {user_id}: {result.error}")
+            return
+
+        # Update wallet thread with new balance
+        balance_str = f"\u00a5{result.recipient_new_balance:,}"
+        await self._update_wallet_thread(
+            guild, user_id, balance_str, f"\U0001f4b0 Found \u00a5{amount:,}"
+        )
+
+    async def _update_wallet_thread(
+        self,
+        guild: discord.Guild,
+        user_id: int,
+        balance_str: str,
+        notification: str,
+    ) -> None:
+        """Update a user's wallet thread description and post a notification.
+
+        Args:
+            guild: Discord guild
+            user_id: User whose wallet to update
+            balance_str: Formatted balance string (e.g., "\\u00a51,000")
+            notification: Notification message to post
+        """
+        try:
+            # Get wallet instance ID from currency account
+            wallet_instance_id = await self._currency.get_wallet_instance_id(user_id)
+            if wallet_instance_id is None:
+                logger.warning(f"No wallet instance found for user {user_id}")
+                return
+
+            # Get entity instance to find thread ID
+            wallet_instance = await self.entity_service.get_entity_instance(
+                UUID(wallet_instance_id)
+            )
+            if wallet_instance is None:
+                logger.warning(f"Wallet instance {wallet_instance_id} not found")
+                return
+
+            # Get thread ID from database
+            row = await self.pool.fetchrow(
+                """
+                SELECT discord_thread_id, discord_description_msg_id
+                FROM entity_instances WHERE id = $1
+                """,
+                wallet_instance_id,
+            )
+            if row is None or row["discord_thread_id"] is None:
+                logger.warning(f"No thread for wallet instance {wallet_instance_id}")
+                return
+
+            thread_id = row["discord_thread_id"]
+            msg_id = row["discord_description_msg_id"]
+
+            # Get thread
+            thread = guild.get_thread(thread_id)
+            if thread is None:
+                logger.warning(f"Thread {thread_id} not found in guild")
+                return
+
+            # Render new description with updated balance
+            new_description = await self._rendering.render_entity_on_look(
+                wallet_instance,
+                self.entity_service,
+                None,  # room is None for inventory items
+                extra_context={"balance": balance_str},
+            )
+
+            # Update thread description message
+            if msg_id:
+                try:
+                    message = await thread.fetch_message(msg_id)
+                    await message.edit(content=new_description)
+                except discord.NotFound:
+                    logger.warning(f"Description message {msg_id} not found")
+                except discord.HTTPException as e:
+                    logger.error(f"Failed to update wallet description: {e}")
+
+            # Post notification
+            try:
+                await thread.send(notification)
+            except discord.HTTPException as e:
+                logger.error(f"Failed to post wallet notification: {e}")
+
+        except Exception:
+            logger.exception(f"Failed to update wallet thread for user {user_id}")
 
 
 def _get_handler_text(entity: ResolvedEntity, action: VerbAction) -> str | None:

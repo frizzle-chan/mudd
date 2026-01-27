@@ -203,6 +203,71 @@ OnDrop: You can't drop your wallet.
 OnLook: Your wallet contains **{{ balance }}**.
 
 # ----------------------------------------------------------------------------
+# Currency pickups (grant yen on take, don't go to inventory)
+# Used by spawning pools, slot machines, NPC rewards, etc.
+# ----------------------------------------------------------------------------
+
+Id: loose_coins
+Name: loose coins
+Prototype: object
+Rarity: common
+Tags: currency
+Tags: loot
+DescriptionShort: a few loose coins
+OnLook: A small handful of yen coins. Worth about ¥100.
+OnTake: {{ effects.grant_currency(100) }}{{ effects.destroy() }}You pocket the coins. (+¥100)
+
+Id: bundle_of_bills
+Name: bundle of bills
+Prototype: object
+Rarity: uncommon
+Tags: currency
+Tags: loot
+DescriptionShort: a bundle of yen notes
+OnLook: A bundle of yen notes held together with a paper band. Worth about ¥1,000.
+OnTake: {{ effects.grant_currency(1000) }}{{ effects.destroy() }}You pocket the bills. (+¥1,000)
+
+Id: money_clip
+Name: money clip
+Prototype: object
+Rarity: rare
+Tags: currency
+Tags: loot
+DescriptionShort: a silver money clip stuffed with cash
+OnLook: An elegant silver money clip stuffed with neatly folded bills. Worth about ¥5,000.
+OnTake: {{ effects.grant_currency(5000) }}{{ effects.destroy() }}You pocket the cash. (+¥5,000)
+
+Id: cash_envelope
+Name: cash envelope
+Prototype: object
+Rarity: epic
+Tags: currency
+Tags: loot
+DescriptionShort: a thick cash envelope
+OnLook: A heavy envelope filled with a substantial stack of bills. Worth about ¥25,000.
+OnTake: {{ effects.grant_currency(25000) }}{{ effects.destroy() }}You pocket the cash. (+¥25,000)
+
+Id: briefcase_of_cash
+Name: briefcase of cash
+Prototype: object
+Rarity: legendary
+Tags: currency
+Tags: loot
+DescriptionShort: a briefcase filled with cash
+OnLook: A sleek black briefcase packed with neat stacks of bills. Worth about ¥100,000.
+OnTake: {{ effects.grant_currency(100000) }}{{ effects.destroy() }}You take the briefcase. (+¥100,000)
+
+Id: gold_brick
+Name: gold brick
+Prototype: object
+Rarity: mythic
+Tags: currency
+Tags: loot
+DescriptionShort: a gleaming gold brick
+OnLook: A solid gold brick stamped with official mint markings. Worth about ¥500,000.
+OnTake: {{ effects.grant_currency(500000) }}{{ effects.destroy() }}You claim the gold brick. (+¥500,000)
+
+# ----------------------------------------------------------------------------
 # Foyer entities
 # ----------------------------------------------------------------------------
 
