@@ -266,18 +266,18 @@ class Interact(commands.Cog):
                         interaction, grant_effect.entity_id, room_channel
                     )
 
+                # Process dispense effect
+                if effects.has_dispense:
+                    await self._handle_dispense(
+                        interaction, matched_instance.entity, room_channel
+                    )
+
         # Process currency grants (outside room_channel check - doesn't need channel)
         if guild is not None:
             for currency_grant in effects.currency_grants:
                 await self._handle_currency_grant(
                     guild, interaction.user.id, currency_grant.amount
                 )
-
-                # Process dispense effect
-                if effects.has_dispense:
-                    await self._handle_dispense(
-                        interaction, matched_instance.entity, room_channel
-                    )
 
     async def _move_item_to_inventory(
         self,
