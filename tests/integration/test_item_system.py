@@ -399,8 +399,10 @@ class TestDispenseEffect:
         """Using slot machine with effects.dispense() gives item to user."""
         user = await test_client.create_user(user_id=500070, room="lounge")
 
-        # Spawn a prize in the slot machine
-        await test_client.spawn_from_pool("lounge_slot_machine_pool")
+        # Spawn a regular item (ring pop) in the slot machine
+        await test_client.spawn_in_container(
+            "ringpop_cherry", "lounge_slot_machine", "lounge"
+        )
 
         # Verify user starts with empty inventory
         inventory = await test_client.get_inventory(user)
@@ -417,11 +419,58 @@ class TestDispenseEffect:
         # Should have broadcast about spinning and getting item
         assert len(broadcasts) >= 2
         assert "spins the slot machine" in broadcasts[0].lower()
-        assert "got a" in broadcasts[1].lower()
+        # Ring pop has on_take: "You pick up the..." so broadcast shows that
+        assert "ring pop" in broadcasts[1].lower()
 
-        # User should have something in inventory
+        # User should have the ring pop in inventory
         inventory = await test_client.get_inventory(user)
         assert len(inventory) == 1
+        entity_ids = [eid for eid, _ in inventory]
+        assert "ringpop_cherry" in entity_ids
+
+    async def test_dispense_currency_grants_balance_not_inventory(self, test_client):
+        """Dispensing currency pack grants currency instead of adding to inventory."""
+        user = await test_client.create_user(user_id=500072, room="lounge")
+
+        # Ensure user has a currency account (normally done by sync on join)
+        await test_client.ensure_currency_account(user, balance=0)
+
+        # Get starting balance (should be 0 for new user)
+        starting_balance = await test_client.get_balance(user)
+        assert starting_balance == 0
+
+        # Spawn loose_coins (a currency pack worth 100) in the slot machine
+        await test_client.spawn_in_container(
+            "loose_coins", "lounge_slot_machine", "lounge"
+        )
+
+        # Verify user starts with empty inventory
+        inventory = await test_client.get_inventory(user)
+        assert len(inventory) == 0
+
+        # Use (pull) the slot machine
+        response, broadcasts = await test_client.interact_with_broadcasts(
+            user, action="pull", target="Slot Machine"
+        )
+
+        # User should see the ephemeral spin message
+        assert "wheels spin" in response.lower()
+
+        # Should have broadcast about spinning and the currency pickup message
+        assert len(broadcasts) >= 2
+        assert "spins the slot machine" in broadcasts[0].lower()
+        # Currency pack output: "You pocket the coins. (+¥100)"
+        assert "pocket" in broadcasts[1].lower() or "+¥100" in broadcasts[1]
+
+        # Currency should be added to balance
+        new_balance = await test_client.get_balance(user)
+        assert new_balance == starting_balance + 100
+
+        # Currency pack should NOT be in inventory (it was destroyed)
+        inventory = await test_client.get_inventory(user)
+        assert len(inventory) == 0
+        entity_ids = [eid for eid, _ in inventory]
+        assert "loose_coins" not in entity_ids
 
     async def test_slot_machine_empty_shows_refill_message(self, test_client):
         """Using empty slot machine broadcasts refill message."""

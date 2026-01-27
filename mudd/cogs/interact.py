@@ -495,7 +495,8 @@ class Interact(commands.Cog):
         """Handle dispensing an item from a container to the user.
 
         Queries the container's contents and picks one randomly, then
-        moves it to the user's inventory.
+        processes its on_take handler (if any) to handle currency packs
+        and other special items, or moves it to the user's inventory.
 
         Args:
             interaction: Discord interaction
@@ -539,12 +540,69 @@ class Interact(commands.Cog):
         if guild is None:
             return
 
+        user_name = interaction.user.display_name
+        user_id = interaction.user.id
+
+        # Check if item has an on_take handler (e.g., currency packs)
+        if item_entity.on_take:
+            user_context = UserContext(
+                name=user_name,
+                mention=interaction.user.mention,
+            )
+
+            try:
+                output, effects = self._rendering.render_with_effects(
+                    item_entity.on_take, item_entity, user_context, "", None, ""
+                )
+            except TemplateRenderError:
+                logger.warning(
+                    "Template error rendering on_take for dispensed entity '%s'",
+                    item_entity.id,
+                    exc_info=True,
+                )
+                # Fall back to regular inventory add
+                effects = TriggerEffects()
+                output = None
+
+            # Process effects from on_take handler
+            if effects.has_destroy:
+                # Currency pack or similar - destroy instance, don't add to inventory
+                await self._handle_destroy(guild, item_instance_id)
+
+            if effects.currency_grants:
+                # Grant currency from on_take handler
+                for currency_grant in effects.currency_grants:
+                    await self._handle_currency_grant(
+                        guild, user_id, currency_grant.amount
+                    )
+
+            if effects.has_pickup and not effects.has_destroy:
+                # Regular item with pickup() - add to inventory
+                result = await self._inventory.add_to_inventory(
+                    guild, user_id, item_instance_id
+                )
+                if not result.success:
+                    logger.warning("Dispense pickup failed: %s", result.error)
+                    return
+                self.entity_resolution.invalidate_cache()
+
+            # Broadcast the rendered output if available, or default message
+            if output:
+                await channel.send(f"**{user_name}**: {output}")
+            elif not effects.has_destroy:
+                # No special output, show default "got item" message
+                article = indefinite_article(item_entity.display_name)
+                name = item_entity.display_name
+                await channel.send(f"**{user_name}** got {article} *{name}*!")
+
+            return
+
+        # No on_take handler - use default behavior (add to inventory)
         result = await self._inventory.add_to_inventory(
-            guild, interaction.user.id, item_instance_id
+            guild, user_id, item_instance_id
         )
         if result.success:
             self.entity_resolution.invalidate_cache()
-            user_name = interaction.user.display_name
             article = indefinite_article(item_entity.display_name)
             name = item_entity.display_name
             await channel.send(f"**{user_name}** got {article} *{name}*!")

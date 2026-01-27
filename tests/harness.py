@@ -496,6 +496,66 @@ class TestClient:
 
         return entity.id
 
+    async def spawn_in_container(
+        self, entity_id: str, container_id: str, room: str
+    ) -> bool:
+        """Spawn a specific entity inside a container.
+
+        Creates an entity instance inside the specified container,
+        useful for testing dispense behavior with specific items.
+
+        Args:
+            entity_id: The entity ID to spawn.
+            container_id: The container entity ID to spawn inside.
+            room: The room where the container is located.
+
+        Returns:
+            True if the entity was spawned, False otherwise.
+        """
+        # Verify the entity exists
+        entity = await self.entity_service.get_entity(entity_id)
+        if entity is None:
+            return False
+
+        # Create the instance
+        await self.pool.execute(
+            """INSERT INTO entity_instances
+                (entity_id, room, container_entity_id)
+            VALUES ($1, $2, $3)""",
+            entity_id,
+            room,
+            container_id,
+        )
+
+        # Invalidate cache
+        self.entity_service.invalidate_cache()
+
+        return True
+
+    async def get_balance(self, user: TestUser) -> int:
+        """Get a user's currency balance.
+
+        Args:
+            user: The test user whose balance to check.
+
+        Returns:
+            The user's balance in yen, or 0 if no account exists.
+        """
+        balance = await self.currency_service.get_balance(user.id)
+        return balance or 0
+
+    async def ensure_currency_account(self, user: TestUser, balance: int = 0) -> None:
+        """Ensure a user has a currency account.
+
+        Creates a currency account for the user if one doesn't exist.
+        Uses the specified starting balance (default 0).
+
+        Args:
+            user: The test user to create an account for.
+            balance: Starting balance for the account.
+        """
+        await self.currency_service.ensure_account(user.id, balance)
+
     def _setup_user_channel_location(self, user_id: int, guild: MockGuild) -> None:
         """Set up user's channel location from their room for same-room checks.
 
