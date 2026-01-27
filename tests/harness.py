@@ -503,28 +503,31 @@ class TestClient:
         """
         try:
             recipient_id = int(recipient)
-            recipient_row = await self.pool.fetchrow(
-                "SELECT current_room FROM users WHERE id = $1", recipient_id
-            )
-            if recipient_row and recipient_row["current_room"]:
-                recipient_channel = next(
-                    (
-                        ch
-                        for ch in guild.text_channels
-                        if ch.name == recipient_row["current_room"]
-                    ),
-                    None,
-                )
-                if recipient_channel:
-                    self._stub_visibility_service.set_user_location(
-                        recipient_id, recipient_channel.id
-                    )
-                # Also ensure recipient is in the guild's member list
-                # (get_member auto-creates, but we make it explicit)
-                if recipient_id not in guild._members:
-                    guild.add_member(MockMember(recipient_id))
         except (ValueError, TypeError):
-            pass  # Invalid recipient ID format
+            # Invalid recipient ID format (not a valid integer string)
+            return
+
+        recipient_row = await self.pool.fetchrow(
+            "SELECT current_room FROM users WHERE id = $1", recipient_id
+        )
+        if recipient_row and recipient_row["current_room"]:
+            recipient_channel = next(
+                (
+                    ch
+                    for ch in guild.text_channels
+                    if ch.name == recipient_row["current_room"]
+                ),
+                None,
+            )
+            if recipient_channel:
+                self._stub_visibility_service.set_user_location(
+                    recipient_id, recipient_channel.id
+                )
+            # Ensure recipient is in the guild's member list.
+            # Note: get_member() auto-creates members, but fetch_member() raises
+            # NotFound for non-existent members. We add explicitly for clarity.
+            if recipient_id not in guild._members:
+                guild.add_member(MockMember(recipient_id))
 
     async def pay(self, user: TestUser, recipient: str, amount: int) -> str:
         """Execute /pay command.
