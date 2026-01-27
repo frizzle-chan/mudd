@@ -201,6 +201,8 @@ Rarity: none
 OnTake: You already have your wallet.
 OnDrop: You can't drop your wallet.
 OnLook: Your wallet contains **{{ balance }}**.
+OnUse: You whip out your wallet, it has **{{ balance }}**.
+OnOpen: You open up your wallet, inside it has **{{ balance }}**.
 
 # ----------------------------------------------------------------------------
 # Currency pickups (grant yen on take, don't go to inventory)

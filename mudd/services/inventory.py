@@ -719,7 +719,7 @@ class InventoryService:
                 instance,
                 self._entity_service,
                 None,
-                extra_context={"balance": balance_str},
+                balance_str,
             )
         else:
             description = f"### {entity.display_name}\n\nYou see nothing special."
@@ -1023,16 +1023,15 @@ class InventoryService:
                     stats["skipped"] += 1
                     continue
 
-                # Provide extra context for wallet templates
-                extra_ctx: dict[str, str] = {}
+                # Fetch balance for wallet templates
+                balance_str = ""
                 if instance.entity.id == "wallet" and instance.owner_id:
                     balance = await currency_service.get_balance(instance.owner_id)
                     balance_str = f"¥{balance:,}" if balance else "¥0"
-                    extra_ctx["balance"] = balance_str
 
                 # Render current description (room=None for inventory items)
                 new_description = await rendering_service.render_entity_on_look(
-                    instance, self._entity_service, None, extra_context=extra_ctx
+                    instance, self._entity_service, None, balance_str
                 )
 
                 # Fetch and compare message

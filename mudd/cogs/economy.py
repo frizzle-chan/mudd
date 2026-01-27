@@ -305,7 +305,7 @@ class Economy(commands.Cog):
                 wallet_instance,
                 self.entity_service,
                 None,  # room is None for inventory items
-                extra_context={"balance": balance_str},
+                balance_str,
             )
 
             # Update thread description message

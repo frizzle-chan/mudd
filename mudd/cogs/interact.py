@@ -176,11 +176,18 @@ class Interact(commands.Cog):
             if focus and focus.focus_mode == "container":
                 container = await self.entity_service.get_entity(focus.entity_id)
 
+        # Fetch balance for wallet entities
+        balance_str = ""
+        if entity.id == "wallet":
+            balance = await self._currency.get_balance(user_id)
+            if balance is not None:
+                balance_str = f"¥{balance:,}"
+
         # Render template with entity and user context
         effects: TriggerEffects
         try:
             output, effects = self._rendering.render_with_effects(
-                handler_text, entity, user_context, contents_str, container
+                handler_text, entity, user_context, contents_str, container, balance_str
             )
         except TemplateRenderError:
             logger.warning(
@@ -633,7 +640,7 @@ class Interact(commands.Cog):
                 wallet_instance,
                 self.entity_service,
                 None,  # room is None for inventory items
-                extra_context={"balance": balance_str},
+                balance_str,
             )
 
             # Update thread description message

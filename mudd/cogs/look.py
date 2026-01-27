@@ -1,7 +1,7 @@
 """Look command for viewing surroundings and examining entities."""
 
 import logging
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 import asyncpg
 import discord
@@ -143,15 +143,15 @@ class Look(commands.Cog):
         # Use room=None for inventory items
         render_room = room if result.source == "room" else None
 
-        # Inject balance for wallet entities
-        extra_context: dict[str, Any] | None = None
+        # Fetch balance for wallet entities
+        balance_str = ""
         if entity.id == "wallet":
             balance = await self._currency.get_balance(user_id)
             if balance is not None:
-                extra_context = {"balance": f"\u00a5{balance:,}"}
+                balance_str = f"¥{balance:,}"
 
         detail_text = await self._rendering.render_entity_on_look(
-            matched_instance, self.entity_service, render_room, extra_context
+            matched_instance, self.entity_service, render_room, balance_str
         )
         await interaction.response.send_message(detail_text, ephemeral=True)
 
