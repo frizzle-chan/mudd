@@ -725,10 +725,13 @@ Id: lounge_globe_minibar
 Name: Globe Minibar
 Prototype: furniture
 Room: lounge
+FocusMode: container
 DescriptionShort: An oversized {{ name }} sits in the corner.
 DescriptionLong: A vintage wooden globe on a brass stand. The northern hemisphere swings open to reveal a minibar stocked with bottles.
-ContentsVisible: yes
+ContentsVisible: no
 OnUse: You swing open the globe and pour yourself a drink. It restores health.
+OnOpen: You swing open the northern hemisphere.{% if contents %} Inside:{{ contents }}{% else %} It's empty.{% endif %}
+OnClose: You swing the globe closed.
 
 Id: lounge_fridge
 Name: Drink Fridge
