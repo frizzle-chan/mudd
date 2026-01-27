@@ -514,6 +514,40 @@ class TestClient:
         interaction = MockInteraction(user.id, user.room, topic, guild=guild)
         interaction.user = mock_member
 
+        # Set up user locations in visibility service so get_user_location() works
+        # Map user's room to the corresponding MockTextChannel ID
+        sender_channel = next(
+            (ch for ch in guild.text_channels if ch.name == user.room), None
+        )
+        if sender_channel:
+            self._stub_visibility_service.set_user_location(user.id, sender_channel.id)
+
+        # Also set location for recipient if they exist in the database
+        try:
+            recipient_id = int(recipient)
+            recipient_row = await self.pool.fetchrow(
+                "SELECT current_room FROM users WHERE id = $1", recipient_id
+            )
+            if recipient_row and recipient_row["current_room"]:
+                recipient_channel = next(
+                    (
+                        ch
+                        for ch in guild.text_channels
+                        if ch.name == recipient_row["current_room"]
+                    ),
+                    None,
+                )
+                if recipient_channel:
+                    self._stub_visibility_service.set_user_location(
+                        recipient_id, recipient_channel.id
+                    )
+                # Also ensure recipient is in the guild's member list
+                # (get_member auto-creates, but we make it explicit)
+                if recipient_id not in guild._members:
+                    guild.add_member(MockMember(recipient_id))
+        except (ValueError, TypeError):
+            pass  # Invalid recipient ID format
+
         await self.economy_cog.pay.callback(
             self.economy_cog, interaction, recipient=recipient, amount=amount
         )

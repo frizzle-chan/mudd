@@ -280,9 +280,15 @@ class MockGuild:
             self._members[user_id] = MockMember(user_id)
         return self._members[user_id]
 
-    async def fetch_member(self, user_id: int) -> MockMember | None:
-        """Fetch a member (same as get_member for tests)."""
-        return self.get_member(user_id)
+    async def fetch_member(self, user_id: int) -> MockMember:
+        """Fetch a member, raising discord.NotFound if not in guild."""
+        member = self._members.get(user_id)
+        if member is None:
+            # Mirror real Discord behavior: raise NotFound for non-members.
+            from unittest.mock import MagicMock
+
+            raise discord.NotFound(MagicMock(), "Member not found")
+        return member
 
     def add_member(self, member: MockMember) -> None:
         """Add a member to the guild."""
