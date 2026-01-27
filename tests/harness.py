@@ -14,6 +14,7 @@ import discord
 from mudd.cogs.interact import Interact
 from mudd.cogs.look import Look
 from mudd.cogs.movement import Movement
+from mudd.services.currency import CurrencyService
 from mudd.services.entity import EntityService
 from mudd.services.entity_resolution import EntityResolutionService
 from mudd.services.focus_context import FocusContextService
@@ -80,6 +81,7 @@ class TestClient:
         self._stub_visibility_service = StubVisibilityService()
         self.rendering_service = RenderingService()
         self.inventory_service = InventoryService(pool, self.entity_service)
+        self.currency_service = CurrencyService(pool)
         self.entity_resolution = EntityResolutionService(
             self.entity_service, self.focus_service, self.inventory_service, pool
         )
@@ -99,6 +101,7 @@ class TestClient:
             visibility_service=visibility_service,
             rendering_service=self.rendering_service,
             inventory_service=self.inventory_service,
+            currency_service=self.currency_service,
         )
         self.interact_cog = Interact(
             bot=None,
@@ -108,6 +111,7 @@ class TestClient:
             inventory_service=self.inventory_service,
             pool=pool,
             rendering_service=self.rendering_service,
+            currency_service=self.currency_service,
         )
         self.movement_cog = Movement(
             bot=None,

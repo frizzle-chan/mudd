@@ -9,8 +9,10 @@ import logging
 import os
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
+from uuid import UUID
 
 import asyncpg
+import discord
 from discord.ext import commands, tasks
 
 if TYPE_CHECKING:
@@ -19,6 +21,7 @@ if TYPE_CHECKING:
 from mudd.loaders.entity_loader import sync_entities
 from mudd.loaders.verb_loader import sync_verbs
 from mudd.loaders.zone_loader import sync_zones_and_rooms
+from mudd.services.currency import CurrencyService
 from mudd.services.entity import EntityService
 from mudd.services.entity_resolution import EntityResolutionService
 from mudd.services.inventory import InventoryService
@@ -49,6 +52,7 @@ class Sync(commands.Cog):
         pool: asyncpg.Pool,
         rendering_service: RenderingService,
         inventory_service: InventoryService,
+        currency_service: CurrencyService,
     ) -> None:
         self.bot = bot
         self.entity_service = entity_service
@@ -57,6 +61,7 @@ class Sync(commands.Cog):
         self._pool = pool
         self._rendering = rendering_service
         self.inventory_service = inventory_service
+        self.currency_service = currency_service
         self._seen_orphans: set[tuple[int, str, str]] = set()
         self._console_channel = os.environ.get("MUDD_CONSOLE_CHANNEL", "console")
         self.periodic_sync.start()
@@ -153,6 +158,14 @@ class Sync(commands.Cog):
                 logger.exception(f"Failed initial inventory sync for {guild.name}")
                 # Non-fatal: continue operation
 
+            # Bootstrap wallets for all members
+            try:
+                wallet_stats = await self.sync_wallets(guild)
+                logger.info(f"Initial wallet sync for {guild.name}: {wallet_stats}")
+            except Exception:
+                logger.exception(f"Failed initial wallet sync for {guild.name}")
+                # Non-fatal: continue operation
+
         # Mark startup complete - unblocks commands
         self.visibility_service.mark_startup_complete()
         logger.info("Initial sync complete - bot ready for commands")
@@ -216,11 +229,19 @@ class Sync(commands.Cog):
                     logger.exception(f"Failed inventory sync for {guild.name}")
                     # Non-fatal: continue operation
 
+                # Bootstrap wallets for new members
+                try:
+                    wallet_stats = await self.sync_wallets(guild)
+                    logger.info(f"Wallet sync for {guild.name}: {wallet_stats}")
+                except Exception:
+                    logger.exception(f"Failed wallet sync for {guild.name}")
+                    # Non-fatal: continue operation
+
                 # Sync inventory thread descriptions (update first post if changed)
                 try:
                     desc_stats = (
                         await self.inventory_service.sync_inventory_descriptions(
-                            guild, self._rendering
+                            guild, self._rendering, self.currency_service
                         )
                     )
                     logger.info(
@@ -371,3 +392,84 @@ class Sync(commands.Cog):
             self.entity_service.invalidate_cache()
             self.entity_resolution.invalidate_cache()
             logger.info(f"Spawned {spawned} items from spawning pools")
+
+    async def sync_wallets(self, guild: discord.Guild) -> dict[str, int]:
+        """Bootstrap wallets for all guild members.
+
+        For each member without a wallet:
+        1. Create currency account with starting balance
+        2. Create wallet entity instance in inventory
+        3. Create inventory thread for wallet
+        4. Link wallet instance to currency account
+
+        Args:
+            guild: Discord guild
+
+        Returns:
+            Stats dict with 'created', 'existing', 'errors' counts
+        """
+        stats = {"created": 0, "existing": 0, "errors": 0}
+
+        # Verify wallet entity exists (must exist after entity sync)
+        if await self.entity_service.get_entity("wallet") is None:
+            logger.error("Wallet entity not found - cannot bootstrap wallets")
+            return stats
+
+        for member in guild.members:
+            if member.bot:
+                continue
+
+            try:
+                # Check if user already has a wallet instance
+                wallet_instance_id = await self.currency_service.get_wallet_instance_id(
+                    member.id
+                )
+                if wallet_instance_id is not None:
+                    # Check if the wallet instance still exists
+                    existing_instance = await self.entity_service.get_entity_instance(
+                        UUID(wallet_instance_id)
+                    )
+                    if existing_instance is not None:
+                        # Ensure existing wallet thread is pinned
+                        row = await self._pool.fetchrow(
+                            """SELECT discord_thread_id FROM entity_instances
+                            WHERE id = $1""",
+                            UUID(wallet_instance_id),
+                        )
+                        if row and row["discord_thread_id"]:
+                            thread = guild.get_thread(row["discord_thread_id"])
+                            if thread and not thread.flags.pinned:
+                                await thread.edit(pinned=True)
+                        stats["existing"] += 1
+                        continue
+
+                # Create currency account (idempotent) - must exist before thread
+                # creation so balance can be fetched
+                await self.currency_service.ensure_account(member.id)
+
+                # Create wallet in inventory (handles forum, instance, thread)
+                result = await self.inventory_service.grant_item(
+                    guild, member.id, "wallet", pinned=True
+                )
+                if not result.success:
+                    logger.error(
+                        f"Failed to create wallet for user {member.id}: {result.error}"
+                    )
+                    stats["errors"] += 1
+                    continue
+
+                # Link wallet instance to currency account
+                instance_id = str(result.instance_id)
+                await self.currency_service.link_wallet(member.id, instance_id)
+
+                stats["created"] += 1
+                logger.info(f"Created wallet for user {member.id} ({member.name})")
+
+            except discord.HTTPException as e:
+                logger.error(f"Discord error creating wallet for {member.id}: {e}")
+                stats["errors"] += 1
+            except Exception:
+                logger.exception(f"Failed to create wallet for {member.id}")
+                stats["errors"] += 1
+
+        return stats

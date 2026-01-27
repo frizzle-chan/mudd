@@ -197,6 +197,7 @@ class RenderingService:
         user: UserContext,
         contents: str = "",
         container: ResolvedEntity | None = None,
+        balance: str = "",
     ) -> tuple[str, TriggerEffects]:
         """Render a template and collect side effects.
 
@@ -207,6 +208,7 @@ class RenderingService:
             - `user`: UserContext with name and mention
             - `effects`: TriggerEffects for queuing side effects
             - `container`: Optional ResolvedEntity for focused container (drop target)
+            - `balance`: Formatted currency balance (e.g., "¥1,000")
 
         Example template:
             {{ effects.broadcast("**" ~ user.name ~ "** put on some music.") }}
@@ -218,6 +220,7 @@ class RenderingService:
             user: User context with name and mention
             contents: Pre-formatted bullet list of contents (default: "")
             container: Optional container entity for drop context (default: None)
+            balance: Formatted currency balance (default: "")
 
         Returns:
             Tuple of (rendered output, collected effects)
@@ -235,6 +238,7 @@ class RenderingService:
             "user": user,
             "effects": effects,
             "container": container,  # Always include, may be None
+            "balance": balance,
         }
         output = self._renderer.render_with_context(template, context, entity.id)
         return output, effects
@@ -350,6 +354,7 @@ class RenderingService:
         instance: EntityInstance,
         entity_service: ContainerContentsFetcher,
         room: str | None,
+        balance: str = "",
     ) -> str:
         """Render entity on_look template for /look at:<entity>.
 
@@ -357,6 +362,7 @@ class RenderingService:
             - `e`: The ResolvedEntity with all properties
             - `name`: Entity name formatted with Discord italics (*Name*)
             - `contents`: Pre-formatted bullet list of contents
+            - `balance`: Formatted currency balance (e.g., "¥1,000")
 
         If on_look is None or template fails, falls back to description_long
         or description_short. Template errors append a warning suffix.
@@ -365,6 +371,7 @@ class RenderingService:
             instance: Entity instance to render
             entity_service: Service to fetch container contents
             room: Room ID for querying contents (None for inventory items)
+            balance: Formatted currency balance (default: "")
 
         Returns:
             Rendered on_look output
@@ -378,10 +385,23 @@ class RenderingService:
             contents = await entity_service.get_container_contents(entity.id, room)
             contents_str = self.build_contents_string(contents)
 
+        # Build base context
+        base_context: dict[str, Any] = {
+            "e": entity,
+            "name": f"*{entity.display_name}*",
+            "contents": contents_str,
+            "balance": balance,
+        }
+
         # Build fallback from descriptions (also rendered as templates)
-        fallback = self.render(
-            entity.description_long or entity.description_short, entity, contents_str
-        )
+        try:
+            fallback = self._renderer.render_with_context(
+                entity.description_long or entity.description_short or "",
+                base_context,
+                entity.id,
+            )
+        except TemplateRenderError:
+            fallback = ""
         if not fallback:
             fallback = "You see nothing special."
 
@@ -391,7 +411,9 @@ class RenderingService:
             output = fallback
         else:
             try:
-                output = self.render(entity.on_look, entity, contents_str)
+                output = self._renderer.render_with_context(
+                    entity.on_look, base_context, entity.id
+                )
             except TemplateRenderError:
                 logger.warning(
                     "Template error rendering on_look for entity '%s', using fallback",

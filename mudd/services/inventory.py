@@ -8,6 +8,7 @@ from uuid import UUID
 import asyncpg
 import discord
 
+from mudd.services.currency import CurrencyService
 from mudd.services.entity import EntityInstance, EntityService
 from mudd.services.rendering import RenderingService
 
@@ -99,6 +100,24 @@ class UserInventoryForum:
     category_id: int
 
 
+@dataclass(frozen=True)
+class DropTarget:
+    """Where an item goes when removed from inventory."""
+
+    room: str
+    container_entity_id: str | None = None
+
+
+@dataclass(frozen=True)
+class InventoryResult:
+    """Result of an inventory operation."""
+
+    success: bool
+    instance_id: UUID | None = None
+    thread: discord.Thread | None = None
+    error: str | None = None
+
+
 class InventoryService:
     """Manages per-user inventory forum channels and item threads.
 
@@ -107,14 +126,20 @@ class InventoryService:
     When items are dropped, the thread is deleted.
 
     Usage:
-        service = InventoryService(pool, entity_service)
+        service = InventoryService(pool, entity_service, rendering_service)
         await service.sync_user_forums(guild)
         await service.ensure_user_forum(guild, user_id)
     """
 
-    def __init__(self, pool: asyncpg.Pool, entity_service: EntityService) -> None:
+    def __init__(
+        self,
+        pool: asyncpg.Pool,
+        entity_service: EntityService,
+        rendering_service: RenderingService | None = None,
+    ) -> None:
         self._pool = pool
         self._entity_service = entity_service
+        self._rendering = rendering_service
         # Cache category ID per guild to avoid repeated lookups
         self._category_cache: dict[int, int] = {}  # guild_id -> category_id
 
@@ -560,6 +585,7 @@ class InventoryService:
         instance_id: UUID,
         item_name: str,
         item_description: str,
+        pinned: bool = False,
     ) -> discord.Thread | None:
         """Create a thread for an inventory item.
 
@@ -572,6 +598,7 @@ class InventoryService:
             instance_id: Entity instance UUID
             item_name: Name for the thread (display name with rarity emoji)
             item_description: Item description (rendered on_look output)
+            pinned: Whether to pin the thread in the forum (default False)
 
         Returns:
             The created thread, or None if failed
@@ -596,6 +623,10 @@ class InventoryService:
                 message.id,
                 instance_id,
             )
+
+            # Pin thread if requested (e.g., for wallet threads)
+            if pinned:
+                await thread.edit(pinned=True)
 
             logger.info(f"Created thread '{item_name}' for instance {instance_id}")
             return thread
@@ -649,6 +680,257 @@ class InventoryService:
 
         return True
 
+    async def _create_inventory_thread(
+        self,
+        guild: discord.Guild,
+        user_id: int,
+        instance_id: UUID,
+        pinned: bool = False,
+    ) -> discord.Thread | None:
+        """Render description and create thread for inventory item.
+
+        Fetches user's balance to make it available in all entity templates.
+
+        Args:
+            guild: Discord guild
+            user_id: Owner's Discord ID
+            instance_id: Entity instance UUID
+            pinned: Whether to pin the thread
+
+        Returns:
+            Created thread, or None on failure
+        """
+        instance = await self._entity_service.get_entity_instance(instance_id)
+        if instance is None:
+            logger.error("Instance %s not found for thread creation", instance_id)
+            return None
+
+        entity = instance.entity
+
+        # Fetch balance for template context (available to all entities)
+        balance = await self._pool.fetchval(
+            "SELECT balance FROM currency_accounts WHERE user_id = $1",
+            user_id,
+        )
+        balance_str = f"\u00a5{balance:,}" if balance else "\u00a50"
+
+        if self._rendering:
+            description = await self._rendering.render_entity_on_look(
+                instance,
+                self._entity_service,
+                None,
+                balance_str,
+            )
+        else:
+            description = f"### {entity.display_name}\n\nYou see nothing special."
+
+        thread = await self.create_item_thread(
+            guild, user_id, instance_id, entity.display_name, description, pinned
+        )
+        if thread is None:
+            logger.warning("Failed to create thread for item %s", entity.id)
+
+        return thread
+
+    async def grant_item(
+        self,
+        guild: discord.Guild,
+        user_id: int,
+        entity_id: str,
+        pinned: bool = False,
+    ) -> InventoryResult:
+        """Create new entity instance directly in inventory.
+
+        Used by effects.grant() and effects.grant_random().
+
+        Args:
+            guild: Discord guild
+            user_id: Owner's Discord ID
+            entity_id: ID of entity to create
+            pinned: Whether to pin the thread (e.g., for wallets)
+
+        Returns:
+            InventoryResult with success/failure info
+        """
+        # Verify entity exists
+        entity = await self._entity_service.get_entity(entity_id)
+        if entity is None:
+            return InventoryResult(
+                success=False, error=f"Entity '{entity_id}' not found"
+            )
+
+        # Create instance in user's inventory
+        instance_id = await self._pool.fetchval(
+            """INSERT INTO entity_instances (entity_id, owner_id)
+            VALUES ($1, $2) RETURNING id""",
+            entity_id,
+            user_id,
+        )
+        if instance_id is None:
+            return InventoryResult(
+                success=False, error=f"Failed to create instance for {entity_id}"
+            )
+
+        # Create thread via shared path
+        return await self.add_to_inventory(guild, user_id, instance_id, pinned=pinned)
+
+    async def add_to_inventory(
+        self,
+        guild: discord.Guild,
+        user_id: int,
+        instance_id: UUID,
+        source_room: str | None = None,
+        pinned: bool = False,
+    ) -> InventoryResult:
+        """Move entity instance to inventory with thread creation.
+
+        Handles recursive container contents: when picking up a container,
+        all its contents move to inventory with it.
+
+        Args:
+            guild: Discord guild
+            user_id: Owner's Discord ID
+            instance_id: Entity instance UUID
+            source_room: For atomic validation - ensures item is still in room
+            pinned: Whether to pin the thread (e.g., for wallets)
+
+        Returns:
+            InventoryResult with success/failure info
+        """
+        # Get the instance first to get entity info (for recursive container handling)
+        instance = await self._entity_service.get_entity_instance(instance_id)
+        if instance is None:
+            return InventoryResult(success=False, error="The item is no longer there.")
+
+        entity = instance.entity
+
+        # Move the item instance to the user's inventory
+        # Clear spawning_pool_id so the pool can spawn a replacement
+        if source_room:
+            # Atomic validation - ensures item is still in expected room
+            result = await self._pool.execute(
+                """UPDATE entity_instances
+                SET room = NULL, owner_id = $1, player_dropped = FALSE,
+                    container_entity_id = NULL, is_world_instance = FALSE,
+                    spawning_pool_id = NULL
+                WHERE id = $2 AND room = $3""",
+                user_id,
+                instance_id,
+                source_room,
+            )
+            if result == "UPDATE 0":
+                return InventoryResult(
+                    success=False, error="The item is no longer there."
+                )
+
+            # Recursive container pickup: move all contents with the container
+            await self._pool.execute(
+                """UPDATE entity_instances
+                SET room = NULL, owner_id = $1,
+                    player_dropped = FALSE, is_world_instance = FALSE,
+                    spawning_pool_id = NULL
+                WHERE container_entity_id = $2 AND room = $3""",
+                user_id,
+                entity.id,
+                source_room,
+            )
+        else:
+            # No source room validation - just move to inventory
+            await self._pool.execute(
+                """UPDATE entity_instances
+                SET room = NULL, owner_id = $1, player_dropped = FALSE,
+                    container_entity_id = NULL, is_world_instance = FALSE,
+                    spawning_pool_id = NULL
+                WHERE id = $2""",
+                user_id,
+                instance_id,
+            )
+
+        # Create thread with rendered description (includes balance)
+        thread = await self._create_inventory_thread(
+            guild, user_id, instance_id, pinned
+        )
+
+        return InventoryResult(success=True, instance_id=instance_id, thread=thread)
+
+    async def remove_from_inventory(
+        self,
+        guild: discord.Guild,
+        user_id: int,
+        instance_id: UUID,
+        entity_id: str,
+        target: DropTarget,
+    ) -> InventoryResult:
+        """Move item from inventory to room.
+
+        Handles recursive container contents: when dropping a container,
+        all its contents move to the room with it.
+
+        Does NOT delete thread - caller must call delete_item_thread() after response.
+        This allows dropping from inventory threads without "Unknown Channel" errors.
+
+        Args:
+            guild: Discord guild
+            user_id: Owner's Discord ID
+            instance_id: Entity instance UUID
+            entity_id: Entity ID (for recursive container handling)
+            target: DropTarget specifying room and optional container
+
+        Returns:
+            InventoryResult with success/failure info
+        """
+        # Move instance from inventory to room (or container)
+        result = await self._pool.execute(
+            """UPDATE entity_instances
+            SET room = $1, owner_id = NULL, player_dropped = TRUE,
+                container_entity_id = $4, is_world_instance = FALSE
+            WHERE id = $2 AND owner_id = $3""",
+            target.room,
+            instance_id,
+            user_id,
+            target.container_entity_id,
+        )
+        if result == "UPDATE 0":
+            return InventoryResult(success=False, error="You no longer have that item.")
+
+        # Recursive container drop: move all contents to room with the container
+        # Contents keep their container_entity_id link so they stay inside
+        await self._pool.execute(
+            """UPDATE entity_instances
+            SET room = $1, owner_id = NULL
+            WHERE container_entity_id = $2 AND owner_id = $3""",
+            target.room,
+            entity_id,
+            user_id,
+        )
+
+        return InventoryResult(success=True, instance_id=instance_id)
+
+    async def destroy_instance(
+        self,
+        guild: discord.Guild,
+        instance_id: UUID,
+    ) -> bool:
+        """Delete entity instance and its thread (if any).
+
+        Works on any instance (room or inventory). Safe to call even if no thread.
+
+        Args:
+            guild: Discord guild
+            instance_id: Entity instance UUID
+
+        Returns:
+            True if instance was deleted, False otherwise
+        """
+        # Delete inventory thread first (if exists) - must happen before DB delete
+        await self.delete_item_thread(guild, instance_id)
+
+        result = await self._pool.execute(
+            "DELETE FROM entity_instances WHERE id = $1",
+            instance_id,
+        )
+        return result == "DELETE 1"
+
     async def get_instance_by_thread_id(self, thread_id: int) -> EntityInstance | None:
         """Get entity instance by its Discord thread ID.
 
@@ -693,6 +975,7 @@ class InventoryService:
         self,
         guild: discord.Guild,
         rendering_service: RenderingService,
+        currency_service: CurrencyService,
     ) -> dict[str, int]:
         """Sync inventory thread descriptions for all users.
 
@@ -703,6 +986,7 @@ class InventoryService:
         Args:
             guild: Discord guild
             rendering_service: Service to render entity descriptions
+            currency_service: Service to get balance for wallet entities
 
         Returns:
             Stats dict with 'updated', 'unchanged', 'skipped', 'errors' counts
@@ -739,9 +1023,15 @@ class InventoryService:
                     stats["skipped"] += 1
                     continue
 
+                # Fetch balance for wallet templates
+                balance_str = ""
+                if instance.entity.id == "wallet" and instance.owner_id:
+                    balance = await currency_service.get_balance(instance.owner_id)
+                    balance_str = f"¥{balance:,}" if balance else "¥0"
+
                 # Render current description (room=None for inventory items)
                 new_description = await rendering_service.render_entity_on_look(
-                    instance, self._entity_service, None
+                    instance, self._entity_service, None, balance_str
                 )
 
                 # Fetch and compare message
