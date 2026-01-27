@@ -350,6 +350,7 @@ class RenderingService:
         instance: EntityInstance,
         entity_service: ContainerContentsFetcher,
         room: str | None,
+        extra_context: dict[str, Any] | None = None,
     ) -> str:
         """Render entity on_look template for /look at:<entity>.
 
@@ -357,6 +358,7 @@ class RenderingService:
             - `e`: The ResolvedEntity with all properties
             - `name`: Entity name formatted with Discord italics (*Name*)
             - `contents`: Pre-formatted bullet list of contents
+            - Additional variables from extra_context (e.g., `balance` for wallets)
 
         If on_look is None or template fails, falls back to description_long
         or description_short. Template errors append a warning suffix.
@@ -365,6 +367,7 @@ class RenderingService:
             instance: Entity instance to render
             entity_service: Service to fetch container contents
             room: Room ID for querying contents (None for inventory items)
+            extra_context: Optional dict of additional template variables
 
         Returns:
             Rendered on_look output
@@ -378,10 +381,24 @@ class RenderingService:
             contents = await entity_service.get_container_contents(entity.id, room)
             contents_str = self.build_contents_string(contents)
 
+        # Build base context
+        base_context: dict[str, Any] = {
+            "e": entity,
+            "name": f"*{entity.display_name}*",
+            "contents": contents_str,
+        }
+        if extra_context:
+            base_context.update(extra_context)
+
         # Build fallback from descriptions (also rendered as templates)
-        fallback = self.render(
-            entity.description_long or entity.description_short, entity, contents_str
-        )
+        try:
+            fallback = self._renderer.render_with_context(
+                entity.description_long or entity.description_short or "",
+                base_context,
+                entity.id,
+            )
+        except TemplateRenderError:
+            fallback = ""
         if not fallback:
             fallback = "You see nothing special."
 
@@ -391,7 +408,9 @@ class RenderingService:
             output = fallback
         else:
             try:
-                output = self.render(entity.on_look, entity, contents_str)
+                output = self._renderer.render_with_context(
+                    entity.on_look, base_context, entity.id
+                )
             except TemplateRenderError:
                 logger.warning(
                     "Template error rendering on_look for entity '%s', using fallback",

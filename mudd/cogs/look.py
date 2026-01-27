@@ -1,7 +1,7 @@
 """Look command for viewing surroundings and examining entities."""
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import asyncpg
 import discord
@@ -12,6 +12,7 @@ from mudd.services.entity_resolution import ResolutionError, ViewMode
 from mudd.services.rendering import RenderingService, TemplateRenderError
 
 if TYPE_CHECKING:
+    from mudd.services.currency import CurrencyService
     from mudd.services.entity import EntityService
     from mudd.services.entity_resolution import (
         EntityResolutionService,
@@ -32,6 +33,7 @@ class Look(commands.Cog):
         visibility_service: "VisibilityServiceProtocol",
         rendering_service: RenderingService,
         inventory_service: "InventoryService",
+        currency_service: "CurrencyService",
     ) -> None:
         self.bot = bot
         self.entity_service = entity_service
@@ -39,6 +41,7 @@ class Look(commands.Cog):
         self.visibility_service = visibility_service
         self._rendering = rendering_service
         self._inventory = inventory_service
+        self._currency = currency_service
 
     async def at_autocomplete(
         self, interaction: Interaction, current: str
@@ -139,8 +142,16 @@ class Look(commands.Cog):
         # Render on_look template
         # Use room=None for inventory items
         render_room = room if result.source == "room" else None
+
+        # Inject balance for wallet entities
+        extra_context: dict[str, Any] | None = None
+        if entity.id == "wallet":
+            balance = await self._currency.get_balance(user_id)
+            if balance is not None:
+                extra_context = {"balance": f"\u00a5{balance:,}"}
+
         detail_text = await self._rendering.render_entity_on_look(
-            matched_instance, self.entity_service, render_room
+            matched_instance, self.entity_service, render_room, extra_context
         )
         await interaction.response.send_message(detail_text, ephemeral=True)
 
