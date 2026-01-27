@@ -213,7 +213,7 @@ Id: loose_coins
 Name: loose coins
 Prototype: object
 Rarity: common
-Tags: currency slot_prize desk_drawer_loot foyer_vase_loot
+Tags: currency slot_prize desk_drawer_loot foyer_vase_loot sitting_room_cushion_loot
 DescriptionShort: a few loose coins
 OnLook: A small handful of yen coins. Worth about ¥100.
 OnTake: {{ effects.grant_currency(100) }}{{ effects.destroy() }}You pocket the coins. (+¥100)
@@ -1393,11 +1393,15 @@ OnUse: You place {{ name }} on the player.{{ effects.broadcast(user.mention ~ " 
 
 Id: sitting_room_chairs
 Name: Comfy Chairs
-Prototype: furniture
+Prototype: chest
 Room: sitting-room
+FocusMode: container
+ContentsVisible: no
 DescriptionShort: Several {{ name }} are arranged around the room.
-DescriptionLong: Plush armchairs upholstered in faded floral fabric. They look well-loved.
+DescriptionLong: Plush armchairs upholstered in faded floral fabric. They look well-loved. You could __search__ between the cushions.
 OnUse: You settle into one of the armchairs near the fire. The warmth and comfort wash over you. You feel your health regenerating.
+OnOpen: You dig around between the cushions.{% if contents %} You find:{{ contents }}{% else %} Nothing but lint and crumbs.{% endif %}
+OnClose: You stop rummaging through the cushions.
 
 Id: sitting_room_fireplace
 Name: Fireplace
@@ -1709,5 +1713,12 @@ Id: lounge_slot_machine_pool
 Room: lounge
 Container: lounge_slot_machine
 TagQuery: slot_prize
+MaxCount: 1
+RespawnIntervalMinutes: 60
+
+Id: sitting_room_cushion_pool
+Room: sitting-room
+Container: sitting_room_chairs
+TagQuery: sitting_room_cushion_loot
 MaxCount: 1
 RespawnIntervalMinutes: 60
