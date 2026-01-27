@@ -11,6 +11,7 @@ from unittest.mock import MagicMock
 import asyncpg
 import discord
 
+from mudd.cogs.economy import Economy
 from mudd.cogs.interact import Interact
 from mudd.cogs.look import Look
 from mudd.cogs.movement import Movement
@@ -23,6 +24,7 @@ from mudd.services.rendering import RenderingService
 from tests.mocks.discord import (
     MockGuild,
     MockInteraction,
+    MockMember,
     MockTextChannel,
     StubVisibilityService,
 )
@@ -78,7 +80,7 @@ class TestClient:
         # Create real services with test database
         self.entity_service = EntityService(pool)
         self.focus_service = FocusContextService(pool)
-        self._stub_visibility_service = StubVisibilityService()
+        self._stub_visibility_service = StubVisibilityService(pool=pool)
         self.rendering_service = RenderingService()
         self.inventory_service = InventoryService(pool, self.entity_service)
         self.currency_service = CurrencyService(pool)
@@ -118,6 +120,15 @@ class TestClient:
             visibility_service=visibility_service,
             entity_resolution=self.entity_resolution,
             inventory_service=self.inventory_service,
+        )
+        self.economy_cog = Economy(
+            bot=None,
+            currency_service=self.currency_service,
+            visibility_service=visibility_service,
+            inventory_service=self.inventory_service,
+            entity_service=self.entity_service,
+            rendering_service=self.rendering_service,
+            pool=pool,
         )
 
         # Cached mock guild (built lazily from DB room data)
@@ -465,3 +476,54 @@ class TestClient:
         self.entity_service.invalidate_cache()
 
         return entity.id
+
+    async def pay(self, user: TestUser, recipient: str, amount: int) -> str:
+        """Execute /pay command.
+
+        Args:
+            user: The test user executing the command.
+            recipient: The recipient user ID (as string).
+            amount: Amount to pay in yen.
+
+        Returns:
+            The response message from the command.
+        """
+        guild = await self._build_mock_guild()
+        topic = await self._get_room_topic(user.room)
+
+        # Create a MockMember for the sender
+        mock_member = MockMember(user.id)
+
+        interaction = MockInteraction(user.id, user.room, topic, guild=guild)
+        interaction.user = mock_member
+
+        await self.economy_cog.pay.callback(
+            self.economy_cog, interaction, recipient=recipient, amount=amount
+        )
+        return interaction.last_response
+
+    async def recipient_autocomplete(
+        self, user: TestUser, current: str = ""
+    ) -> list[AutocompleteResult]:
+        """Get autocomplete suggestions for /pay recipient: parameter.
+
+        Args:
+            user: The test user executing the autocomplete.
+            current: The current input text for filtering.
+
+        Returns:
+            List of autocomplete suggestions.
+        """
+        guild = await self._build_mock_guild()
+        topic = await self._get_room_topic(user.room)
+
+        # Create a MockMember for the user
+        mock_member = MockMember(user.id)
+
+        mock_interaction = MockInteraction(user.id, user.room, topic, guild=guild)
+        mock_interaction.user = mock_member
+
+        # Cast for type checker (MockInteraction provides needed interface)
+        interaction = cast("Interaction[Any]", mock_interaction)
+        choices = await self.economy_cog.recipient_autocomplete(interaction, current)
+        return [AutocompleteResult(name=c.name, value=c.value) for c in choices]

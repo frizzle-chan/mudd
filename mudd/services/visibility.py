@@ -62,6 +62,10 @@ class VisibilityServiceProtocol(Protocol):
         """Get the display name for a room ID."""
         ...
 
+    async def get_user_room(self, user_id: int) -> str | None:
+        """Get the room name of the user's current location, or None if not set."""
+        ...
+
     async def sync_guild(self, guild: discord.Guild) -> dict[str, int]:
         """Synchronize all users' Discord permissions to match database state."""
         ...

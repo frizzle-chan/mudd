@@ -6,9 +6,14 @@ database connections in integration tests.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
 from unittest.mock import MagicMock
 
+import asyncpg
 import discord
+
+if TYPE_CHECKING:
+    pass
 
 
 class MockResponse:
@@ -69,14 +74,26 @@ class MockTextChannel(discord.TextChannel):
         self.sent_messages.append(content)
 
 
-class MockMember:
-    """Mock Discord member for testing."""
+class MockMember(discord.Member):
+    """Mock Discord member for testing.
 
-    def __init__(self, user_id: int, display_name: str | None = None) -> None:
+    Inherits from discord.Member so it passes isinstance() checks,
+    but doesn't call super().__init__() since we're a test mock.
+    """
+
+    def __init__(
+        self, user_id: int, display_name: str | None = None, bot: bool = False
+    ) -> None:
+        # Don't call super().__init__() - we're a test mock
         self.id = user_id
         self.name = f"testuser{user_id}"  # Discord username (lowercased)
-        self.display_name = display_name or f"TestUser{user_id}"
-        self.bot = False
+        self._display_name = display_name or f"TestUser{user_id}"
+        self.bot = bot
+
+    @property
+    def display_name(self) -> str:
+        """Return Discord-style display name."""
+        return self._display_name
 
     @property
     def mention(self) -> str:
@@ -263,6 +280,10 @@ class MockGuild:
             self._members[user_id] = MockMember(user_id)
         return self._members[user_id]
 
+    async def fetch_member(self, user_id: int) -> MockMember | None:
+        """Fetch a member (same as get_member for tests)."""
+        return self.get_member(user_id)
+
     def add_member(self, member: MockMember) -> None:
         """Add a member to the guild."""
         self._members[member.id] = member
@@ -333,11 +354,14 @@ class StubVisibilityService:
     coupled to Discord API - we use this stub in tests.
     """
 
-    def __init__(self, default_room: str = "foyer") -> None:
+    def __init__(
+        self, default_room: str = "foyer", pool: asyncpg.Pool | None = None
+    ) -> None:
         self._startup_complete = True  # Tests start ready
         self._default_room = default_room
         self._room_names: dict[str, str] = {}
         self._user_locations: dict[int, int] = {}
+        self._pool = pool
 
     @property
     def startup_complete(self) -> bool:
@@ -381,6 +405,18 @@ class StubVisibilityService:
         if room_id is None:
             return None
         return self._room_names.get(room_id)
+
+    async def get_user_room(self, user_id: int) -> str | None:
+        """Get the room name of the user's current location."""
+        # If we have a database pool, use it like the real service
+        if self._pool:
+            row = await self._pool.fetchrow(
+                "SELECT current_room FROM users WHERE id = $1",
+                user_id,
+            )
+            return row["current_room"] if row else None
+        # Otherwise, return None
+        return None
 
     async def sync_guild(self, guild) -> dict[str, int]:
         """No-op in tests - returns empty stats."""
@@ -433,16 +469,19 @@ def make_mock_interaction(
     return MockInteraction(user_id, room, topic)
 
 
-def make_stub_visibility_service(default_room: str = "foyer") -> StubVisibilityService:
+def make_stub_visibility_service(
+    default_room: str = "foyer", pool: asyncpg.Pool | None = None
+) -> StubVisibilityService:
     """Create a StubVisibilityService for tests.
 
     Args:
         default_room: The default room name.
+        pool: Optional database pool for get_user_room queries.
 
     Returns:
         StubVisibilityService instance.
     """
-    return StubVisibilityService(default_room)
+    return StubVisibilityService(default_room, pool)
 
 
 def make_mock_guild_with_rooms(room_topics: dict[str, str | None]) -> MockGuild:
