@@ -241,7 +241,7 @@ class Sync(commands.Cog):
                 try:
                     desc_stats = (
                         await self.inventory_service.sync_inventory_descriptions(
-                            guild, self._rendering
+                            guild, self._rendering, self.currency_service
                         )
                     )
                     logger.info(
@@ -431,6 +431,16 @@ class Sync(commands.Cog):
                         UUID(wallet_instance_id)
                     )
                     if existing_instance is not None:
+                        # Ensure existing wallet thread is pinned
+                        row = await self._pool.fetchrow(
+                            """SELECT discord_thread_id FROM entity_instances
+                            WHERE id = $1""",
+                            UUID(wallet_instance_id),
+                        )
+                        if row and row["discord_thread_id"]:
+                            thread = guild.get_thread(row["discord_thread_id"])
+                            if thread and not thread.flags.pinned:
+                                await thread.edit(pinned=True)
                         stats["existing"] += 1
                         continue
 
@@ -474,13 +484,14 @@ class Sync(commands.Cog):
                     extra_context={"balance": balance_str},
                 )
 
-                # Create inventory thread for wallet
+                # Create inventory thread for wallet (pinned for easy access)
                 thread = await self.inventory_service.create_item_thread(
                     guild,
                     member.id,
                     instance_id,
                     wallet_entity.display_name,
                     description,
+                    pinned=True,
                 )
                 if thread is None:
                     logger.error(f"Failed to create wallet thread for user {member.id}")

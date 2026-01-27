@@ -8,6 +8,7 @@ from uuid import UUID
 import asyncpg
 import discord
 
+from mudd.services.currency import CurrencyService
 from mudd.services.entity import EntityInstance, EntityService
 from mudd.services.rendering import RenderingService
 
@@ -560,6 +561,7 @@ class InventoryService:
         instance_id: UUID,
         item_name: str,
         item_description: str,
+        pinned: bool = False,
     ) -> discord.Thread | None:
         """Create a thread for an inventory item.
 
@@ -572,6 +574,7 @@ class InventoryService:
             instance_id: Entity instance UUID
             item_name: Name for the thread (display name with rarity emoji)
             item_description: Item description (rendered on_look output)
+            pinned: Whether to pin the thread in the forum (default False)
 
         Returns:
             The created thread, or None if failed
@@ -596,6 +599,10 @@ class InventoryService:
                 message.id,
                 instance_id,
             )
+
+            # Pin thread if requested (e.g., for wallet threads)
+            if pinned:
+                await thread.edit(pinned=True)
 
             logger.info(f"Created thread '{item_name}' for instance {instance_id}")
             return thread
@@ -693,6 +700,7 @@ class InventoryService:
         self,
         guild: discord.Guild,
         rendering_service: RenderingService,
+        currency_service: CurrencyService,
     ) -> dict[str, int]:
         """Sync inventory thread descriptions for all users.
 
@@ -703,6 +711,7 @@ class InventoryService:
         Args:
             guild: Discord guild
             rendering_service: Service to render entity descriptions
+            currency_service: Service to get balance for wallet entities
 
         Returns:
             Stats dict with 'updated', 'unchanged', 'skipped', 'errors' counts
@@ -739,9 +748,16 @@ class InventoryService:
                     stats["skipped"] += 1
                     continue
 
+                # Provide extra context for wallet templates
+                extra_ctx: dict[str, str] = {}
+                if instance.entity.id == "wallet" and instance.owner_id:
+                    balance = await currency_service.get_balance(instance.owner_id)
+                    balance_str = f"¥{balance:,}" if balance else "¥0"
+                    extra_ctx["balance"] = balance_str
+
                 # Render current description (room=None for inventory items)
                 new_description = await rendering_service.render_entity_on_look(
-                    instance, self._entity_service, None
+                    instance, self._entity_service, None, extra_context=extra_ctx
                 )
 
                 # Fetch and compare message
