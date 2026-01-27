@@ -228,6 +228,42 @@ class Interact(commands.Cog):
                         )
                         output = f"{output}\n\nYou step away from the *{entity.name}*."
 
+        # Process dispense before response so output can be merged
+        dispense_instance_id: UUID | None = None
+        dispense_entity: ResolvedEntity | None = None
+        if effects.has_dispense:
+            (
+                take_output,
+                take_effects,
+                dispense_instance_id,
+                dispense_entity,
+            ) = await self._process_dispense_take(
+                interaction, entity, room, user_context
+            )
+            if take_output and dispense_entity:
+                output = f"{output}\n\n{take_output}"
+                # Merge effects from the take into main effects
+                effects.merge_from(take_effects)
+
+                # Handle the dispensed item based on its effects
+                guild = interaction.guild
+                if take_effects.has_pickup and dispense_instance_id and guild:
+                    # Normal item - goes to inventory
+                    await self._inventory.add_to_inventory(
+                        guild, interaction.user.id, dispense_instance_id
+                    )
+                    self.entity_resolution.invalidate_cache()
+                    # Broadcast what item was won (for items that go to inventory)
+                    article = indefinite_article(dispense_entity.display_name)
+                    name = dispense_entity.display_name
+                    user = user_context.name
+                    effects.broadcast(f"**{user}** got {article} *{name}*!")
+                # Note: destroy handled in normal effect processing below
+            else:
+                # Container is empty
+                output = f"{output}\n\nThe slot machine is waiting to be refilled."
+                effects.broadcast("The slot machine is waiting to be refilled.")
+
         # Handle item pickup for ON_TAKE action
         if action_type == VerbAction.ON_TAKE:
             pickup_result = await self._handle_pickup(
@@ -251,8 +287,10 @@ class Interact(commands.Cog):
         await self._execute_cleanups(interaction, effects)
 
         # Handle entity destruction (before grants so spawning pool can respawn)
+        # If dispense happened, destroy the dispensed item, not the slot machine
         if effects.has_destroy:
-            await self._handle_destroy(interaction.guild, matched_instance.instance_id)
+            destroy_id = dispense_instance_id or matched_instance.instance_id
+            await self._handle_destroy(interaction.guild, destroy_id)
 
         # Execute broadcast side effects (public messages to user's current room)
         # Look up room from DB since interaction may come from inventory thread
@@ -278,12 +316,6 @@ class Interact(commands.Cog):
                 for grant_effect in effects.grants:
                     await self._handle_grant(
                         interaction, grant_effect.entity_id, room_channel
-                    )
-
-                # Process dispense effect
-                if effects.has_dispense:
-                    await self._handle_dispense(
-                        interaction, matched_instance.entity, room_channel
                     )
 
         # Process currency grants (outside room_channel check - doesn't need channel)
@@ -496,29 +528,31 @@ class Interact(commands.Cog):
             self.entity_resolution.invalidate_cache()
         return deleted
 
-    async def _handle_dispense(
+    async def _process_dispense_take(
         self,
         interaction: Interaction,
         container_entity: ResolvedEntity,
-        channel: discord.TextChannel,
-    ) -> None:
-        """Handle dispensing an item from a container to the user.
+        room: str,
+        user_context: UserContext,
+    ) -> tuple[str | None, TriggerEffects, UUID | None, ResolvedEntity | None]:
+        """Execute on_take for a dispensed item.
 
-        Queries the container's contents and picks one randomly, then
-        moves it to the user's inventory.
+        Queries the container's contents, picks one randomly, and executes
+        the TakeCommand for it. The on_take handler determines whether the
+        item goes to inventory (effects.pickup()) or is consumed
+        (effects.destroy() for currency pickups).
 
         Args:
             interaction: Discord interaction
             container_entity: The container entity dispensing items
-            channel: Channel to broadcast result to
+            room: Current room name
+            user_context: User context for template rendering
+
+        Returns:
+            Tuple of (output, effects, instance_id, entity) or
+            (None, empty_effects, None, None) if container is empty
         """
-        # Query container contents (items inside this container in the room)
-        user_room = await self.pool.fetchval(
-            "SELECT current_room FROM users WHERE id = $1",
-            interaction.user.id,
-        )
-        if user_room is None:
-            return
+        empty_result = (None, TriggerEffects(), None, None)
 
         # Get items inside the container
         contents = await self.pool.fetch(
@@ -526,38 +560,65 @@ class Interact(commands.Cog):
             FROM entity_instances ei
             WHERE ei.container_entity_id = $1 AND ei.room = $2""",
             container_entity.id,
-            user_room,
+            room,
         )
 
         if not contents:
-            # Container is empty
-            await channel.send("The slot machine is waiting to be refilled.")
-            return
+            return empty_result
 
         # Pick one randomly
         item_row = random.choice(contents)
-        item_instance_id = item_row["id"]
-        item_entity_id = item_row["entity_id"]
+        item_instance_id: UUID = item_row["id"]
+        item_entity_id: str = item_row["entity_id"]
 
-        # Get the entity for display name
+        # Get the entity
         item_entity = await self.entity_service.get_entity(item_entity_id)
         if item_entity is None:
             logger.error("Entity %s not found for dispense", item_entity_id)
-            return
+            return empty_result
 
-        guild = interaction.guild
-        if guild is None:
-            return
-
-        result = await self._inventory.add_to_inventory(
-            guild, interaction.user.id, item_instance_id
+        # Build action context for the dispensed item
+        action_ctx = ActionContext(
+            interaction=interaction,
+            entity=item_entity,
+            instance_id=item_instance_id,
+            room=room,
+            source="room",  # Dispensed from room container
+            user_context=user_context,
+            container_contents="",  # Dispensed items don't show container contents
+            balance_str="",
+            focused_container=None,
         )
-        if result.success:
-            self.entity_resolution.invalidate_cache()
-            user_name = interaction.user.display_name
+
+        # Execute TakeCommand
+        command = create_command(VerbAction.ON_TAKE, self._rendering)
+        try:
+            cmd_result = command.execute(action_ctx)
+        except TemplateRenderError:
+            logger.warning(
+                "Template error rendering on_take for dispensed entity '%s'",
+                item_entity.id,
+                exc_info=True,
+            )
+            # Fall back to implicit pickup behavior
+            effects = TriggerEffects()
+            effects.pickup()
             article = indefinite_article(item_entity.display_name)
             name = item_entity.display_name
-            await channel.send(f"**{user_name}** got {article} *{name}*!")
+            output = f"You got {article} *{name}*!"
+            return (output, effects, item_instance_id, item_entity)
+
+        output = cmd_result.output
+        effects = cmd_result.effects
+
+        # If no on_take handler, treat as implicit pickup
+        if output == "Nothing happens.":
+            effects.pickup()
+            article = indefinite_article(item_entity.display_name)
+            name = item_entity.display_name
+            output = f"You got {article} *{name}*!"
+
+        return (output, effects, item_instance_id, item_entity)
 
     async def _handle_currency_grant(
         self,

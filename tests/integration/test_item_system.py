@@ -399,8 +399,13 @@ class TestDispenseEffect:
         """Using slot machine with effects.dispense() gives item to user."""
         user = await test_client.create_user(user_id=500070, room="lounge")
 
-        # Spawn a prize in the slot machine
-        await test_client.spawn_from_pool("lounge_slot_machine_pool")
+        # Spawn a specific non-currency item in the slot machine
+        # (spawn_from_pool is random and could spawn currency which doesn't
+        # go to inventory)
+        await test_client.pool.execute(
+            """INSERT INTO entity_instances (entity_id, room, container_entity_id)
+            VALUES ('ringpop_cherry', 'lounge', 'lounge_slot_machine')"""
+        )
 
         # Verify user starts with empty inventory
         inventory = await test_client.get_inventory(user)
