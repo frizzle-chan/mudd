@@ -355,6 +355,7 @@ class RenderingService:
         entity_service: ContainerContentsFetcher,
         room: str | None,
         balance: str = "",
+        include_heading: bool = True,
     ) -> str:
         """Render entity on_look template for /look at:<entity>.
 
@@ -372,12 +373,17 @@ class RenderingService:
             entity_service: Service to fetch container contents
             room: Room ID for querying contents (None for inventory items)
             balance: Formatted currency balance (default: "")
+            include_heading: Whether to include the entity name as a heading
+                (default: True). Set to False for inventory threads where
+                the thread title already shows the name.
 
         Returns:
             Rendered on_look output
         """
         entity = instance.entity
-        parts: list[str] = [f"### {entity.display_name}"]
+        parts: list[str] = []
+        if include_heading:
+            parts.append(f"### {entity.display_name}")
 
         # Fetch and format container contents (skip for inventory items with no room)
         contents_str = ""

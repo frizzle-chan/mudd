@@ -306,6 +306,7 @@ class Economy(commands.Cog):
                 self.entity_service,
                 None,  # room is None for inventory items
                 balance_str,
+                include_heading=False,  # Thread title shows the item name
             )
 
             # Update thread description message

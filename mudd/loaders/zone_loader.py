@@ -526,36 +526,36 @@ async def _sync_channel(
             logger.error(f"Failed to update topic for {room.id}: {e}")
 
 
-async def sync_zones_and_rooms(
-    pool: asyncpg.Pool,
+async def sync_zones_and_rooms_to_discord(
     guild: discord.Guild,
-    world_file: Path,
+    zones: list[Zone],
+    rooms: list[Room],
     console_channel_name: str = "console",
     seen_orphans: set[tuple[int, str, str]] | None = None,
-) -> tuple[dict[str, int], str, list[tuple[int, str, str]]]:
+) -> tuple[dict[str, int], list[tuple[int, str, str]]]:
     """
-    Sync zones and rooms from a world rec file to database and Discord.
+    Sync zones and rooms to Discord (categories and channels).
 
     Creates missing Discord categories and channels, syncs channel topics.
     Moves channels that exist in wrong categories to the correct category.
     Detects orphan channels (in zone categories but not in rec files).
 
+    Note: Database sync must be done separately via sync_zones_and_rooms_to_db()
+    before calling this function.
+
     Args:
-        pool: Database connection pool
         guild: Discord guild to sync
-        world_file: Path to the world .rec file
+        zones: List of Zone objects (pre-loaded from rec file)
+        rooms: List of Room objects (pre-loaded from rec file)
         console_channel_name: Channel name for orphan notifications
         seen_orphans: Set of previously seen orphans. If provided, only NEW
             orphans are reported to console. Set is mutated to include new orphans.
 
     Returns:
-        Tuple of (stats dict, default_room string, orphans list).
+        Tuple of (stats dict, orphans list).
         Orphans are [(guild_id, channel_name, category_name), ...].
     """
     stats: dict[str, int] = {
-        "zones": 0,
-        "rooms": 0,
-        "users_relocated": 0,
         "categories_created": 0,
         "channels_created": 0,
         "channels_failed": 0,
@@ -568,20 +568,9 @@ async def sync_zones_and_rooms(
         "orphans_found": 0,
     }
 
-    # Load data from world file
-    zones = load_zones_from_rec(world_file)
-    rooms = load_rooms_from_rec(world_file)
-
     if not zones:
-        logger.warning("No zones found in rec files - skipping sync")
-        return stats, "", []
-
-    # Discover default room from rec file IsDefault field
-    default_room = get_default_room(rooms)
-
-    # Sync to database first
-    db_stats = await sync_zones_and_rooms_to_db(pool, zones, rooms, default_room)
-    stats.update(db_stats)
+        logger.warning("No zones found - skipping Discord sync")
+        return stats, []
 
     room_ids = {r.id for r in rooms}
 
@@ -696,4 +685,4 @@ async def sync_zones_and_rooms(
         f"{stats['topics_updated']} topics updated, {stats['orphans_found']} orphans"
     )
 
-    return stats, default_room, orphans
+    return stats, orphans

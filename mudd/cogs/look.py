@@ -56,8 +56,6 @@ class Look(commands.Cog):
         In inventory threads, only shows the thread's item (no Room option).
         """
         try:
-            await self.visibility_service.wait_for_startup()
-
             # Build context and get choices using unified API
             ctx = await self.entity_resolution.build_context(interaction, current)
             return await self.entity_resolution.get_autocomplete_choices(ctx, current)
@@ -79,8 +77,6 @@ class Look(commands.Cog):
     @app_commands.autocomplete(at=at_autocomplete)
     async def look(self, interaction: Interaction, at: str):
         """Look at room or specific entity."""
-        await self.visibility_service.wait_for_startup()
-
         # Build context for resolution
         ctx = await self.entity_resolution.build_context(interaction, at)
         user_id = interaction.user.id
@@ -172,7 +168,10 @@ class Look(commands.Cog):
                 thread_item = await self._inventory.get_thread_item(channel)
                 if thread_item:
                     detail_text = await self._rendering.render_entity_on_look(
-                        thread_item, self.entity_service, None
+                        thread_item,
+                        self.entity_service,
+                        None,
+                        include_heading=False,  # Thread title shows the item name
                     )
                     await interaction.response.send_message(detail_text, ephemeral=True)
                     return
