@@ -20,7 +20,13 @@ if TYPE_CHECKING:
 
 from mudd.loaders.entity_loader import sync_entities
 from mudd.loaders.verb_loader import sync_verbs
-from mudd.loaders.zone_loader import sync_zones_and_rooms
+from mudd.loaders.zone_loader import (
+    get_default_room,
+    load_rooms_from_rec,
+    load_zones_from_rec,
+    sync_zones_and_rooms_to_db,
+    sync_zones_and_rooms_to_discord,
+)
 from mudd.services.currency import CurrencyService
 from mudd.services.entity import EntityService
 from mudd.services.entity_resolution import EntityResolutionService
@@ -109,6 +115,20 @@ class Sync(commands.Cog):
 
         world_file = self.bot.world_file
 
+        # Load zones/rooms from rec file (used for both DB and Discord sync)
+        zones = load_zones_from_rec(world_file)
+        rooms = load_rooms_from_rec(world_file)
+
+        # Sync zones/rooms to DB first (entities need room FKs)
+        try:
+            if zones and rooms:
+                default_room = get_default_room(rooms)
+                await sync_zones_and_rooms_to_db(pool, zones, rooms, default_room)
+        except Exception:
+            logger.exception("Failed to sync zones/rooms to database")
+            if fail_fast:
+                raise
+
         # Sync entity definitions and instances (global, once per sync)
         try:
             await sync_entities(pool, world_file)
@@ -129,9 +149,9 @@ class Sync(commands.Cog):
         for guild in self.bot.guilds:
             logger.info(f"Starting sync for {guild.name}")
             try:
-                # Zone/room sync
-                stats, _, orphans = await sync_zones_and_rooms(
-                    pool, guild, world_file, self._console_channel, self._seen_orphans
+                # Zone/room Discord sync
+                stats, orphans = await sync_zones_and_rooms_to_discord(
+                    guild, zones, rooms, self._console_channel, self._seen_orphans
                 )
                 logger.info(f"Zone sync for {guild.name}: {stats}")
                 self._seen_orphans.update(orphans)
