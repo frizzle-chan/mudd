@@ -80,7 +80,7 @@ class TestClient:
         # Create real services with test database
         self.entity_service = EntityService(pool)
         self.focus_service = FocusContextService(pool)
-        self._stub_visibility_service = StubVisibilityService(pool=pool)
+        self._stub_visibility_service = StubVisibilityService()
         self.rendering_service = RenderingService()
         self.inventory_service = InventoryService(pool, self.entity_service)
         self.currency_service = CurrencyService(pool)
@@ -149,6 +149,8 @@ class TestClient:
             user_id,
             room,
         )
+        # Set room in visibility stub for same-room checks
+        self._stub_visibility_service.set_user_room(user_id, room)
         return TestUser(user_id, room)
 
     async def _get_room_topic(self, room: str) -> str | None:
@@ -494,40 +496,31 @@ class TestClient:
 
         return entity.id
 
-    async def _setup_recipient_location(self, recipient: str, guild: MockGuild) -> None:
-        """Set up recipient location and guild membership for pay command.
+    def _setup_user_channel_location(self, user_id: int, guild: MockGuild) -> None:
+        """Set up user's channel location from their room for same-room checks.
+
+        Uses the stub's room data (set by create_user) to find the matching
+        channel and set the channel location.
 
         Args:
-            recipient: The recipient user ID (as string).
+            user_id: The user's ID.
             guild: The mock guild.
         """
-        try:
-            recipient_id = int(recipient)
-        except (ValueError, TypeError):
-            # Invalid recipient ID format (not a valid integer string)
-            return
+        room = self._stub_visibility_service._user_rooms.get(user_id)
+        if room:
+            channel = next((ch for ch in guild.text_channels if ch.name == room), None)
+            if channel:
+                self._stub_visibility_service.set_user_location(user_id, channel.id)
 
-        recipient_row = await self.pool.fetchrow(
-            "SELECT current_room FROM users WHERE id = $1", recipient_id
-        )
-        if recipient_row and recipient_row["current_room"]:
-            recipient_channel = next(
-                (
-                    ch
-                    for ch in guild.text_channels
-                    if ch.name == recipient_row["current_room"]
-                ),
-                None,
-            )
-            if recipient_channel:
-                self._stub_visibility_service.set_user_location(
-                    recipient_id, recipient_channel.id
-                )
-            # Ensure recipient is in the guild's member list.
-            # Note: get_member() auto-creates members, but fetch_member() raises
-            # NotFound for non-existent members. We add explicitly for clarity.
-            if recipient_id not in guild._members:
-                guild.add_member(MockMember(recipient_id))
+    def _ensure_guild_member(self, user_id: int, guild: MockGuild) -> None:
+        """Ensure a user is in the guild's member list.
+
+        Args:
+            user_id: The user's ID.
+            guild: The mock guild.
+        """
+        if user_id not in guild._members:
+            guild.add_member(MockMember(user_id))
 
     async def pay(self, user: TestUser, recipient: str, amount: int) -> str:
         """Execute /pay command.
@@ -543,21 +536,22 @@ class TestClient:
         guild = await self._build_mock_guild()
         topic = await self._get_room_topic(user.room)
 
-        # Create a MockMember for the sender
-        mock_member = MockMember(user.id)
+        # Create a mock member that passes isinstance(member, discord.Member)
+        mock_member = MagicMock(spec=discord.Member)
+        mock_member.id = user.id
+        mock_member.display_name = f"TestUser{user.id}"
 
         interaction = MockInteraction(user.id, user.room, topic, guild=guild)
         interaction.user = mock_member
 
-        # Set up sender location in visibility service
-        sender_channel = next(
-            (ch for ch in guild.text_channels if ch.name == user.room), None
-        )
-        if sender_channel:
-            self._stub_visibility_service.set_user_location(user.id, sender_channel.id)
-
-        # Set up recipient location if they exist in the database
-        await self._setup_recipient_location(recipient, guild)
+        # Set up channel locations for same-room check
+        self._setup_user_channel_location(user.id, guild)
+        try:
+            recipient_id = int(recipient)
+            self._setup_user_channel_location(recipient_id, guild)
+            self._ensure_guild_member(recipient_id, guild)
+        except (ValueError, TypeError):
+            pass  # Invalid recipient ID - let the command handle it
 
         await self.economy_cog.pay.callback(
             self.economy_cog, interaction, recipient=recipient, amount=amount
@@ -579,8 +573,10 @@ class TestClient:
         guild = await self._build_mock_guild()
         topic = await self._get_room_topic(user.room)
 
-        # Create a MockMember for the user
-        mock_member = MockMember(user.id)
+        # Create a mock member that passes isinstance(member, discord.Member)
+        mock_member = MagicMock(spec=discord.Member)
+        mock_member.id = user.id
+        mock_member.display_name = f"TestUser{user.id}"
 
         mock_interaction = MockInteraction(user.id, user.room, topic, guild=guild)
         mock_interaction.user = mock_member

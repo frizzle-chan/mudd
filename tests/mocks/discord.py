@@ -9,7 +9,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 from unittest.mock import MagicMock
 
-import asyncpg
 import discord
 
 if TYPE_CHECKING:
@@ -74,29 +73,20 @@ class MockTextChannel(discord.TextChannel):
         self.sent_messages.append(content)
 
 
-class MockMember(discord.Member):
+class MockMember:
     """Mock Discord member for testing.
 
-    Inherits from discord.Member so it passes isinstance() checks,
-    but doesn't call super().__init__() since we're a test mock.
+    This is a lightweight mock that provides the attributes needed by tests.
+    For isinstance(x, discord.Member) checks, use MagicMock(spec=discord.Member).
     """
-
-    _display_name: str  # Set via object.__setattr__ to bypass read-only properties
 
     def __init__(
         self, user_id: int, display_name: str | None = None, bot: bool = False
     ) -> None:
-        # Don't call super().__init__() - we're a test mock
-        # Use object.__setattr__ to bypass read-only properties from discord.Member
-        object.__setattr__(self, "id", user_id)
-        object.__setattr__(self, "name", f"testuser{user_id}")
-        object.__setattr__(self, "bot", bot)
-        object.__setattr__(self, "_display_name", display_name or f"TestUser{user_id}")
-
-    @property
-    def display_name(self) -> str:
-        """Return Discord-style display name."""
-        return self._display_name
+        self.id = user_id
+        self.name = f"testuser{user_id}"
+        self.bot = bot
+        self.display_name = display_name or f"TestUser{user_id}"
 
     @property
     def mention(self) -> str:
@@ -361,14 +351,12 @@ class StubVisibilityService:
     coupled to Discord API - we use this stub in tests.
     """
 
-    def __init__(
-        self, default_room: str = "foyer", pool: asyncpg.Pool | None = None
-    ) -> None:
+    def __init__(self, default_room: str = "foyer") -> None:
         self._startup_complete = True  # Tests start ready
         self._default_room = default_room
         self._room_names: dict[str, str] = {}
         self._user_locations: dict[int, int] = {}
-        self._pool = pool
+        self._user_rooms: dict[int, str] = {}  # user_id -> room name
 
     @property
     def startup_complete(self) -> bool:
@@ -415,15 +403,7 @@ class StubVisibilityService:
 
     async def get_user_room(self, user_id: int) -> str | None:
         """Get the room name of the user's current location."""
-        # If we have a database pool, use it like the real service
-        if self._pool:
-            row = await self._pool.fetchrow(
-                "SELECT current_room FROM users WHERE id = $1",
-                user_id,
-            )
-            return row["current_room"] if row else None
-        # Otherwise, return None
-        return None
+        return self._user_rooms.get(user_id)
 
     async def sync_guild(self, guild) -> dict[str, int]:
         """No-op in tests - returns empty stats."""
@@ -435,8 +415,12 @@ class StubVisibilityService:
         self._room_names[room] = name
 
     def set_user_location(self, user_id: int, channel_id: int) -> None:
-        """Set user location directly for testing."""
+        """Set user location (channel ID) directly for testing."""
         self._user_locations[user_id] = channel_id
+
+    def set_user_room(self, user_id: int, room: str) -> None:
+        """Set user room (room name) directly for testing."""
+        self._user_rooms[user_id] = room
 
 
 def make_mock_channel(
@@ -476,19 +460,16 @@ def make_mock_interaction(
     return MockInteraction(user_id, room, topic)
 
 
-def make_stub_visibility_service(
-    default_room: str = "foyer", pool: asyncpg.Pool | None = None
-) -> StubVisibilityService:
+def make_stub_visibility_service(default_room: str = "foyer") -> StubVisibilityService:
     """Create a StubVisibilityService for tests.
 
     Args:
         default_room: The default room name.
-        pool: Optional database pool for get_user_room queries.
 
     Returns:
         StubVisibilityService instance.
     """
-    return StubVisibilityService(default_room, pool)
+    return StubVisibilityService(default_room)
 
 
 def make_mock_guild_with_rooms(room_topics: dict[str, str | None]) -> MockGuild:

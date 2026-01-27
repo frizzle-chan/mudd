@@ -25,7 +25,7 @@ class TestPayCommandSuccess:
         response = await test_client.pay(sender, str(recipient.id), 100)
 
         # Should confirm payment
-        assert "paid" in response.lower() or "¥100" in response
+        assert "You paid" in response
 
         # Verify balances
         sender_balance = await test_client.currency_service.get_balance(sender.id)
@@ -50,7 +50,7 @@ class TestPayCommandValidation:
         response = await test_client.pay(sender, str(recipient.id), 1000)
 
         # Should show error
-        assert "enough" in response.lower() or "insufficient" in response.lower()
+        assert "don't have enough" in response
 
         # Balances should be unchanged
         sender_balance = await test_client.currency_service.get_balance(sender.id)
@@ -70,10 +70,7 @@ class TestPayCommandValidation:
         response = await test_client.pay(sender, str(recipient.id), 100)
 
         # Should show error about location
-        assert (
-            "not in the same room" in response.lower()
-            or "same room" in response.lower()
-        )
+        assert "not in the same room" in response
 
         # Balances should be unchanged
         sender_balance = await test_client.currency_service.get_balance(sender.id)
@@ -91,7 +88,7 @@ class TestPayCommandValidation:
         response = await test_client.pay(user, str(user.id), 100)
 
         # Should show error
-        assert "yourself" in response.lower() or "self" in response.lower()
+        assert "can't pay yourself" in response
 
         # Balance should be unchanged
         balance = await test_client.currency_service.get_balance(user.id)
@@ -109,7 +106,7 @@ class TestPayCommandValidation:
         response = await test_client.pay(sender, str(recipient.id), 0)
 
         # Should show error
-        assert "positive" in response.lower() or "amount" in response.lower()
+        assert "must be positive" in response
 
         # Balances should be unchanged
         sender_balance = await test_client.currency_service.get_balance(sender.id)
@@ -129,7 +126,7 @@ class TestPayCommandValidation:
         response = await test_client.pay(sender, str(recipient.id), -100)
 
         # Should show error
-        assert "positive" in response.lower() or "amount" in response.lower()
+        assert "must be positive" in response
 
         # Balances should be unchanged
         sender_balance = await test_client.currency_service.get_balance(sender.id)
@@ -169,7 +166,7 @@ class TestPayCommandValidation:
         response = await test_client.pay(sender, str(recipient.id), 100)
 
         # Should show error about sender not having account
-        assert "account" in response.lower() or "wallet" in response.lower()
+        assert "don't have a currency account" in response
 
         # Recipient balance should be unchanged
         recipient_balance = await test_client.currency_service.get_balance(recipient.id)
@@ -187,7 +184,7 @@ class TestPayCommandValidation:
         response = await test_client.pay(sender, str(recipient.id), 100)
 
         # Should show error about recipient not having account
-        assert "account" in response.lower()
+        assert "doesn't have a currency account" in response
 
         # Sender balance should be unchanged
         sender_balance = await test_client.currency_service.get_balance(sender.id)
