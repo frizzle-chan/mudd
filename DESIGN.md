@@ -243,6 +243,57 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 - Primary key on `user_id`
 - Index on `updated_at` for timeout queries
 
+### Currency Accounts Table
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `user_id` | BIGINT (PK) | Discord user ID (0 is house account) |
+| `balance` | BIGINT NOT NULL | Current balance in yen (must be >= 0) |
+| `wallet_instance_id` | UUID (FK to entity_instances.id) | Player's wallet entity instance |
+| `created_at` | TIMESTAMPTZ NOT NULL | When the account was created |
+
+**Purpose:**
+- Tracks player currency balances
+- Links to wallet entity instance for balance display
+- House account (user_id=0) holds system funds for grants and NPC purchases
+
+**Constraints:**
+- PK on `user_id`
+- CHECK on `balance >= 0` prevents negative balances
+- FK to entity_instances(id) with ON DELETE SET NULL
+
+### Currency Transactions Table
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | UUID (PK) | Auto-generated transaction identifier |
+| `memo` | TEXT | Human-readable description |
+| `idempotency_key` | TEXT UNIQUE | Optional key for idempotent retries |
+| `created_at` | TIMESTAMPTZ NOT NULL | When the transaction was created |
+
+**Purpose:**
+- Records all currency movements for audit trail
+- Idempotency key prevents duplicate transactions
+
+### Currency Ledger Table
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | UUID (PK) | Auto-generated entry identifier |
+| `transaction_id` | UUID NOT NULL (FK to currency_transactions.id) | Parent transaction |
+| `account_id` | BIGINT NOT NULL (FK to currency_accounts.user_id) | Account affected |
+| `amount` | BIGINT NOT NULL | Change amount (positive=credit, negative=debit) |
+| `created_at` | TIMESTAMPTZ NOT NULL | When the entry was created |
+
+**Purpose:**
+- Double-entry ledger for complete audit trail
+- Each transaction has two entries: debit (negative) and credit (positive)
+- Self-balancing: sum of all entries should be zero
+
+**Indexes:**
+- Index on `account_id` for balance history queries
+- Index on `transaction_id` for transaction details
+
 ### Verbs Table
 
 | Column | Type | Description |

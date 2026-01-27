@@ -7,12 +7,14 @@ import discord
 from discord.ext import commands
 from dotenv import load_dotenv
 
+from mudd.cogs.economy import Economy
 from mudd.cogs.interact import Interact
 from mudd.cogs.look import Look
 from mudd.cogs.movement import Movement
 from mudd.cogs.ping import Ping
 from mudd.cogs.sync import Sync
 from mudd.database import close_pool, get_pool, init_database
+from mudd.services.currency import CurrencyService
 from mudd.services.entity import EntityService
 from mudd.services.entity_resolution import EntityResolutionService
 from mudd.services.focus_context import FocusContextService
@@ -75,6 +77,7 @@ async def setup_hook():
     visibility_service = VisibilityService(pool)
     rendering_service = RenderingService()
     inventory_service = InventoryService(pool, entity_service)
+    currency_service = CurrencyService(pool)
     entity_resolution = EntityResolutionService(
         entity_service, focus_service, inventory_service, pool
     )
@@ -99,6 +102,7 @@ async def setup_hook():
             visibility_service,
             rendering_service,
             inventory_service,
+            currency_service,
         )
     )
     await bot.add_cog(Ping(bot))
@@ -114,6 +118,18 @@ async def setup_hook():
             pool,
             rendering_service,
             inventory_service,
+            currency_service,
+        )
+    )
+    await bot.add_cog(
+        Economy(
+            bot,
+            currency_service,
+            visibility_service,
+            inventory_service,
+            entity_service,
+            rendering_service,
+            pool,
         )
     )
 

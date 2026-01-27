@@ -194,6 +194,14 @@ Prototype: item
 OnUse: You crack open the {{ name }} and take a refreshing sip. It restores health.
 OnTake: {{ effects.pickup() }}You grab a {{ name }}.
 
+Id: wallet
+Name: Wallet
+Prototype: item
+Rarity: none
+OnTake: You already have your wallet.
+OnDrop: You can't drop your wallet.
+OnLook: Your wallet contains **{{ balance }}**.
+
 # ----------------------------------------------------------------------------
 # Foyer entities
 # ----------------------------------------------------------------------------
