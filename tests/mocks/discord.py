@@ -285,8 +285,6 @@ class MockGuild:
         member = self._members.get(user_id)
         if member is None:
             # Mirror real Discord behavior: raise NotFound for non-members.
-            from unittest.mock import MagicMock
-
             raise discord.NotFound(MagicMock(), "Member not found")
         return member
 

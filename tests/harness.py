@@ -494,35 +494,13 @@ class TestClient:
 
         return entity.id
 
-    async def pay(self, user: TestUser, recipient: str, amount: int) -> str:
-        """Execute /pay command.
+    async def _setup_recipient_location(self, recipient: str, guild: MockGuild) -> None:
+        """Set up recipient location and guild membership for pay command.
 
         Args:
-            user: The test user executing the command.
             recipient: The recipient user ID (as string).
-            amount: Amount to pay in yen.
-
-        Returns:
-            The response message from the command.
+            guild: The mock guild.
         """
-        guild = await self._build_mock_guild()
-        topic = await self._get_room_topic(user.room)
-
-        # Create a MockMember for the sender
-        mock_member = MockMember(user.id)
-
-        interaction = MockInteraction(user.id, user.room, topic, guild=guild)
-        interaction.user = mock_member
-
-        # Set up user locations in visibility service so get_user_location() works
-        # Map user's room to the corresponding MockTextChannel ID
-        sender_channel = next(
-            (ch for ch in guild.text_channels if ch.name == user.room), None
-        )
-        if sender_channel:
-            self._stub_visibility_service.set_user_location(user.id, sender_channel.id)
-
-        # Also set location for recipient if they exist in the database
         try:
             recipient_id = int(recipient)
             recipient_row = await self.pool.fetchrow(
@@ -547,6 +525,36 @@ class TestClient:
                     guild.add_member(MockMember(recipient_id))
         except (ValueError, TypeError):
             pass  # Invalid recipient ID format
+
+    async def pay(self, user: TestUser, recipient: str, amount: int) -> str:
+        """Execute /pay command.
+
+        Args:
+            user: The test user executing the command.
+            recipient: The recipient user ID (as string).
+            amount: Amount to pay in yen.
+
+        Returns:
+            The response message from the command.
+        """
+        guild = await self._build_mock_guild()
+        topic = await self._get_room_topic(user.room)
+
+        # Create a MockMember for the sender
+        mock_member = MockMember(user.id)
+
+        interaction = MockInteraction(user.id, user.room, topic, guild=guild)
+        interaction.user = mock_member
+
+        # Set up sender location in visibility service
+        sender_channel = next(
+            (ch for ch in guild.text_channels if ch.name == user.room), None
+        )
+        if sender_channel:
+            self._stub_visibility_service.set_user_location(user.id, sender_channel.id)
+
+        # Set up recipient location if they exist in the database
+        await self._setup_recipient_location(recipient, guild)
 
         await self.economy_cog.pay.callback(
             self.economy_cog, interaction, recipient=recipient, amount=amount
