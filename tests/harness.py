@@ -232,6 +232,23 @@ class TestClient:
         )
         return dict(row) if row else None
 
+    async def add_guild_member(
+        self, user_id: int, display_name: str | None = None, bot: bool = False
+    ) -> None:
+        """Add a member to the mock guild.
+
+        This is useful for testing scenarios involving bot users or
+        customizing member display names.
+
+        Args:
+            user_id: Discord user ID
+            display_name: Optional custom display name
+            bot: Whether this is a bot user
+        """
+        guild = await self._build_mock_guild()
+        member = MockMember(user_id, display_name, bot)
+        guild.add_member(member)
+
     async def _build_mock_guild(self) -> MockGuild:
         """Build MockGuild from database room data.
 

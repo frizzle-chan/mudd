@@ -145,11 +145,7 @@ class TestPayCommandValidation:
         await test_client.currency_service.ensure_account(sender.id, 1000)
 
         # Add a bot member to the guild
-        guild = await test_client._build_mock_guild()
-        from tests.mocks.discord import MockMember
-
-        bot_member = MockMember(bot_user.id, bot=True)
-        guild.add_member(bot_member)
+        await test_client.add_guild_member(bot_user.id, bot=True)
 
         # Try to pay the bot
         response = await test_client.pay(sender, str(bot_user.id), 100)
@@ -232,11 +228,7 @@ class TestPayAutocomplete:
         bot_user = await test_client.create_user(user_id=500000111, room="foyer")
 
         # Add a bot member to the guild
-        guild = await test_client._build_mock_guild()
-        from tests.mocks.discord import MockMember
-
-        bot_member = MockMember(bot_user.id, bot=True)
-        guild.add_member(bot_member)
+        await test_client.add_guild_member(bot_user.id, bot=True)
 
         # Autocomplete should not show bot
         results = await test_client.recipient_autocomplete(user)
@@ -251,13 +243,8 @@ class TestPayAutocomplete:
         user3 = await test_client.create_user(user_id=500000122, room="foyer")
 
         # Customize display names
-        guild = await test_client._build_mock_guild()
-        from tests.mocks.discord import MockMember
-
-        alice = MockMember(user2.id, "Alice")
-        bob = MockMember(user3.id, "Bob")
-        guild.add_member(alice)
-        guild.add_member(bob)
+        await test_client.add_guild_member(user2.id, "Alice")
+        await test_client.add_guild_member(user3.id, "Bob")
 
         # Autocomplete with prefix "A" should show Alice
         results = await test_client.recipient_autocomplete(user, "A")
