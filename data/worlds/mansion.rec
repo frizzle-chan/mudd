@@ -365,13 +365,11 @@ FocusMode: container
 ContentsVisible: no
 DescriptionShort: An old {{ name }} hums on the desk.
 DescriptionLong: A bulky CRT monitor displaying green text on black. The case is beige plastic, yellowed with age. A small sticker reads "MUDD-OS v0.2.1".
+OnUse: The CRT hums as you press the power button. Green text flickers to life. You can now __login__.
 OnOpen: ```
-+ ███╗   ███╗██╗   ██╗██████╗ ██████╗        ██████╗ ███████╗
-+ ████╗ ████║██║   ██║██╔══██╗██╔══██╗      ██╔═══██╗██╔════╝
-+ ██╔████╔██║██║   ██║██║  ██║██║  ██║█████╗██║   ██║███████╗
-+ ██║╚██╔╝██║██║   ██║██║  ██║██║  ██║╚════╝██║   ██║╚════██║
-+ ██║ ╚═╝ ██║╚██████╔╝██████╔╝██████╔╝      ╚██████╔╝███████║
-+ ╚═╝     ╚═╝ ╚═════╝ ╚═════╝ ╚═════╝        ╚═════╝ ╚══════╝
++ ┏┳┓╻ ╻╺┳┓╺┳┓   ┏━┓┏━┓
++ ┃┃┃┃ ┃ ┃┃ ┃┃╺━╸┃ ┃┗━┓
++ ╹ ╹┗━┛╺┻┛╺┻┛   ┗━┛┗━┛
 + ```
 + *MUDD-OS v0.2.1 — Multi-User Dungeon (Discord)*
 + Welcome, GUEST. You have access to the following files:{% if contents %}{{ contents }}{% else %} (none){% endif %}
