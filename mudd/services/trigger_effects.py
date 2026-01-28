@@ -213,3 +213,24 @@ class TriggerEffects:
                 guild_id=guild_id,
             )
         )
+
+    def merge_from(self, other: "TriggerEffects") -> None:
+        """Merge effects from a triggered command into this instance.
+
+        Used when processing dispense: the dispensed item's on_take effects
+        are merged into the main effects for unified processing.
+
+        Note: pickup/drop flags are NOT merged - they apply to the triggered
+        item and are handled separately by the caller.
+
+        Args:
+            other: TriggerEffects to merge from
+        """
+        self.broadcasts.extend(other.broadcasts)
+        self.grants.extend(other.grants)
+        self.grant_randoms.extend(other.grant_randoms)
+        self.currency_grants.extend(other.currency_grants)
+        self.cleanups.extend(other.cleanups)
+        # OR flags together
+        if other._destroy_called:
+            self._destroy_called = True
