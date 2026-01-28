@@ -11,6 +11,7 @@ from discord import Interaction, app_commands
 from discord.ext import commands
 
 from mudd.matching.verb_matcher import match_verb
+from mudd.services.currency import HOUSE_ACCOUNT_ID, TransferError
 from mudd.services.entity import ResolvedEntity
 from mudd.services.entity_resolution import ResolutionError
 from mudd.services.inventory import DropTarget
@@ -495,13 +496,36 @@ class Interact(commands.Cog):
         """Handle dispensing an item from a container to the user.
 
         Queries the container's contents and picks one randomly, then
-        moves it to the user's inventory.
+        moves it to the user's inventory. Charges 10 yen to use.
 
         Args:
             interaction: Discord interaction
             container_entity: The container entity dispensing items
             channel: Channel to broadcast result to
         """
+        # Charge 10 yen to use the slot machine
+        transfer_result = await self._currency.transfer(
+            interaction.user.id,
+            HOUSE_ACCOUNT_ID,
+            10,
+            "Slot machine usage fee",
+        )
+
+        if not transfer_result.success:
+            # Handle insufficient funds or other errors
+            if transfer_result.error == TransferError.INSUFFICIENT_BALANCE:
+                user_name = interaction.user.display_name
+                await channel.send(
+                    f"**{user_name}** doesn't have enough yen to use "
+                    f"the slot machine. (Cost: ¥10)"
+                )
+            else:
+                user_name = interaction.user.display_name
+                await channel.send(
+                    f"**{user_name}** can't use the slot machine right now."
+                )
+            return
+
         # Query container contents (items inside this container in the room)
         user_room = await self.pool.fetchval(
             "SELECT current_room FROM users WHERE id = $1",

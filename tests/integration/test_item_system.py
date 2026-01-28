@@ -446,6 +446,70 @@ class TestDispenseEffect:
         inventory = await test_client.get_inventory(user)
         assert len(inventory) == 0
 
+    async def test_slot_machine_costs_10_yen(self, test_client):
+        """Using slot machine deducts 10 yen from user's balance."""
+        user = await test_client.create_user(user_id=500072, room="lounge")
+
+        # Spawn a prize in the slot machine
+        await test_client.spawn_from_pool("lounge_slot_machine_pool")
+
+        # Check initial balance (should be 1000 yen)
+        initial_balance = await test_client.currency_service.get_balance(user.id)
+        assert initial_balance == 1000
+
+        # Use the slot machine
+        response, broadcasts = await test_client.interact_with_broadcasts(
+            user, action="pull", target="Slot Machine"
+        )
+
+        # Should succeed normally
+        assert "wheels spin" in response.lower()
+        assert len(broadcasts) >= 2
+
+        # Balance should be reduced by 10 yen
+        final_balance = await test_client.currency_service.get_balance(user.id)
+        assert final_balance == 990
+
+    async def test_slot_machine_insufficient_funds(self, test_client):
+        """Using slot machine with insufficient funds shows error."""
+        user = await test_client.create_user(user_id=500073, room="lounge")
+
+        # Spawn a prize in the slot machine
+        await test_client.spawn_from_pool("lounge_slot_machine_pool")
+
+        # Reduce user's balance to less than 10 yen
+        from mudd.services.currency import HOUSE_ACCOUNT_ID
+
+        await test_client.currency_service.transfer(
+            user.id, HOUSE_ACCOUNT_ID, 995, "Test transfer"
+        )
+
+        # Verify user has only 5 yen left
+        balance = await test_client.currency_service.get_balance(user.id)
+        assert balance == 5
+
+        # Try to use the slot machine
+        response, broadcasts = await test_client.interact_with_broadcasts(
+            user, action="pull", target="Slot Machine"
+        )
+
+        # User should see the spin message (from OnUse template)
+        assert "wheels spin" in response.lower()
+
+        # Should have broadcast about insufficient funds
+        assert len(broadcasts) >= 2
+        assert "spins the slot machine" in broadcasts[0].lower()
+        assert "doesn't have enough yen" in broadcasts[1].lower()
+        assert "¥10" in broadcasts[1]
+
+        # User should not receive an item
+        inventory = await test_client.get_inventory(user)
+        assert len(inventory) == 0
+
+        # Balance should be unchanged (transaction failed)
+        final_balance = await test_client.currency_service.get_balance(user.id)
+        assert final_balance == 5
+
 
 class TestSmashableEntities:
     """Tests for entities with effects.destroy()."""
