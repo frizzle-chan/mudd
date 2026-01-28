@@ -315,6 +315,23 @@ Container: foyer_table
 DescriptionShort: An {{ name }}
 DescriptionLong: A wooden plaque with a shiny brass plate. The inscription reads: "Welcome to my mansion! You can usually find us in the office down the hall. -Frizzle"
 
+Id: foyer_note
+Name: Handwritten Note
+Prototype: item
+Tags: foyer_note
+Container: foyer_table
+Rarity: quest
+DescriptionShort: A {{ name }} rests on the table
+DescriptionLong: A crumpled piece of paper with hastily scribbled instructions in messy handwriting. It reads: "Hey! New here? The /interact command is your friend! It's usually used like '/interact with:item action:verb'. Try experimenting with different verbs to get surprising results. Most items respond to the same basic actions - you'll figure it out!"
+OnLook: You pick up the {{ name }} and read it carefully. The handwriting is almost illegible, but you can make out instructions about using the /interact command. Most items seem to respond to similar verbs... maybe try checking if this note itself responds to other actions?
+OnTouch: You run your fingers over the crumpled paper. The ink is slightly smudged, as if someone wrote it in a hurry. It feels like regular notebook paper. Try __looking__ at it to read the full message, or maybe __use__ it for something?
+OnAttack: {{ effects.destroy() }}{{ effects.broadcast("**" ~ user.name ~ "** tears up " ~ e.display_name ~ "!") }}You crumple the {{ name }} into a tiny ball and tear it to shreds. The paper confetti scatters across the table. Well, that's one way to interact with it! You could have also tried __opening__ it or __taking__ it, but destruction works too.
+OnUse: You flip the {{ name }} over, looking for more information. The back is blank except for a small doodle of a smiling face. Not particularly useful, but cute! Have you tried __opening__ it or __taking__ it yet?
+OnTake: {{ effects.pickup() }}You fold the {{ name }} and tuck it into your pocket. Now you have a handy reference! Most items in the mansion respond to common verbs like look, touch, attack, use, take, open, close, and drop. Try __dropping__ it later to put it back.
+OnOpen: You unfold the {{ name }} and flatten it out on the table. The creases make it a bit easier to read now. It's the same instructions about /interact, but now you can see a small footnote: "P.S. - Try __closing__ things after you __open__ them. Some containers have surprises inside!"
+OnClose: You carefully fold the {{ name }} back into a neat square. It's more compact now, though still readable. You've discovered that most items have consistent interactions - this note responds to almost everything! Try __taking__ it with you, or maybe __attack__ it if you're feeling destructive?
+OnDrop: {% if container %}You place the {{ name }} back on the *{{ container.name }}*.{% else %}You set the {{ name }} down on the table.{% endif %}{{ effects.drop() }}{{ effects.broadcast(user.name ~ " places " ~ e.display_name ~ " back down.") }}And that's the /interact command in action! You've successfully experimented with multiple verbs. Keep exploring the mansion - there's a lot to discover!
+
 # ----------------------------------------------------------------------------
 # Hallway
 # ----------------------------------------------------------------------------
@@ -716,6 +733,13 @@ DescriptionLong: [Art by applekouhai.](https://img.frizzle.dev/mudd/frizzle_appl
 OnUse: You begin to hate mondays.
 OnLook: {{ e.description_long }} The longer you stare, the more it stares back.
 OnTouch: The paint feels warm. Too warm.
+
+Id: gallery_sign
+Name: Posted Sign
+Prototype: object
+Room: gallery
+DescriptionShort: A {{ name }} hangs on the wall near the entrance
+DescriptionLong: A formal notice from the management, printed on thick cardstock in an elegant serif font. It reads: "Dear Valued Guests, Please do NOT __attack__ or __steal__ the paintings. They are priceless works of art and should be treated with respect. Thank you for your cooperation. - The Management"
 
 # ----------------------------------------------------------------------------
 # Lounge entities
@@ -1722,6 +1746,13 @@ Container: foyer_table
 TagQuery: foyer_vase
 MaxCount: 1
 RespawnIntervalMinutes: 15
+
+Id: foyer_note_pool
+Room: foyer
+Container: foyer_table
+TagQuery: foyer_note
+MaxCount: 1
+RespawnIntervalMinutes: 5
 
 Id: library_desk_drawer_pool
 Room: library
