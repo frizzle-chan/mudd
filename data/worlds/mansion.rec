@@ -380,7 +380,8 @@ Id: restroom_sinks
 Name: Row of Sinks
 Prototype: furniture
 Room: restroom
-DescriptionShort: A {{ name }} lines the wall beneath a long mirror.
+ContentsVisible: no
+DescriptionShort: A {{ name }} lines the wall beneath a long mirror, with soap and paper towel dispensers mounted above.
 DescriptionLong: Four white porcelain sinks with chrome fixtures. Above them stretches a long mirror, and mounted on the wall are soap dispensers and paper towel dispensers.
 OnTouch: You run your hand under the faucet. The water is lukewarm.
 OnUse: You turn on the faucet and wash your hands. The soap smells vaguely of industrial lavender.
@@ -389,7 +390,8 @@ Id: restroom_mirror
 Name: Long Mirror
 Prototype: object
 Room: restroom
-DescriptionShort: A {{ name }} stretches above the sinks.
+Container: restroom_sinks
+DescriptionShort: a {{ name }} stretching above the sinks
 DescriptionLong: A clean mirror spanning the length of the sink counter. The fluorescent lighting is unforgiving.
 OnLook: You look at your reflection in the {{ name }}. You look tired but determined.
 OnTouch: You touch the cool glass. Your reflection mimics you perfectly.
@@ -399,7 +401,8 @@ Id: restroom_soap_dispenser
 Name: Soap Dispenser
 Prototype: object
 Room: restroom
-DescriptionShort: A wall-mounted {{ name }} hangs between the sinks.
+Container: restroom_sinks
+DescriptionShort: a wall-mounted {{ name }}
 DescriptionLong: A chrome soap dispenser with a translucent reservoir. The pink liquid inside is running low.
 OnUse: You pump the dispenser. A small amount of pink soap oozes into your palm.
 OnTouch: The chrome is cold and slightly sticky from soap residue.
@@ -408,7 +411,8 @@ Id: restroom_paper_towels
 Name: Paper Towel Dispenser
 Prototype: object
 Room: restroom
-DescriptionShort: A {{ name }} is mounted on the wall.
+Container: restroom_sinks
+DescriptionShort: a {{ name }} mounted on the wall
 DescriptionLong: A metal paper towel dispenser. You can see brown paper towels through the slot.
 OnUse: You yank a paper towel from the dispenser. It tears unevenly.
 OnTouch: The metal housing rattles slightly when you touch it.
@@ -465,16 +469,6 @@ DescriptionShort: A wall-mounted {{ name }} hangs near the exit.
 DescriptionLong: A Dyson Airblade hand dryer. The chrome surface is covered in water spots and fingerprints.
 OnUse: {{ effects.broadcast("**VROOOOOOM** - " ~ user.name ~ " uses the hand dryer.") }}You insert your hands into the Airblade. The jet of air is surprisingly violent and incredibly loud. Your hands are now dry but your ears are ringing.
 OnTouch: The surface is slightly warm from the heating element.
-
-Id: restroom_wet_floor_sign
-Name: Wet Floor Sign
-Prototype: object
-Room: restroom
-DescriptionShort: A yellow {{ name }} stands near the entrance.
-DescriptionLong: A bright yellow caution sign with a stick figure slipping. The floor doesn't actually look that wet.
-OnTouch: You poke the sign. It wobbles but doesn't fall over.
-OnAttack: {{ effects.broadcast("**" ~ user.name ~ "** kicks the wet floor sign!") }}You kick the sign. It clatters across the tile floor, spinning to a stop near the stalls.
-OnUse: You fold up the wet floor sign and set it aside. The floor is now marginally more dangerous.
 
 Id: restroom_trash_can
 Name: Trash Can
