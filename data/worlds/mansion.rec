@@ -760,7 +760,7 @@ OnTouch: You run your fingers along the frame. The paint is dry and textured.
 OnAttack: {{ effects.destroy() }}{{ effects.broadcast("**" ~ user.name ~ "** slashes " ~ e.display_name ~ " with a knife!") }}You drag your blade across the canvas. The painting is ruined.
 
 Id: frizzle_artsylyds_the_scream_png
-Name: The Scream
+Name: The Scream Painting
 Prototype: painting
 Tags: gallery_painting
 Rarity: uncommon
@@ -768,7 +768,7 @@ DescriptionShort: {{ name }} (artsylyds)
 DescriptionLong: [Art by artsylyds.](https://img.frizzle.dev/mudd/frizzle_artsylyds_the_scream.png)
 
 Id: frizzle_tattie_3up_png
-Name: It's Frizzle
+Name: It's Frizzle Painting
 Prototype: painting
 Tags: gallery_painting
 Rarity: common
@@ -776,7 +776,7 @@ DescriptionShort: {{ name }} (tattie)
 DescriptionLong: [Art by tattie.](https://img.frizzle.dev/mudd/frizzle_tattie_3up.png)
 
 Id: frizzle_nebula_nyafriz_png
-Name: Frizzle on the Phone
+Name: Frizzle on the Phone Painting
 Prototype: painting
 Tags: gallery_painting
 Rarity: uncommon
@@ -784,7 +784,7 @@ DescriptionShort: {{ name }} (nebula)
 DescriptionLong: [Art by nebula.](https://img.frizzle.dev/mudd/frizzle_nebula_nyafriz.png) Frizzle on da phone fo today
 
 Id: frizzle_applekouhai_chair_jpg
-Name: Frizzle Chair
+Name: Frizzle Chair Painting
 Prototype: painting
 Tags: gallery_painting
 Rarity: uncommon
@@ -809,7 +809,7 @@ DescriptionLong: [Art by nebula.](https://img.frizzle.dev/mudd/frizzle_nebula_ma
 OnTouch: The surface shimmers under your fingertips, the glitter catching the light.
 
 Id: frizzle_nebula_maid_all4s_png
-Name: Maid on All Fours
+Name: Maid on All Fours Painting
 Prototype: painting
 Tags: gallery_painting
 Rarity: rare
@@ -817,7 +817,7 @@ DescriptionShort: {{ name }} (nebula)
 DescriptionLong: [Art by nebula.](https://img.frizzle.dev/mudd/frizzle_nebula_maid_all4s.png)
 
 Id: frizzle_nebula_maid_all4s_shiny_gif
-Name: Maid on All Fours (Holographic)
+Name: Maid on All Fours Painting (Holographic)
 Prototype: painting
 Tags: gallery_painting
 Rarity: epic
@@ -827,7 +827,7 @@ OnTouch: The glitter seems to swirl under your touch. You've never seen anything
 OnLook: {{ e.description_long }} It's mesmerizing.
 
 Id: frizzle_applekouhai_kon_png
-Name: Kyoani Frizzle
+Name: Kyoani Frizzle Painting
 Prototype: painting
 Tags: gallery_painting
 Rarity: uncommon
@@ -835,7 +835,7 @@ DescriptionShort: {{ name }} (applekouhai)
 DescriptionLong: [Art by applekouhai.](https://img.frizzle.dev/mudd/frizzle_applekouhai_kon.png)
 
 Id: frizzle_neomory_painting_png
-Name: Sunset with Ruby
+Name: Sunset with Ruby Painting
 Prototype: painting
 Tags: gallery_painting
 Rarity: uncommon
@@ -843,7 +843,7 @@ DescriptionShort: {{ name }} (neomory)
 DescriptionLong: [Art by neomory.](https://img.frizzle.dev/mudd/frizzle_neomory_painting.png)
 
 Id: frizzle_been_drool_jpg
-Name: Seltzer Pour
+Name: Seltzer Pour Painting
 Prototype: painting
 Tags: gallery_painting
 Rarity: rare
@@ -851,7 +851,7 @@ DescriptionShort: {{ name }} (been)
 DescriptionLong: [Art by been.](https://img.frizzle.dev/mudd/frizzle_been_drool.jpg)
 
 Id: frizzle_sanamaru1827_png
-Name: Frizzle Jump
+Name: Frizzle Jump Painting
 Prototype: painting
 Tags: gallery_painting
 Rarity: epic
@@ -859,7 +859,7 @@ DescriptionShort: {{ name }} (sanamaru1827)
 DescriptionLong: [Art by sanamaru1827.](https://img.frizzle.dev/mudd/frizzle_sanamaru1827.png)
 
 Id: frizzle_applekouhai_garfield_jpg
-Name: Garfield Frizzle
+Name: Garfield Frizzle Painting
 Prototype: painting
 Tags: gallery_painting
 Rarity: legendary
