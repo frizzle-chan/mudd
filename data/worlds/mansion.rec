@@ -380,11 +380,13 @@ Id: restroom_sinks
 Name: Row of Sinks
 Prototype: furniture
 Room: restroom
+FocusMode: container
 ContentsVisible: no
 DescriptionShort: A {{ name }} lines the wall beneath a long mirror, with soap and paper towel dispensers mounted above.
 DescriptionLong: Four white porcelain sinks with chrome fixtures. Above them stretches a long mirror, and mounted on the wall are soap dispensers and paper towel dispensers.
 OnTouch: You run your hand under the faucet. The water is lukewarm.
 OnUse: You turn on the faucet and wash your hands. The soap smells vaguely of industrial lavender.
+OnOpen: You step up to the sinks and survey your options.{% if contents %} Above:{{ contents }}{% endif %}
 
 Id: restroom_mirror
 Name: Long Mirror
