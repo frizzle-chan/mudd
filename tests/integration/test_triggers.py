@@ -299,7 +299,7 @@ class TestDispenseEffects:
         assert any(item[0] == "ringpop_cherry" for item in inventory)
 
     async def test_dispense_empty_container_shows_message(self, test_client):
-        """Dispensing from empty container shows 'waiting to be refilled' message."""
+        """Empty container shows message (template handles empty case)."""
         user = await test_client.create_user(user_id=600003, room="lounge")
 
         # Make sure slot machine is empty (no items in it)
@@ -313,8 +313,9 @@ class TestDispenseEffects:
             user, action="pull", target="Slot Machine"
         )
 
-        # Should show refill message
-        assert "refilled" in response.lower() or "waiting" in response.lower()
+        # Should show empty message from template (not dispense flow)
+        assert "empty" in response.lower()
+        assert "waiting to be refilled" in response.lower()
 
     async def test_dispense_currency_not_in_inventory(self, test_client):
         """Currency pickups never appear in inventory."""

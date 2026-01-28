@@ -785,7 +785,7 @@ ContentsVisible: no
 DescriptionShort: A vintage {{ name }} stands against the wall.
 DescriptionLong: A classic one-armed bandit with three spinning reels. The chrome handle gleams invitingly. __Pull__ the handle to try your luck!
 OnTouch: The cold metal handle vibrates slightly.
-OnUse: {{ effects.dispense() }}{{ effects.broadcast("**" ~ user.name ~ "** spins the slot machine...") }}The wheels spin... click click click...
+OnUse: {% if contents %}{{ effects.dispense() }}{{ effects.broadcast("**" ~ user.name ~ "** spins the slot machine...") }}The wheels spin... click click click...{% else %}The slot machine sits empty, waiting to be refilled.{% endif %}
 OnAttack: You kick the machine in frustration. It remains unmoved.
 
 # Slot machine prizes (spawned by lounge_slot_machine_pool)
