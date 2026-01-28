@@ -265,7 +265,7 @@ class TestDispenseEffects:
         )
 
         # Response should include on_take output (slot machine + dispense output)
-        assert "pocket the coins" in response.lower()
+        assert "pick up the" in response.lower()
         assert "+¥100" in response
 
         # Item should NOT be in inventory (was destroyed)

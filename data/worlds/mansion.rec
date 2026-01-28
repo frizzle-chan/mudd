@@ -216,7 +216,7 @@ Rarity: common
 Tags: currency slot_prize desk_drawer_loot foyer_vase_loot sitting_room_cushion_loot
 DescriptionShort: a few loose coins
 OnLook: A small handful of yen coins. Worth about ¥100.
-OnTake: {{ effects.grant_currency(100) }}{{ effects.destroy() }}You pocket the coins. (+¥100)
+OnTake: {{ effects.grant_currency(100) }}{{ effects.destroy() }}{{ effects.broadcast("**" ~ user.name ~ "** pockets " ~ e.display_name ~ " (+¥100)") }}You pick up the {{ name }}. (+¥100)
 
 Id: bundle_of_bills
 Name: bundle of bills
@@ -225,7 +225,7 @@ Rarity: uncommon
 Tags: currency slot_prize desk_drawer_loot foyer_vase_loot
 DescriptionShort: a bundle of yen notes
 OnLook: A bundle of yen notes held together with a paper band. Worth about ¥1,000.
-OnTake: {{ effects.grant_currency(1000) }}{{ effects.destroy() }}You pocket the bills. (+¥1,000)
+OnTake: {{ effects.grant_currency(1000) }}{{ effects.destroy() }}{{ effects.broadcast("**" ~ user.name ~ "** pockets " ~ e.display_name ~ " (+¥1,000)") }}You pick up the {{ name }}. (+¥1,000)
 
 Id: money_clip
 Name: money clip
@@ -234,7 +234,7 @@ Rarity: rare
 Tags: currency slot_prize foyer_vase_loot
 DescriptionShort: a silver money clip stuffed with cash
 OnLook: An elegant silver money clip stuffed with neatly folded bills. Worth about ¥5,000.
-OnTake: {{ effects.grant_currency(5000) }}{{ effects.destroy() }}You pocket the cash. (+¥5,000)
+OnTake: {{ effects.grant_currency(5000) }}{{ effects.destroy() }}{{ effects.broadcast("**" ~ user.name ~ "** pockets " ~ e.display_name ~ " (+¥5,000)") }}You pick up the {{ name }}. (+¥5,000)
 
 Id: cash_envelope
 Name: cash envelope
@@ -243,7 +243,7 @@ Rarity: epic
 Tags: currency slot_prize
 DescriptionShort: a thick cash envelope
 OnLook: A heavy envelope filled with a substantial stack of bills. Worth about ¥25,000.
-OnTake: {{ effects.grant_currency(25000) }}{{ effects.destroy() }}You pocket the cash. (+¥25,000)
+OnTake: {{ effects.grant_currency(25000) }}{{ effects.destroy() }}{{ effects.broadcast("**" ~ user.name ~ "** pockets " ~ e.display_name ~ " (+¥25,000)") }}You pick up the {{ name }}. (+¥25,000)
 
 Id: briefcase_of_cash
 Name: briefcase of cash
@@ -252,7 +252,7 @@ Rarity: legendary
 Tags: currency slot_prize
 DescriptionShort: a briefcase filled with cash
 OnLook: A sleek black briefcase packed with neat stacks of bills. Worth about ¥100,000.
-OnTake: {{ effects.grant_currency(100000) }}{{ effects.destroy() }}You take the briefcase. (+¥100,000)
+OnTake: {{ effects.grant_currency(100000) }}{{ effects.destroy() }}{{ effects.broadcast("**" ~ user.name ~ "** pockets " ~ e.display_name ~ " (+¥100,000)") }}You pick up the {{ name }}. (+¥100,000)
 
 Id: gold_brick
 Name: gold brick
@@ -261,7 +261,7 @@ Rarity: mythic
 Tags: currency slot_prize
 DescriptionShort: a gleaming gold brick
 OnLook: A solid gold brick stamped with official mint markings. Worth about ¥500,000.
-OnTake: {{ effects.grant_currency(500000) }}{{ effects.destroy() }}You claim the gold brick. (+¥500,000)
+OnTake: {{ effects.grant_currency(500000) }}{{ effects.destroy() }}{{ effects.broadcast("**" ~ user.name ~ "** pockets " ~ e.display_name ~ " (+¥500,000)") }}You pick up the {{ name }}. (+¥500,000)
 
 # ----------------------------------------------------------------------------
 # Foyer entities
