@@ -29,6 +29,9 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+# Cost to use entities with dispense effect (currently slot machine only)
+DISPENSE_COST_YEN = 10
+
 
 class Interact(commands.Cog):
     def __init__(
@@ -496,19 +499,22 @@ class Interact(commands.Cog):
         """Handle dispensing an item from a container to the user.
 
         Queries the container's contents and picks one randomly, then
-        moves it to the user's inventory. Charges 10 yen to use.
+        moves it to the user's inventory. Charges a fee to use.
+
+        Currently used by the slot machine entity. The cost is configured
+        via DISPENSE_COST_YEN constant.
 
         Args:
             interaction: Discord interaction
             container_entity: The container entity dispensing items
             channel: Channel to broadcast result to
         """
-        # Charge 10 yen to use the slot machine
+        # Charge fee to use the dispenser
         transfer_result = await self._currency.transfer(
             interaction.user.id,
             HOUSE_ACCOUNT_ID,
-            10,
-            "Slot machine usage fee",
+            DISPENSE_COST_YEN,
+            "Dispenser usage fee",
         )
 
         if not transfer_result.success:
@@ -517,7 +523,7 @@ class Interact(commands.Cog):
                 user_name = interaction.user.display_name
                 await channel.send(
                     f"**{user_name}** doesn't have enough yen to use "
-                    f"the slot machine. (Cost: ¥10)"
+                    f"the slot machine. (Cost: ¥{DISPENSE_COST_YEN})"
                 )
             else:
                 user_name = interaction.user.display_name

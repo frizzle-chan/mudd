@@ -10,6 +10,8 @@ Tests the item system:
 
 import pytest
 
+from mudd.services.currency import HOUSE_ACCOUNT_ID
+
 pytestmark = pytest.mark.asyncio(loop_scope="session")
 
 
@@ -478,8 +480,6 @@ class TestDispenseEffect:
         await test_client.spawn_from_pool("lounge_slot_machine_pool")
 
         # Reduce user's balance to less than 10 yen
-        from mudd.services.currency import HOUSE_ACCOUNT_ID
-
         await test_client.currency_service.transfer(
             user.id, HOUSE_ACCOUNT_ID, 995, "Test transfer"
         )
