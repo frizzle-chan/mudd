@@ -11,6 +11,7 @@ import discord
 from discord import Interaction, app_commands
 from discord.ext import commands
 
+from mudd.cogs.shared import handle_escape
 from mudd.commands import ActionContext, create_command
 from mudd.matching.verb_matcher import match_verb
 from mudd.services.entity import ResolvedEntity
@@ -124,7 +125,19 @@ class Interact(commands.Cog):
         result = await self.entity_resolution.resolve_target(ctx, target)
 
         if isinstance(result, ResolutionError):
-            if result.error_type == "ambiguous":
+            if result.error_type == "escape":
+                # Handle escape - clear focus and show room
+                await handle_escape(
+                    interaction,
+                    ctx,
+                    entity_resolution=self.entity_resolution,
+                    entity_service=self.entity_service,
+                    visibility_service=self.visibility_service,
+                    inventory=self._inventory,
+                    rendering=self._rendering,
+                )
+                return
+            elif result.error_type == "ambiguous":
                 await interaction.response.send_message(result.message, ephemeral=True)
             else:
                 await interaction.response.send_message(result.message, ephemeral=True)
