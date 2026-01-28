@@ -322,9 +322,8 @@ Tags: foyer_note
 Container: foyer_table
 Rarity: quest
 DescriptionShort: A {{ name }} rests on the table
-DescriptionLong: A crumpled piece of paper with hastily scribbled instructions in messy handwriting. It reads: "Hey! New here? The /interact command is your friend! It's usually used like '/interact with:item action:verb'. Try experimenting with different verbs to get surprising results. Most items respond to the same basic actions - you'll figure it out!"
-OnLook: You pick up the {{ name }} and read it carefully. The handwriting is almost illegible, but you can make out instructions about using the /interact command. Most items seem to respond to similar verbs... maybe try checking if this note itself responds to other actions?
-OnTouch: You run your fingers over the crumpled paper. The ink is slightly smudged, as if someone wrote it in a hurry. It feels like regular notebook paper. Try __looking__ at it to read the full message, or maybe __use__ it for something?
+DescriptionLong: A crumpled piece of paper with scribbled instructions. It reads: "Hey! New here? The /interact command is your friend! I usually use it like '/interact with:item action:verb'. Try experimenting with different verbs to get surprising results. Most items respond to the same basic actions, you'll figure it out!"
+OnTouch: You run your fingers over the crumpled paper. The ink is slightly smudged, as if someone wrote it in a hurry. It feels like regular notebook paper. Try to __use__ it for something?
 OnAttack: {{ effects.destroy() }}{{ effects.broadcast("**" ~ user.name ~ "** tears up " ~ e.display_name ~ "!") }}You crumple the {{ name }} into a tiny ball and tear it to shreds. The paper confetti scatters across the table. Well, that's one way to interact with it! You could have also tried __opening__ it or __taking__ it, but destruction works too.
 OnUse: You flip the {{ name }} over, looking for more information. The back is blank except for a small doodle of a smiling face. Not particularly useful, but cute! Have you tried __opening__ it or __taking__ it yet?
 OnTake: {{ effects.pickup() }}You fold the {{ name }} and tuck it into your pocket. Now you have a handy reference! Most items in the mansion respond to common verbs like look, touch, attack, use, take, open, close, and drop. Try __dropping__ it later to put it back.
