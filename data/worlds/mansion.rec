@@ -322,7 +322,9 @@ Tags: foyer_note
 Container: foyer_table
 Rarity: quest
 DescriptionShort: A {{ name }} rests on the table
-DescriptionLong: A crumpled piece of paper with scribbled instructions. It reads: "Hey! New here? The /interact command is your friend! I usually use it like '/interact with:item action:verb'. Try experimenting with different verbs to get surprising results. Most items respond to the same basic actions, you'll figure it out!"
+DescriptionLong: A crumpled piece of paper with scribbled instructions. It reads:
++> "Hey! New here? The **/interact** command is your friend! Use it like **/interact** with:**item** action:**verb**. For example: **/interact Treasure take** or **/interact Crate open**.\
+ Try experimenting with different verbs to get surprising results. Most items respond to the same basic actions, you'll figure it out!"
 OnTouch: You run your fingers over the crumpled paper. The ink is slightly smudged, as if someone wrote it in a hurry. It feels like regular notebook paper. Try to __use__ it for something?
 OnAttack: {{ effects.destroy() }}{{ effects.broadcast("**" ~ user.name ~ "** tears up " ~ e.display_name ~ "!") }}You crumple the {{ name }} into a tiny ball and tear it to shreds. The paper confetti scatters across the table. Well, that's one way to interact with it! You could have also tried __opening__ it or __taking__ it, but destruction works too.
 OnUse: You flip the {{ name }} over, looking for more information. The back is blank except for a small doodle of a smiling face. Not particularly useful, but cute! Have you tried __opening__ it or __taking__ it yet?
