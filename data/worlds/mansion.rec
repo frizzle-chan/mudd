@@ -224,7 +224,7 @@ Rarity: common
 Tags: currency slot_prize desk_drawer_loot foyer_vase_loot sitting_room_cushion_loot
 DescriptionShort: a few loose coins
 OnLook: A small handful of yen coins. Worth about ¥100.
-OnTake: {{ effects.grant_currency(100) }}{{ effects.destroy() }}You pocket the coins. (+¥100)
+OnTake: {{ effects.grant_currency(100) }}{{ effects.destroy() }}{{ effects.broadcast("**" ~ user.name ~ "** pockets " ~ e.display_name ~ " (+¥100)") }}You pick up the {{ name }}. (+¥100)
 
 Id: bundle_of_bills
 Name: bundle of bills
@@ -233,7 +233,7 @@ Rarity: uncommon
 Tags: currency slot_prize desk_drawer_loot foyer_vase_loot
 DescriptionShort: a bundle of yen notes
 OnLook: A bundle of yen notes held together with a paper band. Worth about ¥1,000.
-OnTake: {{ effects.grant_currency(1000) }}{{ effects.destroy() }}You pocket the bills. (+¥1,000)
+OnTake: {{ effects.grant_currency(1000) }}{{ effects.destroy() }}{{ effects.broadcast("**" ~ user.name ~ "** pockets " ~ e.display_name ~ " (+¥1,000)") }}You pick up the {{ name }}. (+¥1,000)
 
 Id: money_clip
 Name: money clip
@@ -242,7 +242,7 @@ Rarity: rare
 Tags: currency slot_prize foyer_vase_loot
 DescriptionShort: a silver money clip stuffed with cash
 OnLook: An elegant silver money clip stuffed with neatly folded bills. Worth about ¥5,000.
-OnTake: {{ effects.grant_currency(5000) }}{{ effects.destroy() }}You pocket the cash. (+¥5,000)
+OnTake: {{ effects.grant_currency(5000) }}{{ effects.destroy() }}{{ effects.broadcast("**" ~ user.name ~ "** pockets " ~ e.display_name ~ " (+¥5,000)") }}You pick up the {{ name }}. (+¥5,000)
 
 Id: cash_envelope
 Name: cash envelope
@@ -251,7 +251,7 @@ Rarity: epic
 Tags: currency slot_prize
 DescriptionShort: a thick cash envelope
 OnLook: A heavy envelope filled with a substantial stack of bills. Worth about ¥25,000.
-OnTake: {{ effects.grant_currency(25000) }}{{ effects.destroy() }}You pocket the cash. (+¥25,000)
+OnTake: {{ effects.grant_currency(25000) }}{{ effects.destroy() }}{{ effects.broadcast("**" ~ user.name ~ "** pockets " ~ e.display_name ~ " (+¥25,000)") }}You pick up the {{ name }}. (+¥25,000)
 
 Id: briefcase_of_cash
 Name: briefcase of cash
@@ -260,7 +260,7 @@ Rarity: legendary
 Tags: currency slot_prize
 DescriptionShort: a briefcase filled with cash
 OnLook: A sleek black briefcase packed with neat stacks of bills. Worth about ¥100,000.
-OnTake: {{ effects.grant_currency(100000) }}{{ effects.destroy() }}You take the briefcase. (+¥100,000)
+OnTake: {{ effects.grant_currency(100000) }}{{ effects.destroy() }}{{ effects.broadcast("**" ~ user.name ~ "** pockets " ~ e.display_name ~ " (+¥100,000)") }}You pick up the {{ name }}. (+¥100,000)
 
 Id: gold_brick
 Name: gold brick
@@ -269,7 +269,7 @@ Rarity: mythic
 Tags: currency slot_prize
 DescriptionShort: a gleaming gold brick
 OnLook: A solid gold brick stamped with official mint markings. Worth about ¥500,000.
-OnTake: {{ effects.grant_currency(500000) }}{{ effects.destroy() }}You claim the gold brick. (+¥500,000)
+OnTake: {{ effects.grant_currency(500000) }}{{ effects.destroy() }}{{ effects.broadcast("**" ~ user.name ~ "** pockets " ~ e.display_name ~ " (+¥500,000)") }}You pick up the {{ name }}. (+¥500,000)
 
 # ----------------------------------------------------------------------------
 # Generic items (used by spawning pools across multiple locations)
@@ -347,7 +347,9 @@ Tags: foyer_note
 Container: foyer_table
 Rarity: quest
 DescriptionShort: A {{ name }} rests on the table
-DescriptionLong: A crumpled piece of paper with scribbled instructions. It reads: "Hey! New here? The /interact command is your friend! I usually use it like '/interact with:item action:verb'. Try experimenting with different verbs to get surprising results. Most items respond to the same basic actions, you'll figure it out!"
+DescriptionLong: A crumpled piece of paper with scribbled instructions. It reads:
++> "Hey! New here? The **/interact** command is your friend! Use it like **/interact** with:**item** action:**verb**. For example: **/interact Treasure take** or **/interact Crate open**.\
+ Try experimenting with different verbs to get surprising results. Most items respond to the same basic actions, you'll figure it out!"
 OnTouch: You run your fingers over the crumpled paper. The ink is slightly smudged, as if someone wrote it in a hurry. It feels like regular notebook paper. Try to __use__ it for something?
 OnAttack: {{ effects.destroy() }}{{ effects.broadcast("**" ~ user.name ~ "** tears up " ~ e.display_name ~ "!") }}You crumple the {{ name }} into a tiny ball and tear it to shreds. The paper confetti scatters across the table. Well, that's one way to interact with it! You could have also tried __opening__ it or __taking__ it, but destruction works too.
 OnUse: You flip the {{ name }} over, looking for more information. The back is blank except for a small doodle of a smiling face. Not particularly useful, but cute! Have you tried __opening__ it or __taking__ it yet?
@@ -505,13 +507,11 @@ FocusMode: container
 ContentsVisible: no
 DescriptionShort: An old {{ name }} hums on the desk.
 DescriptionLong: A bulky CRT monitor displaying green text on black. The case is beige plastic, yellowed with age. A small sticker reads "MUDD-OS v0.2.1".
+OnUse: The CRT hums as you press the power button. Green text flickers to life. You can now __login__.
 OnOpen: ```
-+ ███╗   ███╗██╗   ██╗██████╗ ██████╗        ██████╗ ███████╗
-+ ████╗ ████║██║   ██║██╔══██╗██╔══██╗      ██╔═══██╗██╔════╝
-+ ██╔████╔██║██║   ██║██║  ██║██║  ██║█████╗██║   ██║███████╗
-+ ██║╚██╔╝██║██║   ██║██║  ██║██║  ██║╚════╝██║   ██║╚════██║
-+ ██║ ╚═╝ ██║╚██████╔╝██████╔╝██████╔╝      ╚██████╔╝███████║
-+ ╚═╝     ╚═╝ ╚═════╝ ╚═════╝ ╚═════╝        ╚═════╝ ╚══════╝
++ ┏┳┓╻ ╻╺┳┓╺┳┓   ┏━┓┏━┓
++ ┃┃┃┃ ┃ ┃┃ ┃┃╺━╸┃ ┃┗━┓
++ ╹ ╹┗━┛╺┻┛╺┻┛   ┗━┛┗━┛
 + ```
 + *MUDD-OS v0.2.1 — Multi-User Dungeon (Discord)*
 + Welcome, GUEST. You have access to the following files:{% if contents %}{{ contents }}{% else %} (none){% endif %}
@@ -923,7 +923,7 @@ ContentsVisible: no
 DescriptionShort: A vintage {{ name }} stands against the wall.
 DescriptionLong: A classic one-armed bandit with three spinning reels. The chrome handle gleams invitingly. __Pull__ the handle to try your luck!
 OnTouch: The cold metal handle vibrates slightly.
-OnUse: {{ effects.dispense() }}{{ effects.broadcast("**" ~ user.name ~ "** spins the slot machine...") }}The wheels spin... click click click...
+OnUse: {% if contents %}{{ effects.dispense() }}{{ effects.broadcast("**" ~ user.name ~ "** spins the slot machine...") }}The wheels spin... click click click...{% else %}The slot machine sits empty, waiting to be refilled.{% endif %}
 OnAttack: You kick the machine in frustration. It remains unmoved.
 
 # Slot machine prizes (spawned by lounge_slot_machine_pool)

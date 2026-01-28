@@ -241,3 +241,102 @@ class TestBroadcastEffects:
         # Normal action has response but no broadcasts
         assert "TEST_USE_RESPONSE" in response
         assert len(broadcasts) == 0
+
+
+class TestDispenseEffects:
+    """Tests for effects.dispense() executing on_take for dispensed items."""
+
+    async def test_dispense_executes_on_take_for_currency(self, test_client):
+        """Dispensing currency executes on_take, grants currency, destroys item."""
+        user = await test_client.create_user(user_id=600001, room="lounge")
+
+        # Ensure user has a currency account (starting at 0)
+        await test_client.currency_service.ensure_account(user.id, 0)
+
+        # Spawn loose_coins in slot machine container
+        await test_client.pool.execute(
+            """INSERT INTO entity_instances (entity_id, room, container_entity_id)
+            VALUES ('loose_coins', 'lounge', 'lounge_slot_machine')"""
+        )
+
+        # Use the slot machine
+        response = await test_client.interact(
+            user, action="pull", target="Slot Machine"
+        )
+
+        # Response should include on_take output (slot machine + dispense output)
+        assert "pick up the" in response.lower()
+        assert "+¥100" in response
+
+        # Item should NOT be in inventory (was destroyed)
+        inventory = await test_client.get_inventory(user)
+        assert not any(item[0] == "loose_coins" for item in inventory)
+
+        # Currency should be granted
+        balance = await test_client.currency_service.get_balance(user.id)
+        assert balance == 100
+
+    async def test_dispense_normal_item_goes_to_inventory(self, test_client):
+        """Dispensing normal item (with pickup) adds to inventory."""
+        user = await test_client.create_user(user_id=600002, room="lounge")
+
+        # Spawn a ring pop in slot machine
+        await test_client.pool.execute(
+            """INSERT INTO entity_instances (entity_id, room, container_entity_id)
+            VALUES ('ringpop_cherry', 'lounge', 'lounge_slot_machine')"""
+        )
+
+        # Use the slot machine
+        response = await test_client.interact(
+            user, action="pull", target="Slot Machine"
+        )
+
+        # Response should include the item being picked up
+        assert "ring pop" in response.lower() or "pick up" in response.lower()
+
+        # Item should be in inventory
+        inventory = await test_client.get_inventory(user)
+        assert any(item[0] == "ringpop_cherry" for item in inventory)
+
+    async def test_dispense_empty_container_shows_message(self, test_client):
+        """Empty container shows message (template handles empty case)."""
+        user = await test_client.create_user(user_id=600003, room="lounge")
+
+        # Make sure slot machine is empty (no items in it)
+        await test_client.pool.execute(
+            """DELETE FROM entity_instances
+            WHERE container_entity_id = 'lounge_slot_machine' AND room = 'lounge'"""
+        )
+
+        # Use the slot machine
+        response = await test_client.interact(
+            user, action="pull", target="Slot Machine"
+        )
+
+        # Should show empty message from template (not dispense flow)
+        assert "empty" in response.lower()
+        assert "waiting to be refilled" in response.lower()
+
+    async def test_dispense_currency_not_in_inventory(self, test_client):
+        """Currency pickups never appear in inventory."""
+        user = await test_client.create_user(user_id=600004, room="lounge")
+
+        # Ensure user has a currency account (starting at 0)
+        await test_client.currency_service.ensure_account(user.id, 0)
+
+        # Spawn bundle_of_bills (¥1000 currency)
+        await test_client.pool.execute(
+            """INSERT INTO entity_instances (entity_id, room, container_entity_id)
+            VALUES ('bundle_of_bills', 'lounge', 'lounge_slot_machine')"""
+        )
+
+        # Use the slot machine
+        await test_client.interact(user, action="pull", target="Slot Machine")
+
+        # Currency should NOT be in inventory
+        inventory = await test_client.get_inventory(user)
+        assert not any(item[0] == "bundle_of_bills" for item in inventory)
+
+        # But balance should be increased
+        balance = await test_client.currency_service.get_balance(user.id)
+        assert balance == 1000

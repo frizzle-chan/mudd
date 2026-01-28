@@ -399,8 +399,13 @@ class TestDispenseEffect:
         """Using slot machine with effects.dispense() gives item to user."""
         user = await test_client.create_user(user_id=500070, room="lounge")
 
-        # Spawn a prize in the slot machine
-        await test_client.spawn_from_pool("lounge_slot_machine_pool")
+        # Spawn a specific non-currency item in the slot machine
+        # (spawn_from_pool is random and could spawn currency which doesn't
+        # go to inventory)
+        await test_client.pool.execute(
+            """INSERT INTO entity_instances (entity_id, room, container_entity_id)
+            VALUES ('ringpop_cherry', 'lounge', 'lounge_slot_machine')"""
+        )
 
         # Verify user starts with empty inventory
         inventory = await test_client.get_inventory(user)
@@ -424,7 +429,7 @@ class TestDispenseEffect:
         assert len(inventory) == 1
 
     async def test_slot_machine_empty_shows_refill_message(self, test_client):
-        """Using empty slot machine broadcasts refill message."""
+        """Using empty slot machine shows refill message (no broadcast)."""
         user = await test_client.create_user(user_id=500071, room="lounge")
 
         # Don't spawn anything - slot machine starts empty
@@ -434,13 +439,12 @@ class TestDispenseEffect:
             user, action="pull", target="Slot Machine"
         )
 
-        # User should see the spin message
-        assert "wheels spin" in response.lower()
+        # User should see the empty message (handled in template)
+        assert "empty" in response.lower()
+        assert "waiting to be refilled" in response.lower()
 
-        # Should have broadcast about spinning and empty machine
-        assert len(broadcasts) >= 2
-        assert "spins the slot machine" in broadcasts[0].lower()
-        assert "waiting to be refilled" in broadcasts[1].lower()
+        # No broadcasts when empty (dispense is not called)
+        assert len(broadcasts) == 0
 
         # User should still have empty inventory
         inventory = await test_client.get_inventory(user)

@@ -85,6 +85,8 @@ PGPASSWORD=mudd psql -h db -U mudd -d mudd -c "SELECT * FROM table_name"
 - Use `typing.cast()` when you've validated a value but the type checker can't infer it
 - Use `@overload` for functions with return types that depend on literal argument values
 
+**Return values**: Prefer dataclasses over tuples when returning more than 2 values. Tuples are acceptable for simple pairs (e.g., `(value, error)`) but become unwieldy with 3+ elements. Named fields improve readability and make refactoring safer.
+
 ## PR Reviews
 
 PR reviews are written to `review.md` (gitignored). When working with reviews:

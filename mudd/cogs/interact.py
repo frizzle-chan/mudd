@@ -2,7 +2,8 @@
 
 import logging
 import random
-from typing import TYPE_CHECKING
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Literal, cast
 from uuid import UUID
 
 import asyncpg
@@ -10,6 +11,7 @@ import discord
 from discord import Interaction, app_commands
 from discord.ext import commands
 
+from mudd.commands import ActionContext, create_command
 from mudd.matching.verb_matcher import match_verb
 from mudd.services.entity import ResolvedEntity
 from mudd.services.entity_resolution import ResolutionError
@@ -27,6 +29,16 @@ if TYPE_CHECKING:
     from mudd.services.visibility import VisibilityServiceProtocol
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class DispenseResult:
+    """Result from processing a dispense effect."""
+
+    output: str | None
+    effects: TriggerEffects
+    instance_id: UUID | None
+    entity: ResolvedEntity | None
 
 
 class Interact(commands.Cog):
@@ -121,7 +133,8 @@ class Interact(commands.Cog):
         # Successfully resolved entity
         matched_instance = result.instance
         entity = matched_instance.entity
-        source = result.source  # "room", "inventory", or "container"
+        # source is "room", "inventory", or "container" - cast for type safety
+        source = cast(Literal["room", "inventory", "container"], result.source)
 
         # Skip focus manipulation for inventory actions - they don't affect room focus
         is_inventory_source = source in ("inventory", "container")
@@ -137,13 +150,6 @@ class Interact(commands.Cog):
             else:
                 # Clear focus when interacting with entity not in current focus
                 await self.entity_resolution.clear_focus(user_id, reason="interaction")
-
-        # Get handler text based on action
-        handler_text = _get_handler_text(entity, action_type)
-
-        if handler_text is None:
-            await interaction.response.send_message("Nothing happens.", ephemeral=True)
-            return
 
         # Fetch container contents for template (regardless of contents_visible)
         # For inventory items, check inventory container contents
@@ -179,12 +185,22 @@ class Interact(commands.Cog):
             if balance is not None:
                 balance_str = f"¥{balance:,}"
 
-        # Render template with entity and user context
-        effects: TriggerEffects
+        # Build action context and execute command
+        action_ctx = ActionContext(
+            interaction=interaction,
+            entity=entity,
+            instance_id=matched_instance.instance_id,
+            room=room,
+            source=source,
+            user_context=user_context,
+            container_contents=contents_str,
+            balance_str=balance_str,
+            focused_container=container,
+        )
+
+        command = create_command(action_type, self._rendering)
         try:
-            output, effects = self._rendering.render_with_effects(
-                handler_text, entity, user_context, contents_str, container, balance_str
-            )
+            cmd_result = command.execute(action_ctx)
         except TemplateRenderError:
             logger.warning(
                 "Template error rendering '%s' handler for entity '%s'",
@@ -194,29 +210,64 @@ class Interact(commands.Cog):
             )
             output = f"*{entity.name}* responds, but something went wrong."
             effects = TriggerEffects()
+        else:
+            output = cmd_result.output
+            effects = cmd_result.effects
 
-        # Handle focus changes based on action type
-        if action_type == VerbAction.ON_OPEN and entity.focus_mode != "none":
-            # Establish focus when opening a focusable entity (e.g., container)
-            await self.entity_resolution.set_focus(user_id, room, entity)
-        elif action_type == VerbAction.ON_CLOSE:
-            # Clear focus when explicitly closing
-            # Get close message (template) before clearing
-            close_template = await self.entity_resolution.clear_focus(
-                user_id, reason="close"
+            # Handle focus changes from command result
+            if cmd_result.set_focus:
+                focus_entity = cmd_result.set_focus
+                await self.entity_resolution.set_focus(user_id, room, focus_entity)
+            if cmd_result.clear_focus:
+                # Clear focus when explicitly closing
+                # Get close message (template) before clearing
+                close_template = await self.entity_resolution.clear_focus(
+                    user_id, reason="close"
+                )
+                if close_template:
+                    # Render the close template and append
+                    try:
+                        close_output = self._rendering.render(
+                            close_template, entity, ""
+                        )
+                        output = f"{output}\n\n{close_output}"
+                    except TemplateRenderError:
+                        logger.warning(
+                            "Template error rendering on_close for entity '%s'",
+                            entity.id,
+                            exc_info=True,
+                        )
+                        output = f"{output}\n\nYou step away from the *{entity.name}*."
+
+        # Process dispense before response so output can be merged
+        dispense_result: DispenseResult | None = None
+        if effects.has_dispense:
+            dispense_result = await self._process_dispense_take(
+                interaction, entity, room, user_context
             )
-            if close_template:
-                # Render the close template and append
-                try:
-                    close_output = self._rendering.render(close_template, entity, "")
-                    output = f"{output}\n\n{close_output}"
-                except TemplateRenderError:
-                    logger.warning(
-                        "Template error rendering on_close for entity '%s'",
-                        entity.id,
-                        exc_info=True,
+            if dispense_result.output and dispense_result.entity:
+                output = f"{output}\n\n{dispense_result.output}"
+                # Merge effects from the take into main effects
+                effects.merge_from(dispense_result.effects)
+
+                # Handle the dispensed item based on its effects
+                guild = interaction.guild
+                if (
+                    dispense_result.effects.has_pickup
+                    and dispense_result.instance_id
+                    and guild
+                ):
+                    # Normal item - goes to inventory
+                    await self._inventory.add_to_inventory(
+                        guild, interaction.user.id, dispense_result.instance_id
                     )
-                    output = f"{output}\n\nYou step away from the *{entity.name}*."
+                    self.entity_resolution.invalidate_cache()
+                    # Broadcast what item was won (for items that go to inventory)
+                    article = indefinite_article(dispense_result.entity.display_name)
+                    name = dispense_result.entity.display_name
+                    user = user_context.name
+                    effects.broadcast(f"**{user}** got {article} *{name}*!")
+                # Note: destroy handled in normal effect processing below
 
         # Handle item pickup for ON_TAKE action
         if action_type == VerbAction.ON_TAKE:
@@ -241,8 +292,13 @@ class Interact(commands.Cog):
         await self._execute_cleanups(interaction, effects)
 
         # Handle entity destruction (before grants so spawning pool can respawn)
+        # If dispense happened, destroy the dispensed item, not the container
         if effects.has_destroy:
-            await self._handle_destroy(interaction.guild, matched_instance.instance_id)
+            dispense_instance_id = (
+                dispense_result.instance_id if dispense_result else None
+            )
+            destroy_id = dispense_instance_id or matched_instance.instance_id
+            await self._handle_destroy(interaction.guild, destroy_id)
 
         # Execute broadcast side effects (public messages to user's current room)
         # Look up room from DB since interaction may come from inventory thread
@@ -268,12 +324,6 @@ class Interact(commands.Cog):
                 for grant_effect in effects.grants:
                     await self._handle_grant(
                         interaction, grant_effect.entity_id, room_channel
-                    )
-
-                # Process dispense effect
-                if effects.has_dispense:
-                    await self._handle_dispense(
-                        interaction, matched_instance.entity, room_channel
                     )
 
         # Process currency grants (outside room_channel check - doesn't need channel)
@@ -486,29 +536,31 @@ class Interact(commands.Cog):
             self.entity_resolution.invalidate_cache()
         return deleted
 
-    async def _handle_dispense(
+    async def _process_dispense_take(
         self,
         interaction: Interaction,
         container_entity: ResolvedEntity,
-        channel: discord.TextChannel,
-    ) -> None:
-        """Handle dispensing an item from a container to the user.
+        room: str,
+        user_context: UserContext,
+    ) -> DispenseResult:
+        """Execute on_take for a dispensed item.
 
-        Queries the container's contents and picks one randomly, then
-        moves it to the user's inventory.
+        Queries the container's contents, picks one randomly, and executes
+        the TakeCommand for it. The on_take handler determines whether the
+        item goes to inventory (effects.pickup()) or is consumed
+        (effects.destroy() for currency pickups).
 
         Args:
             interaction: Discord interaction
             container_entity: The container entity dispensing items
-            channel: Channel to broadcast result to
+            room: Current room name
+            user_context: User context for template rendering
+
+        Returns:
+            DispenseResult with output, effects, instance_id, and entity.
+            Returns empty result if container is empty.
         """
-        # Query container contents (items inside this container in the room)
-        user_room = await self.pool.fetchval(
-            "SELECT current_room FROM users WHERE id = $1",
-            interaction.user.id,
-        )
-        if user_room is None:
-            return
+        empty_result = DispenseResult(None, TriggerEffects(), None, None)
 
         # Get items inside the container
         contents = await self.pool.fetch(
@@ -516,38 +568,65 @@ class Interact(commands.Cog):
             FROM entity_instances ei
             WHERE ei.container_entity_id = $1 AND ei.room = $2""",
             container_entity.id,
-            user_room,
+            room,
         )
 
         if not contents:
-            # Container is empty
-            await channel.send("The slot machine is waiting to be refilled.")
-            return
+            return empty_result
 
         # Pick one randomly
         item_row = random.choice(contents)
-        item_instance_id = item_row["id"]
-        item_entity_id = item_row["entity_id"]
+        item_instance_id: UUID = item_row["id"]
+        item_entity_id: str = item_row["entity_id"]
 
-        # Get the entity for display name
+        # Get the entity
         item_entity = await self.entity_service.get_entity(item_entity_id)
         if item_entity is None:
             logger.error("Entity %s not found for dispense", item_entity_id)
-            return
+            return empty_result
 
-        guild = interaction.guild
-        if guild is None:
-            return
-
-        result = await self._inventory.add_to_inventory(
-            guild, interaction.user.id, item_instance_id
+        # Build action context for the dispensed item
+        action_ctx = ActionContext(
+            interaction=interaction,
+            entity=item_entity,
+            instance_id=item_instance_id,
+            room=room,
+            source="room",  # Dispensed from room container
+            user_context=user_context,
+            container_contents="",  # Dispensed items don't show container contents
+            balance_str="",
+            focused_container=None,
         )
-        if result.success:
-            self.entity_resolution.invalidate_cache()
-            user_name = interaction.user.display_name
+
+        # Execute TakeCommand
+        command = create_command(VerbAction.ON_TAKE, self._rendering)
+        try:
+            cmd_result = command.execute(action_ctx)
+        except TemplateRenderError:
+            logger.warning(
+                "Template error rendering on_take for dispensed entity '%s'",
+                item_entity.id,
+                exc_info=True,
+            )
+            # Fall back to implicit pickup behavior
+            effects = TriggerEffects()
+            effects.pickup()
             article = indefinite_article(item_entity.display_name)
             name = item_entity.display_name
-            await channel.send(f"**{user_name}** got {article} *{name}*!")
+            output = f"You got {article} *{name}*!"
+            return DispenseResult(output, effects, item_instance_id, item_entity)
+
+        output = cmd_result.output
+        effects = cmd_result.effects
+
+        # If no on_take handler, treat as implicit pickup
+        if output == "Nothing happens.":
+            effects.pickup()
+            article = indefinite_article(item_entity.display_name)
+            name = item_entity.display_name
+            output = f"You got {article} *{name}*!"
+
+        return DispenseResult(output, effects, item_instance_id, item_entity)
 
     async def _handle_currency_grant(
         self,
@@ -658,26 +737,3 @@ class Interact(commands.Cog):
 
         except Exception:
             logger.exception(f"Failed to update wallet thread for user {user_id}")
-
-
-def _get_handler_text(entity: ResolvedEntity, action: VerbAction) -> str | None:
-    """Get handler text from entity based on action.
-
-    Args:
-        entity: The resolved entity
-        action: The verb action (on_look, on_attack, etc.)
-
-    Returns:
-        Handler text or None if no handler defined
-    """
-    handler_map = {
-        VerbAction.ON_LOOK: entity.on_look,
-        VerbAction.ON_TOUCH: entity.on_touch,
-        VerbAction.ON_ATTACK: entity.on_attack,
-        VerbAction.ON_USE: entity.on_use,
-        VerbAction.ON_TAKE: entity.on_take,
-        VerbAction.ON_OPEN: entity.on_open,
-        VerbAction.ON_CLOSE: entity.on_close,
-        VerbAction.ON_DROP: entity.on_drop,
-    }
-    return handler_map.get(action)
