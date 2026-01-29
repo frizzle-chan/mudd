@@ -393,7 +393,8 @@ DescriptionShort: A {{ name }} lines the wall beneath a long mirror, with soap a
 DescriptionLong: Four white porcelain sinks with chrome fixtures. Above them stretches a long mirror, and mounted on the wall are soap dispensers and paper towel dispensers.
 OnTouch: You run your hand under the faucet. The water is lukewarm.
 OnUse: You turn on the faucet and wash your hands. The soap smells vaguely of industrial lavender.
-OnOpen: You step up to the sinks and survey your options.{% if contents %} Above:{{ contents }}{% endif %}
+OnOpen: {{ effects.set_focus() }}You step up to the sinks and survey your options.{% if contents %} Above:{{ contents }}{% endif %}
+OnClose: {{ effects.clear_focus() }}You step back from the sinks.
 
 Id: restroom_mirror
 Name: Long Mirror
@@ -443,8 +444,8 @@ FocusMode: container
 ContentsVisible: yes
 DescriptionShort: Three {{ name }} with wooden doors line the back wall{% if contents %}. Inside:{{ contents }}{% endif %}
 DescriptionLong: Three toilet stalls with honey-colored wooden doors. The gaps around the doors are uncomfortably wide, as is tradition.
-OnOpen: You push open a stall door.{% if contents %} Inside you see:{{ contents }}{% else %} Just an empty stall.{% endif %}
-OnClose: You let the stall door swing shut. It bounces a few times before settling.
+OnOpen: {{ effects.set_focus() }}You push open a stall door.{% if contents %} Inside you see:{{ contents }}{% else %} Just an empty stall.{% endif %}
+OnClose: {{ effects.clear_focus() }}You let the stall door swing shut. It bounces a few times before settling.
 
 Id: restroom_toilet
 Name: Toilet
@@ -486,8 +487,8 @@ Room: restroom
 ContentsVisible: no
 DescriptionShort: A metal {{ name }} sits in the corner.
 DescriptionLong: A stainless steel trash can with a swinging lid. It's overflowing with crumpled paper towels.
-OnOpen: You peer into the {{ name }}, pushing aside damp paper towels.{% if contents %} You spot:{{ contents }}{% else %} Nothing but garbage.{% endif %}
-OnClose: You let the lid swing shut.
+OnOpen: {{ effects.set_focus() }}You peer into the {{ name }}, pushing aside damp paper towels.{% if contents %} You spot:{{ contents }}{% else %} Nothing but garbage.{% endif %}
+OnClose: {{ effects.clear_focus() }}You let the lid swing shut.
 OnTouch: The metal is cold and slightly damp.
 
 # ----------------------------------------------------------------------------
@@ -1619,8 +1620,6 @@ Room: store-room
 ContentsVisible: no
 DescriptionShort: a beat-up {{ name }} sits in the corner
 DescriptionLong: A cardboard box with "TEST FIXTURES - DO NOT REMOVE" written on it in marker.
-OnOpen: {{ effects.set_focus() }}You open the {{ name }}.{% if contents %} Inside:{{ contents }}{% else %} It's empty.{% endif %}
-OnClose: {{ effects.clear_focus() }}You close the {{ name }}.
 
 Id: storeroom_crate
 Name: Wooden Crate
