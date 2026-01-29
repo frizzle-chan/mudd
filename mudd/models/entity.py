@@ -1,0 +1,439 @@
+"""Entity models with database access methods."""
+
+from __future__ import annotations
+
+import logging
+from dataclasses import dataclass, field, replace
+from typing import TYPE_CHECKING, Literal
+from uuid import UUID
+
+import asyncpg
+
+from mudd.utils.random import weighted_choice
+from mudd.utils.text import RARITY_EMOJI, Rarity
+
+if TYPE_CHECKING:
+    from mudd.models.interfaces import IRoom, IUser
+    from mudd.models.types import Observer
+
+logger = logging.getLogger(__name__)
+
+FocusMode = Literal["none", "container"]
+
+# Rarity weights for spawning (sum to 1000 for standard rarities)
+RARITY_WEIGHTS: dict[Rarity, int] = {
+    "none": 0,  # Static world items never spawn
+    "common": 600,
+    "uncommon": 250,
+    "rare": 100,
+    "epic": 40,
+    "legendary": 9,
+    "mythic": 1,
+    "quest": 600,  # Same as common; use unique tags for dedicated spawning pools
+}
+
+
+@dataclass(frozen=True)
+class ResolvedEntity:
+    """Entity with all inherited properties resolved.
+
+    This is a standalone model that mirrors the existing ResolvedEntity
+    in mudd/services/entity.py but adds classmethods for database access.
+    """
+
+    id: str
+    name: str
+    description_short: str | None
+    description_long: str | None
+    on_look: str | None
+    on_touch: str | None
+    on_attack: str | None
+    on_use: str | None
+    on_take: str | None
+    on_open: str | None
+    on_close: str | None
+    on_drop: str | None
+    contents_visible: bool | None
+    focus_mode: FocusMode
+    rarity: Rarity
+
+    @property
+    def display_name(self) -> str:
+        """Name with rarity emoji suffix for display."""
+        emoji = RARITY_EMOJI[self.rarity]
+        return f"{self.name} {emoji}" if emoji else self.name
+
+    @classmethod
+    def _from_row(cls, row: asyncpg.Record) -> ResolvedEntity:
+        """Construct ResolvedEntity from asyncpg.Record."""
+        return cls(
+            id=row["id"],
+            name=row["name"],
+            description_short=row["description_short"],
+            description_long=row["description_long"],
+            on_look=row["on_look"],
+            on_touch=row["on_touch"],
+            on_attack=row["on_attack"],
+            on_use=row["on_use"],
+            on_take=row["on_take"],
+            on_open=row["on_open"],
+            on_close=row["on_close"],
+            on_drop=row["on_drop"],
+            contents_visible=row["contents_visible"],
+            focus_mode=row["focus_mode"],
+            rarity=row["rarity"],
+        )
+
+    @classmethod
+    async def get(cls, pool: asyncpg.Pool, entity_id: str) -> ResolvedEntity | None:
+        """Get resolved entity by ID using prototype inheritance.
+
+        Args:
+            pool: Database connection pool
+            entity_id: The entity ID to look up
+
+        Returns:
+            ResolvedEntity with inherited properties, or None if not found
+        """
+        row = await pool.fetchrow("SELECT * FROM resolve_entity($1)", entity_id)
+
+        if row is None or row["name"] is None:
+            return None
+
+        return cls._from_row(row)
+
+    @classmethod
+    async def get_random_by_tag(
+        cls, pool: asyncpg.Pool, tag: str
+    ) -> ResolvedEntity | None:
+        """Select random entity by tag with weighted rarity.
+
+        Args:
+            pool: Database connection pool
+            tag: Tag to filter entities by
+
+        Returns:
+            ResolvedEntity with weighted random selection, or None if no matches
+        """
+        candidates = await pool.fetch(
+            """
+            SELECT DISTINCT e.id, e.rarity
+            FROM entities e
+            JOIN entity_tags et ON e.id = et.entity_id
+            WHERE et.tag = $1 AND e.rarity != 'none'
+            """,
+            tag,
+        )
+
+        if not candidates:
+            return None
+
+        items = [
+            (candidate["id"], RARITY_WEIGHTS.get(candidate["rarity"], 0))
+            for candidate in candidates
+        ]
+
+        selected_id = weighted_choice(items)
+        if selected_id is None:
+            return None
+
+        return await cls.get(pool, selected_id)
+
+
+@dataclass(frozen=True)
+class EntityInstance:
+    """Entity instance with location, resolved properties, and mutation methods.
+
+    Instances are immutable. Mutation methods (move_to_inventory, drop_to_room,
+    destroy) update the database and return new instances.
+    """
+
+    instance_id: UUID
+    entity: ResolvedEntity
+    room_id: str | None
+    owner_id: int | None
+    container_entity_id: str | None = None
+    _pool: asyncpg.Pool = field(repr=False, compare=False, default=None)  # type: ignore[assignment]
+    _observers: tuple[Observer, ...] = field(
+        repr=False, compare=False, default_factory=tuple
+    )
+
+    def _notify(self, event: str) -> None:
+        """Notify all observers of an event."""
+        for observer in self._observers:
+            observer(self, event)
+
+    def with_observers(self, *observers: Observer) -> EntityInstance:
+        """Return a new instance with additional observers appended.
+
+        Args:
+            *observers: Observer callbacks to add
+
+        Returns:
+            New EntityInstance with observers appended
+        """
+        return replace(self, _observers=self._observers + observers)
+
+    @classmethod
+    def _from_row(
+        cls,
+        row: asyncpg.Record,
+        entity: ResolvedEntity,
+        pool: asyncpg.Pool,
+        observers: tuple[Observer, ...] = (),
+    ) -> EntityInstance:
+        """Construct EntityInstance from asyncpg.Record."""
+        return cls(
+            instance_id=row["instance_id"],
+            entity=entity,
+            room_id=row["room"],
+            owner_id=row["owner_id"],
+            container_entity_id=row["container_entity_id"],
+            _pool=pool,
+            _observers=observers,
+        )
+
+    @classmethod
+    async def get(cls, pool: asyncpg.Pool, instance_id: UUID) -> EntityInstance | None:
+        """Get entity instance by UUID.
+
+        Args:
+            pool: Database connection pool
+            instance_id: The instance UUID
+
+        Returns:
+            EntityInstance with resolved entity, or None if not found
+        """
+        row = await pool.fetchrow(
+            """
+            SELECT ei.id AS instance_id, ei.room, ei.owner_id,
+                   ei.container_entity_id, r.*
+            FROM entity_instances ei
+            CROSS JOIN LATERAL resolve_entity(ei.entity_id) r
+            WHERE ei.id = $1
+            """,
+            instance_id,
+        )
+
+        if row is None:
+            return None
+
+        entity = ResolvedEntity._from_row(row)
+        return cls._from_row(row, entity, pool)
+
+    @classmethod
+    async def get_by_room(cls, pool: asyncpg.Pool, room: IRoom) -> list[EntityInstance]:
+        """Get all entity instances in a room.
+
+        Args:
+            pool: Database connection pool
+            room: Room model instance
+
+        Returns:
+            List of EntityInstance objects in the room
+        """
+        rows = await pool.fetch(
+            """
+            SELECT ei.id AS instance_id, ei.room, ei.owner_id,
+                   ei.container_entity_id, r.*
+            FROM entity_instances ei
+            CROSS JOIN LATERAL resolve_entity(ei.entity_id) r
+            WHERE ei.room = $1
+            """,
+            room.id,
+        )
+
+        instances = []
+        for row in rows:
+            entity = ResolvedEntity._from_row(row)
+            instances.append(cls._from_row(row, entity, pool))
+        return instances
+
+    @classmethod
+    async def get_by_owner(
+        cls, pool: asyncpg.Pool, owner_id: int
+    ) -> list[EntityInstance]:
+        """Get all entity instances owned by a user (inventory).
+
+        Args:
+            pool: Database connection pool
+            owner_id: Discord user ID
+
+        Returns:
+            List of EntityInstance objects in the user's inventory
+        """
+        rows = await pool.fetch(
+            """
+            SELECT ei.id AS instance_id, ei.room, ei.owner_id,
+                   ei.container_entity_id, r.*
+            FROM entity_instances ei
+            CROSS JOIN LATERAL resolve_entity(ei.entity_id) r
+            WHERE ei.owner_id = $1
+            """,
+            owner_id,
+        )
+
+        instances = []
+        for row in rows:
+            entity = ResolvedEntity._from_row(row)
+            instances.append(cls._from_row(row, entity, pool))
+        return instances
+
+    @classmethod
+    async def create(
+        cls,
+        pool: asyncpg.Pool,
+        entity_id: str,
+        *,
+        room: IRoom | None = None,
+        owner_id: int | None = None,
+        container_entity_id: str | None = None,
+    ) -> EntityInstance | None:
+        """Create a new entity instance.
+
+        Args:
+            pool: Database connection pool
+            entity_id: Entity definition ID
+            room: Room to place the instance (mutually exclusive with owner_id)
+            owner_id: Owner's Discord ID for inventory (mutually exclusive with room)
+            container_entity_id: Optional container entity ID
+
+        Returns:
+            New EntityInstance, or None if entity_id is invalid
+        """
+        entity = await ResolvedEntity.get(pool, entity_id)
+        if entity is None:
+            return None
+
+        room_id = room.id if room else None
+        row = await pool.fetchrow(
+            """
+            INSERT INTO entity_instances
+                (entity_id, room, owner_id, container_entity_id)
+            VALUES ($1, $2, $3, $4)
+            RETURNING id AS instance_id, room, owner_id, container_entity_id
+            """,
+            entity_id,
+            room_id,
+            owner_id,
+            container_entity_id,
+        )
+
+        if row is None:
+            return None
+
+        return cls(
+            instance_id=row["instance_id"],
+            entity=entity,
+            room_id=row["room"],
+            owner_id=row["owner_id"],
+            container_entity_id=row["container_entity_id"],
+            _pool=pool,
+        )
+
+    async def move_to_inventory(self, user: IUser) -> EntityInstance:
+        """Move this instance to a user's inventory.
+
+        Updates the database and notifies observers with "picked_up" event.
+
+        Args:
+            user: User model instance to receive the item
+
+        Returns:
+            New EntityInstance with updated location
+        """
+        await self._pool.execute(
+            """
+            UPDATE entity_instances
+            SET room = NULL, owner_id = $2, container_entity_id = NULL
+            WHERE id = $1
+            """,
+            self.instance_id,
+            user.id,
+        )
+
+        new_instance = replace(
+            self,
+            room_id=None,
+            owner_id=user.id,
+            container_entity_id=None,
+        )
+        new_instance._notify("picked_up")
+        return new_instance
+
+    async def drop_to_room(
+        self,
+        room: IRoom,
+        container: EntityInstance | None = None,
+    ) -> EntityInstance:
+        """Drop this instance to a room, optionally into a container.
+
+        Updates the database and notifies observers with "dropped" event.
+
+        Args:
+            room: Room model instance to drop into
+            container: Optional container EntityInstance
+
+        Returns:
+            New EntityInstance with updated location
+        """
+        container_id = container.entity.id if container else None
+        await self._pool.execute(
+            """
+            UPDATE entity_instances
+            SET room = $2, owner_id = NULL, container_entity_id = $3
+            WHERE id = $1
+            """,
+            self.instance_id,
+            room.id,
+            container_id,
+        )
+
+        new_instance = replace(
+            self,
+            room_id=room.id,
+            owner_id=None,
+            container_entity_id=container_id,
+        )
+        new_instance._notify("dropped")
+        return new_instance
+
+    async def destroy(self) -> None:
+        """Delete this instance from the database.
+
+        Notifies observers with "destroyed" event before deletion.
+        """
+        self._notify("destroyed")
+        await self._pool.execute(
+            "DELETE FROM entity_instances WHERE id = $1",
+            self.instance_id,
+        )
+
+    async def get_contents(self) -> list[EntityInstance]:
+        """Get direct children of this container entity.
+
+        Returns:
+            List of EntityInstance objects contained in this entity
+        """
+        if self.room_id is None:
+            return []
+
+        rows = await self._pool.fetch(
+            """
+            SELECT ei.id AS instance_id, ei.room, ei.owner_id,
+                   ei.container_entity_id, r.*
+            FROM entity_instances ei
+            CROSS JOIN LATERAL resolve_entity(ei.entity_id) r
+            WHERE ei.room = $1 AND ei.container_entity_id = $2
+            """,
+            self.room_id,
+            self.entity.id,
+        )
+
+        instances = []
+        for row in rows:
+            entity = ResolvedEntity._from_row(row)
+            instances.append(
+                EntityInstance._from_row(row, entity, self._pool, self._observers)
+            )
+        return instances
