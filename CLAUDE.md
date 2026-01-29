@@ -60,6 +60,8 @@ PGPASSWORD=mudd psql -h db -U mudd -d mudd -c "SELECT * FROM table_name"
 
 **Entity resolution**: When querying entity fields that support prototype inheritance (like `focus_mode`, `on_close`, etc.), use the `resolve_entity()` SQL function instead of joining directly to the `entities` table. Direct joins return NULL for inherited values, while `resolve_entity()` follows the prototype chain and applies defaults.
 
+**Adding new triggers**: When adding a new `On*` handler (e.g., `OnSmell`), update the `base-room` entity in `mansion.rec` to include the new handler. Room entities should respond to all verbs by clearing focus and showing the room description.
+
 **Docker**: The `.dockerignore` uses an allowlist pattern (starts with `*`, then `!` to include specific paths). **When adding new top-level directories needed at runtime, you must add them to `.dockerignore`.**
 
 ## Dependencies

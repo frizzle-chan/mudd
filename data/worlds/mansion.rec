@@ -169,6 +169,27 @@ Prototype: object
 OnLook: {{ effects.clear_focus() }}{{ room.description() }}
 +
 + {{ room.entities() }}
+OnTouch: {{ effects.clear_focus() }}{{ room.description() }}
++
++ {{ room.entities() }}
+OnAttack: {{ effects.clear_focus() }}{{ room.description() }}
++
++ {{ room.entities() }}
+OnUse: {{ effects.clear_focus() }}{{ room.description() }}
++
++ {{ room.entities() }}
+OnTake: {{ effects.clear_focus() }}{{ room.description() }}
++
++ {{ room.entities() }}
+OnOpen: {{ effects.clear_focus() }}{{ room.description() }}
++
++ {{ room.entities() }}
+OnClose: {{ effects.clear_focus() }}{{ room.description() }}
++
++ {{ room.entities() }}
+OnDrop: {{ effects.clear_focus() }}{{ room.description() }}
++
++ {{ room.entities() }}
 
 Id: furniture
 Name: furniture
