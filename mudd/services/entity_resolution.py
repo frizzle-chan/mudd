@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 
 # Valid source prefixes for encoded autocomplete values
-VALID_SOURCES = frozenset({"room", "inventory", "container", "escape"})
+VALID_SOURCES = frozenset({"room", "inventory", "container"})
 
 
 class ViewMode(str, Enum):
@@ -308,14 +308,6 @@ class EntityResolutionService:
                 ctx.user_id, ctx.focus_entity_id
             )
 
-            # Add escape option first
-            escape_label = f"[Close {thread_item.entity.name}]"
-            choices.append(
-                app_commands.Choice(
-                    name=escape_label, value=encode_choice("escape", "container")
-                )
-            )
-
             # Add container itself
             choices.append(
                 app_commands.Choice(
@@ -449,13 +441,6 @@ class EntityResolutionService:
             ResolvedTarget on success, ResolutionError on failure
         """
         source, name = decode_choice(encoded_value)
-
-        # Handle escape action
-        if source == "escape":
-            return ResolutionError(
-                error_type="escape",
-                message="escape",  # Signals to clear focus and show room
-            )
 
         # Determine search scope based on source
         if source == "room":

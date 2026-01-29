@@ -7,7 +7,6 @@ import asyncpg
 from discord import Interaction, app_commands
 from discord.ext import commands
 
-from mudd.cogs.shared import handle_escape
 from mudd.services.entity_resolution import ResolutionError, ViewMode, encode_choice
 from mudd.services.rendering import RenderingService
 
@@ -89,25 +88,7 @@ class Look(commands.Cog):
         # Resolve target using unified API
         result = await self.entity_resolution.resolve_target(ctx, at)
 
-        if isinstance(result, ResolutionError) and result.error_type == "escape":
-            # Escape from inventory thread container - show the container
-            if ctx.view_mode == ViewMode.INVENTORY_THREAD:
-                await handle_escape(
-                    interaction,
-                    ctx,
-                    entity_resolution=self.entity_resolution,
-                    entity_service=self.entity_service,
-                    visibility_service=self.visibility_service,
-                    inventory=self._inventory,
-                    rendering=self._rendering,
-                )
-                return
-            # For room mode, resolve to room entity (legacy escape:room)
-            room_entity_id = f"room:{room}"
-            at = encode_choice("room", room_entity_id)
-            result = await self.entity_resolution.resolve_target(ctx, at)
-
-        # Check if still a resolution error after retry
+        # Check resolution result
         if isinstance(result, ResolutionError):
             if result.error_type == "ambiguous":
                 # Disambiguation prompt

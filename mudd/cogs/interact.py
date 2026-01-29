@@ -11,11 +11,10 @@ import discord
 from discord import Interaction, app_commands
 from discord.ext import commands
 
-from mudd.cogs.shared import handle_escape
 from mudd.commands import ActionContext, create_command
 from mudd.matching.verb_matcher import match_verb
 from mudd.services.entity import ResolvedEntity
-from mudd.services.entity_resolution import ResolutionError
+from mudd.services.entity_resolution import ResolutionError, ViewMode
 from mudd.services.inventory import DropTarget
 from mudd.services.rendering import RenderingService, TemplateRenderError
 from mudd.services.trigger_effects import TriggerEffects
@@ -125,19 +124,7 @@ class Interact(commands.Cog):
         result = await self.entity_resolution.resolve_target(ctx, target)
 
         if isinstance(result, ResolutionError):
-            if result.error_type == "escape":
-                # Handle escape - clear focus and show room
-                await handle_escape(
-                    interaction,
-                    ctx,
-                    entity_resolution=self.entity_resolution,
-                    entity_service=self.entity_service,
-                    visibility_service=self.visibility_service,
-                    inventory=self._inventory,
-                    rendering=self._rendering,
-                )
-                return
-            elif result.error_type == "ambiguous":
+            if result.error_type == "ambiguous":
                 await interaction.response.send_message(result.message, ephemeral=True)
             else:
                 await interaction.response.send_message(result.message, ephemeral=True)
@@ -149,8 +136,22 @@ class Interact(commands.Cog):
         # source is "room", "inventory", or "container" - cast for type safety
         source = cast(Literal["room", "inventory", "container"], result.source)
 
-        # Update focus timestamp if interacting within focus (prevents timeout)
+        # Block open/close on inventory items (implicit focus, always "open")
+        # Only applies to inventory threads - room containers still use explicit focus
+        is_inventory_context = ctx.view_mode in (
+            ViewMode.INVENTORY_THREAD,
+            ViewMode.INVENTORY,
+        )
+        is_open_close = action_type in (VerbAction.ON_OPEN, VerbAction.ON_CLOSE)
+        if is_open_close and is_inventory_context:
+            await interaction.response.send_message(
+                "You can't do that with items in your inventory.", ephemeral=True
+            )
+            return
+
         is_inventory_source = source in ("inventory", "container")
+
+        # Update focus timestamp if interacting within focus (prevents timeout)
         if not is_inventory_source and action_type != VerbAction.ON_DROP:
             is_in_focus = await self.entity_resolution.is_entity_in_focus(
                 user_id, room, entity.id
