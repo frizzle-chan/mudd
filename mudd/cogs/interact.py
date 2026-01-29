@@ -182,11 +182,23 @@ class Interact(commands.Cog):
         )
 
         # For drop actions, look up focused container for template context
-        container: ResolvedEntity | None = None
+        container_ctx: EntityContext | None = None
         if action_type == VerbAction.ON_DROP:
             focus = await self.entity_resolution.get_focus(user_id, room)
             if focus and focus.focus_mode == "container":
-                container = await self.entity_service.get_entity(focus.entity_id)
+                container_entity = await self.entity_service.get_entity(focus.entity_id)
+                if container_entity:
+                    container_ctx = EntityContext(
+                        entity=container_entity,
+                        instance_id=focus.instance_id,
+                        source="room",
+                        room=room,
+                        user_id=user_id,
+                        entity_service=self.entity_service,
+                        entity_resolution=self.entity_resolution,
+                        rendering_service=self._rendering,
+                        skip_contents=True,
+                    )
 
         # Create lazy room context for templates that use room.description()/entities()
         # Data is fetched on-demand when templates call these methods
@@ -202,7 +214,7 @@ class Interact(commands.Cog):
             entity=entity_ctx,
             source=source,
             user=user_context,
-            focused_container=container,
+            container=container_ctx,
             room=room_ctx,
         )
 
@@ -224,7 +236,9 @@ class Interact(commands.Cog):
 
             # Handle focus changes from template effects
             if effects.has_set_focus:
-                await self.entity_resolution.set_focus(user_id, room, entity)
+                await self.entity_resolution.set_focus(
+                    user_id, matched_instance.instance_id
+                )
             if effects.has_clear_focus:
                 # Note: clear_focus returns the on_close template, but since
                 # templates now call effects.clear_focus() directly in on_close,
@@ -597,7 +611,7 @@ class Interact(commands.Cog):
             entity=item_entity_ctx,
             source="room",
             user=user_context,
-            focused_container=None,
+            container=None,
         )
 
         # Execute TakeCommand

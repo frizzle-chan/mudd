@@ -106,7 +106,7 @@ def action_context(
         entity=entity_ctx,
         source="room",
         user=UserContext(name="TestUser", mention="<@12345>"),
-        focused_container=None,
+        container=None,
     )
 
 
@@ -217,7 +217,7 @@ class TestSimpleCommands:
             entity=entity_ctx,
             source="room",
             user=UserContext(name="TestUser", mention="<@12345>"),
-            focused_container=None,
+            container=None,
         )
         cmd = LookCommand(rendering_service)
         result = await cmd.execute(ctx)
@@ -256,7 +256,7 @@ class TestFocusCommands:
             entity=entity_ctx,
             source="room",
             user=UserContext(name="TestUser", mention="<@12345>"),
-            focused_container=None,
+            container=None,
         )
         cmd = OpenCommand(rendering_service)
         result = await cmd.execute(ctx)
@@ -395,6 +395,6 @@ class TestActionContext:
                 entity=entity_ctx,
                 source=source,
                 user=UserContext(name="Test", mention="<@1>"),
-                focused_container=None,
+                container=None,
             )
             assert ctx.source == source

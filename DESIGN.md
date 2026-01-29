@@ -240,14 +240,14 @@ Rooms are represented as entities in the database for unified entity resolution:
 | Column | Type | Description |
 |--------|------|-------------|
 | `user_id` | BIGINT (PK, FK to users.id) | Discord user ID |
-| `room` | TEXT NOT NULL (FK to rooms.id) | Room where focus was established |
-| `entity_id` | TEXT NOT NULL (FK to entities.id) | Focused entity ID (e.g., open container) |
+| `instance_id` | UUID NOT NULL (FK to entity_instances.id) | Focused entity instance UUID |
 | `updated_at` | TIMESTAMPTZ NOT NULL | Last interaction timestamp for timeout |
 
 **Purpose:**
 - Tracks which container/entity a user has "open" and is currently focusing on
 - Enables autocomplete to prioritize contextually relevant entities
 - Persists across bot restarts (stored in PostgreSQL, not memory)
+- Room and entity_id are derived from `entity_instances` via JOIN when needed
 
 **Focus Lifecycle (ADR 0006):**
 - Established: When `effects.set_focus()` is called in any template (on_look, on_open, etc.)
@@ -257,8 +257,7 @@ Rooms are represented as entities in the database for unified entity resolution:
 **Constraints:**
 - PK on `user_id` (one focus per user)
 - FK to users(id) with ON DELETE CASCADE
-- FK to rooms(id) with ON DELETE CASCADE
-- FK to entities(id) with ON DELETE CASCADE
+- FK to entity_instances(id) with ON DELETE CASCADE
 
 **Indexes:**
 - Primary key on `user_id`
@@ -508,7 +507,7 @@ The `FocusContextService` manages per-user focus state for modal interactions (A
 ### Service Methods
 
 - `get_focus(user_id, room)` - Get active focus or None (includes lazy timeout cleanup)
-- `set_focus(user_id, room, entity)` - Establish focus on a container/modal entity
+- `set_focus(user_id, instance_id)` - Establish focus on a container/modal entity
 - `clear_focus(user_id, reason)` - Clear focus, optionally returns close message template
 - `is_entity_in_focus(user_id, room, entity_id)` - Check if entity is focused or in focused contents
 - `get_focused_contents(user_id, room)` - Get entity IDs accessible through focus
@@ -561,8 +560,8 @@ The `EntityResolutionService` consolidates entity visibility, focus context, and
 - `resolve_target(ctx, encoded_value)` - Resolve encoded value to EntityInstance or error
 
 **Focus Operations (delegated):**
-- `get_focus(user_id, room)` - Get active focus
-- `set_focus(user_id, room, entity)` - Establish focus
+- `get_focus(user_id, room)` - Get active focus (includes `instance_id`)
+- `set_focus(user_id, instance_id)` - Establish focus
 - `clear_focus(user_id, reason)` - Clear focus
 - `update_focus_timestamp(user_id)` - Refresh timeout
 - `is_entity_in_focus(user_id, room, entity_id)` - Check focus membership

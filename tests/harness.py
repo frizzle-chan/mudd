@@ -227,11 +227,22 @@ class TestClient:
     async def get_focus(self, user: TestUser) -> dict | None:
         """Get the user's current focus state from database.
 
+        Joins with entity_instances to include entity_id and room,
+        which were previously stored directly in user_focus.
+
         Returns:
-            Focus row as dict, or None if no focus.
+            Focus data as dict with user_id, instance_id, entity_id, room,
+            updated_at, or None if no focus.
         """
         row = await self.pool.fetchrow(
-            "SELECT * FROM user_focus WHERE user_id = $1", user.id
+            """
+            SELECT uf.user_id, uf.instance_id, uf.updated_at,
+                   ei.entity_id, ei.room
+            FROM user_focus uf
+            JOIN entity_instances ei ON ei.id = uf.instance_id
+            WHERE uf.user_id = $1
+            """,
+            user.id,
         )
         return dict(row) if row else None
 

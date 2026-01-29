@@ -164,7 +164,7 @@ class Look(commands.Cog):
             entity=entity_ctx,
             source=cast(str, source),  # type: ignore[arg-type]
             user=user_context,
-            focused_container=None,
+            container=None,
             room=room_ctx,
         )
 
@@ -195,7 +195,9 @@ class Look(commands.Cog):
         # Process focus effects
         if effects:
             if effects.has_set_focus:
-                await self.entity_resolution.set_focus(user_id, room, entity)
+                await self.entity_resolution.set_focus(
+                    user_id, matched_instance.instance_id
+                )
             if effects.has_clear_focus:
                 await self.entity_resolution.clear_focus(user_id, reason="close")
 

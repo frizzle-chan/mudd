@@ -434,7 +434,7 @@ class RenderingService:
         template: str | None,
         entity: EntityContext,
         user: UserContext,
-        container: ResolvedEntity | None = None,
+        container: EntityContext | None = None,
         room: RoomContext | None = None,
     ) -> tuple[str, TriggerEffects]:
         """Render a template and collect side effects.
@@ -447,7 +447,7 @@ class RenderingService:
             - `name`: Entity name formatted with Discord italics (*Name*)
             - `user`: UserContext with name, mention, and optional async balance()
             - `effects`: TriggerEffects for queuing side effects
-            - `container`: Optional ResolvedEntity for focused container (drop target)
+            - `container`: Optional EntityContext for focused container (drop target)
             - `room`: Optional RoomContext with async room.description()/entities()
 
         Example template:
@@ -459,7 +459,7 @@ class RenderingService:
             template: Jinja2 template string (or None)
             entity: EntityContext with lazy contents fetching
             user: User context with name, mention, and optional balance()
-            container: Optional container entity for drop context (default: None)
+            container: Optional container EntityContext for drop context (default: None)
             room: Optional RoomContext for room.description()/entities() (default: None)
 
         Returns:
@@ -597,13 +597,13 @@ class RenderingService:
         room: str | None,
         balance: str = "",
         include_heading: bool = True,
+        user_id: int = 0,
     ) -> str:
         """Render entity on_look template for /look at:<entity>.
 
         Uses Jinja2 templating for on_look field. Template context:
-            - `e`: The ResolvedEntity with all properties
+            - `e`: EntityContext with all entity properties and lazy e.contents
             - `name`: Entity name formatted with Discord italics (*Name*)
-            - `contents`: Pre-formatted bullet list of contents
             - `balance`: Formatted currency balance (e.g., "¥1,000")
 
         If on_look is None or template fails, falls back to description_long
@@ -617,6 +617,7 @@ class RenderingService:
             include_heading: Whether to include the entity name as a heading
                 (default: True). Set to False for inventory threads where
                 the thread title already shows the name.
+            user_id: User ID for inventory container lookups (default: 0)
 
         Returns:
             Rendered on_look output
@@ -626,17 +627,28 @@ class RenderingService:
         if include_heading:
             parts.append(f"### {entity.display_name}")
 
-        # Fetch and format container contents (skip for inventory items with no room)
-        contents_str = ""
-        if entity.contents_visible and room is not None:
-            contents = await entity_service.get_container_contents(entity.id, room)
-            contents_str = await self.build_contents_string(contents)
+        # Determine source and whether to skip contents
+        # Skip contents for inventory items (room=None) or non-container entities
+        is_inventory = room is None
+        skip_contents = is_inventory or not entity.contents_visible
+
+        # Create EntityContext for lazy contents fetching via e.contents
+        entity_ctx = EntityContext(
+            entity=entity,
+            instance_id=instance.instance_id,
+            source="inventory" if is_inventory else "room",
+            room=room or "",
+            user_id=user_id,
+            entity_service=entity_service,
+            entity_resolution=None,
+            rendering_service=self,
+            skip_contents=skip_contents,
+        )
 
         # Build base context
         base_context: dict[str, Any] = {
-            "e": entity,
-            "name": f"*{entity.display_name}*",
-            "contents": contents_str,
+            "e": entity_ctx,
+            "name": f"*{entity_ctx.display_name}*",
             "balance": balance,
         }
 

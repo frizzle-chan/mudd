@@ -27,7 +27,7 @@ class ActionContext:
     entity: "EntityContext"
     source: Literal["room", "inventory", "container"]
     user: UserContext
-    focused_container: ResolvedEntity | None
+    container: "EntityContext | None"
     room: "RoomContext | None" = None
 
 
@@ -90,7 +90,7 @@ class ActionCommand(ABC):
             handler_text,
             ctx.entity,
             ctx.user,
-            ctx.focused_container,
+            ctx.container,
             ctx.room,
         )
         return ActionResult(output=output, effects=effects)

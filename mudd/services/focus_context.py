@@ -8,14 +8,11 @@ and cleared on room change, timeout, or interaction with unrelated entities.
 import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING
+from uuid import UUID
 
 import asyncpg
 
 from mudd.services.entity import FocusMode
-
-if TYPE_CHECKING:
-    from mudd.services.entity import ResolvedEntity
 
 logger = logging.getLogger(__name__)
 
@@ -28,11 +25,15 @@ class FocusContext:
 
     Focus establishes a "modal" interaction context where autocomplete
     prioritizes entities accessible through the focused entity.
+
+    Note: room is not stored here - it's derived from entity_instances
+    when needed. The entity_id field is populated via JOIN with
+    entity_instances.
     """
 
     user_id: int
-    room: str
-    entity_id: str
+    instance_id: UUID
+    entity_id: str  # From ei.entity_id via join
     entity_name: str
     focus_mode: FocusMode
     updated_at: datetime
@@ -74,11 +75,13 @@ class FocusContextService:
         """
         row = await self._pool.fetchrow(
             """
-            SELECT uf.user_id, uf.room, uf.entity_id, uf.updated_at,
+            SELECT uf.user_id, uf.instance_id, uf.updated_at,
+                   ei.entity_id,
                    re.name AS entity_name, re.focus_mode
             FROM user_focus uf
-            JOIN LATERAL resolve_entity(uf.entity_id) re ON TRUE
-            WHERE uf.user_id = $1 AND uf.room = $2
+            JOIN entity_instances ei ON ei.id = uf.instance_id
+            JOIN LATERAL resolve_entity(ei.entity_id) re ON TRUE
+            WHERE uf.user_id = $1 AND ei.room = $2
             """,
             user_id,
             room,
@@ -103,7 +106,7 @@ class FocusContextService:
 
         return FocusContext(
             user_id=row["user_id"],
-            room=row["room"],
+            instance_id=row["instance_id"],
             entity_id=row["entity_id"],
             entity_name=row["entity_name"],
             focus_mode=row["focus_mode"],
@@ -113,15 +116,13 @@ class FocusContextService:
     async def set_focus(
         self,
         user_id: int,
-        room: str,
-        entity: "ResolvedEntity",
+        instance_id: UUID,
     ) -> str | None:
         """Establish focus on an entity.
 
         Args:
             user_id: Discord user ID
-            room: Current room name
-            entity: The entity to focus on (must have focus_mode != 'none')
+            instance_id: The entity instance UUID
 
         Returns:
             Optional message to append to interaction response.
@@ -129,19 +130,17 @@ class FocusContextService:
         """
         await self._pool.execute(
             """
-            INSERT INTO user_focus (user_id, room, entity_id, updated_at)
-            VALUES ($1, $2, $3, now())
+            INSERT INTO user_focus (user_id, instance_id, updated_at)
+            VALUES ($1, $2, now())
             ON CONFLICT (user_id)
             DO UPDATE SET
-                room = EXCLUDED.room,
-                entity_id = EXCLUDED.entity_id,
+                instance_id = EXCLUDED.instance_id,
                 updated_at = EXCLUDED.updated_at
             """,
             user_id,
-            room,
-            entity.id,
+            instance_id,
         )
-        logger.debug(f"Set focus for user {user_id} on {entity.id} in {room}")
+        logger.debug(f"Set focus for user {user_id} on instance {instance_id}")
 
         # No extra message needed for establishing focus
         return None
@@ -163,13 +162,15 @@ class FocusContextService:
             Returns None for most reasons.
         """
         # Delete focus and get resolved entity info (with prototype inheritance)
+        # Uses DELETE USING to join with entity_instances for entity_id
         row = await self._pool.fetchrow(
             """
-            DELETE FROM user_focus
-            WHERE user_id = $1
+            DELETE FROM user_focus uf
+            USING entity_instances ei
+            WHERE uf.user_id = $1 AND uf.instance_id = ei.id
             RETURNING
-                entity_id,
-                (SELECT on_close FROM resolve_entity(entity_id)) AS on_close
+                ei.entity_id,
+                (SELECT on_close FROM resolve_entity(ei.entity_id)) AS on_close
             """,
             user_id,
         )
