@@ -288,6 +288,18 @@ OnClose: You snap the lid shut, trapping the worms inside.
 OnTake: {{ effects.pickup() }}You grab the {{ name }}.
 OnDrop: {% if container %}You toss the {{ name }} into the *{{ container.name }}*.{% else %}You set the {{ name }} down.{% endif %}{{ effects.drop() }}{{ effects.broadcast(user.name ~ " drops " ~ e.display_name ~ ".") }}
 
+Id: blade_of_dissonance
+Name: Blade of Dissonance
+Prototype: item
+Tags: restroom_trash_loot slot_prize
+Rarity: mythic
+DescriptionShort: A big impractical sword
+DescriptionLong: A big impractical sword that was once used for good but fell into oopey goopey and now it's evil.
+OnTouch: The blade is actually quite dull.
+OnTake: {{ effects.pickup() }}You heft the impractically large {{ name }} onto your shoulder. \
+You feel you made a grave mistake.
+OnDrop: You cannot drop the sword, it's evil. It compels you to keep it in your inventory, taking up a ton of space.
+
 # ----------------------------------------------------------------------------
 # Foyer entities
 # ----------------------------------------------------------------------------
