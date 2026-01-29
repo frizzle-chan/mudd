@@ -64,19 +64,21 @@ def rendering_service() -> RenderingService:
 class TestRender:
     """Test render method on RenderingService."""
 
-    def test_renders_name_template(self, rendering_service):
+    async def test_renders_name_template(self, rendering_service):
         """The {{ name }} template variable is replaced with formatted name."""
         entity = make_entity(name="Wooden Table", description_short="a {{ name }}")
-        result = rendering_service.render("a {{ name }} sits here", entity)
+        result = await rendering_service.render("a {{ name }} sits here", entity)
         assert result == "a *Wooden Table* sits here"
 
-    def test_handles_multiple_name_references(self, rendering_service):
+    async def test_handles_multiple_name_references(self, rendering_service):
         """Multiple {{ name }} references are all replaced."""
         entity = make_entity(name="Flower Vase")
-        result = rendering_service.render("the {{ name }} is a nice {{ name }}", entity)
+        result = await rendering_service.render(
+            "the {{ name }} is a nice {{ name }}", entity
+        )
         assert result == "the *Flower Vase* is a nice *Flower Vase*"
 
-    def test_renders_rarity_emoji_in_name(self, rendering_service):
+    async def test_renders_rarity_emoji_in_name(self, rendering_service):
         """Entity name includes rarity emoji when rarity is not 'none'."""
         entity = ResolvedEntity(
             id="gem",
@@ -95,37 +97,37 @@ class TestRender:
             focus_mode="none",
             rarity="rare",
         )
-        result = rendering_service.render("You found {{ name }}!", entity)
+        result = await rendering_service.render("You found {{ name }}!", entity)
         assert result == "You found *Ruby 🔵*!"
 
-    def test_handles_no_template_variables(self, rendering_service):
+    async def test_handles_no_template_variables(self, rendering_service):
         """Template without variables is returned unchanged."""
         entity = make_entity(name="Wooden Table")
-        result = rendering_service.render("a simple table", entity)
+        result = await rendering_service.render("a simple table", entity)
         assert result == "a simple table"
 
-    def test_handles_none_template(self, rendering_service):
+    async def test_handles_none_template(self, rendering_service):
         """None template returns empty string."""
         entity = make_entity(name="Wooden Table")
-        result = rendering_service.render(None, entity)
+        result = await rendering_service.render(None, entity)
         assert result == ""
 
-    def test_renders_entity_properties(self, rendering_service):
+    async def test_renders_entity_properties(self, rendering_service):
         """Can access entity properties via e variable."""
         entity = make_entity(description_long="A sturdy table.")
-        result = rendering_service.render("{{ e.description_long }}", entity)
+        result = await rendering_service.render("{{ e.description_long }}", entity)
         assert result == "A sturdy table."
 
 
 class TestBuildContentsString:
     """Test build_contents_string method."""
 
-    def test_empty_list_returns_empty_string(self, rendering_service):
+    async def test_empty_list_returns_empty_string(self, rendering_service):
         """Empty contents list returns empty string."""
-        result = rendering_service.build_contents_string([])
+        result = await rendering_service.build_contents_string([])
         assert result == ""
 
-    def test_single_item_space_prefixed(self, rendering_service):
+    async def test_single_item_space_prefixed(self, rendering_service):
         """Single item returns space-prefixed description."""
         vase = ResolvedEntity(
             id="vase",
@@ -150,10 +152,10 @@ class TestBuildContentsString:
             ),
         ]
 
-        result = rendering_service.build_contents_string(contents)
+        result = await rendering_service.build_contents_string(contents)
         assert result == " a *Flower Vase*"
 
-    def test_two_items_joined_with_and(self, rendering_service):
+    async def test_two_items_joined_with_and(self, rendering_service):
         """Two items are joined with 'and', second lowercased."""
         vase = ResolvedEntity(
             id="vase",
@@ -198,11 +200,11 @@ class TestBuildContentsString:
             ),
         ]
 
-        result = rendering_service.build_contents_string(contents)
+        result = await rendering_service.build_contents_string(contents)
         # Second item "An" should be lowercased to "an"
         assert result == " a *Flower Vase* and an *Inscribed Plaque*"
 
-    def test_three_items_bullet_list(self, rendering_service):
+    async def test_three_items_bullet_list(self, rendering_service):
         """Three or more items returns bullet list."""
         vase = ResolvedEntity(
             id="vase",
@@ -267,10 +269,10 @@ class TestBuildContentsString:
             ),
         ]
 
-        result = rendering_service.build_contents_string(contents)
+        result = await rendering_service.build_contents_string(contents)
         assert result == "\n- a *Flower Vase*\n- an *Inscribed Plaque*\n- an *Old Book*"
 
-    def test_skips_items_with_empty_description(self, rendering_service):
+    async def test_skips_items_with_empty_description(self, rendering_service):
         """Items with empty rendered descriptions are skipped."""
         empty = ResolvedEntity(
             id="empty",
@@ -315,7 +317,7 @@ class TestBuildContentsString:
             ),
         ]
 
-        result = rendering_service.build_contents_string(contents)
+        result = await rendering_service.build_contents_string(contents)
         # Empty item skipped, only vase remains (single item format)
         assert result == " a *Flower Vase*"
 
@@ -323,7 +325,7 @@ class TestBuildContentsString:
 class TestFormatEntityWithContents:
     """Test format_entity_with_contents method."""
 
-    def test_entity_without_contents(self, rendering_service):
+    async def test_entity_without_contents(self, rendering_service):
         """Entity without contents shows only its description."""
         entity = ResolvedEntity(
             id="table",
@@ -342,10 +344,10 @@ class TestFormatEntityWithContents:
             focus_mode="none",
             rarity="none",
         )
-        result = rendering_service.format_entity_with_contents(entity, None)
+        result = await rendering_service.format_entity_with_contents(entity, None)
         assert result == "a *Wooden Table* sits here"
 
-    def test_entity_with_empty_contents(self, rendering_service):
+    async def test_entity_with_empty_contents(self, rendering_service):
         """Entity with empty contents list shows only its description."""
         entity = ResolvedEntity(
             id="table",
@@ -364,10 +366,10 @@ class TestFormatEntityWithContents:
             focus_mode="none",
             rarity="none",
         )
-        result = rendering_service.format_entity_with_contents(entity, [])
+        result = await rendering_service.format_entity_with_contents(entity, [])
         assert result == "a *Wooden Table* sits here"
 
-    def test_entity_with_contents_uses_template(self, rendering_service):
+    async def test_entity_with_contents_uses_template(self, rendering_service):
         """Entity with contents passes {{ contents }} to template."""
         table = ResolvedEntity(
             id="table",
@@ -429,13 +431,13 @@ class TestFormatEntityWithContents:
             ),
         ]
 
-        result = rendering_service.format_entity_with_contents(table, contents)
+        result = await rendering_service.format_entity_with_contents(table, contents)
         # 2 items: space-prefixed, joined with "and", second lowercased
         assert result == (
             "a *Wooden Table*. On it: a *Flower Vase* and a *Inscribed Plaque*"
         )
 
-    def test_contents_variable_empty_when_no_contents(self, rendering_service):
+    async def test_contents_variable_empty_when_no_contents(self, rendering_service):
         """The {{ contents }} variable is empty string when no contents."""
         entity = ResolvedEntity(
             id="table",
@@ -454,10 +456,10 @@ class TestFormatEntityWithContents:
             focus_mode="none",
             rarity="none",
         )
-        result = rendering_service.format_entity_with_contents(entity, [])
+        result = await rendering_service.format_entity_with_contents(entity, [])
         assert result == "a *Wooden Table*[]"
 
-    def test_malformed_content_template_uses_fallback(self, rendering_service):
+    async def test_malformed_content_template_uses_fallback(self, rendering_service):
         """Malformed item template falls back to entity name."""
         table = ResolvedEntity(
             id="table",
@@ -500,7 +502,7 @@ class TestFormatEntityWithContents:
             ),
         ]
 
-        result = rendering_service.format_entity_with_contents(table, contents)
+        result = await rendering_service.format_entity_with_contents(table, contents)
         # Should fall back to entity name
         assert "*Broken Vase*" in result
 

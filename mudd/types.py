@@ -1,19 +1,54 @@
 """Core type definitions for MUDD."""
 
-from dataclasses import dataclass
 from enum import Enum
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from mudd.services.currency import CurrencyService
 
 
-@dataclass(frozen=True)
 class UserContext:
-    """User information available in templates.
+    """User context for templates with optional lazy balance fetching.
 
-    Provides user-specific context for template rendering, allowing
-    templates to reference the interacting user's name and mention.
+    Provides user-specific context for template rendering. Templates can
+    access user.name, user.mention, and optionally user.balance() for
+    lazy wallet balance fetching.
+
+    Usage in cogs (with balance support):
+        user = UserContext(
+            name=interaction.user.display_name,
+            mention=interaction.user.mention,
+            user_id=interaction.user.id,
+            currency_service=self._currency,
+        )
+
+    Usage in tests (minimal):
+        user = UserContext(name="Frizzle", mention="<@12345>")
     """
 
-    name: str  # display_name
-    mention: str  # @mention string
+    def __init__(
+        self,
+        name: str,
+        mention: str,
+        user_id: int | None = None,
+        currency_service: "CurrencyService | None" = None,
+    ) -> None:
+        self.name = name
+        self.mention = mention
+        self._user_id = user_id
+        self._currency = currency_service
+
+    async def balance(self) -> int:
+        """Fetch user's wallet balance.
+
+        Returns:
+            Balance as integer. Use {{ user.balance() | money }} in templates
+            for formatted output like "¥1,000".
+        """
+        if self._currency is None or self._user_id is None:
+            return 0
+        balance = await self._currency.get_balance(self._user_id)
+        return balance if balance else 0
 
 
 class VerbAction(str, Enum):

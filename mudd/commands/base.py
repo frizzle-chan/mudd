@@ -12,7 +12,7 @@ from mudd.services.trigger_effects import TriggerEffects
 from mudd.types import UserContext
 
 if TYPE_CHECKING:
-    from mudd.services.rendering import RenderingService
+    from mudd.services.rendering import RenderingService, RoomContext
 
 
 @dataclass(frozen=True)
@@ -31,8 +31,8 @@ class ActionContext:
     source: Literal["room", "inventory", "container"]
     user_context: UserContext
     container_contents: str
-    balance_str: str
     focused_container: ResolvedEntity | None
+    room_context: "RoomContext | None" = None
 
 
 @dataclass(frozen=True)
@@ -74,7 +74,7 @@ class ActionCommand(ABC):
         """
         pass
 
-    def execute(self, ctx: ActionContext) -> ActionResult:
+    async def execute(self, ctx: ActionContext) -> ActionResult:
         """Execute this command.
 
         Default implementation renders the handler template with full context.
@@ -90,12 +90,12 @@ class ActionCommand(ABC):
         if handler_text is None:
             return ActionResult(output="Nothing happens.", effects=TriggerEffects())
 
-        output, effects = self._rendering.render_with_effects(
+        output, effects = await self._rendering.render_with_effects(
             handler_text,
             ctx.entity,
             ctx.user_context,
             ctx.container_contents,
             ctx.focused_container,
-            ctx.balance_str,
+            ctx.room_context,
         )
         return ActionResult(output=output, effects=effects)

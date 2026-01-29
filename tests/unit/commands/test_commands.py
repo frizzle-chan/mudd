@@ -89,7 +89,6 @@ def action_context(
         source="room",
         user_context=UserContext(name="TestUser", mention="<@12345>"),
         container_contents="",
-        balance_str="",
         focused_container=None,
     )
 
@@ -160,21 +159,21 @@ class TestSimpleCommands:
         cmd = UseCommand(MagicMock())
         assert cmd.get_handler_text(mock_entity) == mock_entity.on_use
 
-    def test_look_command_executes(
+    async def test_look_command_executes(
         self,
         rendering_service: RenderingService,
         action_context: ActionContext,
     ):
         """LookCommand.execute renders template and returns result."""
         cmd = LookCommand(rendering_service)
-        result = cmd.execute(action_context)
+        result = await cmd.execute(action_context)
 
         assert isinstance(result, ActionResult)
         assert "Test Entity" in result.output
         assert result.set_focus is None
         assert result.clear_focus is False
 
-    def test_simple_command_no_handler_returns_nothing_happens(
+    async def test_simple_command_no_handler_returns_nothing_happens(
         self, rendering_service: RenderingService
     ):
         """Command with no handler text returns 'Nothing happens.'"""
@@ -203,11 +202,10 @@ class TestSimpleCommands:
             source="room",
             user_context=UserContext(name="TestUser", mention="<@12345>"),
             container_contents="",
-            balance_str="",
             focused_container=None,
         )
         cmd = LookCommand(rendering_service)
-        result = cmd.execute(ctx)
+        result = await cmd.execute(ctx)
 
         assert result.output == "Nothing happens."
 
@@ -230,7 +228,7 @@ class TestFocusCommands:
         cmd = CloseCommand(MagicMock())
         assert cmd.get_handler_text(mock_entity) == mock_entity.on_close
 
-    def test_open_command_delegates_focus_to_template(
+    async def test_open_command_delegates_focus_to_template(
         self,
         rendering_service: RenderingService,
         focusable_entity: ResolvedEntity,
@@ -245,38 +243,37 @@ class TestFocusCommands:
             source="room",
             user_context=UserContext(name="TestUser", mention="<@12345>"),
             container_contents="",
-            balance_str="",
             focused_container=None,
         )
         cmd = OpenCommand(rendering_service)
-        result = cmd.execute(ctx)
+        result = await cmd.execute(ctx)
 
         # Focus is now controlled by effects.set_focus() in templates
         assert result.set_focus is None
         assert result.clear_focus is False
 
-    def test_open_command_renders_template(
+    async def test_open_command_renders_template(
         self,
         rendering_service: RenderingService,
         action_context: ActionContext,
     ):
         """OpenCommand renders the on_open template."""
         cmd = OpenCommand(rendering_service)
-        result = cmd.execute(action_context)
+        result = await cmd.execute(action_context)
 
         assert result.set_focus is None
         assert result.clear_focus is False
         # Template should be rendered
         assert "open" in result.output.lower() or result.output
 
-    def test_close_command_delegates_focus_to_template(
+    async def test_close_command_delegates_focus_to_template(
         self,
         rendering_service: RenderingService,
         action_context: ActionContext,
     ):
         """CloseCommand no longer sets focus flags - templates control focus."""
         cmd = CloseCommand(rendering_service)
-        result = cmd.execute(action_context)
+        result = await cmd.execute(action_context)
 
         # Focus is now controlled by effects.clear_focus() in templates
         assert result.clear_focus is False
@@ -296,26 +293,26 @@ class TestInventoryCommands:
         cmd = DropCommand(MagicMock())
         assert cmd.get_handler_text(mock_entity) == mock_entity.on_drop
 
-    def test_take_command_sets_pickup_flag(
+    async def test_take_command_sets_pickup_flag(
         self,
         rendering_service: RenderingService,
         action_context: ActionContext,
     ):
         """TakeCommand template with effects.pickup() sets the pickup flag."""
         cmd = TakeCommand(rendering_service)
-        result = cmd.execute(action_context)
+        result = await cmd.execute(action_context)
 
         assert result.effects.has_pickup is True
         assert "You take" in result.output
 
-    def test_drop_command_sets_drop_flag(
+    async def test_drop_command_sets_drop_flag(
         self,
         rendering_service: RenderingService,
         action_context: ActionContext,
     ):
         """DropCommand template with effects.drop() sets the drop flag."""
         cmd = DropCommand(rendering_service)
-        result = cmd.execute(action_context)
+        result = await cmd.execute(action_context)
 
         assert result.effects.has_drop is True
         assert "You drop" in result.output
@@ -374,7 +371,6 @@ class TestActionContext:
                 source=source,
                 user_context=UserContext(name="Test", mention="<@1>"),
                 container_contents="",
-                balance_str="",
                 focused_container=None,
             )
             assert ctx.source == source

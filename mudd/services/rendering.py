@@ -22,6 +22,11 @@ from mudd.types import UserContext
 logger = logging.getLogger(__name__)
 
 
+def _money_filter(value: int) -> str:
+    """Format an integer as yen currency (e.g., 1000 -> "¥1,000")."""
+    return f"¥{value:,}"
+
+
 class TemplateRenderError(Exception):
     """Raised when a template fails to render."""
 
@@ -37,25 +42,31 @@ class TemplateRenderer:
         - `name`: Entity name formatted with Discord italics (*Name*)
         - `contents`: Pre-formatted bullet list of container contents (empty if none)
 
+    Async mode is enabled, allowing templates to call async functions directly.
+    For example, `{{ room.description() }}` will automatically await the async
+    `description()` method.
+
     Usage:
         renderer = TemplateRenderer()
-        output = renderer.render(
+        output = await renderer.render_async(
             template_source=entity.on_look,
-            entity=entity,
-            name_formatted="*Wooden Table*",
-            contents="\\n- a *Vase*\\n- a *Plaque*",
+            context={"e": entity, "name": "*Wooden Table*"},
+            entity_id=entity.id,
         )
     """
 
     def __init__(self) -> None:
         # Plain text output - no HTML escaping for string templates
+        # enable_async allows templates to call async functions directly
         self._env = Environment(
             autoescape=select_autoescape(default_for_string=False),
             undefined=StrictUndefined,  # Fail on undefined variables
+            enable_async=True,
         )
+        self._env.filters["money"] = _money_filter
         self._cache: dict[str, Template] = {}  # template source -> compiled Template
 
-    def render_template(
+    async def render_template(
         self,
         template_source: str,
         entity: ResolvedEntity,
@@ -77,19 +88,22 @@ class TemplateRenderer:
             TemplateRenderError: If template has syntax errors or undefined variables
         """
         context = {"e": entity, "name": name_formatted, "contents": contents}
-        return self.render_with_context(template_source, context, entity.id)
+        return await self.render_with_context(template_source, context, entity.id)
 
-    def render_with_context(
+    async def render_with_context(
         self,
         template_source: str,
         context: dict[str, Any],
         entity_id: str,
     ) -> str:
-        """Render a Jinja2 template with a custom context dictionary.
+        """Render a Jinja2 template with context.
+
+        Supports templates that call async functions. For example,
+        `{{ room.description() }}` will automatically await the async method.
 
         Args:
             template_source: Jinja2 template string
-            context: Dictionary of template variables
+            context: Dictionary of template variables (may contain async callables)
             entity_id: Entity ID for error logging
 
         Returns:
@@ -100,7 +114,7 @@ class TemplateRenderer:
         """
         try:
             template = self._get_or_compile(template_source)
-            return template.render(context)
+            return await template.render_async(context)
         except TemplateSyntaxError as exc:
             logger.error(
                 "Template syntax error in entity '%s': %s", entity_id, str(exc)
@@ -149,14 +163,17 @@ class ContainerContentsFetcher(Protocol):
 class RoomContext:
     """Lazy room data access for room entity templates.
 
-    Provides room.description() and room.entities() template functions
-    for rendering room entities. Data is pre-fetched before template
-    rendering to allow synchronous access in templates.
+    Provides room.description() and room.entities() as async template functions.
+    With Jinja's enable_async mode, templates can call these directly and they
+    will be automatically awaited.
 
-    Usage:
-        room_ctx = RoomContext(room_id, pool, entity_service)
-        await room_ctx.prefetch(rendering_service)
-        # Now room_ctx.description() and room_ctx.entities() are available
+    Usage in templates:
+        {{ room.description() }}
+        {{ room.entities() }}
+
+    Usage in Python:
+        room_ctx = RoomContext(room_id, pool, entity_service, rendering_service)
+        # Pass to template context - methods are called lazily during render
     """
 
     def __init__(
@@ -164,58 +181,44 @@ class RoomContext:
         room_id: str,
         pool: asyncpg.Pool,
         entity_service: ContainerContentsFetcher,
+        rendering_service: RenderingService,
     ) -> None:
         self._room_id = room_id
         self._pool = pool
         self._entity_service = entity_service
+        self._rendering_service = rendering_service
         self._description_cache: str | None = None
         self._entities_cache: str | None = None
 
-    def description(self) -> str:
-        """Fetch room description synchronously (pre-fetched).
+    async def description(self) -> str:
+        """Fetch room description lazily.
 
         Returns:
             Room description from rooms table, or default message.
-
-        Raises:
-            RuntimeError: If prefetch() was not called first.
         """
         if self._description_cache is None:
-            raise RuntimeError("RoomContext not initialized - call prefetch() first")
+            row = await self._pool.fetchrow(
+                "SELECT name, description FROM rooms WHERE id = $1", self._room_id
+            )
+            self._description_cache = (
+                row["description"] if row else "You see nothing special."
+            )
         return self._description_cache
 
-    def entities(self) -> str:
-        """Fetch formatted entity list synchronously (pre-fetched).
+    async def entities(self) -> str:
+        """Fetch formatted entity list lazily.
 
         Returns:
             Formatted string of visible entities, or empty string if none.
-
-        Raises:
-            RuntimeError: If prefetch() was not called first.
         """
         if self._entities_cache is None:
-            raise RuntimeError("RoomContext not initialized - call prefetch() first")
+            entities = await self._entity_service.get_top_level_room_entities(
+                self._room_id
+            )
+            self._entities_cache = await self._rendering_service.format_room_entities(
+                entities, self._entity_service, self._room_id
+            )
         return self._entities_cache
-
-    async def prefetch(self, rendering_service: RenderingService) -> None:
-        """Pre-fetch room data before template rendering.
-
-        Args:
-            rendering_service: Service for formatting entities.
-        """
-        # Get room description from rooms table
-        row = await self._pool.fetchrow(
-            "SELECT name, description FROM rooms WHERE id = $1", self._room_id
-        )
-        self._description_cache = (
-            row["description"] if row else "You see nothing special."
-        )
-
-        # Get and format visible entities
-        entities = await self._entity_service.get_top_level_room_entities(self._room_id)
-        self._entities_cache = await rendering_service.format_room_entities(
-            entities, self._entity_service, self._room_id
-        )
 
 
 def _lowercase_first(s: str) -> str:
@@ -239,7 +242,7 @@ class RenderingService:
         """Clear template cache (call after entity sync)."""
         self._renderer.clear_cache()
 
-    def render(
+    async def render(
         self, template: str | None, entity: ResolvedEntity, contents: str = ""
     ) -> str:
         """Render a template with entity context.
@@ -263,41 +266,45 @@ class RenderingService:
         if template is None:
             return ""
         name_formatted = f"*{entity.display_name}*"
-        return self._renderer.render_template(
+        return await self._renderer.render_template(
             template, entity, name_formatted, contents
         )
 
-    def render_with_effects(
+    async def render_with_effects(
         self,
         template: str | None,
         entity: ResolvedEntity,
         user: UserContext,
         contents: str = "",
         container: ResolvedEntity | None = None,
-        balance: str = "",
+        room: RoomContext | None = None,
     ) -> tuple[str, TriggerEffects]:
         """Render a template and collect side effects.
+
+        Supports templates that call async functions like room.description(),
+        room.entities(), and user.balance().
 
         Extended template context:
             - `e`: The ResolvedEntity
             - `name`: Entity name formatted with Discord italics (*Name*)
             - `contents`: Pre-formatted bullet list of container contents
-            - `user`: UserContext with name and mention
+            - `user`: UserContext with name, mention, and optional async balance()
             - `effects`: TriggerEffects for queuing side effects
             - `container`: Optional ResolvedEntity for focused container (drop target)
-            - `balance`: Formatted currency balance (e.g., "¥1,000")
+            - `room`: Optional RoomContext with async room.description()/entities()
 
         Example template:
-            {{ effects.broadcast("**" ~ user.name ~ "** put on some music.") }}
-            You slide the record onto the turntable.
+            {{ room.description() }}
+            {{ room.entities() }}
+            {{ user.balance() }}
 
         Args:
             template: Jinja2 template string (or None)
             entity: The entity providing context
-            user: User context with name and mention
+            user: User context with name, mention, and optional balance()
             contents: Pre-formatted bullet list of contents (default: "")
             container: Optional container entity for drop context (default: None)
-            balance: Formatted currency balance (default: "")
+            room: Optional RoomContext for room.description()/entities() (default: None)
 
         Returns:
             Tuple of (rendered output, collected effects)
@@ -315,12 +322,12 @@ class RenderingService:
             "user": user,
             "effects": effects,
             "container": container,  # Always include, may be None
-            "balance": balance,
+            "room": room,  # Always include, may be None
         }
-        output = self._renderer.render_with_context(template, context, entity.id)
+        output = await self._renderer.render_with_context(template, context, entity.id)
         return output, effects
 
-    def build_contents_string(self, contents: list[EntityInstance]) -> str:
+    async def build_contents_string(self, contents: list[EntityInstance]) -> str:
         """Build a formatted string from container contents.
 
         Formats based on item count:
@@ -341,7 +348,7 @@ class RenderingService:
         descriptions: list[str] = []
         for c in contents:
             try:
-                desc = self.render(c.entity.description_short, c.entity)
+                desc = await self.render(c.entity.description_short, c.entity)
                 if desc:
                     descriptions.append(desc)
             except TemplateRenderError:
@@ -372,7 +379,7 @@ class RenderingService:
             # Three or more: bullet list (no case change, each line starts fresh)
             return "\n" + "\n".join(f"- {desc}" for desc in descriptions)
 
-    def format_entity_with_contents(
+    async def format_entity_with_contents(
         self,
         entity: ResolvedEntity,
         contents: list[EntityInstance] | None = None,
@@ -389,8 +396,10 @@ class RenderingService:
         Returns:
             Rendered description_short with contents interpolated
         """
-        contents_str = self.build_contents_string(contents or [])
-        return self.render(entity.description_short, entity, contents=contents_str)
+        contents_str = await self.build_contents_string(contents or [])
+        return await self.render(
+            entity.description_short, entity, contents=contents_str
+        )
 
     async def format_room_entities(
         self,
@@ -420,7 +429,7 @@ class RenderingService:
             if entity.contents_visible:
                 contents = await entity_service.get_container_contents(entity.id, room)
 
-            formatted = self.format_entity_with_contents(entity, contents)
+            formatted = await self.format_entity_with_contents(entity, contents)
             if formatted:
                 lines.append(formatted)
 
@@ -466,7 +475,7 @@ class RenderingService:
         contents_str = ""
         if entity.contents_visible and room is not None:
             contents = await entity_service.get_container_contents(entity.id, room)
-            contents_str = self.build_contents_string(contents)
+            contents_str = await self.build_contents_string(contents)
 
         # Build base context
         base_context: dict[str, Any] = {
@@ -478,7 +487,7 @@ class RenderingService:
 
         # Build fallback from descriptions (also rendered as templates)
         try:
-            fallback = self._renderer.render_with_context(
+            fallback = await self._renderer.render_with_context(
                 entity.description_long or entity.description_short or "",
                 base_context,
                 entity.id,
@@ -494,7 +503,7 @@ class RenderingService:
             output = fallback
         else:
             try:
-                output = self._renderer.render_with_context(
+                output = await self._renderer.render_with_context(
                     entity.on_look, base_context, entity.id
                 )
             except TemplateRenderError:
@@ -536,8 +545,7 @@ class RenderingService:
         Returns:
             Tuple of (rendered output, collected effects)
         """
-        room_ctx = RoomContext(room_id, pool, entity_service)
-        await room_ctx.prefetch(self)
+        room_ctx = RoomContext(room_id, pool, entity_service, self)
 
         effects = TriggerEffects()
         context: dict[str, Any] = {
@@ -551,7 +559,7 @@ class RenderingService:
         template_text = entity.on_look or default_room_template
 
         try:
-            output = self._renderer.render_with_context(
+            output = await self._renderer.render_with_context(
                 template_text, context, entity.id
             )
         except TemplateRenderError:
@@ -559,6 +567,6 @@ class RenderingService:
                 "Template error rendering on_look for room entity '%s', using fallback",
                 entity.id,
             )
-            output = f"{room_ctx.description()}\n\n{room_ctx.entities()}"
+            output = f"{await room_ctx.description()}\n\n{await room_ctx.entities()}"
 
         return output, effects

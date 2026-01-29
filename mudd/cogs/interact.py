@@ -16,7 +16,7 @@ from mudd.matching.verb_matcher import match_verb
 from mudd.services.entity import ResolvedEntity
 from mudd.services.entity_resolution import ResolutionError, ViewMode
 from mudd.services.inventory import DropTarget
-from mudd.services.rendering import RenderingService, TemplateRenderError
+from mudd.services.rendering import RenderingService, RoomContext, TemplateRenderError
 from mudd.services.trigger_effects import TriggerEffects
 from mudd.types import UserContext, VerbAction
 from mudd.utils.text import indefinite_article
@@ -171,12 +171,14 @@ class Interact(commands.Cog):
             container_contents = await self.entity_service.get_container_contents(
                 entity.id, room
             )
-        contents_str = self._rendering.build_contents_string(container_contents)
+        contents_str = await self._rendering.build_contents_string(container_contents)
 
-        # Create user context for template
+        # Create user context for template with lazy balance fetching
         user_context = UserContext(
             name=interaction.user.display_name,
             mention=interaction.user.mention,
+            user_id=user_id,
+            currency_service=self._currency,
         )
 
         # For drop actions, look up focused container for template context
@@ -186,12 +188,13 @@ class Interact(commands.Cog):
             if focus and focus.focus_mode == "container":
                 container = await self.entity_service.get_entity(focus.entity_id)
 
-        # Fetch balance for wallet entities
-        balance_str = ""
-        if entity.id == "wallet":
-            balance = await self._currency.get_balance(user_id)
-            if balance is not None:
-                balance_str = f"¥{balance:,}"
+        # Create lazy room context for templates that use room.description()/entities()
+        # Data is fetched on-demand when templates call these methods
+        room_ctx: RoomContext | None = None
+        if not is_inventory_source:
+            room_ctx = RoomContext(
+                room, self.pool, self.entity_service, self._rendering
+            )
 
         # Build action context and execute command
         action_ctx = ActionContext(
@@ -202,13 +205,13 @@ class Interact(commands.Cog):
             source=source,
             user_context=user_context,
             container_contents=contents_str,
-            balance_str=balance_str,
             focused_container=container,
+            room_context=room_ctx,
         )
 
         command = create_command(action_type, self._rendering)
         try:
-            cmd_result = command.execute(action_ctx)
+            cmd_result = await command.execute(action_ctx)
         except TemplateRenderError:
             logger.warning(
                 "Template error rendering '%s' handler for entity '%s'",
@@ -586,14 +589,13 @@ class Interact(commands.Cog):
             source="room",  # Dispensed from room container
             user_context=user_context,
             container_contents="",  # Dispensed items don't show container contents
-            balance_str="",
             focused_container=None,
         )
 
         # Execute TakeCommand
         command = create_command(VerbAction.ON_TAKE, self._rendering)
         try:
-            cmd_result = command.execute(action_ctx)
+            cmd_result = await command.execute(action_ctx)
         except TemplateRenderError:
             logger.warning(
                 "Template error rendering on_take for dispensed entity '%s'",

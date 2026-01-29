@@ -1,14 +1,16 @@
 """Look command for viewing surroundings and examining entities."""
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 import asyncpg
 from discord import Interaction, app_commands
 from discord.ext import commands
 
+from mudd.commands import ActionContext, create_command
 from mudd.services.entity_resolution import ResolutionError, ViewMode, encode_choice
-from mudd.services.rendering import RenderingService
+from mudd.services.rendering import RenderingService, RoomContext, TemplateRenderError
+from mudd.types import UserContext, VerbAction
 
 if TYPE_CHECKING:
     from mudd.services.currency import CurrencyService
@@ -73,15 +75,15 @@ class Look(commands.Cog):
     @app_commands.command(name="look", description="View surroundings or examine item")
     @app_commands.describe(at="Thing to examine")
     @app_commands.autocomplete(at=at_autocomplete)
-    async def look(self, interaction: Interaction, at: str | None = None):
+    async def look(self, interaction: Interaction, at: str):
         """Look at room or specific entity."""
         # Build context for resolution
-        ctx = await self.entity_resolution.build_context(interaction, at or "")
+        ctx = await self.entity_resolution.build_context(interaction, at)
         user_id = interaction.user.id
         room = ctx.room
 
-        # If no target, resolve to room entity
-        if not at or at == "Room":
+        # If "Room" selected, resolve to room entity
+        if at == "Room":
             room_entity_id = f"room:{room}"
             at = encode_choice("room", room_entity_id)
 
@@ -111,9 +113,9 @@ class Look(commands.Cog):
         # Successfully resolved entity
         matched_instance = result.instance
         entity = matched_instance.entity
-
-        # Check if this is a room entity (ID starts with "room:")
+        source = cast(str, result.source)
         is_room_entity = entity.id.startswith("room:")
+        is_inventory_source = source in ("inventory", "container")
 
         # Update focus timestamp if looking at entity in focus (prevents timeout)
         if ctx.view_mode == ViewMode.ROOM and not is_room_entity:
@@ -123,34 +125,77 @@ class Look(commands.Cog):
             if is_in_focus:
                 await self.entity_resolution.update_focus_timestamp(user_id)
 
-        # Render on_look template
-        # Use room=None for inventory items
-        render_room = room if result.source == "room" else None
-
-        if is_room_entity:
-            # Room entity rendering with RoomContext
-            output, effects = await self._rendering.render_room_entity(
-                entity, room, self._pool, self.entity_service
+        # Create lazy room context (for all entities in room context)
+        # Data is fetched on-demand when templates call room.description()/entities()
+        room_ctx: RoomContext | None = None
+        if not is_inventory_source:
+            room_ctx = RoomContext(
+                room, self._pool, self.entity_service, self._rendering
             )
 
-            # Process focus effects from room entity template
+        # Fetch container contents for template
+        if is_inventory_source:
+            container_contents = (
+                await self.entity_resolution._get_inventory_container_contents(
+                    user_id, entity.id
+                )
+            )
+        else:
+            container_contents = await self.entity_service.get_container_contents(
+                entity.id, room
+            )
+        contents_str = await self._rendering.build_contents_string(container_contents)
+
+        # Create user context for template with lazy balance fetching
+        user_context = UserContext(
+            name=interaction.user.display_name,
+            mention=interaction.user.mention,
+            user_id=user_id,
+            currency_service=self._currency,
+        )
+
+        # Build action context and execute LookCommand
+        action_ctx = ActionContext(
+            interaction=interaction,
+            entity=entity,
+            instance_id=matched_instance.instance_id,
+            room=room,
+            source=cast(str, source),  # type: ignore[arg-type]
+            user_context=user_context,
+            container_contents=contents_str,
+            focused_container=None,
+            room_context=room_ctx,
+        )
+
+        command = create_command(VerbAction.ON_LOOK, self._rendering)
+        try:
+            cmd_result = await command.execute(action_ctx)
+        except TemplateRenderError:
+            logger.warning(
+                "Template error rendering on_look for entity '%s'",
+                entity.id,
+                exc_info=True,
+            )
+            output = "You see nothing special."
+            effects = cmd_result.effects if "cmd_result" in dir() else None
+        else:
+            output = cmd_result.output
+            effects = cmd_result.effects
+
+        # Add heading
+        if is_room_entity:
+            room_name = await self.visibility_service.get_room_name(room)
+            heading = room_name or "Unknown Room"
+        else:
+            heading = entity.display_name
+
+        detail_text = f"### {heading}\n\n{output}"
+
+        # Process focus effects
+        if effects:
+            if effects.has_set_focus:
+                await self.entity_resolution.set_focus(user_id, room, entity)
             if effects.has_clear_focus:
                 await self.entity_resolution.clear_focus(user_id, reason="close")
-
-            # Add room name heading
-            room_name = await self.visibility_service.get_room_name(room)
-            detail_text = f"### {room_name}\n\n{output}" if room_name else output
-        else:
-            # Regular entity rendering
-            # Fetch balance for wallet entities
-            balance_str = ""
-            if entity.id == "wallet":
-                balance = await self._currency.get_balance(user_id)
-                if balance is not None:
-                    balance_str = f"¥{balance:,}"
-
-            detail_text = await self._rendering.render_entity_on_look(
-                matched_instance, self.entity_service, render_room, balance_str
-            )
 
         await interaction.response.send_message(detail_text, ephemeral=True)
