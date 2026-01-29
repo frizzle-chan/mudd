@@ -87,7 +87,7 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 | `on_close` | TEXT | Handler response for close action (NULL = inherit from prototype) |
 | `on_drop` | TEXT | Handler response for drop action (NULL = inherit from prototype) |
 | `contents_visible` | BOOLEAN | Whether child entities appear in room descriptions (NULL = inherit, TRUE = auto-list, FALSE = hidden until examined). Note: This controls *visibility* only; interaction context is controlled by `focus_mode` |
-| `focus_mode` | focus_mode | Focus behavior: `none` (no focus), `container` (establish focus on open). NULL = inherit from prototype |
+| `focus_mode` | focus_mode | **DEPRECATED** - Focus behavior now controlled via `effects.set_focus()` in templates. Column kept for backwards compatibility during migration. NULL = inherit from prototype |
 | `rarity` | rarity NOT NULL DEFAULT 'none' | Item rarity affecting name display and pickup behavior |
 
 **Constraints:**
@@ -98,14 +98,35 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 - If template calls `pickup()`: item moves to inventory
 - If template doesn't call `pickup()`: message shown, item stays
 
-**Focus Mode Enum:**
+**Focus Mode Enum (DEPRECATED):**
 - `none`: No focus established when opened (default)
 - `container`: Focus established on open, contents become autocomplete targets
+
+Focus is now controlled via `effects.set_focus()` and `effects.clear_focus()` template effects (ADR 0006).
 
 **Indexes:**
 - Primary key on `id`
 - GIN index on `name` using pg_trgm for fuzzy matching
 - Index on `prototype_id` for inheritance queries
+
+### Room Entities (ADR 0006)
+
+Rooms are represented as entities in the database for unified entity resolution:
+
+**ID Convention:** `room:<room_id>` (e.g., `room:foyer`, `room:office`)
+
+**Prototype:** All room entities inherit from `base-room`
+
+**Creation:** Room entities and their instances are created during zone sync when rooms are synced to the database.
+
+**Purpose:**
+- Eliminates special-case code for the `[Close X] Room` escape option in autocomplete
+- Allows `/look` with no target to resolve to the room entity
+- Enables room-specific templates with `room.description()` and `room.entities()` context
+
+**Autocomplete Behavior:**
+- Room entity always appears first in autocomplete results
+- Display name computed at autocomplete time based on focus state (e.g., `[Close Chest] Room` when focused)
 
 ### Entity Instances Table
 
@@ -228,10 +249,10 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 - Enables autocomplete to prioritize contextually relevant entities
 - Persists across bot restarts (stored in PostgreSQL, not memory)
 
-**Focus Lifecycle (ADR 0003):**
-- Established: When user executes ON_OPEN action on entity with `focus_mode != 'none'`
-- Cleared: Room movement, looking at room, looking at unrelated entity, interacting with unrelated entity, ON_CLOSE action, 5-minute timeout
-- Preserved: Looking at focused entity or its contents, interacting with focused entity or its contents
+**Focus Lifecycle (ADR 0006):**
+- Established: When `effects.set_focus()` is called in any template (on_look, on_open, etc.)
+- Cleared: `effects.clear_focus()` called in template, room movement (`/move`), 5-minute inactivity timeout
+- Preserved: Any interaction with focused entity or its contents
 
 **Constraints:**
 - PK on `user_id` (one focus per user)
@@ -319,7 +340,7 @@ The `resolve_entity(target_id TEXT)` function resolves entity properties by walk
 - First non-NULL value wins for each property
 - Supports up to 10 levels of inheritance depth (prevents infinite loops from circular references)
 - Used to materialize the final entity state including inherited properties
-- Returns: `id`, `name`, `description_short`, `description_long`, `on_*` handlers (including `on_open`, `on_close`), `contents_visible`, `focus_mode`, `rarity`
+- Returns: `id`, `name`, `description_short`, `description_long`, `on_*` handlers (including `on_open`, `on_close`), `contents_visible`, `focus_mode` (deprecated), `rarity`
 
 ## Sync System
 
@@ -341,6 +362,7 @@ on_ready()
 periodic_sync() [FIRST ITERATION]
     ├─ sync_zones_and_rooms() ─→ Load .rec files
     │    ├─ Sync to database
+    │    ├─ Create room entities (room:<id>) and instances
     │    ├─ Create Discord categories/channels
     │    ├─ Fix channel topics
     │    └─ Return orphans + default_room
@@ -515,15 +537,15 @@ focus = await self.focus_service.get_focus(user_id, room)
 
 ### Focus-Aware Autocomplete
 
-When a user has an active focus, autocomplete shows only the focused container contents with an escape option to close it:
+When a user has an active focus, autocomplete shows only the focused container contents with a room entity option to exit focus:
 
 ```
-[Close Wooden Chest] Room                    <- Escape option (clears focus)
+[Close Wooden Chest] Room                    <- Room entity (clears focus via on_look)
 Vinyl Record - Abbey Road                    <- Focused content
 Gold Ring                                    <- Focused content
 ```
 
-Room entities are hidden while focused. Selecting the escape option clears focus and shows the room.
+Room entities are hidden while focused (except the current room which appears first). Selecting the room entity triggers its `on_look` handler which calls `effects.clear_focus()` and shows the room description.
 
 ## Entity Resolution Service
 
@@ -631,6 +653,15 @@ Templates have access to:
 - `contents`: Pre-formatted bullet list of container contents (for entities with `contents_visible`)
 - `user`: User context with `name` (display name) and `mention` (@mention string)
 - `effects`: Side effects object for triggering actions beyond the ephemeral response
+- `room`: Room context with lazy data access (only for room entity templates, see below)
+
+**Room Context (for room entities only):**
+
+Room entities (ID pattern `room:<room_id>`) have access to a special `room` context with lazy-evaluated functions:
+- `room.description()`: Fetches the room description (from rooms table)
+- `room.entities()`: Fetches formatted list of visible entities in the room
+
+These are lazy to avoid unnecessary database queries since room lookups are relatively rare.
 
 ### Rendering Flow
 
@@ -674,6 +705,17 @@ You examine the {{ name }}. {{ e.description_long }}
 
 {# Conditional template #}
 {% if e.description_long %}{{ e.description_long }}{% else %}Nothing special about this {{ name }}.{% endif %}
+
+{# Base room on_look - clears focus and shows room (ADR 0006) #}
+{{ effects.clear_focus() }}{{ room.description() }}
+
+{{ room.entities() }}
+
+{# Container on_open with focus (ADR 0006) #}
+{{ effects.set_focus() }}You open the {{ name }}.{{ contents }}
+
+{# Container on_close (ADR 0006) #}
+{{ effects.clear_focus() }}You close the {{ name }}.
 ```
 
 ### Template Cache
@@ -728,9 +770,31 @@ Result:
 - Entity instance is deleted from the database
 - If paired with a spawning pool, the entity will respawn
 
+**`effects.set_focus()`** - Establishes focus on the current entity (ADR 0006). Can be called from any handler, not just `on_open`.
+
+```jinja
+{# Container on_open - traditional container behavior #}
+{{ effects.set_focus() }}You open the {{ name }}.{{ contents }}
+
+{# Painting on_look - studying it focuses on details #}
+{{ effects.set_focus() }}You study the {{ name }} closely. The brushwork reveals incredible detail...
+```
+
+**`effects.clear_focus()`** - Clears the user's current focus (ADR 0006).
+
+```jinja
+{# Container on_close #}
+{{ effects.clear_focus() }}You close the {{ name }}.
+
+{# Room on_look - looking at room clears focus #}
+{{ effects.clear_focus() }}{{ room.description() }}
+
+{{ room.entities() }}
+```
+
 All effect functions return an empty string, allowing inline use without affecting output.
 
 **Implementation:**
 - `TriggerEffects` dataclass collects side effects during rendering
 - `RenderingService.render_with_effects()` returns `(output, effects)` tuple
-- Interact cog checks `effects.has_pickup`, `effects.has_drop`, and executes `effects.broadcasts`
+- Interact cog checks `effects.has_pickup`, `effects.has_drop`, `effects.has_set_focus`, `effects.has_clear_focus`, and executes `effects.broadcasts`

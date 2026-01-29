@@ -127,6 +127,24 @@ In the context of **focus clearing triggers**, facing **redundant "interacting w
 **Removed trigger:**
 - ~~Interacting with entity not in current focus~~ (not reachable when focused anyway)
 
+### Inventory Containers Use Implicit Focus
+
+In the context of **containers in player inventory**, facing **the mismatch between explicit room focus and implicit inventory focus**, we decided to **disable open/close actions on inventory items and keep implicit focus**, to achieve **simplified inventory UX without conflicting focus states**, accepting **that inventory containers are always "open" when viewed in their thread**.
+
+**Problem:** Room focus uses explicit `user_focus` records (one per user). Supporting explicit focus on inventory containers would require N focus contexts (one per inventory thread), a significant schema change.
+
+**Solution:** Inventory containers use **implicit focus** - when viewing a container in its inventory thread:
+- Focus is derived from the thread item's `focus_mode` property
+- No `user_focus` record is created
+- Container contents appear in autocomplete automatically
+- There's no "escape" option because there's nothing to close
+
+**Disabled actions:**
+- `open` and `close` verbs are blocked on inventory items
+- The response is "You can't do that with items in your inventory."
+
+**Tradeoff:** Inventory containers cannot use `effects.set_focus()` or `effects.clear_focus()` - they're always implicitly open.
+
 ### Deprecate focus_mode Column
 
 In the context of **migrating to effect-based focus**, facing **the now-redundant `focus_mode` schema column**, we decided to **deprecate `focus_mode` but keep the column temporarily**, to achieve **backwards compatibility during migration**, accepting **temporary schema cruft**.

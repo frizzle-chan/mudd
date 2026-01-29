@@ -343,7 +343,7 @@ In the context of **dropping items from inventory**, facing **the mismatch betwe
 In the context of **dropping items into containers**, facing **the need to support transferring items between containers**, we decided to **use the focus context to determine drop targets**, to achieve **intuitive item placement into currently-focused containers**, accepting **that players must open a container to drop items into it**.
 
 **Behavior:**
-- If user has active focus on a container (`focus_mode=container`), dropped items go into that container
+- If user has active focus on a container (~~`focus_mode=container`~~ *focus set via `effects.set_focus()` per ADR 0006*), dropped items go into that container
 - If no container focus, dropped items go to the room floor
 - Items dropped into containers do not count toward floor clutter limit
 - Template has access to `{{ container }}` variable for customized drop messages
@@ -446,4 +446,4 @@ Examples:
 
 **Implicit Focus in Container Threads:**
 
-When a player is in an inventory thread for a container (`focus_mode != 'none'`), the system implicitly focuses on that container's contents. Autocomplete shows the container plus all its contents immediately without requiring an explicit "open" action.
+When a player is in an inventory thread for a container (~~`focus_mode != 'none'`~~ *containers with `on_open` handlers that call `effects.set_focus()` per ADR 0006*), the system implicitly focuses on that container's contents. Autocomplete shows the container plus all its contents immediately without requiring an explicit "open" action.

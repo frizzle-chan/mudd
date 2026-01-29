@@ -300,7 +300,7 @@ In the context of **modeling nested objects** (e.g., a lamp on a table), facing 
   - `TRUE` (table, shelf): Children listed when container appears in room or is examined
   - ~~`FALSE` (chest, drawer): Children only listed when container is directly examined via `/look`~~
   - `FALSE` (chest, drawer): Children not auto-listed in room descriptions; visibility controlled separately from focus behavior
-  - *Note: ADR 0003 introduces `focus_mode` to control interaction context separately from visibility*
+  - *Note: ~~ADR 0003 introduces `focus_mode` to control interaction context separately from visibility~~ ADR 0006 supersedes `focus_mode`; focus is now controlled via `effects.set_focus()` in templates*
 
 **Example:**
 ```sql
