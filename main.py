@@ -104,6 +104,7 @@ async def setup_hook():
             rendering_service,
             inventory_service,
             currency_service,
+            pool,
         )
     )
     await bot.add_cog(Ping(bot))

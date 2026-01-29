@@ -374,7 +374,41 @@ async def sync_zones_and_rooms_to_db(
             )
             stats["rooms"] += 1
 
-    logger.info(f"Synced {stats['zones']} zones and {stats['rooms']} rooms to database")
+        # Create room entities for each room
+        # Room entities have ID "room:<room_id>" and inherit from "base-room"
+        # First ensure base-room prototype exists (populated by entity sync)
+        await conn.execute(
+            """INSERT INTO entities (id, name)
+               VALUES ('base-room', 'Room')
+               ON CONFLICT (id) DO NOTHING"""
+        )
+
+        stats["room_entities"] = 0
+        for room in rooms:
+            room_entity_id = f"room:{room.id}"
+            await conn.execute(
+                """INSERT INTO entities (id, name, prototype_id)
+                   VALUES ($1, $2, 'base-room')
+                   ON CONFLICT (id) DO UPDATE SET name = $2""",
+                room_entity_id,
+                room.name,
+            )
+
+            # Create room entity instance (world instance)
+            await conn.execute(
+                """INSERT INTO entity_instances (entity_id, room, is_world_instance)
+                   VALUES ($1, $2, TRUE)
+                   ON CONFLICT (entity_id, room) WHERE is_world_instance = TRUE
+                   DO NOTHING""",
+                room_entity_id,
+                room.id,
+            )
+            stats["room_entities"] += 1
+
+    logger.info(
+        f"Synced {stats['zones']} zones, {stats['rooms']} rooms, "
+        f"and {stats['room_entities']} room entities to database"
+    )
     return stats
 
 

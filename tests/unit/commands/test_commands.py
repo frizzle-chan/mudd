@@ -213,7 +213,12 @@ class TestSimpleCommands:
 
 
 class TestFocusCommands:
-    """Tests for focus commands (open, close)."""
+    """Tests for focus commands (open, close).
+
+    Note: As of ADR 0006, focus is controlled by template effects
+    (effects.set_focus() and effects.clear_focus()), not by command result
+    flags. OpenCommand and CloseCommand no longer set set_focus/clear_focus.
+    """
 
     def test_open_command_get_handler_text(self, mock_entity: ResolvedEntity):
         """OpenCommand.get_handler_text returns on_open."""
@@ -225,13 +230,13 @@ class TestFocusCommands:
         cmd = CloseCommand(MagicMock())
         assert cmd.get_handler_text(mock_entity) == mock_entity.on_close
 
-    def test_open_command_sets_focus_for_focusable_entity(
+    def test_open_command_delegates_focus_to_template(
         self,
         rendering_service: RenderingService,
         focusable_entity: ResolvedEntity,
         mock_interaction: MagicMock,
     ):
-        """OpenCommand sets set_focus for entities with focus_mode != 'none'."""
+        """OpenCommand no longer sets focus flags - templates control focus."""
         ctx = ActionContext(
             interaction=mock_interaction,
             entity=focusable_entity,
@@ -246,31 +251,35 @@ class TestFocusCommands:
         cmd = OpenCommand(rendering_service)
         result = cmd.execute(ctx)
 
-        assert result.set_focus is focusable_entity
+        # Focus is now controlled by effects.set_focus() in templates
+        assert result.set_focus is None
         assert result.clear_focus is False
 
-    def test_open_command_no_focus_for_non_focusable_entity(
+    def test_open_command_renders_template(
         self,
         rendering_service: RenderingService,
         action_context: ActionContext,
     ):
-        """OpenCommand does not set focus for entities with focus_mode='none'."""
+        """OpenCommand renders the on_open template."""
         cmd = OpenCommand(rendering_service)
         result = cmd.execute(action_context)
 
         assert result.set_focus is None
         assert result.clear_focus is False
+        # Template should be rendered
+        assert "open" in result.output.lower() or result.output
 
-    def test_close_command_signals_clear_focus(
+    def test_close_command_delegates_focus_to_template(
         self,
         rendering_service: RenderingService,
         action_context: ActionContext,
     ):
-        """CloseCommand always signals clear_focus=True."""
+        """CloseCommand no longer sets focus flags - templates control focus."""
         cmd = CloseCommand(rendering_service)
         result = cmd.execute(action_context)
 
-        assert result.clear_focus is True
+        # Focus is now controlled by effects.clear_focus() in templates
+        assert result.clear_focus is False
         assert result.set_focus is None
 
 

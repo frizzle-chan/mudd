@@ -393,18 +393,20 @@ class EntityResolutionService:
         # Build choices
         choices: list[app_commands.Choice[str]] = []
 
-        # Get focus for escape option
+        # Get focus for room option display
         focus = await self._focus_service.get_focus(ctx.user_id, ctx.room)
 
-        # Add escape option when focused (and matches query)
-        if focus:
-            escape_label = f"[Close {focus.entity_name}] Room"
-            if not query or "room".startswith(query.lower()):
-                choices.append(
-                    app_commands.Choice(
-                        name=escape_label, value=encode_choice("escape", "room")
-                    )
+        # Room entity ID for this room
+        room_entity_id = f"room:{ctx.room}"
+
+        # Add room entity at top (shows focus close info if focused)
+        if not query or "room".startswith(query.lower()):
+            room_label = f"[Close {focus.entity_name}] Room" if focus else "Room"
+            choices.append(
+                app_commands.Choice(
+                    name=room_label, value=encode_choice("room", room_entity_id)
                 )
+            )
 
         # When focused, return only focused items
         focused = [c for c in candidates if c.is_focused]
@@ -422,17 +424,6 @@ class EntityResolutionService:
                     )
                 )
         else:
-            # Not focused - add Room option at top
-            if not query or "room".startswith(query.lower()):
-                room_display = f"[Close {focus.entity_name}] Room" if focus else "Room"
-                # Only add if we didn't already add escape option
-                if not focus:
-                    choices.append(
-                        app_commands.Choice(
-                            name=room_display, value=encode_choice("escape", "room")
-                        )
-                    )
-
             for c in candidates:
                 # All visible items without focus are "room" items
                 # (even those inside visible containers)
@@ -503,7 +494,16 @@ class EntityResolutionService:
                 message=f"Unknown source: {source}",
             )
 
-        # Try exact match first
+        # Try exact match by entity ID first (used for room entities)
+        id_matches = [e for e in entities if e.entity.id == name]
+        if len(id_matches) == 1:
+            if source != "legacy":
+                actual_source = source
+            else:
+                actual_source = self._infer_source(id_matches[0], ctx)
+            return ResolvedTarget(instance=id_matches[0], source=actual_source)
+
+        # Try exact match by name
         exact_matches = [e for e in entities if e.entity.name == name]
         if len(exact_matches) == 1:
             if source != "legacy":

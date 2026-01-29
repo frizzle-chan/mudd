@@ -149,20 +149,14 @@ class Interact(commands.Cog):
         # source is "room", "inventory", or "container" - cast for type safety
         source = cast(Literal["room", "inventory", "container"], result.source)
 
-        # Skip focus manipulation for inventory actions - they don't affect room focus
+        # Update focus timestamp if interacting within focus (prevents timeout)
         is_inventory_source = source in ("inventory", "container")
         if not is_inventory_source and action_type != VerbAction.ON_DROP:
-            # Check if target is in current focus (to decide whether to clear focus)
             is_in_focus = await self.entity_resolution.is_entity_in_focus(
                 user_id, room, entity.id
             )
-
             if is_in_focus:
-                # Update timestamp to prevent timeout when interacting with focus
                 await self.entity_resolution.update_focus_timestamp(user_id)
-            else:
-                # Clear focus when interacting with entity not in current focus
-                await self.entity_resolution.clear_focus(user_id, reason="interaction")
 
         # Fetch container contents for template (regardless of contents_visible)
         # For inventory items, check inventory container contents
@@ -227,30 +221,14 @@ class Interact(commands.Cog):
             output = cmd_result.output
             effects = cmd_result.effects
 
-            # Handle focus changes from command result
-            if cmd_result.set_focus:
-                focus_entity = cmd_result.set_focus
-                await self.entity_resolution.set_focus(user_id, room, focus_entity)
-            if cmd_result.clear_focus:
-                # Clear focus when explicitly closing
-                # Get close message (template) before clearing
-                close_template = await self.entity_resolution.clear_focus(
-                    user_id, reason="close"
-                )
-                if close_template:
-                    # Render the close template and append
-                    try:
-                        close_output = self._rendering.render(
-                            close_template, entity, ""
-                        )
-                        output = f"{output}\n\n{close_output}"
-                    except TemplateRenderError:
-                        logger.warning(
-                            "Template error rendering on_close for entity '%s'",
-                            entity.id,
-                            exc_info=True,
-                        )
-                        output = f"{output}\n\nYou step away from the *{entity.name}*."
+            # Handle focus changes from template effects
+            if effects.has_set_focus:
+                await self.entity_resolution.set_focus(user_id, room, entity)
+            if effects.has_clear_focus:
+                # Note: clear_focus returns the on_close template, but since
+                # templates now call effects.clear_focus() directly in on_close,
+                # we don't need to render it again (it's already in output).
+                await self.entity_resolution.clear_focus(user_id, reason="close")
 
         # Process dispense before response so output can be merged
         dispense_result: DispenseResult | None = None

@@ -106,8 +106,8 @@ class TestUserDiscoversRecords:
         assert any("WLFGRL" in name for name in names)
 
         # Room option shows close hint when focused
-        # Values are now source-prefixed (e.g., "escape:room")
-        room_option = next(r for r in results if r.value == "escape:room")
+        # Values are now source-prefixed (e.g., "room:room:library")
+        room_option = next(r for r in results if r.value.startswith("room:room:"))
         assert room_option.name == "[Close Wooden Chest] Room"
 
         # User examines a record inside the chest
@@ -181,8 +181,16 @@ class TestFocusClears:
         focus = await test_client.get_focus(user)
         assert focus is None
 
-    async def test_focus_clears_when_looking_at_unrelated_entity(self, test_client):
-        """Opening a container then looking elsewhere clears focus."""
+    async def test_focus_preserved_when_looking_at_unrelated_entity(self, test_client):
+        """Opening a container then looking elsewhere preserves focus (ADR 0006).
+
+        Per ADR 0006, focus is only cleared via:
+        - effects.clear_focus() in template
+        - /move command
+        - 5-minute timeout
+
+        Looking at unrelated entities no longer clears focus.
+        """
         user = await test_client.create_user(user_id=300000022, room="library")
 
         # User opens the chest
@@ -195,12 +203,17 @@ class TestFocusClears:
         # User looks at bookshelves (not in the chest)
         await test_client.look(user, at="Bookshelves")
 
-        # Focus should be cleared
+        # Focus should be preserved (not cleared)
         focus = await test_client.get_focus(user)
-        assert focus is None
+        assert focus is not None
+        assert focus["entity_id"] == "library_records"
 
-    async def test_focus_clears_when_interacting_elsewhere(self, test_client):
-        """Opening a container then interacting elsewhere clears focus."""
+    async def test_focus_preserved_when_interacting_elsewhere(self, test_client):
+        """Opening a container then interacting elsewhere preserves focus (ADR 0006).
+
+        Per ADR 0006, focus is only cleared via explicit mechanisms.
+        Interacting with unrelated entities no longer clears focus.
+        """
         user = await test_client.create_user(user_id=300000023, room="library")
 
         # User opens the chest
@@ -213,9 +226,10 @@ class TestFocusClears:
         # User interacts with bookshelves (not in the chest)
         await test_client.interact(user, action="touch", target="Bookshelves")
 
-        # Focus should be cleared
+        # Focus should be preserved (not cleared)
         focus = await test_client.get_focus(user)
-        assert focus is None
+        assert focus is not None
+        assert focus["entity_id"] == "library_records"
 
 
 class TestEmptyRoom:

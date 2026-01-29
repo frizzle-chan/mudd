@@ -164,6 +164,10 @@ async def sync_entities(pool: asyncpg.Pool, world_file: Path) -> int:
 
     all_entity_ids = [e.id for e in sorted_entities]
 
+    # Add room entity IDs to preserve list (room entities are created during zone sync)
+    room_entity_ids = [f"room:{room_id}" for room_id in room_ids]
+    preserve_entity_ids = all_entity_ids + room_entity_ids
+
     # Collect entities with Room field for instance creation
     # container_id from rec file becomes container_entity_id on instance
     entities_with_room = [
@@ -171,10 +175,11 @@ async def sync_entities(pool: asyncpg.Pool, world_file: Path) -> int:
     ]
 
     async with pool.acquire() as conn, conn.transaction():
-        # Delete entities not in current files (CASCADE deletes instances)
+        # Delete entities not in current files or room entities
+        # (CASCADE deletes instances)
         deleted = await conn.execute(
             "DELETE FROM entities WHERE id != ALL($1::text[])",
-            all_entity_ids,
+            preserve_entity_ids,
         )
         if deleted != "DELETE 0":
             logger.info(f"Removed stale entities: {deleted}")
@@ -227,15 +232,18 @@ async def sync_entities(pool: asyncpg.Pool, world_file: Path) -> int:
 
         # Delete world instances no longer in rec files.
         # Player instances (is_world_instance=FALSE) are preserved.
-        if entities_with_room:
+        # Room entity instances (room:*) are also preserved.
+        room_entity_instances = [(f"room:{room_id}", room_id) for room_id in room_ids]
+        preserve_instances = entities_with_room + room_entity_instances
+        if preserve_instances:
             await conn.execute(
                 """DELETE FROM entity_instances
                 WHERE is_world_instance = TRUE
                   AND (entity_id, room) NOT IN (
                       SELECT * FROM unnest($1::text[], $2::text[])
                   )""",
-                [e[0] for e in entities_with_room],
-                [e[1] for e in entities_with_room],
+                [e[0] for e in preserve_instances],
+                [e[1] for e in preserve_instances],
             )
         else:
             await conn.execute(

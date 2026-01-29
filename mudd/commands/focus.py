@@ -1,44 +1,26 @@
 """Focus-related action commands (open/close)."""
 
-from mudd.commands.base import ActionCommand, ActionContext, ActionResult
+from mudd.commands.base import ActionCommand
 from mudd.services.entity import ResolvedEntity
 
 
 class OpenCommand(ActionCommand):
     """Command for the 'open' action.
 
-    When opening a focusable entity (e.g., container), signals that
-    focus should be established on that entity.
+    Focus is now controlled by templates via effects.set_focus().
+    This command just renders the on_open template.
     """
 
     def get_handler_text(self, entity: ResolvedEntity) -> str | None:
         return entity.on_open
 
-    def execute(self, ctx: ActionContext) -> ActionResult:
-        result = super().execute(ctx)
-        # Signal focus should be set if entity supports it
-        if ctx.entity.focus_mode != "none":
-            return ActionResult(
-                output=result.output,
-                effects=result.effects,
-                set_focus=ctx.entity,
-            )
-        return result
-
 
 class CloseCommand(ActionCommand):
     """Command for the 'close' action.
 
-    Signals that focus should be cleared after execution.
+    Focus is now controlled by templates via effects.clear_focus().
+    This command just renders the on_close template.
     """
 
     def get_handler_text(self, entity: ResolvedEntity) -> str | None:
         return entity.on_close
-
-    def execute(self, ctx: ActionContext) -> ActionResult:
-        result = super().execute(ctx)
-        return ActionResult(
-            output=result.output,
-            effects=result.effects,
-            clear_focus=True,
-        )

@@ -7,7 +7,7 @@ import discord
 from discord import Interaction
 
 from mudd.services.entity_resolution import ViewMode
-from mudd.services.rendering import RenderingService, TemplateRenderError
+from mudd.services.rendering import RenderingService
 
 if TYPE_CHECKING:
     from mudd.services.entity import EntityService
@@ -31,91 +31,48 @@ async def handle_escape(
     inventory: "InventoryService",
     rendering: RenderingService,
 ) -> None:
-    """Handle escape action (close focus, show room or thread item).
+    """Handle escape action in inventory thread (close focus, show thread item).
 
-    This is shared between /look and /interact commands.
+    This is only used for inventory thread containers. Room escape is now
+    handled by the room entity's on_look template (ADR 0006).
 
     Args:
         interaction: Discord interaction
         ctx: Interaction context from entity resolution
         entity_resolution: Service for focus management
         entity_service: Service for entity lookups
-        visibility_service: Service for room name lookups
+        visibility_service: Service for room name lookups (unused, kept for API compat)
         inventory: Service for inventory thread lookups
         rendering: Service for template rendering
     """
     user_id = interaction.user.id
-    room = ctx.room
 
-    if ctx.view_mode == ViewMode.INVENTORY_THREAD and ctx.thread_instance_id:
-        # In inventory thread container - close focus and show the container
-        await entity_resolution.clear_focus(user_id, reason="close")
-
-        # Get thread item and show it
-        channel = interaction.channel
-        if isinstance(channel, (discord.abc.GuildChannel, discord.Thread)):
-            thread_item = await inventory.get_thread_item(channel)
-            if thread_item:
-                detail_text = await rendering.render_entity_on_look(
-                    thread_item,
-                    entity_service,
-                    None,
-                    include_heading=False,  # Thread title shows the item name
-                )
-                await interaction.response.send_message(detail_text, ephemeral=True)
-                return
-
+    if ctx.view_mode != ViewMode.INVENTORY_THREAD or not ctx.thread_instance_id:
+        # This shouldn't happen - room escape should go through room entity
+        logger.warning(
+            "handle_escape called outside inventory thread context for user %s",
+            user_id,
+        )
         await interaction.response.send_message(
             "You see nothing special.", ephemeral=True
         )
         return
 
-    # Room escape - clear focus and show room
-    close_msg = None
+    # In inventory thread container - close focus and show the container
+    await entity_resolution.clear_focus(user_id, reason="close")
 
-    # Get focus to capture entity before clearing (for template rendering)
-    focus = await entity_resolution.get_focus(user_id, room)
-    focused_entity = None
-    if focus:
-        focused_entity = await entity_service.get_entity(focus.entity_id)
-
-    # Clear focus with "close" reason to get on_close template
-    close_template = await entity_resolution.clear_focus(user_id, reason="close")
-
-    # Render close message if we have template and entity
-    if close_template and focused_entity:
-        try:
-            close_msg = rendering.render(close_template, focused_entity, "")
-        except TemplateRenderError:
-            logger.warning(
-                "Template error rendering on_close for entity '%s'",
-                focused_entity.id,
-                exc_info=True,
+    # Get thread item and show it
+    channel = interaction.channel
+    if isinstance(channel, (discord.abc.GuildChannel, discord.Thread)):
+        thread_item = await inventory.get_thread_item(channel)
+        if thread_item:
+            detail_text = await rendering.render_entity_on_look(
+                thread_item,
+                entity_service,
+                None,
+                include_heading=False,  # Thread title shows the item name
             )
-            entity_name = focused_entity.name
-            close_msg = f"You step away from the *{entity_name}*."
+            await interaction.response.send_message(detail_text, ephemeral=True)
+            return
 
-    # Show room description + top-level entities
-    room_name = await visibility_service.get_room_name(room) if room else None
-    topic = getattr(interaction.channel, "topic", None)
-    room_description = topic or "You see nothing special."
-
-    entity_text = ""
-    if room:
-        entities = await entity_service.get_top_level_room_entities(room)
-        entity_text = await rendering.format_room_entities(
-            entities, entity_service, room
-        )
-
-    # Build message, prepending close message if present
-    parts = []
-    if close_msg:
-        parts.append(close_msg)
-    if room_name:
-        parts.append(f"### {room_name}")
-    parts.append(room_description)
-    if entity_text:
-        parts.append(entity_text)
-
-    message = "\n\n".join(parts)
-    await interaction.response.send_message(message, ephemeral=True)
+    await interaction.response.send_message("You see nothing special.", ephemeral=True)

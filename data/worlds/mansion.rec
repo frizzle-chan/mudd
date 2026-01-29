@@ -163,6 +163,13 @@ OnAttack: You attack the {{ name }}, but it has no effect.
 OnUse: You can't use the {{ name }}.
 OnTake: You can't take the {{ name }}.
 
+Id: base-room
+Name: Room
+Prototype: object
+OnLook: {{ effects.clear_focus() }}{{ room.description() }}
++
++ {{ room.entities() }}
+
 Id: furniture
 Name: furniture
 Prototype: object
@@ -175,8 +182,8 @@ DescriptionShort: A {{ name }} sits here.
 FocusMode: container
 OnLook: {{ e.description_long or e.description_short or "You see nothing special." }}
 OnUse: You open the {{ name }}.{% if contents %} Inside:{{ contents }}{% else %} It's empty.{% endif %}
-OnOpen: You open the {{ name }}.{% if contents %} Inside:{{ contents }}{% else %} It's empty.{% endif %}
-OnClose: You close the {{ name }}.
+OnOpen: {{ effects.set_focus() }}You open the {{ name }}.{% if contents %} Inside:{{ contents }}{% else %} It's empty.{% endif %}
+OnClose: {{ effects.clear_focus() }}You close the {{ name }}.
 
 Id: glass_object
 Name: Glass Object
@@ -504,14 +511,14 @@ ContentsVisible: no
 DescriptionShort: An old {{ name }} hums on the desk.
 DescriptionLong: A bulky CRT monitor displaying green text on black. The case is beige plastic, yellowed with age. A small sticker reads "MUDD-OS v0.2.1".
 OnUse: The CRT hums as you press the power button. Green text flickers to life. You can now __login__.
-OnOpen: ```
+OnOpen: {{ effects.set_focus() }}```
 + ┏┳┓╻ ╻╺┳┓╺┳┓   ┏━┓┏━┓
 + ┃┃┃┃ ┃ ┃┃ ┃┃╺━╸┃ ┃┗━┓
 + ╹ ╹┗━┛╺┻┛╺┻┛   ┗━┛┗━┛
 + ```
 + *MUDD-OS v0.2.1 — Multi-User Dungeon (Discord)*
 + Welcome, GUEST. You have access to the following files:{% if contents %}{{ contents }}{% else %} (none){% endif %}
-OnClose: ```
+OnClose: {{ effects.clear_focus() }}```
 + LOGGING OUT...
 +
 + GOODBYE, GUEST.
@@ -745,8 +752,8 @@ FocusMode: container
 DescriptionShort: A section of {{ name }} displays rotating artwork{% if contents %}:{{ contents }}{% endif %}
 DescriptionLong: A dedicated wall space where the curator rotates pieces from the collection. A small placard reads "Featured Works - Selection changes periodically. All artwork drawn by real human beings."
 ContentsVisible: yes
-OnOpen: You step closer to examine the {{ name }}.{% if contents %} Currently on display:{{ contents }}{% else %} The wall is bare.{% endif %}
-OnClose: You step back from the {{ name }}.
+OnOpen: {{ effects.set_focus() }}You step closer to examine the {{ name }}.{% if contents %} Currently on display:{{ contents }}{% else %} The wall is bare.{% endif %}
+OnClose: {{ effects.clear_focus() }}You step back from the {{ name }}.
 
 # Gallery wall paintings (spawned by gallery_wall_pool)
 
@@ -889,8 +896,8 @@ DescriptionShort: An oversized {{ name }} sits in the corner.
 DescriptionLong: A vintage wooden globe on a brass stand. You can __open__ the northern hemisphere to reveal the minibar inside.
 ContentsVisible: no
 OnUse: You swing open the globe and pour yourself a drink. It restores health.
-OnOpen: You swing open the northern hemisphere.{% if contents %} Inside:{{ contents }}{% else %} It's empty.{% endif %}
-OnClose: You swing the globe closed.
+OnOpen: {{ effects.set_focus() }}You swing open the northern hemisphere.{% if contents %} Inside:{{ contents }}{% else %} It's empty.{% endif %}
+OnClose: {{ effects.clear_focus() }}You swing the globe closed.
 
 Id: lounge_fridge
 Name: Drink Fridge
@@ -900,8 +907,8 @@ FocusMode: container
 DescriptionShort: A windowed {{ name }} sits against the east wall.
 DescriptionLong: A glass-door mini fridge humming quietly. The glass is fogged with condensation. You can __open__ it to see what's inside.
 OnTouch: The glass is cold and slightly damp with condensation.
-OnOpen: You swing open the fridge door.{% if contents %} Inside:{{ contents }}{% else %} It's empty.{% endif %}
-OnClose: You close the fridge door.
+OnOpen: {{ effects.set_focus() }}You swing open the fridge door.{% if contents %} Inside:{{ contents }}{% else %} It's empty.{% endif %}
+OnClose: {{ effects.clear_focus() }}You close the fridge door.
 
 Id: lounge_chairs
 Name: Comfy Chairs
@@ -1099,8 +1106,8 @@ Room: library
 DescriptionShort: A {{ name }} sits in the southern half of the room.
 DescriptionLong: An antique writing desk with a worn leather top. There's a drawer you can __open__.
 ContentsVisible: no
-OnOpen: You pull open the drawer.{% if contents %} Inside:{{ contents }}{% else %} It's empty.{% endif %}
-OnClose: You slide the drawer shut.
+OnOpen: {{ effects.set_focus() }}You pull open the drawer.{% if contents %} Inside:{{ contents }}{% else %} It's empty.{% endif %}
+OnClose: {{ effects.clear_focus() }}You slide the drawer shut.
 
 Id: library_side_table
 Name: Side Table
@@ -1589,8 +1596,8 @@ ContentsVisible: no
 DescriptionShort: Several {{ name }} are arranged around the room.
 DescriptionLong: Plush armchairs upholstered in faded floral fabric. They look well-loved. You could __search__ between the cushions.
 OnUse: You settle into one of the armchairs near the fire. The warmth and comfort wash over you. You feel your health regenerating.
-OnOpen: You dig around between the cushions.{% if contents %} You find:{{ contents }}{% else %} Nothing but lint and crumbs.{% endif %}
-OnClose: You stop rummaging through the cushions.
+OnOpen: {{ effects.set_focus() }}You dig around between the cushions.{% if contents %} You find:{{ contents }}{% else %} Nothing but lint and crumbs.{% endif %}
+OnClose: {{ effects.clear_focus() }}You stop rummaging through the cushions.
 
 Id: sitting_room_fireplace
 Name: Fireplace
@@ -1612,8 +1619,8 @@ Room: store-room
 ContentsVisible: no
 DescriptionShort: a beat-up {{ name }} sits in the corner
 DescriptionLong: A cardboard box with "TEST FIXTURES - DO NOT REMOVE" written on it in marker.
-OnOpen: You open the {{ name }}.{% if contents %} Inside:{{ contents }}{% else %} It's empty.{% endif %}
-OnClose: You close the {{ name }}.
+OnOpen: {{ effects.set_focus() }}You open the {{ name }}.{% if contents %} Inside:{{ contents }}{% else %} It's empty.{% endif %}
+OnClose: {{ effects.clear_focus() }}You close the {{ name }}.
 
 Id: storeroom_crate
 Name: Wooden Crate
@@ -1622,8 +1629,8 @@ Room: store-room
 ContentsVisible: no
 DescriptionShort: a sturdy {{ name }}
 DescriptionLong: A wooden crate, slightly worn from use.
-OnOpen: You pry open the *{{ name }}*.{% if contents %} Inside:{{ contents }}{% else %} It's empty.{% endif %}
-OnClose: You close the *{{ name }}*.
+OnOpen: {{ effects.set_focus() }}You pry open the *{{ name }}*.{% if contents %} Inside:{{ contents }}{% else %} It's empty.{% endif %}
+OnClose: {{ effects.clear_focus() }}You close the *{{ name }}*.
 
 Id: test_orb
 Name: Test Orb
@@ -1652,8 +1659,8 @@ Room: store-room
 Container: storeroom_box
 DescriptionShort: a small {{ name }}
 DescriptionLong: A metal lockbox.
-OnOpen: TEST_OPEN_RESPONSE - You open the lockbox.
-OnClose: TEST_CLOSE_RESPONSE - You close the lockbox.
+OnOpen: {{ effects.set_focus() }}TEST_OPEN_RESPONSE - You open the lockbox.
+OnClose: {{ effects.clear_focus() }}TEST_CLOSE_RESPONSE - You close the lockbox.
 
 Id: test_record
 Name: Test Record
@@ -1728,7 +1735,7 @@ Room: store-room
 Container: storeroom_box
 DescriptionShort: a {{ name }} that grants random loot
 DescriptionLong: A test chest that grants random loot when opened.
-OnOpen: TEST_RANDOM_GRANT_RESPONSE - You open the chest and find something inside!{{ effects.grant_random("test_loot") }}
+OnOpen: {{ effects.set_focus() }}TEST_RANDOM_GRANT_RESPONSE - You open the chest and find something inside!{{ effects.grant_random("test_loot") }}
 
 Id: test_common_loot
 Name: Test Common Loot

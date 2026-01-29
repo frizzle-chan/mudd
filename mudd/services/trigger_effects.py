@@ -50,6 +50,8 @@ class TriggerEffects:
     - `grant_currency(amount)`: Queue granting currency from house account
     - `destroy()`: Signal that this entity instance should be destroyed
     - `dispense()`: Signal that an item should be dispensed from this container
+    - `set_focus()`: Establish focus on the current entity
+    - `clear_focus()`: Clear the user's current focus
 
     Example template:
         {{ effects.broadcast("**" ~ user.name ~ "** put on music.") }}
@@ -65,6 +67,8 @@ class TriggerEffects:
     _pickup_called: bool = False
     _destroy_called: bool = False
     _dispense_called: bool = False
+    _set_focus: bool = False
+    _clear_focus: bool = False
     grants: list[GrantEffect] = field(default_factory=list)
     grant_randoms: list[GrantRandomEffect] = field(default_factory=list)
     currency_grants: list[CurrencyGrantEffect] = field(default_factory=list)
@@ -198,6 +202,40 @@ class TriggerEffects:
     def has_dispense(self) -> bool:
         """Whether dispense() was called during template rendering."""
         return self._dispense_called
+
+    def set_focus(self) -> str:
+        """Establish focus on the current entity.
+
+        Must be called in an action handler (e.g., on_open, on_look). The entity
+        will become the user's focused context after the response is sent.
+
+        Returns:
+            Empty string (allows inline use in templates without output)
+        """
+        self._set_focus = True
+        return ""
+
+    @property
+    def has_set_focus(self) -> bool:
+        """Whether set_focus() was called during template rendering."""
+        return self._set_focus
+
+    def clear_focus(self) -> str:
+        """Clear the user's current focus.
+
+        Must be called in an action handler (e.g., on_close, on_look). The user's
+        focus will be cleared after the response is sent.
+
+        Returns:
+            Empty string (allows inline use in templates without output)
+        """
+        self._clear_focus = True
+        return ""
+
+    @property
+    def has_clear_focus(self) -> bool:
+        """Whether clear_focus() was called during template rendering."""
+        return self._clear_focus
 
     def queue_thread_deletion(self, instance_id: UUID, guild_id: int) -> None:
         """Queue a thread deletion to run after response.

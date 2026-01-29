@@ -104,6 +104,7 @@ class TestClient:
             rendering_service=self.rendering_service,
             inventory_service=self.inventory_service,
             currency_service=self.currency_service,
+            pool=pool,
         )
         self.interact_cog = Interact(
             bot=None,

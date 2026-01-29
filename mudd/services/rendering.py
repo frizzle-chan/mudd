@@ -1,8 +1,11 @@
 """Entity rendering service using Jinja2 templates."""
 
+from __future__ import annotations
+
 import logging
 from typing import Any, Protocol
 
+import asyncpg
 from jinja2 import (
     Environment,
     StrictUndefined,
@@ -139,6 +142,80 @@ class ContainerContentsFetcher(Protocol):
     async def get_container_contents(
         self, container_id: str, room: str
     ) -> list[EntityInstance]: ...
+
+    async def get_top_level_room_entities(self, room: str) -> list[EntityInstance]: ...
+
+
+class RoomContext:
+    """Lazy room data access for room entity templates.
+
+    Provides room.description() and room.entities() template functions
+    for rendering room entities. Data is pre-fetched before template
+    rendering to allow synchronous access in templates.
+
+    Usage:
+        room_ctx = RoomContext(room_id, pool, entity_service)
+        await room_ctx.prefetch(rendering_service)
+        # Now room_ctx.description() and room_ctx.entities() are available
+    """
+
+    def __init__(
+        self,
+        room_id: str,
+        pool: asyncpg.Pool,
+        entity_service: ContainerContentsFetcher,
+    ) -> None:
+        self._room_id = room_id
+        self._pool = pool
+        self._entity_service = entity_service
+        self._description_cache: str | None = None
+        self._entities_cache: str | None = None
+
+    def description(self) -> str:
+        """Fetch room description synchronously (pre-fetched).
+
+        Returns:
+            Room description from rooms table, or default message.
+
+        Raises:
+            RuntimeError: If prefetch() was not called first.
+        """
+        if self._description_cache is None:
+            raise RuntimeError("RoomContext not initialized - call prefetch() first")
+        return self._description_cache
+
+    def entities(self) -> str:
+        """Fetch formatted entity list synchronously (pre-fetched).
+
+        Returns:
+            Formatted string of visible entities, or empty string if none.
+
+        Raises:
+            RuntimeError: If prefetch() was not called first.
+        """
+        if self._entities_cache is None:
+            raise RuntimeError("RoomContext not initialized - call prefetch() first")
+        return self._entities_cache
+
+    async def prefetch(self, rendering_service: RenderingService) -> None:
+        """Pre-fetch room data before template rendering.
+
+        Args:
+            rendering_service: Service for formatting entities.
+        """
+        # Get room description from rooms table
+        row = await self._pool.fetchrow(
+            "SELECT name, description FROM rooms WHERE id = $1", self._room_id
+        )
+        self._description_cache = (
+            row["description"] if row else "You see nothing special."
+        )
+
+        # Get and format visible entities
+        entities = await self._entity_service.get_top_level_room_entities(self._room_id)
+        self._entities_cache = await rendering_service.format_room_entities(
+            entities, self._entity_service, self._room_id
+        )
 
 
 def _lowercase_first(s: str) -> str:
@@ -436,3 +513,52 @@ class RenderingService:
             parts.append("-# (error rendering template)")
 
         return "\n\n".join(parts) if parts else "You see nothing special."
+
+    async def render_room_entity(
+        self,
+        entity: ResolvedEntity,
+        room_id: str,
+        pool: asyncpg.Pool,
+        entity_service: ContainerContentsFetcher,
+    ) -> tuple[str, TriggerEffects]:
+        """Render a room entity's on_look with room context.
+
+        Room entities have access to a special `room` context providing:
+            - `room.description()`: Room description from database
+            - `room.entities()`: Formatted list of visible entities
+
+        Args:
+            entity: The room entity to render
+            room_id: Room ID for fetching room data
+            pool: Database connection pool
+            entity_service: Service for fetching entities
+
+        Returns:
+            Tuple of (rendered output, collected effects)
+        """
+        room_ctx = RoomContext(room_id, pool, entity_service)
+        await room_ctx.prefetch(self)
+
+        effects = TriggerEffects()
+        context: dict[str, Any] = {
+            "e": entity,
+            "name": f"*{entity.display_name}*",
+            "room": room_ctx,
+            "effects": effects,
+        }
+
+        default_room_template = "{{ room.description() }}\n\n{{ room.entities() }}"
+        template_text = entity.on_look or default_room_template
+
+        try:
+            output = self._renderer.render_with_context(
+                template_text, context, entity.id
+            )
+        except TemplateRenderError:
+            logger.warning(
+                "Template error rendering on_look for room entity '%s', using fallback",
+                entity.id,
+            )
+            output = f"{room_ctx.description()}\n\n{room_ctx.entities()}"
+
+        return output, effects

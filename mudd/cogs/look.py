@@ -8,7 +8,7 @@ from discord import Interaction, app_commands
 from discord.ext import commands
 
 from mudd.cogs.shared import handle_escape
-from mudd.services.entity_resolution import ResolutionError, ViewMode
+from mudd.services.entity_resolution import ResolutionError, ViewMode, encode_choice
 from mudd.services.rendering import RenderingService
 
 if TYPE_CHECKING:
@@ -31,6 +31,7 @@ class Look(commands.Cog):
         rendering_service: RenderingService,
         inventory_service: "InventoryService",
         currency_service: "CurrencyService",
+        pool: asyncpg.Pool,
     ) -> None:
         self.bot = bot
         self.entity_service = entity_service
@@ -39,6 +40,7 @@ class Look(commands.Cog):
         self._rendering = rendering_service
         self._inventory = inventory_service
         self._currency = currency_service
+        self._pool = pool
 
     async def at_autocomplete(
         self, interaction: Interaction, current: str
@@ -72,33 +74,24 @@ class Look(commands.Cog):
     @app_commands.command(name="look", description="View surroundings or examine item")
     @app_commands.describe(at="Thing to examine")
     @app_commands.autocomplete(at=at_autocomplete)
-    async def look(self, interaction: Interaction, at: str):
+    async def look(self, interaction: Interaction, at: str | None = None):
         """Look at room or specific entity."""
         # Build context for resolution
-        ctx = await self.entity_resolution.build_context(interaction, at)
+        ctx = await self.entity_resolution.build_context(interaction, at or "")
         user_id = interaction.user.id
         room = ctx.room
 
-        # Handle "Room" and empty input as escape (show room description)
-        # This supports both legacy calls with at="Room" and new escape:room values
+        # If no target, resolve to room entity
         if not at or at == "Room":
-            await handle_escape(
-                interaction,
-                ctx,
-                entity_resolution=self.entity_resolution,
-                entity_service=self.entity_service,
-                visibility_service=self.visibility_service,
-                inventory=self._inventory,
-                rendering=self._rendering,
-            )
-            return
+            room_entity_id = f"room:{room}"
+            at = encode_choice("room", room_entity_id)
 
         # Resolve target using unified API
         result = await self.entity_resolution.resolve_target(ctx, at)
 
-        if isinstance(result, ResolutionError):
-            if result.error_type == "escape":
-                # Handle escape - clear focus and show room/item
+        if isinstance(result, ResolutionError) and result.error_type == "escape":
+            # Escape from inventory thread container - show the container
+            if ctx.view_mode == ViewMode.INVENTORY_THREAD:
                 await handle_escape(
                     interaction,
                     ctx,
@@ -109,57 +102,74 @@ class Look(commands.Cog):
                     rendering=self._rendering,
                 )
                 return
-            elif result.error_type == "ambiguous":
+            # For room mode, resolve to room entity (legacy escape:room)
+            room_entity_id = f"room:{room}"
+            at = encode_choice("room", room_entity_id)
+            result = await self.entity_resolution.resolve_target(ctx, at)
+
+        # Check if still a resolution error after retry
+        if isinstance(result, ResolutionError):
+            if result.error_type == "ambiguous":
                 # Disambiguation prompt
                 await interaction.response.send_message(result.message, ephemeral=True)
                 return
+
+            # Not found or other error
+            if ctx.view_mode == ViewMode.INVENTORY_THREAD:
+                await interaction.response.send_message(result.message, ephemeral=True)
             else:
-                # Not found
-                if ctx.view_mode == ViewMode.INVENTORY_THREAD:
-                    await interaction.response.send_message(
-                        result.message, ephemeral=True
-                    )
-                else:
-                    # Show room description on not found
-                    topic = getattr(interaction.channel, "topic", None)
-                    room_description = topic or "You see nothing special."
-                    await interaction.response.send_message(
-                        f"{result.message}\n\n{room_description}",
-                        ephemeral=True,
-                    )
-                return
+                # Show room description on not found
+                topic = getattr(interaction.channel, "topic", None)
+                room_description = topic or "You see nothing special."
+                await interaction.response.send_message(
+                    f"{result.message}\n\n{room_description}",
+                    ephemeral=True,
+                )
+            return
 
         # Successfully resolved entity
         matched_instance = result.instance
         entity = matched_instance.entity
 
-        # Handle focus for room entities only
-        if ctx.view_mode == ViewMode.ROOM:
-            # Check if looking at entity that is NOT in current focus
+        # Check if this is a room entity (ID starts with "room:")
+        is_room_entity = entity.id.startswith("room:")
+
+        # Update focus timestamp if looking at entity in focus (prevents timeout)
+        if ctx.view_mode == ViewMode.ROOM and not is_room_entity:
             is_in_focus = await self.entity_resolution.is_entity_in_focus(
                 user_id, room, entity.id
             )
-
-            # Clear focus if looking at unrelated entity
-            # (per ADR 0003: "focus follows attention")
-            if not is_in_focus:
-                await self.entity_resolution.clear_focus(user_id, reason="interaction")
-            else:
-                # Update timestamp to prevent timeout
+            if is_in_focus:
                 await self.entity_resolution.update_focus_timestamp(user_id)
 
         # Render on_look template
         # Use room=None for inventory items
         render_room = room if result.source == "room" else None
 
-        # Fetch balance for wallet entities
-        balance_str = ""
-        if entity.id == "wallet":
-            balance = await self._currency.get_balance(user_id)
-            if balance is not None:
-                balance_str = f"¥{balance:,}"
+        if is_room_entity:
+            # Room entity rendering with RoomContext
+            output, effects = await self._rendering.render_room_entity(
+                entity, room, self._pool, self.entity_service
+            )
 
-        detail_text = await self._rendering.render_entity_on_look(
-            matched_instance, self.entity_service, render_room, balance_str
-        )
+            # Process focus effects from room entity template
+            if effects.has_clear_focus:
+                await self.entity_resolution.clear_focus(user_id, reason="close")
+
+            # Add room name heading
+            room_name = await self.visibility_service.get_room_name(room)
+            detail_text = f"### {room_name}\n\n{output}" if room_name else output
+        else:
+            # Regular entity rendering
+            # Fetch balance for wallet entities
+            balance_str = ""
+            if entity.id == "wallet":
+                balance = await self._currency.get_balance(user_id)
+                if balance is not None:
+                    balance_str = f"¥{balance:,}"
+
+            detail_text = await self._rendering.render_entity_on_look(
+                matched_instance, self.entity_service, render_room, balance_str
+            )
+
         await interaction.response.send_message(detail_text, ephemeral=True)
