@@ -9,7 +9,12 @@ from discord.ext import commands
 
 from mudd.commands import ActionContext, create_command
 from mudd.services.entity_resolution import ResolutionError, ViewMode, encode_choice
-from mudd.services.rendering import RenderingService, RoomContext, TemplateRenderError
+from mudd.services.rendering import (
+    EntityContext,
+    RenderingService,
+    RoomContext,
+    TemplateRenderError,
+)
 from mudd.types import UserContext, VerbAction
 
 if TYPE_CHECKING:
@@ -133,18 +138,17 @@ class Look(commands.Cog):
                 room, self._pool, self.entity_service, self._rendering
             )
 
-        # Fetch container contents for template
-        if is_inventory_source:
-            container_contents = (
-                await self.entity_resolution._get_inventory_container_contents(
-                    user_id, entity.id
-                )
-            )
-        else:
-            container_contents = await self.entity_service.get_container_contents(
-                entity.id, room
-            )
-        contents_str = await self._rendering.build_contents_string(container_contents)
+        # Create EntityContext with lazy contents fetching
+        entity_ctx = EntityContext(
+            entity=entity,
+            instance_id=matched_instance.instance_id,
+            source=cast(str, source),  # type: ignore[arg-type]
+            room=room,
+            user_id=user_id,
+            entity_service=self.entity_service,
+            entity_resolution=self.entity_resolution,
+            rendering_service=self._rendering,
+        )
 
         # Create user context for template with lazy balance fetching
         user_context = UserContext(
@@ -157,14 +161,11 @@ class Look(commands.Cog):
         # Build action context and execute LookCommand
         action_ctx = ActionContext(
             interaction=interaction,
-            entity=entity,
-            instance_id=matched_instance.instance_id,
-            room=room,
+            entity=entity_ctx,
             source=cast(str, source),  # type: ignore[arg-type]
-            user_context=user_context,
-            container_contents=contents_str,
+            user=user_context,
             focused_container=None,
-            room_context=room_ctx,
+            room=room_ctx,
         )
 
         command = create_command(VerbAction.ON_LOOK, self._rendering)

@@ -3,9 +3,14 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Protocol
+from collections.abc import Coroutine
+from typing import TYPE_CHECKING, Any, Literal, Protocol
+from uuid import UUID
 
 import asyncpg
+
+if TYPE_CHECKING:
+    from mudd.services.entity_resolution import EntityResolutionService
 from jinja2 import (
     Environment,
     StrictUndefined,
@@ -190,6 +195,11 @@ class RoomContext:
         self._description_cache: str | None = None
         self._entities_cache: str | None = None
 
+    @property
+    def id(self) -> str:
+        """The room ID."""
+        return self._room_id
+
     async def description(self) -> str:
         """Fetch room description lazily.
 
@@ -219,6 +229,155 @@ class RoomContext:
                 entities, self._entity_service, self._room_id
             )
         return self._entities_cache
+
+
+class EntityContext:
+    """Lazy entity data access for templates.
+
+    Wraps a ResolvedEntity and provides lazy contents fetching via e.contents.
+    Proxies all ResolvedEntity properties for templates using {{ e.name }},
+    {{ e.description_long }}, etc.
+
+    Usage in templates:
+        {{ e.contents }}
+        {{ e.name }}
+        {{ e.display_name }}
+
+    Usage in Python:
+        entity_ctx = EntityContext(
+            entity=resolved_entity,
+            instance_id=instance.instance_id,
+            source="room",
+            room="foyer",
+            user_id=123,
+            entity_service=entity_service,
+            entity_resolution=entity_resolution,
+            rendering_service=rendering_service,
+        )
+    """
+
+    def __init__(
+        self,
+        entity: ResolvedEntity,
+        instance_id: UUID,
+        source: Literal["room", "inventory", "container"],
+        room: str,
+        user_id: int,
+        entity_service: ContainerContentsFetcher,
+        entity_resolution: EntityResolutionService | None,
+        rendering_service: RenderingService,
+        skip_contents: bool = False,
+    ) -> None:
+        self._entity = entity
+        self._instance_id = instance_id
+        self._source = source
+        self._room = room
+        self._user_id = user_id
+        self._entity_service = entity_service
+        self._entity_resolution = entity_resolution
+        self._rendering_service = rendering_service
+        self._skip_contents = skip_contents
+
+    @property
+    def instance_id(self) -> UUID:
+        """The entity instance UUID."""
+        return self._instance_id
+
+    # Proxy all ResolvedEntity properties
+    @property
+    def id(self) -> str:
+        return self._entity.id
+
+    @property
+    def name(self) -> str:
+        return self._entity.name
+
+    @property
+    def display_name(self) -> str:
+        return self._entity.display_name
+
+    @property
+    def description_short(self) -> str | None:
+        return self._entity.description_short
+
+    @property
+    def description_long(self) -> str | None:
+        return self._entity.description_long
+
+    @property
+    def on_look(self) -> str | None:
+        return self._entity.on_look
+
+    @property
+    def on_touch(self) -> str | None:
+        return self._entity.on_touch
+
+    @property
+    def on_attack(self) -> str | None:
+        return self._entity.on_attack
+
+    @property
+    def on_use(self) -> str | None:
+        return self._entity.on_use
+
+    @property
+    def on_take(self) -> str | None:
+        return self._entity.on_take
+
+    @property
+    def on_open(self) -> str | None:
+        return self._entity.on_open
+
+    @property
+    def on_close(self) -> str | None:
+        return self._entity.on_close
+
+    @property
+    def on_drop(self) -> str | None:
+        return self._entity.on_drop
+
+    @property
+    def contents_visible(self) -> bool | None:
+        return self._entity.contents_visible
+
+    @property
+    def focus_mode(self) -> str:
+        return self._entity.focus_mode
+
+    @property
+    def rarity(self) -> str:
+        return self._entity.rarity
+
+    @property
+    def contents(self) -> Coroutine[Any, Any, str]:
+        """Fetch and format container contents lazily.
+
+        Returns a coroutine that Jinja2's render_async will auto-await.
+        Templates use {{ e.contents }} (no parentheses needed).
+
+        Returns:
+            Coroutine yielding formatted bullet list of contents, or empty string.
+        """
+        return self._get_contents()
+
+    async def _get_contents(self) -> str:
+        """Internal async implementation for contents fetching."""
+        if self._skip_contents:
+            return ""
+
+        is_inventory_source = self._source in ("inventory", "container")
+        if is_inventory_source and self._entity_resolution is not None:
+            container_contents = (
+                await self._entity_resolution._get_inventory_container_contents(
+                    self._user_id, self._entity.id
+                )
+            )
+        else:
+            container_contents = await self._entity_service.get_container_contents(
+                self._entity.id, self._room
+            )
+
+        return await self._rendering_service.build_contents_string(container_contents)
 
 
 def _lowercase_first(s: str) -> str:
@@ -273,36 +432,33 @@ class RenderingService:
     async def render_with_effects(
         self,
         template: str | None,
-        entity: ResolvedEntity,
+        entity: EntityContext,
         user: UserContext,
-        contents: str = "",
         container: ResolvedEntity | None = None,
         room: RoomContext | None = None,
     ) -> tuple[str, TriggerEffects]:
         """Render a template and collect side effects.
 
         Supports templates that call async functions like room.description(),
-        room.entities(), and user.balance().
+        room.entities(), user.balance(), and e.contents.
 
         Extended template context:
-            - `e`: The ResolvedEntity
+            - `e`: EntityContext with all entity properties and lazy e.contents
             - `name`: Entity name formatted with Discord italics (*Name*)
-            - `contents`: Pre-formatted bullet list of container contents
             - `user`: UserContext with name, mention, and optional async balance()
             - `effects`: TriggerEffects for queuing side effects
             - `container`: Optional ResolvedEntity for focused container (drop target)
             - `room`: Optional RoomContext with async room.description()/entities()
 
         Example template:
+            {{ e.contents }}
             {{ room.description() }}
-            {{ room.entities() }}
             {{ user.balance() }}
 
         Args:
             template: Jinja2 template string (or None)
-            entity: The entity providing context
+            entity: EntityContext with lazy contents fetching
             user: User context with name, mention, and optional balance()
-            contents: Pre-formatted bullet list of contents (default: "")
             container: Optional container entity for drop context (default: None)
             room: Optional RoomContext for room.description()/entities() (default: None)
 
@@ -318,11 +474,10 @@ class RenderingService:
         context: dict[str, Any] = {
             "e": entity,
             "name": f"*{entity.display_name}*",
-            "contents": contents,
             "user": user,
             "effects": effects,
-            "container": container,  # Always include, may be None
-            "room": room,  # Always include, may be None
+            "container": container,
+            "room": room,
         }
         output = await self._renderer.render_with_context(template, context, entity.id)
         return output, effects

@@ -3,7 +3,6 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
-from uuid import UUID
 
 from discord import Interaction
 
@@ -12,7 +11,7 @@ from mudd.services.trigger_effects import TriggerEffects
 from mudd.types import UserContext
 
 if TYPE_CHECKING:
-    from mudd.services.rendering import RenderingService, RoomContext
+    from mudd.services.rendering import EntityContext, RenderingService, RoomContext
 
 
 @dataclass(frozen=True)
@@ -25,14 +24,11 @@ class ActionContext:
     """
 
     interaction: Interaction
-    entity: ResolvedEntity
-    instance_id: UUID
-    room: str
+    entity: "EntityContext"
     source: Literal["room", "inventory", "container"]
-    user_context: UserContext
-    container_contents: str
+    user: UserContext
     focused_container: ResolvedEntity | None
-    room_context: "RoomContext | None" = None
+    room: "RoomContext | None" = None
 
 
 @dataclass(frozen=True)
@@ -86,16 +82,15 @@ class ActionCommand(ABC):
         Returns:
             ActionResult with rendered output and effects
         """
-        handler_text = self.get_handler_text(ctx.entity)
+        handler_text = self.get_handler_text(ctx.entity._entity)
         if handler_text is None:
             return ActionResult(output="Nothing happens.", effects=TriggerEffects())
 
         output, effects = await self._rendering.render_with_effects(
             handler_text,
             ctx.entity,
-            ctx.user_context,
-            ctx.container_contents,
+            ctx.user,
             ctx.focused_container,
-            ctx.room_context,
+            ctx.room,
         )
         return ActionResult(output=output, effects=effects)

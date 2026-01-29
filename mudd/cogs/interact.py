@@ -16,7 +16,12 @@ from mudd.matching.verb_matcher import match_verb
 from mudd.services.entity import ResolvedEntity
 from mudd.services.entity_resolution import ResolutionError, ViewMode
 from mudd.services.inventory import DropTarget
-from mudd.services.rendering import RenderingService, RoomContext, TemplateRenderError
+from mudd.services.rendering import (
+    EntityContext,
+    RenderingService,
+    RoomContext,
+    TemplateRenderError,
+)
 from mudd.services.trigger_effects import TriggerEffects
 from mudd.types import UserContext, VerbAction
 from mudd.utils.text import indefinite_article
@@ -156,19 +161,17 @@ class Interact(commands.Cog):
             if is_in_focus:
                 await self.entity_resolution.update_focus_timestamp(user_id)
 
-        # Fetch container contents for template (regardless of contents_visible)
-        # For inventory items, check inventory container contents
-        if is_inventory_source:
-            container_contents = (
-                await self.entity_resolution._get_inventory_container_contents(
-                    user_id, entity.id
-                )
-            )
-        else:
-            container_contents = await self.entity_service.get_container_contents(
-                entity.id, room
-            )
-        contents_str = await self._rendering.build_contents_string(container_contents)
+        # Create EntityContext with lazy contents fetching
+        entity_ctx = EntityContext(
+            entity=entity,
+            instance_id=matched_instance.instance_id,
+            source=source,
+            room=room,
+            user_id=user_id,
+            entity_service=self.entity_service,
+            entity_resolution=self.entity_resolution,
+            rendering_service=self._rendering,
+        )
 
         # Create user context for template with lazy balance fetching
         user_context = UserContext(
@@ -196,14 +199,11 @@ class Interact(commands.Cog):
         # Build action context and execute command
         action_ctx = ActionContext(
             interaction=interaction,
-            entity=entity,
-            instance_id=matched_instance.instance_id,
-            room=room,
+            entity=entity_ctx,
             source=source,
-            user_context=user_context,
-            container_contents=contents_str,
+            user=user_context,
             focused_container=container,
-            room_context=room_ctx,
+            room=room_ctx,
         )
 
         command = create_command(action_type, self._rendering)
@@ -577,15 +577,26 @@ class Interact(commands.Cog):
             logger.error("Entity %s not found for dispense", item_entity_id)
             return empty_result
 
+        # Build EntityContext for dispensed item (skip_contents=True since dispensed
+        # items don't show their own container contents)
+        item_entity_ctx = EntityContext(
+            entity=item_entity,
+            instance_id=item_instance_id,
+            source="room",
+            room=room,
+            user_id=interaction.user.id,
+            entity_service=self.entity_service,
+            entity_resolution=self.entity_resolution,
+            rendering_service=self._rendering,
+            skip_contents=True,
+        )
+
         # Build action context for the dispensed item
         action_ctx = ActionContext(
             interaction=interaction,
-            entity=item_entity,
-            instance_id=item_instance_id,
-            room=room,
-            source="room",  # Dispensed from room container
-            user_context=user_context,
-            container_contents="",  # Dispensed items don't show container contents
+            entity=item_entity_ctx,
+            source="room",
+            user=user_context,
             focused_container=None,
         )
 

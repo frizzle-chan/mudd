@@ -11,7 +11,7 @@ from mudd.commands.focus import CloseCommand, OpenCommand
 from mudd.commands.inventory import DropCommand, TakeCommand
 from mudd.commands.simple import AttackCommand, LookCommand, TouchCommand, UseCommand
 from mudd.services.entity import ResolvedEntity
-from mudd.services.rendering import RenderingService
+from mudd.services.rendering import EntityContext, RenderingService
 from mudd.services.trigger_effects import TriggerEffects
 from mudd.types import UserContext, VerbAction
 
@@ -76,19 +76,36 @@ def mock_interaction() -> MagicMock:
     return interaction
 
 
+def make_entity_context(
+    entity: ResolvedEntity, rendering_service: RenderingService
+) -> EntityContext:
+    """Create an EntityContext with skip_contents for tests."""
+    return EntityContext(
+        entity=entity,
+        instance_id=UUID("12345678-1234-1234-1234-123456789012"),
+        source="room",
+        room="test-room",
+        user_id=12345,
+        entity_service=MagicMock(),
+        entity_resolution=None,
+        rendering_service=rendering_service,
+        skip_contents=True,
+    )
+
+
 @pytest.fixture
 def action_context(
-    mock_interaction: MagicMock, mock_entity: ResolvedEntity
+    mock_interaction: MagicMock,
+    mock_entity: ResolvedEntity,
+    rendering_service: RenderingService,
 ) -> ActionContext:
     """Create an ActionContext for tests."""
+    entity_ctx = make_entity_context(mock_entity, rendering_service)
     return ActionContext(
         interaction=mock_interaction,
-        entity=mock_entity,
-        instance_id=UUID("12345678-1234-1234-1234-123456789012"),
-        room="test-room",
+        entity=entity_ctx,
         source="room",
-        user_context=UserContext(name="TestUser", mention="<@12345>"),
-        container_contents="",
+        user=UserContext(name="TestUser", mention="<@12345>"),
         focused_container=None,
     )
 
@@ -194,14 +211,12 @@ class TestSimpleCommands:
             focus_mode="none",
             rarity="common",
         )
+        entity_ctx = make_entity_context(entity, rendering_service)
         ctx = ActionContext(
             interaction=MagicMock(),
-            entity=entity,
-            instance_id=UUID("12345678-1234-1234-1234-123456789012"),
-            room="test-room",
+            entity=entity_ctx,
             source="room",
-            user_context=UserContext(name="TestUser", mention="<@12345>"),
-            container_contents="",
+            user=UserContext(name="TestUser", mention="<@12345>"),
             focused_container=None,
         )
         cmd = LookCommand(rendering_service)
@@ -235,14 +250,12 @@ class TestFocusCommands:
         mock_interaction: MagicMock,
     ):
         """OpenCommand no longer sets focus flags - templates control focus."""
+        entity_ctx = make_entity_context(focusable_entity, rendering_service)
         ctx = ActionContext(
             interaction=mock_interaction,
-            entity=focusable_entity,
-            instance_id=UUID("12345678-1234-1234-1234-123456789012"),
-            room="test-room",
+            entity=entity_ctx,
             source="room",
-            user_context=UserContext(name="TestUser", mention="<@12345>"),
-            container_contents="",
+            user=UserContext(name="TestUser", mention="<@12345>"),
             focused_container=None,
         )
         cmd = OpenCommand(rendering_service)
@@ -354,7 +367,10 @@ class TestActionContext:
             action_context.room = "another-room"  # type: ignore
 
     def test_action_context_source_types(
-        self, mock_interaction: MagicMock, mock_entity: ResolvedEntity
+        self,
+        mock_interaction: MagicMock,
+        mock_entity: ResolvedEntity,
+        rendering_service: RenderingService,
     ):
         """ActionContext accepts valid source values."""
         sources: list[Literal["room", "inventory", "container"]] = [
@@ -363,14 +379,22 @@ class TestActionContext:
             "container",
         ]
         for source in sources:
-            ctx = ActionContext(
-                interaction=mock_interaction,
+            entity_ctx = EntityContext(
                 entity=mock_entity,
                 instance_id=UUID("12345678-1234-1234-1234-123456789012"),
-                room="test-room",
                 source=source,
-                user_context=UserContext(name="Test", mention="<@1>"),
-                container_contents="",
+                room="test-room",
+                user_id=12345,
+                entity_service=MagicMock(),
+                entity_resolution=None,
+                rendering_service=rendering_service,
+                skip_contents=True,
+            )
+            ctx = ActionContext(
+                interaction=mock_interaction,
+                entity=entity_ctx,
+                source=source,
+                user=UserContext(name="Test", mention="<@1>"),
                 focused_container=None,
             )
             assert ctx.source == source

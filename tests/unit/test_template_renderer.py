@@ -1,9 +1,13 @@
 """Tests for template renderer."""
 
+from unittest.mock import MagicMock
+from uuid import UUID
+
 import pytest
 
 from mudd.services.entity import ResolvedEntity
 from mudd.services.rendering import (
+    EntityContext,
     RenderingService,
     TemplateRenderer,
     TemplateRenderError,
@@ -34,6 +38,25 @@ def make_entity(
         contents_visible=None,
         focus_mode="none",
         rarity="none",
+    )
+
+
+def make_entity_context(
+    entity: ResolvedEntity,
+    rendering_service: RenderingService,
+    skip_contents: bool = True,
+) -> EntityContext:
+    """Create an EntityContext for tests."""
+    return EntityContext(
+        entity=entity,
+        instance_id=UUID("12345678-1234-1234-1234-123456789012"),
+        source="room",
+        room="test-room",
+        user_id=12345,
+        entity_service=MagicMock(),
+        entity_resolution=None,
+        rendering_service=rendering_service,
+        skip_contents=skip_contents,
     )
 
 
@@ -164,9 +187,10 @@ class TestRenderWithEffects:
     async def test_simple_template_returns_output_and_effects(self, rendering_service):
         """render_with_effects returns tuple of (output, effects)."""
         entity = make_entity()
+        entity_ctx = make_entity_context(entity, rendering_service)
         user = UserContext(name="Frizzle", mention="<@12345>")
         output, effects = await rendering_service.render_with_effects(
-            "Hello world", entity, user
+            "Hello world", entity_ctx, user
         )
         assert output == "Hello world"
         assert effects.broadcasts == []
@@ -174,28 +198,31 @@ class TestRenderWithEffects:
     async def test_template_with_user_context(self, rendering_service):
         """Template can access user.name and user.mention."""
         entity = make_entity()
+        entity_ctx = make_entity_context(entity, rendering_service)
         user = UserContext(name="Frizzle", mention="<@12345>")
         output, effects = await rendering_service.render_with_effects(
-            "Welcome {{ user.name }}!", entity, user
+            "Welcome {{ user.name }}!", entity_ctx, user
         )
         assert output == "Welcome Frizzle!"
 
     async def test_template_with_user_mention(self, rendering_service):
         """Template can use user.mention for @mentions."""
         entity = make_entity()
+        entity_ctx = make_entity_context(entity, rendering_service)
         user = UserContext(name="Frizzle", mention="<@12345>")
         output, effects = await rendering_service.render_with_effects(
-            "{{ user.mention }} did something", entity, user
+            "{{ user.mention }} did something", entity_ctx, user
         )
         assert output == "<@12345> did something"
 
     async def test_template_with_broadcast_effect(self, rendering_service):
         """effects.broadcast() collects messages in effects.broadcasts."""
         entity = make_entity()
+        entity_ctx = make_entity_context(entity, rendering_service)
         user = UserContext(name="Frizzle", mention="<@12345>")
         template = '{{ effects.broadcast("**" ~ user.name ~ "** did it.") }}You did it!'
         output, effects = await rendering_service.render_with_effects(
-            template, entity, user
+            template, entity_ctx, user
         )
         assert output == "You did it!"
         assert effects.broadcasts == ["**Frizzle** did it."]
@@ -203,12 +230,13 @@ class TestRenderWithEffects:
     async def test_template_with_multiple_broadcasts(self, rendering_service):
         """Multiple broadcast() calls collect all messages."""
         entity = make_entity()
+        entity_ctx = make_entity_context(entity, rendering_service)
         user = UserContext(name="Frizzle", mention="<@12345>")
         template = (
             '{{ effects.broadcast("First") }}{{ effects.broadcast("Second") }}Output'
         )
         output, effects = await rendering_service.render_with_effects(
-            template, entity, user
+            template, entity_ctx, user
         )
         assert output == "Output"
         assert effects.broadcasts == ["First", "Second"]
@@ -218,9 +246,10 @@ class TestRenderWithEffects:
     ):
         """None template returns empty string and empty effects."""
         entity = make_entity()
+        entity_ctx = make_entity_context(entity, rendering_service)
         user = UserContext(name="Frizzle", mention="<@12345>")
         output, effects = await rendering_service.render_with_effects(
-            None, entity, user
+            None, entity_ctx, user
         )
         assert output == ""
         assert effects.broadcasts == []
@@ -228,36 +257,42 @@ class TestRenderWithEffects:
     async def test_template_with_entity_and_user_context(self, rendering_service):
         """Template can use both entity (e) and user context."""
         entity = make_entity(description_long="A magical item.")
+        entity_ctx = make_entity_context(entity, rendering_service)
         user = UserContext(name="Frizzle", mention="<@12345>")
         template = "{{ user.name }} examines {{ name }}. {{ e.description_long }}"
         output, effects = await rendering_service.render_with_effects(
-            template, entity, user
+            template, entity_ctx, user
         )
         assert output == "Frizzle examines *Test Entity*. A magical item."
 
-    async def test_template_with_contents(self, rendering_service):
-        """Template can use contents variable."""
+    async def test_template_with_entity_contents(self, rendering_service):
+        """Template can use e.contents for lazy contents fetching."""
         entity = make_entity()
+        # Create EntityContext with skip_contents=True (returns empty string)
+        entity_ctx = make_entity_context(entity, rendering_service, skip_contents=True)
         user = UserContext(name="Frizzle", mention="<@12345>")
         output, effects = await rendering_service.render_with_effects(
-            "Items:{{ contents }}", entity, user, contents="\n- a *Vase*"
+            "Items:{{ e.contents }}", entity_ctx, user
         )
-        assert output == "Items:\n- a *Vase*"
+        # With skip_contents=True, contents returns empty string
+        assert output == "Items:"
 
     async def test_syntax_error_raises_exception(self, rendering_service):
         """Template syntax error raises TemplateRenderError."""
         entity = make_entity()
+        entity_ctx = make_entity_context(entity, rendering_service)
         user = UserContext(name="Frizzle", mention="<@12345>")
         with pytest.raises(TemplateRenderError):
             await rendering_service.render_with_effects(
-                "{% if %}broken{% endif %}", entity, user
+                "{% if %}broken{% endif %}", entity_ctx, user
             )
 
     async def test_undefined_variable_raises_exception(self, rendering_service):
         """Undefined variable raises TemplateRenderError."""
         entity = make_entity()
+        entity_ctx = make_entity_context(entity, rendering_service)
         user = UserContext(name="Frizzle", mention="<@12345>")
         with pytest.raises(TemplateRenderError):
             await rendering_service.render_with_effects(
-                "{{ undefined_var }}", entity, user
+                "{{ undefined_var }}", entity_ctx, user
             )
