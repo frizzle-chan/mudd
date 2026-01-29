@@ -124,10 +124,7 @@ class Interact(commands.Cog):
         result = await self.entity_resolution.resolve_target(ctx, target)
 
         if isinstance(result, ResolutionError):
-            if result.error_type == "ambiguous":
-                await interaction.response.send_message(result.message, ephemeral=True)
-            else:
-                await interaction.response.send_message(result.message, ephemeral=True)
+            await interaction.response.send_message(result.message, ephemeral=True)
             return
 
         # Successfully resolved entity
