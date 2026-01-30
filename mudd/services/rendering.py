@@ -12,6 +12,7 @@ from jinja2 import (
     select_autoescape,
 )
 
+from mudd.models.entity import EntityInstance as ModelEntityInstance
 from mudd.services.entity import EntityInstance, ResolvedEntity
 from mudd.services.trigger_effects import TriggerEffects
 from mudd.types import UserContext
@@ -397,6 +398,96 @@ class RenderingService:
             "name": f"*{entity.display_name}*",
             "contents": contents_str,
             "balance": balance,
+        }
+
+        # Build fallback from descriptions (also rendered as templates)
+        try:
+            fallback = self._renderer.render_with_context(
+                entity.description_long or entity.description_short or "",
+                base_context,
+                entity.id,
+            )
+        except TemplateRenderError:
+            fallback = ""
+        if not fallback:
+            fallback = "You see nothing special."
+
+        # Render on_look template (use fallback if on_look is None)
+        has_error = False
+        if entity.on_look is None:
+            output = fallback
+        else:
+            try:
+                output = self._renderer.render_with_context(
+                    entity.on_look, base_context, entity.id
+                )
+            except TemplateRenderError:
+                logger.warning(
+                    "Template error rendering on_look for entity '%s', using fallback",
+                    entity.id,
+                )
+                output = fallback
+                has_error = True
+
+        if output:
+            parts.append(output)
+
+        # Add error warning if template failed
+        if has_error:
+            parts.append("-# (error rendering template)")
+
+        return "\n\n".join(parts) if parts else "You see nothing special."
+
+    def build_contents_string_v2(self, contents: list[ModelEntityInstance]) -> str:
+        """Format container contents using new model type.
+
+        Args:
+            contents: List of contained entity instances from mudd.models
+
+        Returns:
+            Formatted string or empty string if no contents
+        """
+        if not contents:
+            return ""
+        return "\n".join(f"- {c.entity.display_name}" for c in contents)
+
+    async def render_entity_on_look_v2(
+        self,
+        instance: ModelEntityInstance,
+        balance_str: str,
+        include_heading: bool = False,
+    ) -> str:
+        """Render on_look template for entity using new model type.
+
+        Unlike render_entity_on_look, this uses the model's get_contents()
+        method directly instead of requiring a ContainerContentsFetcher.
+
+        Args:
+            instance: Entity instance from mudd.models
+            balance_str: Formatted currency balance (e.g., "¥1,000")
+            include_heading: Whether to include the entity name as a heading
+                (default: False for inventory threads)
+
+        Returns:
+            Rendered on_look output
+        """
+        entity = instance.entity
+        parts: list[str] = []
+        if include_heading:
+            parts.append(f"### {entity.display_name}")
+
+        # Fetch contents using model method (for room items with visible contents)
+        contents_str = ""
+        if entity.contents_visible and instance.room_id is not None:
+            contents = await instance.get_contents()
+            contents_str = self.build_contents_string_v2(contents)
+
+        # Build base context
+        base_context: dict[str, Any] = {
+            "e": entity,
+            "name": f"*{entity.display_name}*",
+            "contents": contents_str,
+            "balance": balance_str,
         }
 
         # Build fallback from descriptions (also rendered as templates)

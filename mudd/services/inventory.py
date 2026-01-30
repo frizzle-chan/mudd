@@ -8,6 +8,7 @@ from uuid import UUID
 import asyncpg
 import discord
 
+from mudd.models.entity import EntityInstance as ModelEntityInstance
 from mudd.services.currency import CurrencyService
 from mudd.services.entity import EntityInstance, EntityService
 from mudd.services.rendering import RenderingService
@@ -679,6 +680,53 @@ class InventoryService:
         )
 
         return True
+
+    async def create_item_thread_v2(
+        self,
+        guild: discord.Guild,
+        instance: ModelEntityInstance,
+        description: str,
+        pinned: bool = False,
+    ) -> discord.Thread | None:
+        """Create thread for inventory item using new model type.
+
+        Takes EntityInstance from mudd.models instead of primitives.
+
+        Args:
+            guild: Discord guild
+            instance: Entity instance from mudd.models
+            description: Pre-rendered item description
+            pinned: Whether to pin the thread (default False)
+
+        Returns:
+            The created thread, or None if failed
+        """
+        if instance.owner_id is None:
+            return None
+        return await self.create_item_thread(
+            guild,
+            instance.owner_id,
+            instance.instance_id,
+            instance.entity.display_name,
+            description,
+            pinned,
+        )
+
+    async def delete_item_thread_v2(
+        self,
+        guild: discord.Guild,
+        instance: ModelEntityInstance,
+    ) -> bool:
+        """Delete thread for inventory item using new model type.
+
+        Args:
+            guild: Discord guild
+            instance: Entity instance from mudd.models
+
+        Returns:
+            True if deleted, False otherwise
+        """
+        return await self.delete_item_thread(guild, instance.instance_id)
 
     async def _create_inventory_thread(
         self,
