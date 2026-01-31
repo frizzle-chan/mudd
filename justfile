@@ -1,5 +1,9 @@
 default: lint format types entities verbs squawk
 
+dev:
+    @mkdir -p .tasks
+    uv run main.py 2>&1 | tee .tasks/lastrun.log
+
 test:
     uv run pytest
 

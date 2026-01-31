@@ -30,8 +30,10 @@ just format    # ruff format
 just types     # ty check
 
 # Run the bot (requires .env with DISCORD_TOKEN)
-python main.py
+just dev
 ```
+
+When asked to debug the last run, inspect the logs in .tasks/lastrun.log
 
 Pre-commit hooks (lefthook) auto-run ruff and ty on staged files.
 
