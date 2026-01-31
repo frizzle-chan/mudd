@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 import asyncpg
 
-from mudd.models import IRoom, ResolvedEntity
+from mudd.models import ResolvedEntity
 
 if TYPE_CHECKING:
     from mudd.models.entity import EntityInstance
@@ -98,7 +98,7 @@ class Room:
             on_drop=on_look,
             contents_visible=True,
             focus_mode="none",
-            rarity="none"
+            rarity="none",
         )
 
     async def get_entities(self) -> list[EntityInstance]:
@@ -171,6 +171,7 @@ class Room:
             ]
         except asyncpg.UndefinedTableError:
             return []
+
 
 @dataclass(frozen=True)
 class EntityModal:

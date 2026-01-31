@@ -98,12 +98,7 @@ class TestClient:
         # Create cogs with injected services
         self.look_cog = Look(
             bot=None,
-            entity_service=self.entity_service,
-            entity_resolution=self.entity_resolution,
-            visibility_service=visibility_service,
-            rendering_service=self.rendering_service,
-            inventory_service=self.inventory_service,
-            currency_service=self.currency_service,
+            pool=pool,
         )
         self.interact_cog = Interact(
             bot=None,
@@ -172,7 +167,9 @@ class TestClient:
         """
         topic = await self._get_room_topic(user.room)
         interaction = MockInteraction(user.id, user.room, topic)
-        await self.look_cog.look.callback(self.look_cog, interaction, at=at)
+        await self.look_cog.look.callback(
+            self.look_cog, interaction, entity_instance_query=at
+        )
         return interaction.last_response
 
     async def interact(self, user: TestUser, action: str, target: str) -> str:
@@ -289,7 +286,9 @@ class TestClient:
         mock_interaction = MockInteraction(user.id, user.room, topic)
         # Cast for type checker (MockInteraction provides needed interface)
         interaction = cast("Interaction[Any]", mock_interaction)
-        choices = await self.look_cog.at_autocomplete(interaction, current)
+        choices = await self.look_cog.entity_instance_id_autocomplete(
+            interaction, current
+        )
         return [AutocompleteResult(name=c.name, value=c.value) for c in choices]
 
     async def interact_autocomplete(

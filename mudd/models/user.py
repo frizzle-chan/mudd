@@ -1,8 +1,6 @@
 """User model with database access methods."""
 
 from __future__ import annotations
-from discord import Interaction
-from operator import is_
 
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
@@ -41,7 +39,7 @@ class FocusContext:
         """
         cutoff = datetime.now(UTC) - timedelta(minutes=FOCUS_TIMEOUT_MINUTES)
         return self.updated_at < cutoff
-    
+
     async def contains(self, entity: EntityInstance) -> bool:
         contents = {e.instance_id for e in await self.current_container.get_contents()}
         focused_entity_ids = {self.current_container.instance_id} | contents
@@ -119,7 +117,7 @@ class User:
             current_room=row["current_room"],
             _pool=pool,
         )
-    
+
     async def can_see(self, entity: EntityInstance) -> bool:
         """Check if the user can see a given entity.
 
@@ -136,17 +134,19 @@ class User:
         async def in_room_and_visible() -> bool:
             if entity.room_id != self.current_room:
                 return False
-            
+
             # It's in the room
             # It's either not in a container, or the container's contents are visible
             container = await entity.get_container()
             return not container or container.entity.contents_visible
 
-        
-        return any(e() for e in [
-            lambda: entity.owner_id == self.id, # it's in your inventory
-            is_in_focus or in_room_and_visible,
-        ])
+        return any(
+            e()
+            for e in [
+                lambda: entity.owner_id == self.id,  # it's in your inventory
+                is_in_focus or in_room_and_visible,
+            ]
+        )
 
     async def get_room(self) -> Room:
         """Get the user's current room.
@@ -189,9 +189,10 @@ class User:
         """
         row = await self._pool.fetchrow(
             """
-            SELECT uf.instance_id, uf.updated_at,
+            SELECT uf.entity_instance_id, uf.updated_at
             FROM user_focus uf
-            WHERE uf.user_id = $1 AND uf.room = $2
+            JOIN entity_instances ei ON ei.id = uf.entity_instance_id
+            WHERE uf.user_id = $1 AND ei.room = $2
             """,
             self.id,
             self.current_room,
@@ -213,7 +214,7 @@ class User:
             )
             return None
 
-        entity = await EntityInstance.get(self._pool, row["instance_id"])
+        entity = await EntityInstance.get(self._pool, row["entity_instance_id"])
         if not entity:
             return None
 

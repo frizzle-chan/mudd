@@ -256,8 +256,9 @@ class EntityInstance:
         return instances
 
     @classmethod
-    async def get_by_inventory_thread_id(cls, pool: asyncpg.Pool, thread_id: int) -> EntityInstance | None:
-
+    async def get_by_inventory_thread_id(
+        cls, pool: asyncpg.Pool, thread_id: int
+    ) -> EntityInstance | None:
         with await pool.acquire() as conn:
             instance_row = await conn.fetchrow(
                 """
@@ -270,7 +271,7 @@ class EntityInstance:
             )
             if not instance_row:
                 return None
-            
+
             # TODO: cache this, it's static for all callers
             entity_row = await conn.fetchrow(
                 """

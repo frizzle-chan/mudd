@@ -1,17 +1,15 @@
 """Look command for viewing surroundings and examining entities."""
 
-from rapidfuzz import fuzz
-
-from mudd.models.scene import Scene
-
 import logging
 from uuid import UUID
 
 import asyncpg
 from discord import Interaction, app_commands
 from discord.ext import commands
+from rapidfuzz import fuzz
 
-from mudd.models import EntityInstance, User
+from mudd.models import EntityInstance
+from mudd.models.scene import Scene
 
 logger = logging.getLogger(__name__)
 
@@ -72,9 +70,8 @@ class Look(commands.Cog):
     @app_commands.rename(entity_instance_query="at")
     async def look(self, interaction: Interaction, entity_instance_query: str) -> None:
         """Look at room or specific entity."""
-        # discord interaction to scene
-        # build a scene from the interaction that includes the user, entiteis, type etc
-        # if it's a UUID, query directly. if it's a str, use autocomplete to resolve to uuid
+        # Build a scene from the interaction that includes the user, entities, etc.
+        # If it's a UUID, query directly. Otherwise, use autocomplete to resolve.
         try:
             entity_instance_id = UUID(entity_instance_query)
             entity_instance = await EntityInstance.get(self._pool, entity_instance_id)
@@ -94,7 +91,7 @@ class Look(commands.Cog):
                 entity_instance = options[0]
 
         scene = await Scene.from_interaction(self._pool, interaction)
-        if not entity_instance or not scene.contains(entity_instance):
+        if not entity_instance or not await scene.contains(entity_instance):
             await interaction.response.send_message(
                 "You don't see that here.", ephemeral=True
             )
