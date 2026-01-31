@@ -45,6 +45,7 @@ def parse_args() -> argparse.Namespace:
 
 intents = discord.Intents.default()
 intents.members = True
+intents.message_content = True
 
 
 class MuddBot(commands.Bot):
