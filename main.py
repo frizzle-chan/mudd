@@ -45,6 +45,9 @@ def parse_args() -> argparse.Namespace:
 
 intents = discord.Intents.default()
 intents.members = True
+# Enable message_content to suppress discord.py warning about prefix commands.
+# This bot uses slash commands only, but discord.py requires this intent when
+# a command_prefix is specified (even if not used).
 intents.message_content = True
 
 
