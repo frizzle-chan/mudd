@@ -229,8 +229,7 @@ class Interact(commands.Cog):
 
             # Handle focus changes from command result
             if cmd_result.set_focus:
-                focus_entity = cmd_result.set_focus
-                await self.entity_resolution.set_focus(user_id, room, focus_entity)
+                await self.entity_resolution.set_focus(user_id, cmd_result.set_focus)
             if cmd_result.clear_focus:
                 # Clear focus when explicitly closing
                 # Get close message (template) before clearing

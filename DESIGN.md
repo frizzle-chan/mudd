@@ -219,8 +219,7 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 | Column | Type | Description |
 |--------|------|-------------|
 | `user_id` | BIGINT (PK, FK to users.id) | Discord user ID |
-| `room` | TEXT NOT NULL (FK to rooms.id) | Room where focus was established |
-| `entity_id` | TEXT NOT NULL (FK to entities.id) | Focused entity ID (e.g., open container) |
+| `entity_instance_id` | UUID NOT NULL (FK to entity_instances.id) | Focused entity instance (room and entity_id derived via join) |
 | `updated_at` | TIMESTAMPTZ NOT NULL | Last interaction timestamp for timeout |
 
 **Purpose:**
@@ -236,8 +235,7 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 **Constraints:**
 - PK on `user_id` (one focus per user)
 - FK to users(id) with ON DELETE CASCADE
-- FK to rooms(id) with ON DELETE CASCADE
-- FK to entities(id) with ON DELETE CASCADE
+- FK to entity_instances(id) with ON DELETE CASCADE
 
 **Indexes:**
 - Primary key on `user_id`

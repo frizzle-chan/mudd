@@ -1,18 +1,20 @@
 """User model with database access methods."""
 
 from __future__ import annotations
+from discord import Interaction
+from operator import is_
 
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
+from uuid import UUID
 
 import asyncpg
 
 if TYPE_CHECKING:
-    from mudd.models.entity import EntityInstance
     from mudd.models.room import Room
 
-from mudd.models.entity import FocusMode
+from mudd.models.entity import EntityInstance
 
 FOCUS_TIMEOUT_MINUTES = 5
 
@@ -27,10 +29,24 @@ class FocusContext:
     This is a pure value object with no database access methods.
     """
 
-    entity_id: str
-    entity_name: str
-    focus_mode: FocusMode
+    current_container: EntityInstance
     updated_at: datetime
+
+    @property
+    def is_expired(self) -> bool:
+        """Check if the focus context has expired.
+
+        Returns:
+            True if expired, False otherwise
+        """
+        cutoff = datetime.now(UTC) - timedelta(minutes=FOCUS_TIMEOUT_MINUTES)
+        return self.updated_at < cutoff
+    
+    async def contains(self, entity: EntityInstance) -> bool:
+        contents = {e.instance_id for e in await self.current_container.get_contents()}
+        focused_entity_ids = {self.current_container.instance_id} | contents
+
+        return entity.instance_id in focused_entity_ids
 
 
 @dataclass(frozen=True)
@@ -103,6 +119,34 @@ class User:
             current_room=row["current_room"],
             _pool=pool,
         )
+    
+    async def can_see(self, entity: EntityInstance) -> bool:
+        """Check if the user can see a given entity.
+
+        Args:
+            entity: EntityInstance to check visibility for
+        Returns:
+            True if the user can see the entity, False otherwise
+        """
+
+        async def is_in_focus() -> bool:
+            focus = await self.get_focus()
+            return focus is None or await focus.contains(entity)
+
+        async def in_room_and_visible() -> bool:
+            if entity.room_id != self.current_room:
+                return False
+            
+            # It's in the room
+            # It's either not in a container, or the container's contents are visible
+            container = await entity.get_container()
+            return not container or container.entity.contents_visible
+
+        
+        return any(e() for e in [
+            lambda: entity.owner_id == self.id, # it's in your inventory
+            is_in_focus or in_room_and_visible,
+        ])
 
     async def get_room(self) -> Room:
         """Get the user's current room.
@@ -145,10 +189,8 @@ class User:
         """
         row = await self._pool.fetchrow(
             """
-            SELECT uf.entity_id, uf.updated_at,
-                   re.name AS entity_name, re.focus_mode
+            SELECT uf.instance_id, uf.updated_at,
             FROM user_focus uf
-            JOIN LATERAL resolve_entity(uf.entity_id) re ON TRUE
             WHERE uf.user_id = $1 AND uf.room = $2
             """,
             self.id,
@@ -171,32 +213,32 @@ class User:
             )
             return None
 
+        entity = await EntityInstance.get(self._pool, row["instance_id"])
+        if not entity:
+            return None
+
         return FocusContext(
-            entity_id=row["entity_id"],
-            entity_name=row["entity_name"],
-            focus_mode=row["focus_mode"],
+            current_container=entity,
             updated_at=updated_at,
         )
 
-    async def set_focus(self, entity_id: str) -> None:
-        """Establish focus on an entity.
+    async def set_focus(self, entity_instance_id: UUID) -> None:
+        """Establish focus on an entity instance.
 
         Args:
-            entity_id: The entity ID to focus on
+            entity_instance_id: UUID of the entity instance to focus on
         """
         await self._pool.execute(
             """
-            INSERT INTO user_focus (user_id, room, entity_id, updated_at)
-            VALUES ($1, $2, $3, now())
+            INSERT INTO user_focus (user_id, entity_instance_id, updated_at)
+            VALUES ($1, $2, now())
             ON CONFLICT (user_id)
             DO UPDATE SET
-                room = EXCLUDED.room,
-                entity_id = EXCLUDED.entity_id,
+                entity_instance_id = EXCLUDED.entity_instance_id,
                 updated_at = EXCLUDED.updated_at
             """,
             self.id,
-            self.current_room,
-            entity_id,
+            entity_instance_id,
         )
 
     async def clear_focus(self) -> str | None:
@@ -207,16 +249,22 @@ class User:
         """
         row = await self._pool.fetchrow(
             """
-            DELETE FROM user_focus
-            WHERE user_id = $1
+            DELETE FROM user_focus uf
+            USING entity_instances ei
+            WHERE uf.user_id = $1 AND uf.entity_instance_id = ei.id
             RETURNING
-                entity_id,
-                (SELECT on_close FROM resolve_entity(entity_id)) AS on_close
+                ei.entity_id,
+                (SELECT on_close FROM resolve_entity(ei.entity_id)) AS on_close
             """,
             self.id,
         )
 
         if not row:
+            # No focus existed (or instance was already deleted)
+            # Try simple delete in case instance was cascade-deleted
+            await self._pool.execute(
+                "DELETE FROM user_focus WHERE user_id = $1", self.id
+            )
             return None
 
         return row["on_close"]
@@ -239,16 +287,18 @@ class User:
         if not focus:
             return []
 
+        # Use focus.entity.entity.id (entity_id from the instance's resolved entity)
+        entity_id = focus.current_container.entity.id
         rows = await self._pool.fetch(
             """
             SELECT DISTINCT entity_id FROM entity_instances
             WHERE container_entity_id = $1 AND room = $2
             """,
-            focus.entity_id,
+            entity_id,
             self.current_room,
         )
 
-        entity_ids = [focus.entity_id]
+        entity_ids = [entity_id]
         entity_ids.extend([row["entity_id"] for row in rows])
 
         return entity_ids

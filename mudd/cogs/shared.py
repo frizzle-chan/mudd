@@ -1,10 +1,15 @@
 """Shared utilities for cogs."""
+from uuid import UUID
+from ast import arg
+import asyncpg
+from mudd.models import EntityInstance
 
 import logging
 from typing import TYPE_CHECKING
 
 import discord
 from discord import Interaction
+from discord.ext import commands
 
 from mudd.services.entity_resolution import ViewMode
 from mudd.services.rendering import RenderingService, TemplateRenderError
@@ -19,7 +24,6 @@ if TYPE_CHECKING:
     from mudd.services.visibility import VisibilityServiceProtocol
 
 logger = logging.getLogger(__name__)
-
 
 async def handle_escape(
     interaction: Interaction,

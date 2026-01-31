@@ -21,7 +21,7 @@ class OpenCommand(ActionCommand):
             return ActionResult(
                 output=result.output,
                 effects=result.effects,
-                set_focus=ctx.entity,
+                set_focus=ctx.instance_id,  # Use instance_id instead of entity
             )
         return result
 

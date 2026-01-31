@@ -232,10 +232,11 @@ class TestFocusCommands:
         mock_interaction: MagicMock,
     ):
         """OpenCommand sets set_focus for entities with focus_mode != 'none'."""
+        instance_id = UUID("12345678-1234-1234-1234-123456789012")
         ctx = ActionContext(
             interaction=mock_interaction,
             entity=focusable_entity,
-            instance_id=UUID("12345678-1234-1234-1234-123456789012"),
+            instance_id=instance_id,
             room="test-room",
             source="room",
             user_context=UserContext(name="TestUser", mention="<@12345>"),
@@ -246,7 +247,8 @@ class TestFocusCommands:
         cmd = OpenCommand(rendering_service)
         result = cmd.execute(ctx)
 
-        assert result.set_focus is focusable_entity
+        # set_focus now returns instance_id (UUID) instead of entity
+        assert result.set_focus == instance_id
         assert result.clear_focus is False
 
     def test_open_command_no_focus_for_non_focusable_entity(
@@ -325,17 +327,18 @@ class TestActionResult:
         assert result.set_focus is None
         assert result.clear_focus is False
 
-    def test_action_result_with_focus(self, mock_entity: ResolvedEntity):
+    def test_action_result_with_focus(self):
         """ActionResult can carry focus change signals."""
         effects = TriggerEffects()
+        instance_id = UUID("12345678-1234-1234-1234-123456789012")
         result = ActionResult(
             output="test",
             effects=effects,
-            set_focus=mock_entity,
+            set_focus=instance_id,
             clear_focus=True,
         )
 
-        assert result.set_focus is mock_entity
+        assert result.set_focus == instance_id
         assert result.clear_focus is True
 
 

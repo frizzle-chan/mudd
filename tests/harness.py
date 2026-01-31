@@ -227,10 +227,17 @@ class TestClient:
         """Get the user's current focus state from database.
 
         Returns:
-            Focus row as dict, or None if no focus.
+            Focus row as dict with entity_instance_id, room, entity_id, updated_at,
+            or None if no focus.
         """
         row = await self.pool.fetchrow(
-            "SELECT * FROM user_focus WHERE user_id = $1", user.id
+            """
+            SELECT uf.entity_instance_id, uf.updated_at, ei.room, ei.entity_id
+            FROM user_focus uf
+            JOIN entity_instances ei ON uf.entity_instance_id = ei.id
+            WHERE uf.user_id = $1
+            """,
+            user.id,
         )
         return dict(row) if row else None
 

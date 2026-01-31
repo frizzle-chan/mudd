@@ -53,7 +53,7 @@ class ResolvedEntity:
     on_open: str | None
     on_close: str | None
     on_drop: str | None
-    contents_visible: bool | None
+    contents_visible: bool
     focus_mode: FocusMode
     rarity: Rarity
 
@@ -66,6 +66,11 @@ class ResolvedEntity:
     @classmethod
     def _from_row(cls, row: asyncpg.Record) -> ResolvedEntity:
         """Construct ResolvedEntity from asyncpg.Record."""
+        contents_visible = row["contents_visible"]
+        if contents_visible is None:
+            contents_visible = False  # Default to False if NULL in DB
+        contents_visible = bool(contents_visible)
+
         return cls(
             id=row["id"],
             name=row["name"],
@@ -79,7 +84,7 @@ class ResolvedEntity:
             on_open=row["on_open"],
             on_close=row["on_close"],
             on_drop=row["on_drop"],
-            contents_visible=row["contents_visible"],
+            contents_visible=contents_visible,
             focus_mode=row["focus_mode"],
             rarity=row["rarity"],
         )
@@ -183,7 +188,7 @@ class EntityInstance:
         observers: tuple[Observer, ...] = (),
     ) -> EntityInstance:
         """Construct EntityInstance from asyncpg.Record."""
-        return cls(
+        ei = cls(
             instance_id=row["instance_id"],
             entity=entity,
             room_id=row["room"],
@@ -192,6 +197,7 @@ class EntityInstance:
             _pool=pool,
             _observers=observers,
         )
+        return ei
 
     @classmethod
     async def get(cls, pool: asyncpg.Pool, instance_id: UUID) -> EntityInstance | None:
@@ -239,6 +245,63 @@ class EntityInstance:
             FROM entity_instances ei
             CROSS JOIN LATERAL resolve_entity(ei.entity_id) r
             WHERE ei.room = $1
+            """,
+            room.id,
+        )
+
+        instances = []
+        for row in rows:
+            entity = ResolvedEntity._from_row(row)
+            instances.append(cls._from_row(row, entity, pool))
+        return instances
+
+    @classmethod
+    async def get_by_inventory_thread_id(cls, pool: asyncpg.Pool, thread_id: int) -> EntityInstance | None:
+
+        with await pool.acquire() as conn:
+            instance_row = await conn.fetchrow(
+                """
+                SELECT ei.id AS instance_id, ei.room, ei.owner_id,
+                    ei.container_entity_id, ei.entity_id
+                FROM entity_instances ei
+                WHERE ei.discord_thread_id = $1
+                """,
+                thread_id,
+            )
+            if not instance_row:
+                return None
+            
+            # TODO: cache this, it's static for all callers
+            entity_row = await conn.fetchrow(
+                """
+                SELECT * FROM resolve_entity($1)
+                """,
+                instance_row["entity_id"],
+            )
+
+        entity = ResolvedEntity._from_row(entity_row)
+        return cls._from_row(instance_row, entity, pool)
+
+    @classmethod
+    async def get_visible_by_room(
+        cls, pool: asyncpg.Pool, room: IRoom
+    ) -> list[EntityInstance]:
+        """Get all entity instances in a room.
+
+        Args:
+            pool: Database connection pool
+            room: Room model instance
+
+        Returns:
+            List of EntityInstance objects in the room
+        """
+        rows = await pool.fetch(
+            """
+            SELECT ei.id AS instance_id, ei.room, ei.owner_id,
+                   ei.container_entity_id, r.*
+            FROM entity_instances ei
+            CROSS JOIN LATERAL resolve_entity(ei.entity_id) r
+            WHERE ei.room = $1 AND rc.contents_visible = TRUE
             """,
             room.id,
         )
@@ -408,6 +471,17 @@ class EntityInstance:
             "DELETE FROM entity_instances WHERE id = $1",
             self.instance_id,
         )
+
+    async def get_container(self) -> EntityInstance | None:
+        """Get the container EntityInstance if this entity is inside one.
+
+        Returns:
+            Container EntityInstance, or None if not in a container
+        """
+        if self.container_entity_id is None:
+            return None
+
+        return await EntityInstance.get(self._pool, UUID(self.container_entity_id))
 
     async def get_contents(self) -> list[EntityInstance]:
         """Get direct children of this container entity.

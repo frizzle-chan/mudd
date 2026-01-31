@@ -4,16 +4,16 @@ import os
 from pathlib import Path
 
 import discord
-from discord.ext import commands
 from dotenv import load_dotenv
 
+from mudd.bot import MuddBot
 from mudd.cogs.economy import Economy
 from mudd.cogs.interact import Interact
 from mudd.cogs.look import Look
 from mudd.cogs.movement import Movement
 from mudd.cogs.ping import Ping
 from mudd.cogs.sync import Sync
-from mudd.database import close_pool, get_pool, init_database
+from mudd.database import get_pool, init_database
 from mudd.services.currency import CurrencyService
 from mudd.services.entity import EntityService
 from mudd.services.entity_resolution import EntityResolutionService
@@ -53,19 +53,6 @@ intents.members = True
 # a command_prefix is specified (even if not used).
 intents.message_content = True
 
-
-class MuddBot(commands.Bot):
-    """MUDD Discord bot with world file configuration."""
-
-    def __init__(self, world_file: Path, **kwargs):
-        super().__init__(**kwargs)
-        self.world_file = world_file
-
-    async def close(self):
-        await close_pool()
-        await super().close()
-
-
 args = parse_args()
 bot = MuddBot(world_file=args.world, command_prefix="!", intents=intents)
 
@@ -91,6 +78,12 @@ async def setup_hook():
 
     # Create cogs with explicit dependencies
     await bot.add_cog(
+        Look(
+            bot,
+            pool,
+        )
+    )
+    await bot.add_cog(
         Interact(
             bot,
             entity_service,
@@ -99,17 +92,6 @@ async def setup_hook():
             inventory_service,
             pool,
             rendering_service,
-            currency_service,
-        )
-    )
-    await bot.add_cog(
-        Look(
-            bot,
-            entity_service,
-            entity_resolution,
-            visibility_service,
-            rendering_service,
-            inventory_service,
             currency_service,
         )
     )

@@ -7,6 +7,8 @@ from typing import TYPE_CHECKING
 
 import asyncpg
 
+from mudd.models import IRoom, ResolvedEntity
+
 if TYPE_CHECKING:
     from mudd.models.entity import EntityInstance
 
@@ -74,6 +76,29 @@ class Room:
             description=row["description"],
             zone_id=row["zone_id"],
             _pool=pool,
+        )
+
+    def make_entity(self, visible: list[EntityInstance]) -> ResolvedEntity:
+        on_look = (
+            """{{ e.description_long or "You see nothing special." }}"""
+            """{{ contents }}"""
+        )
+        return ResolvedEntity(
+            f"room::{self.id}",
+            name=self.name,
+            description_short=self.description,
+            description_long=self.description,
+            on_look=on_look,
+            on_touch=on_look,
+            on_attack=on_look,
+            on_use=on_look,
+            on_take=on_look,
+            on_open=on_look,
+            on_close=on_look,
+            on_drop=on_look,
+            contents_visible=True,
+            focus_mode="none",
+            rarity="none"
         )
 
     async def get_entities(self) -> list[EntityInstance]:
@@ -146,3 +171,34 @@ class Room:
             ]
         except asyncpg.UndefinedTableError:
             return []
+
+@dataclass(frozen=True)
+class EntityModal:
+    """
+    Rooms are immutable and represent a location in the game world.
+    """
+
+    id: str
+    zone_id: str
+    entity_instance: EntityInstance
+    _pool: asyncpg.Pool = field(repr=False, compare=False)
+    allow_close: bool = True
+
+    async def get_entities(self) -> list[EntityInstance]:
+        """Get all entity instances in this room.
+
+        Returns:
+            List of EntityInstance objects in the room
+        """
+        return [self.entity_instance, *await self.entity_instance.get_contents()]
+
+    async def get_visible_entities(self) -> list[EntityInstance]:
+        """Get visible entities (top-level + visible container contents).
+
+        Returns top-level entities plus contents of containers with
+        contents_visible=True.
+
+        Returns:
+            List of EntityInstance objects visible in the room
+        """
+        return await self.get_entities()

@@ -46,7 +46,7 @@ class ActionResult:
     output: str
     effects: TriggerEffects
     # Focus changes (for open/close)
-    set_focus: ResolvedEntity | None = None
+    set_focus: UUID | None = None  # entity_instance_id to focus on
     clear_focus: bool = False
 
 

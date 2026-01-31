@@ -89,7 +89,7 @@ class FocusContextFetcher(Protocol):
     async def get_focus(self, user_id: int, room: str) -> FocusContext | None: ...
 
     async def set_focus(
-        self, user_id: int, room: str, entity: ResolvedEntity
+        self, user_id: int, entity_instance_id: UUID
     ) -> str | None: ...
 
     async def clear_focus(
@@ -690,14 +690,14 @@ class EntityResolutionService:
         return await self._focus_service.get_focus(user_id, room)
 
     async def set_focus(
-        self, user_id: int, room: str, entity: ResolvedEntity
+        self, user_id: int, entity_instance_id: UUID
     ) -> str | None:
-        """Establish focus on an entity.
+        """Establish focus on an entity instance.
 
         Delegates to FocusContextService. No cache invalidation needed since
         changing focus just changes which cache key is used for lookups.
         """
-        return await self._focus_service.set_focus(user_id, room, entity)
+        return await self._focus_service.set_focus(user_id, entity_instance_id)
 
     async def clear_focus(
         self, user_id: int, reason: str = "interaction"

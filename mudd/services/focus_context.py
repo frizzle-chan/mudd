@@ -8,14 +8,11 @@ and cleared on room change, timeout, or interaction with unrelated entities.
 import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING
+from uuid import UUID
 
 import asyncpg
 
 from mudd.services.entity import FocusMode
-
-if TYPE_CHECKING:
-    from mudd.services.entity import ResolvedEntity
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +28,7 @@ class FocusContext:
     """
 
     user_id: int
+    entity_instance_id: UUID
     room: str
     entity_id: str
     entity_name: str
@@ -74,11 +72,13 @@ class FocusContextService:
         """
         row = await self._pool.fetchrow(
             """
-            SELECT uf.user_id, uf.room, uf.entity_id, uf.updated_at,
+            SELECT uf.entity_instance_id, uf.updated_at,
+                   ei.room, ei.entity_id,
                    re.name AS entity_name, re.focus_mode
             FROM user_focus uf
-            JOIN LATERAL resolve_entity(uf.entity_id) re ON TRUE
-            WHERE uf.user_id = $1 AND uf.room = $2
+            JOIN entity_instances ei ON uf.entity_instance_id = ei.id
+            CROSS JOIN LATERAL resolve_entity(ei.entity_id) re
+            WHERE uf.user_id = $1 AND ei.room = $2
             """,
             user_id,
             room,
@@ -102,7 +102,8 @@ class FocusContextService:
             return None
 
         return FocusContext(
-            user_id=row["user_id"],
+            user_id=user_id,
+            entity_instance_id=row["entity_instance_id"],
             room=row["room"],
             entity_id=row["entity_id"],
             entity_name=row["entity_name"],
@@ -113,15 +114,13 @@ class FocusContextService:
     async def set_focus(
         self,
         user_id: int,
-        room: str,
-        entity: "ResolvedEntity",
+        entity_instance_id: UUID,
     ) -> str | None:
-        """Establish focus on an entity.
+        """Establish focus on an entity instance.
 
         Args:
             user_id: Discord user ID
-            room: Current room name
-            entity: The entity to focus on (must have focus_mode != 'none')
+            entity_instance_id: UUID of the entity instance to focus on
 
         Returns:
             Optional message to append to interaction response.
@@ -129,19 +128,17 @@ class FocusContextService:
         """
         await self._pool.execute(
             """
-            INSERT INTO user_focus (user_id, room, entity_id, updated_at)
-            VALUES ($1, $2, $3, now())
+            INSERT INTO user_focus (user_id, entity_instance_id, updated_at)
+            VALUES ($1, $2, now())
             ON CONFLICT (user_id)
             DO UPDATE SET
-                room = EXCLUDED.room,
-                entity_id = EXCLUDED.entity_id,
+                entity_instance_id = EXCLUDED.entity_instance_id,
                 updated_at = EXCLUDED.updated_at
             """,
             user_id,
-            room,
-            entity.id,
+            entity_instance_id,
         )
-        logger.debug(f"Set focus for user {user_id} on {entity.id} in {room}")
+        logger.debug(f"Set focus for user {user_id} on instance {entity_instance_id}")
 
         # No extra message needed for establishing focus
         return None
@@ -162,20 +159,25 @@ class FocusContextService:
             Optional message to append to response when closing.
             Returns None for most reasons.
         """
-        # Delete focus and get resolved entity info (with prototype inheritance)
+        # Delete focus and get resolved entity info via instance join
         row = await self._pool.fetchrow(
             """
-            DELETE FROM user_focus
-            WHERE user_id = $1
+            DELETE FROM user_focus uf
+            USING entity_instances ei
+            WHERE uf.user_id = $1 AND uf.entity_instance_id = ei.id
             RETURNING
-                entity_id,
-                (SELECT on_close FROM resolve_entity(entity_id)) AS on_close
+                ei.entity_id,
+                (SELECT on_close FROM resolve_entity(ei.entity_id)) AS on_close
             """,
             user_id,
         )
 
         if not row:
-            # No focus existed
+            # No focus existed (or instance was already deleted)
+            # Try simple delete in case instance was cascade-deleted
+            await self._pool.execute(
+                "DELETE FROM user_focus WHERE user_id = $1", user_id
+            )
             return None
 
         logger.debug(f"Cleared focus for user {user_id} (reason: {reason})")
@@ -224,6 +226,7 @@ class FocusContextService:
             return True
 
         # Check if entity is contained within the focused entity (check instances)
+        # Use focus.entity_id (derived from instance) as container_entity_id
         row = await self._pool.fetchrow(
             """
             SELECT 1 FROM entity_instances
@@ -256,6 +259,7 @@ class FocusContextService:
             return []
 
         # Get container contents (query instances, not entity definitions)
+        # Use focus.entity_id (derived from instance) as container_entity_id
         rows = await self._pool.fetch(
             """
             SELECT DISTINCT entity_id FROM entity_instances
