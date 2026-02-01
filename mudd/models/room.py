@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 
 import asyncpg
 
-from mudd.models import ResolvedEntity
+from mudd.models.entity import ResolvedEntity
 
 if TYPE_CHECKING:
     from mudd.models.entity import EntityInstance

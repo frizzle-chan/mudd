@@ -1,6 +1,7 @@
 """Look command for viewing surroundings and examining entities."""
 
 import logging
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 import asyncpg
@@ -9,7 +10,11 @@ from discord.ext import commands
 from rapidfuzz import fuzz
 
 from mudd.models import EntityInstance
-from mudd.models.scene import Scene
+from mudd.observers import EffectsObserver
+from mudd.scene import Scene
+
+if TYPE_CHECKING:
+    from mudd.services.rendering import RenderingService
 
 logger = logging.getLogger(__name__)
 
@@ -19,9 +24,11 @@ class Look(commands.Cog):
         self,
         bot: commands.Bot | None,
         pool: asyncpg.Pool,
+        rendering_service: "RenderingService",
     ) -> None:
         self.bot = bot
         self._pool = pool
+        self._rendering = rendering_service
 
     async def entity_instance_id_autocomplete(
         self, interaction: Interaction, current: str
@@ -82,15 +89,33 @@ class Look(commands.Cog):
             if len(options) == 0:
                 entity_instance = None
             elif len(options) > 1:
-                await interaction.response.send_message(
-                    "Multiple things match that description. Please be more specific.",
-                    ephemeral=True,
-                )
-                return
+                # Check for exact name match first (case-insensitive)
+                query_lower = entity_instance_query.lower()
+                exact_matches = [
+                    e for e in options if e.entity.name.lower() == query_lower
+                ]
+                if len(exact_matches) == 1:
+                    entity_instance = exact_matches[0]
+                else:
+                    candidates = ", ".join(
+                        f"*{e.entity.display_name}*" for e in options[:3]
+                    )
+                    await interaction.response.send_message(
+                        (
+                            f"Multiple things match that description: {candidates}. "
+                            "Please be more specific."
+                        ),
+                        ephemeral=True,
+                    )
+                    return
             else:
                 entity_instance = options[0]
 
+        # Build scene with effects observer
+        effects = EffectsObserver()
         scene = await Scene.from_interaction(self._pool, interaction)
+        scene = scene.with_observers(effects)
+
         if not entity_instance or not await scene.contains(entity_instance):
             await interaction.response.send_message(
                 "You don't see that here.", ephemeral=True
@@ -98,5 +123,8 @@ class Look(commands.Cog):
             return
 
         await interaction.response.send_message(
-            entity_instance.entity.description_long, ephemeral=True
+            entity_instance.entity.display_name, ephemeral=True
         )
+
+        # Flush all observers
+        await scene.flush_observers()

@@ -99,6 +99,7 @@ class TestClient:
         self.look_cog = Look(
             bot=None,
             pool=pool,
+            rendering_service=self.rendering_service,
         )
         self.interact_cog = Interact(
             bot=None,

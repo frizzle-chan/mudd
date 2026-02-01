@@ -81,6 +81,7 @@ async def setup_hook():
         Look(
             bot,
             pool,
+            rendering_service,
         )
     )
     await bot.add_cog(
