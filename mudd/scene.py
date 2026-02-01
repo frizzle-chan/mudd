@@ -1,0 +1,118 @@
+from __future__ import annotations
+
+from dataclasses import dataclass, field, replace
+from typing import TypeVar
+
+import asyncpg
+import discord
+from discord import Interaction
+
+from mudd.events import Observer
+from mudd.models.entity import EntityInstance
+from mudd.models.interfaces import IRoom
+from mudd.models.room import EntityModal, Room
+from mudd.models.user import User
+
+T = TypeVar("T")
+
+
+@dataclass(frozen=True)
+class Scene:
+    """Scene represents the current context for a user's interaction.
+
+    Contains the user, their current room/focus, and attached observers
+    that collect events during command execution.
+    """
+
+    user: User
+    room: IRoom
+    _pool: asyncpg.Pool = field(repr=False, compare=False, default=None)  # ty:ignore[invalid-assignment]
+    _observers: tuple[Observer, ...] = field(default=(), repr=False, compare=False)
+
+    # room and inventory share an interface
+    # rooms and inventories fill the scene
+    #
+    # entities are the entities the user can see
+    # entities the user can see are the entities the user is focused on
+    # if no focus, implicitly focus on the room
+    #
+    # interaction is scene(user, room, entities) + command(entity) = outcome
+    # a room is an entity just like in a 3d program where the room is modeled object
+    # room is a virtual entity
+
+    @classmethod
+    async def from_interaction(
+        cls, pool: asyncpg.Pool, interaction: Interaction
+    ) -> Scene:
+        user = await User.get(pool, interaction.user.id)
+        if not user:
+            raise ValueError("User not found")
+
+        if isinstance(interaction.channel, discord.Thread) and (
+            inventory_entity := await EntityInstance.get_by_inventory_thread_id(
+                pool, interaction.channel.id
+            )
+        ):
+            if inventory_entity.owner_id != user.id:
+                raise ValueError("User does not own this inventory thread")
+            room = EntityModal(
+                _pool=pool,
+                id=str(interaction.channel.id),
+                zone_id="Inventory",
+                entity_instance=inventory_entity,
+                allow_close=False,
+            )
+        elif focus := await user.get_focus():
+            room = EntityModal(
+                _pool=pool,
+                id=f"Focus:{focus.current_container.instance_id}",
+                zone_id="Focus",
+                entity_instance=focus.current_container,
+                allow_close=True,
+            )
+        else:
+            room = await Room.get(pool, user.current_room)
+            if not room:
+                raise ValueError("User is in an invalid room")
+        return cls(_pool=pool, user=user, room=room)
+
+    async def contains(self, entity: EntityInstance) -> bool:
+        """Check if the scene contains the given entity instance."""
+        # Check if the entity is in the room
+        visible = {e.instance_id for e in await self.room.get_visible_entities()}
+        inventory = {e.instance_id for e in await self.user.get_inventory()}
+        return entity.instance_id in visible | inventory
+
+    def with_observers(self, *observers: Observer) -> Scene:
+        """Return a new Scene with the given observers attached.
+
+        Args:
+            observers: Observer instances to attach
+
+        Returns:
+            New Scene with observers attached
+        """
+        return replace(self, _observers=self._observers + observers)
+
+    def get_observer(self, cls: type[T]) -> T | None:
+        """Get an attached observer by type.
+
+        Args:
+            cls: The observer class to find
+
+        Returns:
+            The observer instance if found, None otherwise
+        """
+        for observer in self._observers:
+            if isinstance(observer, cls):
+                return observer
+        return None
+
+    async def flush_observers(self) -> None:
+        """Flush all attached observers.
+
+        Call this after the response is sent to execute any pending
+        side effects collected during command execution.
+        """
+        for observer in self._observers:
+            await observer.flush()
