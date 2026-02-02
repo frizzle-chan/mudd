@@ -61,11 +61,11 @@ class Look(commands.Cog):
             )
             return
 
-        result = await LookCommand().execute(scene, entity_instance)
+        result = await scene.execute(LookCommand(), entity_instance)
 
         await interaction.response.send_message(
             result.output or "You see nothing special.", ephemeral=True
         )
 
-        # Flush all observers
+        # Flush all observers (Discord thread creation, etc.)
         await scene.flush_observers()

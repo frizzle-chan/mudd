@@ -12,6 +12,9 @@ from mudd.events.types import (
     DestroySignal,
     DispenseSignal,
     DropSignal,
+    EntityDestroyedEvent,
+    EntityDroppedEvent,
+    EntityPickedUpEvent,
     GameEvent,
     GrantCurrencyEvent,
     GrantEvent,
@@ -35,4 +38,7 @@ __all__ = [
     "DropSignal",
     "DestroySignal",
     "DispenseSignal",
+    "EntityPickedUpEvent",
+    "EntityDroppedEvent",
+    "EntityDestroyedEvent",
 ]

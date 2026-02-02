@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
-from typing import TypeVar
+from typing import TYPE_CHECKING, TypeVar
 
 import asyncpg
 import discord
@@ -12,6 +12,10 @@ from mudd.models.entity import EntityInstance
 from mudd.models.interfaces import IRoom, IUser
 from mudd.models.room import EntityModal, Room
 from mudd.models.user import User
+from mudd.observers import EffectsObserver
+
+if TYPE_CHECKING:
+    from mudd.commands2 import ActionCommand, ActionResult
 
 T = TypeVar("T")
 
@@ -116,3 +120,41 @@ class Scene:
         """
         for observer in self._observers:
             await observer.flush()
+
+    async def execute(
+        self, command: ActionCommand, target: EntityInstance
+    ) -> ActionResult:
+        """Execute a command and process all effects.
+
+        1. Attach scene observers to target entity
+        2. Run command (collects signals via EffectsObserver)
+        3. Map signals to entity mutations (pickup → move_to_inventory)
+        4. Entity mutations emit events to all observers
+        5. Flush observers (Discord thread creation, etc.)
+        6. Return result
+
+        Args:
+            command: The action command to execute
+            target: The entity instance to act upon
+
+        Returns:
+            ActionResult with rendered output
+        """
+        effects = self.get_observer(EffectsObserver)
+        if not effects:
+            raise ValueError("EffectsObserver not attached to scene")
+
+        # Attach scene observers to target so mutations notify them
+        target = target.with_observers(*self._observers)
+
+        result = await command.execute(self, target)
+
+        # Map signals to actions
+        if effects.has_pickup:
+            await target.move_to_inventory(self.user)
+        if effects.has_drop:
+            await target.drop_to_room(self.room)
+        if effects.has_destroy:
+            await target.destroy()
+
+        return result

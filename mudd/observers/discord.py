@@ -10,9 +10,16 @@ import discord
 if TYPE_CHECKING:
     import asyncpg
 
-    from mudd.models.entity import EntityInstance
     from mudd.services.inventory import InventoryService
     from mudd.services.rendering import RenderingService
+
+from mudd.events import (
+    EntityDestroyedEvent,
+    EntityDroppedEvent,
+    EntityPickedUpEvent,
+    GameEvent,
+)
+from mudd.models.entity import EntityInstance
 
 logger = logging.getLogger(__name__)
 
@@ -25,10 +32,9 @@ class DiscordReconciler:
     - "dropped": Deletes inventory thread
     - "destroyed": Deletes inventory thread
 
-    The reconciler implements the Observer protocol: __call__ is sync
-    (required by the Observer type) and queues notifications for async
-    processing. Call flush() after sending the response to execute
-    queued Discord operations.
+    The reconciler implements the Observer protocol: notify() is sync
+    and queues notifications for async processing. Call flush() after
+    sending the response to execute queued Discord operations.
 
     Usage:
         reconciler = DiscordReconciler(bot, pool, inventory_service, rendering_service)
@@ -59,17 +65,23 @@ class DiscordReconciler:
         self.rendering_service = rendering_service
         self._pending: list[tuple[EntityInstance, str]] = []
 
-    def __call__(self, instance: EntityInstance, event: str) -> None:
+    def notify(self, event: GameEvent) -> None:
         """Receive notification (sync). Queue for async processing.
 
         This method is called synchronously by EntityInstance._notify().
         It queues the event for later async processing via flush().
 
         Args:
-            instance: The entity instance that changed
-            event: The event name ("picked_up", "dropped", "destroyed")
+            event: The game event to process
         """
-        self._pending.append((instance, event))
+        match event:
+            case EntityPickedUpEvent(instance=instance):
+                self._pending.append((instance, "picked_up"))
+            case EntityDroppedEvent(instance=instance):
+                self._pending.append((instance, "dropped"))
+            case EntityDestroyedEvent(instance=instance):
+                self._pending.append((instance, "destroyed"))
+            # Ignore template signals - they're handled by EffectsObserver
 
     async def flush(self) -> None:
         """Process queued notifications. Call after response sent.

@@ -7,6 +7,9 @@ from mudd.events.types import (
     DestroySignal,
     DispenseSignal,
     DropSignal,
+    EntityDestroyedEvent,
+    EntityDroppedEvent,
+    EntityPickedUpEvent,
     GameEvent,
     GrantCurrencyEvent,
     GrantEvent,
@@ -69,6 +72,8 @@ class EffectsObserver:
                 self._destroy_signaled = True
             case DispenseSignal():
                 self._dispense_signaled = True
+            case EntityPickedUpEvent() | EntityDroppedEvent() | EntityDestroyedEvent():
+                pass  # Model events - handled by DiscordReconciler
 
     async def flush(self) -> None:
         """Flush pending operations (no-op for EffectsObserver).

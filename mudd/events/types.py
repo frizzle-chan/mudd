@@ -1,6 +1,10 @@
 """Event dataclasses for the observer pattern."""
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from mudd.models.entity import EntityInstance
 
 
 @dataclass(frozen=True)
@@ -59,6 +63,27 @@ class DispenseSignal:
     pass
 
 
+@dataclass(frozen=True)
+class EntityPickedUpEvent:
+    """Fact: entity was picked up by a user."""
+
+    instance: "EntityInstance"
+
+
+@dataclass(frozen=True)
+class EntityDroppedEvent:
+    """Fact: entity was dropped to a room."""
+
+    instance: "EntityInstance"
+
+
+@dataclass(frozen=True)
+class EntityDestroyedEvent:
+    """Fact: entity was destroyed."""
+
+    instance: "EntityInstance"
+
+
 GameEvent = (
     BroadcastEvent
     | GrantEvent
@@ -68,4 +93,7 @@ GameEvent = (
     | DropSignal
     | DestroySignal
     | DispenseSignal
+    | EntityPickedUpEvent
+    | EntityDroppedEvent
+    | EntityDestroyedEvent
 )

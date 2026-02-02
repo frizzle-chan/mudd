@@ -9,13 +9,18 @@ from uuid import UUID
 
 import asyncpg
 
+from mudd.events import (
+    EntityDestroyedEvent,
+    EntityDroppedEvent,
+    EntityPickedUpEvent,
+)
 from mudd.models.types import FocusMode
 from mudd.utils.random import weighted_choice
 from mudd.utils.text import Rarity
 
 if TYPE_CHECKING:
+    from mudd.events import Observer
     from mudd.models.interfaces import IRoom, IUser
-    from mudd.models.types import Observer
 
 logger = logging.getLogger(__name__)
 
@@ -194,11 +199,6 @@ class EntityInstance:
     def rarity(self) -> Rarity:
         """Item rarity tier."""
         return self.entity.rarity
-
-    def _notify(self, event: str) -> None:
-        """Notify all observers of an event."""
-        for observer in self._observers:
-            observer(self, event)
 
     def with_observers(self, *observers: Observer) -> EntityInstance:
         """Return a new instance with additional observers appended.
@@ -454,7 +454,8 @@ class EntityInstance:
             owner_id=user.id,
             container_entity_id=None,
         )
-        new_instance._notify("picked_up")
+        for observer in new_instance._observers:
+            observer.notify(EntityPickedUpEvent(instance=new_instance))
         return new_instance
 
     async def drop_to_room(
@@ -491,7 +492,8 @@ class EntityInstance:
             owner_id=None,
             container_entity_id=container_id,
         )
-        new_instance._notify("dropped")
+        for observer in new_instance._observers:
+            observer.notify(EntityDroppedEvent(instance=new_instance))
         return new_instance
 
     async def destroy(self) -> None:
@@ -499,7 +501,8 @@ class EntityInstance:
 
         Notifies observers with "destroyed" event before deletion.
         """
-        self._notify("destroyed")
+        for observer in self._observers:
+            observer.notify(EntityDestroyedEvent(instance=self))
         await self._pool.execute(
             "DELETE FROM entity_instances WHERE id = $1",
             self.instance_id,
