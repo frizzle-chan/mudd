@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 if TYPE_CHECKING:
     from mudd.models.entity import EntityInstance
@@ -12,3 +12,5 @@ if TYPE_CHECKING:
 # Called with (instance, event_name) when an entity changes state.
 # Event names: "picked_up", "dropped", "destroyed"
 Observer = Callable[["EntityInstance", str], None]
+
+FocusMode = Literal["none", "container"]

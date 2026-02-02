@@ -5,6 +5,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Protocol
 from uuid import UUID
 
+from mudd.models.types import FocusMode
+from mudd.utils.text import Rarity
+
 if TYPE_CHECKING:
     from mudd.models.entity import EntityInstance, ResolvedEntity
     from mudd.models.room import Room
@@ -22,6 +25,11 @@ class IUser(Protocol):
     @property
     def current_room(self) -> str:
         """Current room ID."""
+        ...
+
+    @property
+    def mention(self) -> str:
+        """Discord mention string for this user."""
         ...
 
     async def get_room(self) -> Room:
@@ -90,6 +98,42 @@ class IEntityInstance(Protocol):
         """Owner's Discord ID if in inventory, None if in room."""
         ...
 
+    # Proxy properties delegating to self.entity for template access
+    @property
+    def id(self) -> str:
+        """Entity definition ID."""
+        ...
+
+    @property
+    def name(self) -> str:
+        """Entity name."""
+        ...
+
+    @property
+    def description_short(self) -> str | None:
+        """Short description template."""
+        ...
+
+    @property
+    def description_long(self) -> str | None:
+        """Long description template."""
+        ...
+
+    @property
+    def contents_visible(self) -> bool:
+        """Whether container contents are visible."""
+        ...
+
+    @property
+    def focus_mode(self) -> FocusMode:
+        """Focus mode (none or container)."""
+        ...
+
+    @property
+    def rarity(self) -> Rarity:
+        """Item rarity tier."""
+        ...
+
     async def move_to_inventory(self, user: IUser) -> EntityInstance:
         """Move this instance to a user's inventory."""
         ...
@@ -102,4 +146,8 @@ class IEntityInstance(Protocol):
 
     async def destroy(self) -> None:
         """Delete this instance from the database."""
+        ...
+
+    async def get_contents(self) -> list[EntityInstance]:
+        """Get direct children of this container entity."""
         ...

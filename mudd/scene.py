@@ -9,7 +9,7 @@ from discord import Interaction
 
 from mudd.events import Observer
 from mudd.models.entity import EntityInstance
-from mudd.models.interfaces import IRoom
+from mudd.models.interfaces import IRoom, IUser
 from mudd.models.room import EntityModal, Room
 from mudd.models.user import User
 
@@ -24,7 +24,7 @@ class Scene:
     that collect events during command execution.
     """
 
-    user: User
+    user: IUser
     room: IRoom
     _pool: asyncpg.Pool = field(repr=False, compare=False, default=None)  # ty:ignore[invalid-assignment]
     _observers: tuple[Observer, ...] = field(default=(), repr=False, compare=False)

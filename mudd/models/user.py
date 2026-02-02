@@ -59,6 +59,11 @@ class User:
     current_room: str
     _pool: asyncpg.Pool = field(repr=False, compare=False)
 
+    @property
+    def mention(self) -> str:
+        """Discord mention string for this user."""
+        return f"<@{self.id}>"
+
     @classmethod
     async def get(cls, pool: asyncpg.Pool, user_id: int) -> User | None:
         """Get user by Discord ID.

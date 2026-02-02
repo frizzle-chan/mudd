@@ -4,21 +4,20 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field, replace
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 import asyncpg
 
+from mudd.models.types import FocusMode
 from mudd.utils.random import weighted_choice
-from mudd.utils.text import RARITY_EMOJI, Rarity
+from mudd.utils.text import Rarity
 
 if TYPE_CHECKING:
     from mudd.models.interfaces import IRoom, IUser
     from mudd.models.types import Observer
 
 logger = logging.getLogger(__name__)
-
-FocusMode = Literal["none", "container"]
 
 # Rarity weights for spawning (sum to 1000 for standard rarities)
 RARITY_WEIGHTS: dict[Rarity, int] = {
@@ -56,12 +55,6 @@ class ResolvedEntity:
     contents_visible: bool
     focus_mode: FocusMode
     rarity: Rarity
-
-    @property
-    def display_name(self) -> str:
-        """Name with rarity emoji suffix for display."""
-        emoji = RARITY_EMOJI[self.rarity]
-        return f"{self.name} {emoji}" if emoji else self.name
 
     @classmethod
     def _from_row(cls, row: asyncpg.Record) -> ResolvedEntity:
@@ -162,6 +155,45 @@ class EntityInstance:
     _observers: tuple[Observer, ...] = field(
         repr=False, compare=False, default_factory=tuple
     )
+
+    def __str__(self) -> str:
+        return self.entity.name
+
+    # Proxy properties delegating to self.entity for template access
+    @property
+    def id(self) -> str:
+        """Entity definition ID."""
+        return self.entity.id
+
+    @property
+    def name(self) -> str:
+        """Entity name."""
+        return self.entity.name
+
+    @property
+    def description_short(self) -> str | None:
+        """Short description template."""
+        return self.entity.description_short
+
+    @property
+    def description_long(self) -> str | None:
+        """Long description template."""
+        return self.entity.description_long
+
+    @property
+    def contents_visible(self) -> bool:
+        """Whether container contents are visible."""
+        return self.entity.contents_visible
+
+    @property
+    def focus_mode(self) -> FocusMode:
+        """Focus mode (none or container)."""
+        return self.entity.focus_mode
+
+    @property
+    def rarity(self) -> Rarity:
+        """Item rarity tier."""
+        return self.entity.rarity
 
     def _notify(self, event: str) -> None:
         """Notify all observers of an event."""
