@@ -194,3 +194,5 @@ review.md
 # Image optimization directories
 img-src/
 img-dist/
+
+*.local.md
