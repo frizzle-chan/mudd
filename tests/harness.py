@@ -97,16 +97,7 @@ class TestClient:
 
         # Create cogs with injected services
         self.look_cog = Look(bot=None, pool=pool)
-        self.interact_cog = Interact(
-            bot=None,
-            entity_service=self.entity_service,
-            entity_resolution=self.entity_resolution,
-            visibility_service=visibility_service,
-            inventory_service=self.inventory_service,
-            pool=pool,
-            rendering_service=self.rendering_service,
-            currency_service=self.currency_service,
-        )
+        self.interact_cog = Interact(bot=None, pool=pool)
         self.movement_cog = Movement(
             bot=None,
             visibility_service=visibility_service,

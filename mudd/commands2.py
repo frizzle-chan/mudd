@@ -2,7 +2,6 @@
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from functools import cached_property
 from typing import Any
 
 from mudd import template
@@ -10,6 +9,8 @@ from mudd.events import EffectsCollector
 from mudd.models import IEntityInstance, IUser
 from mudd.observers import EffectsObserver
 from mudd.scene import Scene
+from mudd.types import VerbAction
+from mudd.utils import async_cached_property
 from mudd.utils.text import RARITY_EMOJI
 
 
@@ -40,7 +41,7 @@ class ViewEntity:
         """Short description template."""
         return self._entity.description_short
 
-    @cached_property
+    @async_cached_property
     async def contents(self) -> str:
         """Get contents as a markdown bullet list."""
         contents = await self._entity.get_contents()
@@ -65,7 +66,7 @@ class ViewUser:
         """Discord mention string for this user."""
         return self._user.mention
 
-    @cached_property
+    @async_cached_property
     async def balance(self) -> int:
         """User's currency balance."""
         return await self._user.get_balance()
@@ -162,3 +163,73 @@ class LookCommand(ActionCommand):
     def get_handler_text(self, entity: IEntityInstance) -> str | None:
         """Return the entity's on_look handler template."""
         return entity.entity.on_look
+
+
+class TouchCommand(ActionCommand):
+    """Command for the 'touch' action."""
+
+    def get_handler_text(self, entity: IEntityInstance) -> str | None:
+        """Return the entity's on_touch handler template."""
+        return entity.entity.on_touch
+
+
+class AttackCommand(ActionCommand):
+    """Command for the 'attack' action."""
+
+    def get_handler_text(self, entity: IEntityInstance) -> str | None:
+        """Return the entity's on_attack handler template."""
+        return entity.entity.on_attack
+
+
+class UseCommand(ActionCommand):
+    """Command for the 'use' action."""
+
+    def get_handler_text(self, entity: IEntityInstance) -> str | None:
+        """Return the entity's on_use handler template."""
+        return entity.entity.on_use
+
+
+class TakeCommand(ActionCommand):
+    """Command for the 'take' action."""
+
+    def get_handler_text(self, entity: IEntityInstance) -> str | None:
+        """Return the entity's on_take handler template."""
+        return entity.entity.on_take
+
+
+class DropCommand(ActionCommand):
+    """Command for the 'drop' action."""
+
+    def get_handler_text(self, entity: IEntityInstance) -> str | None:
+        """Return the entity's on_drop handler template."""
+        return entity.entity.on_drop
+
+
+class OpenCommand(ActionCommand):
+    """Command for the 'open' action."""
+
+    def get_handler_text(self, entity: IEntityInstance) -> str | None:
+        """Return the entity's on_open handler template."""
+        return entity.entity.on_open
+
+
+class CloseCommand(ActionCommand):
+    """Command for the 'close' action."""
+
+    def get_handler_text(self, entity: IEntityInstance) -> str | None:
+        """Return the entity's on_close handler template."""
+        return entity.entity.on_close
+
+
+def get_command(action: VerbAction) -> ActionCommand:
+    """Get command instance for a verb action."""
+    return {
+        VerbAction.ON_LOOK: LookCommand(),
+        VerbAction.ON_TOUCH: TouchCommand(),
+        VerbAction.ON_ATTACK: AttackCommand(),
+        VerbAction.ON_USE: UseCommand(),
+        VerbAction.ON_TAKE: TakeCommand(),
+        VerbAction.ON_DROP: DropCommand(),
+        VerbAction.ON_OPEN: OpenCommand(),
+        VerbAction.ON_CLOSE: CloseCommand(),
+    }[action]
