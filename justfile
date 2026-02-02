@@ -7,6 +7,9 @@ dev:
 test:
     uv run pytest
 
+testq:
+    uv run pytest -qx --tb=line
+
 lint:
     uv run ruff check .
 
