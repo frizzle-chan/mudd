@@ -96,11 +96,7 @@ class TestClient:
         self._visibility_service = visibility_service
 
         # Create cogs with injected services
-        self.look_cog = Look(
-            bot=None,
-            pool=pool,
-            rendering_service=self.rendering_service,
-        )
+        self.look_cog = Look(bot=None, pool=pool)
         self.interact_cog = Interact(
             bot=None,
             entity_service=self.entity_service,

@@ -707,7 +707,7 @@ class InventoryService:
             guild,
             instance.owner_id,
             instance.instance_id,
-            instance.entity.display_name,
+            instance.entity.name,
             description,
             pinned,
         )

@@ -77,13 +77,7 @@ async def setup_hook():
     )
 
     # Create cogs with explicit dependencies
-    await bot.add_cog(
-        Look(
-            bot,
-            pool,
-            rendering_service,
-        )
-    )
+    await bot.add_cog(Look(bot, pool))
     await bot.add_cog(
         Interact(
             bot,

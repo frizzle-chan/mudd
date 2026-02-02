@@ -6,6 +6,7 @@ SET lock_timeout = '1s';
 SET statement_timeout = '5s';
 
 -- Drop old table and create new schema
+-- squawk-ignore ban-drop-table
 DROP TABLE IF EXISTS user_focus;
 
 CREATE TABLE user_focus (

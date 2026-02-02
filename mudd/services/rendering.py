@@ -186,7 +186,7 @@ class RenderingService:
         """
         if template is None:
             return ""
-        name_formatted = f"*{entity.display_name}*"
+        name_formatted = f"*{entity.name}*"
         return self._renderer.render_template(
             template, entity, name_formatted, contents
         )
@@ -234,7 +234,7 @@ class RenderingService:
             return "", effects
         context: dict[str, Any] = {
             "e": entity,
-            "name": f"*{entity.display_name}*",
+            "name": f"*{entity.name}*",
             "contents": contents,
             "user": user,
             "effects": effects,
@@ -275,7 +275,7 @@ class RenderingService:
                     "using name fallback",
                     c.entity.id,
                 )
-                descriptions.append(f"*{c.entity.display_name}*")
+                descriptions.append(f"*{c.entity.name}*")
 
         if not descriptions:
             return ""
@@ -384,7 +384,7 @@ class RenderingService:
         entity = instance.entity
         parts: list[str] = []
         if include_heading:
-            parts.append(f"### {entity.display_name}")
+            parts.append(f"### {entity.name}")
 
         # Fetch and format container contents (skip for inventory items with no room)
         contents_str = ""
@@ -395,7 +395,7 @@ class RenderingService:
         # Build base context
         base_context: dict[str, Any] = {
             "e": entity,
-            "name": f"*{entity.display_name}*",
+            "name": f"*{entity.name}*",
             "contents": contents_str,
             "balance": balance,
         }
@@ -449,7 +449,7 @@ class RenderingService:
         """
         if not contents:
             return ""
-        return "\n".join(f"- {c.entity.display_name}" for c in contents)
+        return "\n".join(f"- {c.entity.name}" for c in contents)
 
     async def render_entity_on_look_v2(
         self,
@@ -474,7 +474,7 @@ class RenderingService:
         entity = instance.entity
         parts: list[str] = []
         if include_heading:
-            parts.append(f"### {entity.display_name}")
+            parts.append(f"### {entity.name}")
 
         # Fetch contents using model method (for room items with visible contents)
         contents_str = ""
@@ -485,7 +485,7 @@ class RenderingService:
         # Build base context
         base_context: dict[str, Any] = {
             "e": entity,
-            "name": f"*{entity.display_name}*",
+            "name": f"*{entity.name}*",
             "contents": contents_str,
             "balance": balance_str,
         }
