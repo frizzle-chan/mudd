@@ -22,6 +22,9 @@ from mudd.services.inventory import InventoryService
 from mudd.services.rendering import RenderingService
 from mudd.services.visibility import VisibilityService
 
+# Suppress PyNaCl warning since we don't use voice features
+discord.VoiceClient.warn_nacl = False
+
 load_dotenv()
 
 logging.basicConfig(level=logging.INFO)
