@@ -1,10 +1,12 @@
 import argparse
+import atexit
 import logging
 import os
 from pathlib import Path
 
 import discord
 from dotenv import load_dotenv
+from mudd.services.visibility import VisibilityService
 
 from mudd.bot import MuddBot
 from mudd.cogs.economy import Economy
@@ -20,7 +22,6 @@ from mudd.services.entity_resolution import EntityResolutionService
 from mudd.services.focus_context import FocusContextService
 from mudd.services.inventory import InventoryService
 from mudd.services.rendering import RenderingService
-from mudd.services.visibility import VisibilityService
 
 # Suppress PyNaCl warning since we don't use voice features
 discord.VoiceClient.warn_nacl = False
@@ -111,4 +112,17 @@ async def on_ready():
     logger.info(f"Logged in as {bot.user} (world: {bot.world_file})")
 
 
+PID_FILE = Path("mudd.pid")
+
+
+def write_pid() -> None:
+    PID_FILE.write_text(str(os.getpid()))
+
+
+def cleanup_pid() -> None:
+    PID_FILE.unlink(missing_ok=True)
+
+
+atexit.register(cleanup_pid)
+write_pid()
 bot.run(os.environ["DISCORD_TOKEN"])

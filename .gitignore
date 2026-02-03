@@ -196,3 +196,6 @@ img-src/
 img-dist/
 
 *.local.md
+
+# Dev server PID file
+mudd.pid
