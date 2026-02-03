@@ -17,12 +17,21 @@ Tests:
 import pytest
 import pytest_asyncio
 
-from mudd.loaders.entity_loader import _validate_and_sort_entities, sync_entities
+from mudd.loaders.entity_loader import sync_entities
 from mudd.loaders.zone_loader import (
     Entity,
     load_entities_from_rec,
     load_rooms_from_rec,
 )
+from mudd.models.entity_definition import EntityDefinition
+
+
+def _validate_and_sort_entities(
+    entities: list[Entity], room_ids: set[str]
+) -> list[Entity]:
+    """Wrapper to call EntityDefinition validation and sorting for tests."""
+    EntityDefinition._validate_entities(entities, room_ids)
+    return EntityDefinition._topological_sort(entities)
 
 
 class TestLoadEntitiesFromRec:

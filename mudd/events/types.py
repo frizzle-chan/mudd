@@ -84,6 +84,34 @@ class EntityDestroyedEvent:
     instance: "EntityInstance"
 
 
+@dataclass(frozen=True)
+class ZoneSyncedEvent:
+    """Zone was synced to database (created or updated)."""
+
+    zone_id: str
+    name: str
+
+
+@dataclass(frozen=True)
+class RoomSyncedEvent:
+    """Room was synced to database (created or updated)."""
+
+    room_id: str
+    name: str
+    description: str
+    zone_id: str
+    has_voice: bool
+
+
+@dataclass(frozen=True)
+class OrphanChannelDetectedEvent:
+    """Orphan channel detected during sync."""
+
+    guild_id: int
+    channel_name: str
+    category_name: str
+
+
 GameEvent = (
     BroadcastEvent
     | GrantEvent
@@ -96,4 +124,7 @@ GameEvent = (
     | EntityPickedUpEvent
     | EntityDroppedEvent
     | EntityDestroyedEvent
+    | ZoneSyncedEvent
+    | RoomSyncedEvent
+    | OrphanChannelDetectedEvent
 )

@@ -18,15 +18,16 @@ from discord.ext import commands, tasks
 if TYPE_CHECKING:
     from main import MuddBot
 
+from mudd.events import OrphanChannelDetectedEvent
 from mudd.loaders.entity_loader import sync_entities
 from mudd.loaders.verb_loader import sync_verbs
 from mudd.loaders.zone_loader import (
     get_default_room,
     load_rooms_from_rec,
     load_zones_from_rec,
-    sync_zones_and_rooms_to_db,
-    sync_zones_and_rooms_to_discord,
 )
+from mudd.models import Room, Zone
+from mudd.observers.discord import DiscordReconciler
 from mudd.services.currency import CurrencyService
 from mudd.services.entity import EntityService
 from mudd.services.entity_resolution import EntityResolutionService
@@ -115,17 +116,45 @@ class Sync(commands.Cog):
 
         world_file = self.bot.world_file
 
-        # Load zones/rooms from rec file (used for both DB and Discord sync)
+        # Load zones/rooms from rec file
         zones = load_zones_from_rec(world_file)
         rooms = load_rooms_from_rec(world_file)
 
-        # Sync zones/rooms to DB first (entities need room FKs)
+        if not zones or not rooms:
+            logger.warning("No zones or rooms found - skipping sync")
+            return
+
+        default_room = get_default_room(rooms)
+
+        # Create reconciler for Discord operations
+        reconciler = DiscordReconciler(
+            self.bot, pool, console_channel=self._console_channel
+        )
+        # Transfer seen orphans to reconciler
+        reconciler._seen_orphans = self._seen_orphans
+
+        # Sync zones to DB via model (emits ZoneSyncedEvent)
         try:
-            if zones and rooms:
-                default_room = get_default_room(rooms)
-                await sync_zones_and_rooms_to_db(pool, zones, rooms, default_room)
+            zone_stats = await Zone.sync_all(pool, zones, observers=(reconciler,))
+            logger.info(
+                f"Zone sync: {zone_stats.synced} synced, {zone_stats.deleted} deleted"
+            )
         except Exception:
-            logger.exception("Failed to sync zones/rooms to database")
+            logger.exception("Failed to sync zones to database")
+            if fail_fast:
+                raise
+
+        # Sync rooms to DB via model (emits RoomSyncedEvent)
+        try:
+            room_stats = await Room.sync_all(
+                pool, rooms, default_room, observers=(reconciler,)
+            )
+            logger.info(
+                f"Room sync: {room_stats.synced} synced, {room_stats.deleted} deleted, "
+                f"{room_stats.users_relocated} users relocated"
+            )
+        except Exception:
+            logger.exception("Failed to sync rooms to database")
             if fail_fast:
                 raise
 
@@ -146,21 +175,57 @@ class Sync(commands.Cog):
         except Exception:
             logger.exception("Failed to prepopulate autocomplete cache")
 
-        for guild in self.bot.guilds:
-            logger.info(f"Starting sync for {guild.name}")
-            try:
-                # Zone/room Discord sync
-                stats, orphans = await sync_zones_and_rooms_to_discord(
-                    guild, zones, rooms, self._console_channel, self._seen_orphans
-                )
-                logger.info(f"Zone sync for {guild.name}: {stats}")
-                self._seen_orphans.update(orphans)
+        # Flush reconciler to sync Discord state (idempotent)
+        try:
+            await reconciler.flush()
+        except Exception:
+            logger.exception("Failed to flush Discord reconciler")
+            if fail_fast:
+                raise
 
+        # Detect orphans and emit events
+        room_ids = {r.id for r in rooms}
+        for guild in self.bot.guilds:
+            for zone in zones:
+                # Find category for this zone
+                normalized_name = zone.name.lower().replace(" ", "-")
+                category = None
+                for cat in guild.categories:
+                    if cat.name.lower().replace(" ", "-") == normalized_name:
+                        category = cat
+                        break
+
+                if category is None:
+                    continue
+
+                # Find orphan channels in this category
+                for channel in category.channels:
+                    if channel.name not in room_ids:
+                        reconciler.notify(
+                            OrphanChannelDetectedEvent(
+                                guild_id=guild.id,
+                                channel_name=channel.name,
+                                category_name=category.name,
+                            )
+                        )
+
+        # Flush orphan notifications
+        try:
+            await reconciler.flush()
+        except Exception:
+            logger.exception("Failed to report orphans")
+
+        # Update seen orphans from reconciler
+        self._seen_orphans = reconciler._seen_orphans
+
+        for guild in self.bot.guilds:
+            logger.info(f"Starting remaining sync for {guild.name}")
+            try:
                 # Visibility sync
                 vis_stats = await self.visibility_service.sync_guild(guild)
                 logger.info(f"Visibility sync for {guild.name}: {vis_stats}")
             except Exception:
-                logger.exception(f"Failed sync for {guild.name}")
+                logger.exception(f"Failed visibility sync for {guild.name}")
                 if fail_fast:
                     raise
 

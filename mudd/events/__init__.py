@@ -19,7 +19,10 @@ from mudd.events.types import (
     GrantCurrencyEvent,
     GrantEvent,
     GrantRandomEvent,
+    OrphanChannelDetectedEvent,
     PickupSignal,
+    RoomSyncedEvent,
+    ZoneSyncedEvent,
 )
 
 __all__ = [
@@ -41,4 +44,7 @@ __all__ = [
     "EntityPickedUpEvent",
     "EntityDroppedEvent",
     "EntityDestroyedEvent",
+    "ZoneSyncedEvent",
+    "RoomSyncedEvent",
+    "OrphanChannelDetectedEvent",
 ]

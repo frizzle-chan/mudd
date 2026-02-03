@@ -15,6 +15,7 @@ from mudd.events import (
     EntityPickedUpEvent,
 )
 from mudd.models.types import FocusMode
+from mudd.models.zone import SyncStats
 from mudd.utils.random import weighted_choice
 from mudd.utils.text import Rarity
 
@@ -426,6 +427,64 @@ class EntityInstance:
             container_entity_id=row["container_entity_id"],
             _pool=pool,
         )
+
+    @classmethod
+    async def sync_world_instances(
+        cls,
+        pool: asyncpg.Pool,
+        instance_data: list[tuple[str, str, str | None]],
+    ) -> SyncStats:
+        """Sync world instances from rec file data.
+
+        Deletes stale world instances (is_world_instance=TRUE),
+        upserts instances from rec file data.
+        Player instances (is_world_instance=FALSE) are preserved.
+
+        Args:
+            pool: Database connection pool
+            instance_data: List of (entity_id, room, container_id) tuples
+
+        Returns:
+            SyncStats with synced and deleted counts
+        """
+        deleted = 0
+        synced = 0
+
+        async with pool.acquire() as conn, conn.transaction():
+            # Delete world instances no longer in rec files
+            if instance_data:
+                result = await conn.execute(
+                    """DELETE FROM entity_instances
+                    WHERE is_world_instance = TRUE
+                      AND (entity_id, room) NOT IN (
+                          SELECT * FROM unnest($1::text[], $2::text[])
+                      )""",
+                    [e[0] for e in instance_data],
+                    [e[1] for e in instance_data],
+                )
+                if result.startswith("DELETE "):
+                    deleted = int(result.split()[1])
+            else:
+                result = await conn.execute(
+                    "DELETE FROM entity_instances WHERE is_world_instance = TRUE"
+                )
+                if result.startswith("DELETE "):
+                    deleted = int(result.split()[1])
+
+            # Upsert world instances from rec file
+            if instance_data:
+                await conn.executemany(
+                    """INSERT INTO entity_instances
+                           (entity_id, room, container_entity_id, is_world_instance)
+                    VALUES ($1, $2, $3, TRUE)
+                    ON CONFLICT (entity_id, room) WHERE is_world_instance = TRUE
+                    DO UPDATE SET container_entity_id = $3""",
+                    instance_data,
+                )
+                synced = len(instance_data)
+                logger.info(f"Ensured {synced} entity instances exist")
+
+        return SyncStats(synced=synced, deleted=deleted)
 
     async def move_to_inventory(self, user: IUser) -> EntityInstance:
         """Move this instance to a user's inventory.
