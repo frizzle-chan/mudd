@@ -19,6 +19,10 @@ format:
 types:
     uv run ty check
 
+ralph prompt_file="prompt.local.md":
+    if [ ! -f {{prompt_file}} ]; then echo "{{prompt_file}} not found"; exit 1; fi
+    claude --permission-mode accept-edits '/ralph-loop:ralph-loop "execute @{{prompt_file}} and output <promise>FIN</promise> when done." --max-iterations 5 --completion-promise FIN'
+
 entities:
     #!/usr/bin/env bash
     set -euo pipefail
