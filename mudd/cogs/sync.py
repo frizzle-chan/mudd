@@ -17,7 +17,7 @@ from discord.ext import commands, tasks
 if TYPE_CHECKING:
     from main import MuddBot
 
-from mudd.events import OrphanChannelDetectedEvent
+from mudd.events import InventoryForumContext, OrphanChannelDetectedEvent
 from mudd.loaders.entity_loader import sync_entities
 from mudd.loaders.verb_loader import sync_verbs
 from mudd.loaders.zone_loader import (
@@ -31,7 +31,7 @@ from mudd.observers.discord import DiscordReconciler
 from mudd.services.currency import CurrencyService
 from mudd.services.entity import EntityService
 from mudd.services.entity_resolution import EntityResolutionService
-from mudd.services.inventory import InventoryService
+from mudd.services.inventory import InventoryService, get_inventory_forum_name
 from mudd.services.rendering import RenderingService
 from mudd.services.visibility import VisibilityService
 
@@ -203,7 +203,7 @@ class Sync(commands.Cog):
 
             # Inventory forum sync (non-fatal)
             try:
-                inv_stats = await self.inventory_service.sync_user_forums(guild)
+                inv_stats = await self._sync_inventory_forums(guild, reconciler)
                 logger.info(f"Inventory sync for {guild.name}: {inv_stats}")
             except Exception:
                 logger.exception(f"Failed inventory sync for {guild.name}")
@@ -408,6 +408,134 @@ class Sync(commands.Cog):
                 stats["errors"] += 1
 
         return stats
+
+    async def _sync_inventory_forums(
+        self, guild: discord.Guild, reconciler: DiscordReconciler
+    ) -> dict[str, int]:
+        """Sync inventory forums for all guild members using event-based approach.
+
+        Computes InventoryForumContext for each member and emits events
+        for the reconciler to handle Discord operations.
+
+        Args:
+            guild: Discord guild
+            reconciler: DiscordReconciler to handle Discord operations
+
+        Returns:
+            Stats dict with keys: created, recovered, existing, renamed,
+            fixed, threads_pruned, errors
+        """
+        # Reset reconciler stats for this sync
+        reconciler.reset_inventory_forum_stats()
+
+        # Find inventory category (needed for forum lookups)
+        inventory_category: discord.CategoryChannel | None = None
+        for category in guild.categories:
+            if category.name == "Inventory":
+                inventory_category = category
+                break
+
+        for member in guild.members:
+            if member.bot:
+                continue
+
+            try:
+                # Compute forum context from Discord state
+                context = await self._compute_forum_context(
+                    guild, member, inventory_category
+                )
+
+                # Get or create user and emit event
+                user = await User.get_or_create(self._pool, member.id)
+                await user.ensure_inventory_forum(context, observers=(reconciler,))
+
+            except Exception:
+                logger.exception(f"Failed to sync inventory forum for {member.id}")
+                reconciler._inventory_forum_stats["errors"] += 1
+
+        # Flush events
+        await reconciler.flush()
+
+        return reconciler.get_inventory_forum_stats()
+
+    async def _compute_forum_context(
+        self,
+        guild: discord.Guild,
+        member: discord.Member,
+        inventory_category: discord.CategoryChannel | None,
+    ) -> InventoryForumContext:
+        """Compute the InventoryForumContext for a member.
+
+        Examines Discord and DB state to determine what action is needed.
+
+        Args:
+            guild: Discord guild
+            member: Discord member
+            inventory_category: The Inventory category, if it exists
+
+        Returns:
+            InventoryForumContext with pre-computed Discord state
+        """
+        forum_name = get_inventory_forum_name(member.name)
+        existing_forum_id: int | None = None
+        duplicate_forum_ids: list[int] = []
+        needs_rename = False
+        needs_permission_fix = False
+
+        # Check DB for existing forum record
+        forum_data = await self._pool.fetchrow(
+            """SELECT forum_id FROM user_inventory_forums WHERE user_id = $1""",
+            member.id,
+        )
+
+        if forum_data:
+            # Verify forum still exists in Discord
+            forum = guild.get_channel(forum_data["forum_id"])
+            if forum and isinstance(forum, discord.ForumChannel):
+                existing_forum_id = forum.id
+                # Check if name needs update
+                if forum.name != forum_name:
+                    needs_rename = True
+                # Check if permissions need fixing
+                overwrites = forum.overwrites_for(member)
+                if overwrites.create_public_threads is not False:
+                    needs_permission_fix = True
+            else:
+                # Forum was deleted from Discord, clear stale DB record
+                await self._pool.execute(
+                    "DELETE FROM user_inventory_forums WHERE user_id = $1", member.id
+                )
+
+        # If no DB record, search Discord for existing forums (recovery case)
+        if existing_forum_id is None and inventory_category is not None:
+            # Search for forums by name in the category
+            matching_forums = [
+                forum
+                for forum in guild.forums
+                if forum.category_id == inventory_category.id
+                and forum.name == forum_name
+            ]
+            matching_forums.sort(key=lambda f: f.id)
+
+            if matching_forums:
+                # Keep oldest (smallest ID), rest are duplicates
+                existing_forum_id = matching_forums[0].id
+                duplicate_forum_ids = [f.id for f in matching_forums[1:]]
+                # Check if permissions need fixing
+                overwrites = matching_forums[0].overwrites_for(member)
+                if overwrites.create_public_threads is not False:
+                    needs_permission_fix = True
+
+        return InventoryForumContext(
+            guild_id=guild.id,
+            user_id=member.id,
+            username=member.name,
+            display_name=member.display_name,
+            existing_forum_id=existing_forum_id,
+            duplicate_forum_ids=tuple(duplicate_forum_ids),
+            needs_rename=needs_rename,
+            needs_permission_fix=needs_permission_fix,
+        )
 
     def _detect_orphan_channels(
         self,

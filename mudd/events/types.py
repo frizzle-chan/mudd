@@ -1,6 +1,7 @@
 """Event dataclasses for the observer pattern."""
 
 from dataclasses import dataclass
+from enum import Enum
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -131,6 +132,42 @@ class BalanceChangedEvent:
     memo: str
 
 
+class InventoryForumAction(Enum):
+    """Action taken when ensuring an inventory forum."""
+
+    CREATE = "create"  # Need to create new forum
+    RECOVER = "recover"  # Recover existing Discord forum to DB
+    EXISTING = "existing"  # Forum already valid in DB
+
+
+@dataclass(frozen=True)
+class InventoryForumContext:
+    """Pre-computed Discord state for inventory forum sync.
+
+    Keeps the User model Discord-free by computing Discord state
+    in the sync cog before calling the model method.
+    """
+
+    guild_id: int
+    user_id: int
+    username: str
+    display_name: str
+    existing_forum_id: int | None  # Forum found in Discord (from DB or by name)
+    duplicate_forum_ids: tuple[int, ...]  # Duplicates to clean up
+    needs_rename: bool  # Forum name doesn't match expected format
+    needs_permission_fix: bool  # Permissions need correction
+
+
+@dataclass(frozen=True)
+class InventoryForumEnsuredEvent:
+    """Inventory forum was ensured for a user."""
+
+    user_id: int
+    guild_id: int
+    action: InventoryForumAction
+    context: InventoryForumContext
+
+
 GameEvent = (
     BroadcastEvent
     | GrantEvent
@@ -148,4 +185,5 @@ GameEvent = (
     | OrphanChannelDetectedEvent
     | WalletEnsuredEvent
     | BalanceChangedEvent
+    | InventoryForumEnsuredEvent
 )

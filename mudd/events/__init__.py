@@ -20,6 +20,9 @@ from mudd.events.types import (
     GrantCurrencyEvent,
     GrantEvent,
     GrantRandomEvent,
+    InventoryForumAction,
+    InventoryForumContext,
+    InventoryForumEnsuredEvent,
     OrphanChannelDetectedEvent,
     PickupSignal,
     RoomSyncedEvent,
@@ -51,4 +54,7 @@ __all__ = [
     "OrphanChannelDetectedEvent",
     "WalletEnsuredEvent",
     "BalanceChangedEvent",
+    "InventoryForumAction",
+    "InventoryForumContext",
+    "InventoryForumEnsuredEvent",
 ]

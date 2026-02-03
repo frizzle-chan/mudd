@@ -17,6 +17,9 @@ from mudd.events import (
     EntityDroppedEvent,
     EntityPickedUpEvent,
     GameEvent,
+    InventoryForumAction,
+    InventoryForumContext,
+    InventoryForumEnsuredEvent,
     OrphanChannelDetectedEvent,
     RoomSyncedEvent,
     WalletEnsuredEvent,
@@ -31,6 +34,7 @@ type PendingEvent = (
     | tuple[RoomSyncedEvent, str]
     | tuple[OrphanChannelDetectedEvent, str]
     | tuple[WalletEnsuredEvent, str]
+    | tuple[InventoryForumEnsuredEvent, str]
 )
 
 logger = logging.getLogger(__name__)
@@ -89,6 +93,16 @@ class DiscordReconciler:
         self._zone_categories: dict[int, dict[str, discord.CategoryChannel]] = {}
         # Track seen orphans: (guild_id, channel_name, category_name)
         self._seen_orphans: set[tuple[int, str, str]] = set()
+        # Stats for inventory forum sync
+        self._inventory_forum_stats: dict[str, int] = {
+            "created": 0,
+            "recovered": 0,
+            "existing": 0,
+            "renamed": 0,
+            "fixed": 0,
+            "threads_pruned": 0,
+            "errors": 0,
+        }
 
     def notify(self, event: GameEvent) -> None:
         """Receive notification (sync). Queue for async processing.
@@ -114,6 +128,8 @@ class DiscordReconciler:
                 self._pending.append((evt, "orphan_detected"))
             case WalletEnsuredEvent() as evt:
                 self._pending.append((evt, "wallet_ensured"))
+            case InventoryForumEnsuredEvent() as evt:
+                self._pending.append((evt, "inventory_forum_ensured"))
             # Ignore template signals - they're handled by EffectsObserver
 
     async def flush(self) -> None:
@@ -140,6 +156,7 @@ class DiscordReconciler:
         room_events: list[RoomSyncedEvent] = []
         orphan_events: list[OrphanChannelDetectedEvent] = []
         wallet_events: list[WalletEnsuredEvent] = []
+        inventory_forum_events: list[InventoryForumEnsuredEvent] = []
         entity_events: list[tuple[EntityInstance, str]] = []
 
         for item, event_type in pending:
@@ -152,6 +169,8 @@ class DiscordReconciler:
                     orphan_events.append(item)  # type: ignore[arg-type]
                 case "wallet_ensured":
                     wallet_events.append(item)  # type: ignore[arg-type]
+                case "inventory_forum_ensured":
+                    inventory_forum_events.append(item)  # type: ignore[arg-type]
                 case _:
                     entity_events.append((item, event_type))  # type: ignore[arg-type]
 
@@ -174,7 +193,12 @@ class DiscordReconciler:
             for evt in wallet_events:
                 await self._handle_wallet_event(guild, evt)
 
-        # 5. Process entity events (original behavior)
+            # 5. Process inventory forum events
+            for evt in inventory_forum_events:
+                if evt.guild_id == guild.id:
+                    await self._handle_inventory_forum_event(guild, evt)
+
+        # 6. Process entity events (original behavior)
         for instance, event_type in entity_events:
             await self._handle_entity_event(instance, event_type)
 
@@ -672,3 +696,299 @@ class DiscordReconciler:
                     )
                 except discord.HTTPException as e:
                     logger.error(f"Failed to pin wallet thread {thread.id}: {e}")
+
+    def get_inventory_forum_stats(self) -> dict[str, int]:
+        """Get accumulated inventory forum sync stats.
+
+        Returns:
+            Stats dict with keys: created, recovered, existing, renamed,
+            fixed, threads_pruned, errors
+        """
+        return self._inventory_forum_stats.copy()
+
+    def reset_inventory_forum_stats(self) -> None:
+        """Reset inventory forum sync stats to zero."""
+        self._inventory_forum_stats = {
+            "created": 0,
+            "recovered": 0,
+            "existing": 0,
+            "renamed": 0,
+            "fixed": 0,
+            "threads_pruned": 0,
+            "errors": 0,
+        }
+
+    async def _handle_inventory_forum_event(
+        self, guild: discord.Guild, event: InventoryForumEnsuredEvent
+    ) -> None:
+        """Handle an inventory forum ensured event.
+
+        Performs Discord operations based on the action:
+        - CREATE: Creates new forum with correct permissions
+        - RECOVER: Deletes duplicates, renames if needed, registers in DB
+        - EXISTING: Renames if needed, fixes permissions if needed
+
+        All cases prune orphan threads.
+
+        Args:
+            guild: Discord guild
+            event: The inventory forum ensured event
+        """
+        ctx = event.context
+        member = guild.get_member(event.user_id)
+        if member is None:
+            logger.warning(f"User {event.user_id} not found in guild {guild.name}")
+            self._inventory_forum_stats["errors"] += 1
+            return
+
+        try:
+            # Ensure category exists
+            category = await self._ensure_inventory_category(guild)
+            forum_name = _get_inventory_forum_name(ctx.username)
+
+            match event.action:
+                case InventoryForumAction.CREATE:
+                    forum = await self._create_inventory_forum(
+                        guild, category, member, forum_name, ctx.display_name
+                    )
+                    if forum:
+                        self._inventory_forum_stats["created"] += 1
+                    else:
+                        self._inventory_forum_stats["errors"] += 1
+                        return
+
+                case InventoryForumAction.RECOVER:
+                    forum = await self._recover_inventory_forum(
+                        guild, category, member, forum_name, ctx
+                    )
+                    if forum:
+                        self._inventory_forum_stats["recovered"] += 1
+                    else:
+                        self._inventory_forum_stats["errors"] += 1
+                        return
+
+                case InventoryForumAction.EXISTING:
+                    if ctx.existing_forum_id is None:
+                        logger.error(
+                            f"EXISTING action but no forum_id for user {event.user_id}"
+                        )
+                        self._inventory_forum_stats["errors"] += 1
+                        return
+                    forum = guild.get_channel(ctx.existing_forum_id)
+                    if not forum or not isinstance(forum, discord.ForumChannel):
+                        logger.error(
+                            f"Forum {ctx.existing_forum_id} not found "
+                            f"for user {event.user_id}"
+                        )
+                        self._inventory_forum_stats["errors"] += 1
+                        return
+                    self._inventory_forum_stats["existing"] += 1
+
+            # Handle rename if needed
+            if ctx.needs_rename and forum.name != forum_name:
+                try:
+                    await forum.edit(name=forum_name)
+                    logger.info(
+                        f"Renamed forum '{forum.name}' -> '{forum_name}' "
+                        f"for user {event.user_id}"
+                    )
+                    self._inventory_forum_stats["renamed"] += 1
+                except discord.HTTPException as e:
+                    logger.error(f"Failed to rename forum {forum.id}: {e}")
+
+            # Fix permissions if needed
+            if ctx.needs_permission_fix:
+                try:
+                    await forum.set_permissions(
+                        member,
+                        view_channel=True,
+                        send_messages_in_threads=True,
+                        create_public_threads=False,
+                        send_messages=False,
+                    )
+                    self._inventory_forum_stats["fixed"] += 1
+                except discord.HTTPException as e:
+                    logger.error(f"Failed to fix permissions for forum {forum.id}: {e}")
+
+            # Prune orphan threads
+            pruned = await self._prune_orphan_threads(forum, event.user_id)
+            self._inventory_forum_stats["threads_pruned"] += pruned
+
+        except discord.HTTPException as e:
+            logger.error(f"Failed to handle inventory forum for {event.user_id}: {e}")
+            self._inventory_forum_stats["errors"] += 1
+
+    async def _create_inventory_forum(
+        self,
+        guild: discord.Guild,
+        category: discord.CategoryChannel,
+        member: discord.Member,
+        forum_name: str,
+        display_name: str,
+    ) -> discord.ForumChannel | None:
+        """Create a new inventory forum for a user.
+
+        Args:
+            guild: Discord guild
+            category: Inventory category channel
+            member: Discord member
+            forum_name: Name for the forum
+            display_name: User's display name for topic
+
+        Returns:
+            The created forum, or None if creation failed
+        """
+        # Ensure user exists in users table first
+        await self.pool.execute(
+            """
+            INSERT INTO users (id, current_room)
+            SELECT $1, (SELECT id FROM rooms WHERE is_default = TRUE)
+            WHERE NOT EXISTS (SELECT 1 FROM users WHERE id = $1)
+            """,
+            member.id,
+        )
+
+        # Permissions: only owner can see and reply to threads (not create)
+        overwrites = {
+            guild.default_role: discord.PermissionOverwrite(view_channel=False),
+            member: discord.PermissionOverwrite(
+                view_channel=True,
+                send_messages_in_threads=True,
+                create_public_threads=False,
+                send_messages=False,
+            ),
+        }
+
+        try:
+            forum = await category.create_forum(
+                name=forum_name,
+                topic=f"Personal inventory for {display_name}",
+                overwrites=overwrites,
+            )
+
+            # Store in database
+            await self.pool.execute(
+                """
+                INSERT INTO user_inventory_forums (user_id, forum_id, category_id)
+                VALUES ($1, $2, $3)
+                ON CONFLICT (user_id) DO UPDATE SET forum_id = $2, category_id = $3
+                """,
+                member.id,
+                forum.id,
+                category.id,
+            )
+
+            logger.info(f"Created inventory forum '{forum_name}' for user {member.id}")
+            return forum
+        except discord.HTTPException as e:
+            logger.error(f"Failed to create inventory forum for {member.id}: {e}")
+            return None
+
+    async def _recover_inventory_forum(
+        self,
+        guild: discord.Guild,
+        category: discord.CategoryChannel,
+        member: discord.Member,
+        forum_name: str,
+        ctx: InventoryForumContext,
+    ) -> discord.ForumChannel | None:
+        """Recover an existing Discord forum that lost its DB record.
+
+        Args:
+            guild: Discord guild
+            category: Inventory category channel
+            member: Discord member
+            forum_name: Expected forum name
+            ctx: Forum context with existing forum info
+
+        Returns:
+            The recovered forum, or None if recovery failed
+        """
+        if ctx.existing_forum_id is None:
+            logger.error(f"RECOVER action but no forum_id for user {member.id}")
+            return None
+
+        forum = guild.get_channel(ctx.existing_forum_id)
+        if not forum or not isinstance(forum, discord.ForumChannel):
+            logger.error(f"Forum {ctx.existing_forum_id} not found for recovery")
+            return None
+
+        # Delete duplicate forums
+        for dup_id in ctx.duplicate_forum_ids:
+            dup = guild.get_channel(dup_id)
+            if dup:
+                try:
+                    await dup.delete(
+                        reason="Duplicate inventory forum cleanup during sync"
+                    )
+                    logger.info(f"Deleted duplicate inventory forum (ID: {dup_id})")
+                except discord.HTTPException as e:
+                    logger.error(f"Failed to delete duplicate forum {dup_id}: {e}")
+
+        # Ensure user exists in users table
+        await self.pool.execute(
+            """
+            INSERT INTO users (id, current_room)
+            SELECT $1, (SELECT id FROM rooms WHERE is_default = TRUE)
+            WHERE NOT EXISTS (SELECT 1 FROM users WHERE id = $1)
+            """,
+            member.id,
+        )
+
+        # Update DB to track the recovered forum
+        await self.pool.execute(
+            """
+            INSERT INTO user_inventory_forums (user_id, forum_id, category_id)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (user_id) DO UPDATE SET forum_id = $2, category_id = $3
+            """,
+            member.id,
+            forum.id,
+            category.id,
+        )
+
+        logger.info(
+            f"Recovered inventory forum '{forum.name}' (ID: {forum.id}) "
+            f"for user {member.id}"
+        )
+        return forum
+
+    async def _prune_orphan_threads(
+        self, forum: discord.ForumChannel, user_id: int
+    ) -> int:
+        """Delete threads that don't correspond to inventory items.
+
+        Args:
+            forum: User's inventory forum
+            user_id: Discord user ID
+
+        Returns:
+            Number of threads pruned
+        """
+        # Query all valid thread IDs for this user's inventory items
+        rows = await self.pool.fetch(
+            """
+            SELECT discord_thread_id FROM entity_instances
+            WHERE owner_id = $1 AND discord_thread_id IS NOT NULL
+            """,
+            user_id,
+        )
+        valid_thread_ids = {row["discord_thread_id"] for row in rows}
+
+        pruned = 0
+        for thread in forum.threads:
+            if thread.id in valid_thread_ids:
+                continue
+
+            # Orphan thread - delete it
+            try:
+                await thread.delete()
+                pruned += 1
+                logger.info(
+                    f"Pruned orphan thread '{thread.name}' (ID: {thread.id}) "
+                    f"from inventory forum for user {user_id}"
+                )
+            except discord.HTTPException as e:
+                logger.error(f"Failed to prune thread {thread.id}: {e}")
+
+        return pruned
