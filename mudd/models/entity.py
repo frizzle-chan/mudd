@@ -119,6 +119,28 @@ class ResolvedEntity:
         Returns:
             ResolvedEntity with weighted random selection, or None if no matches
         """
+        return await cls.get_weighted_random_by_tag(pool, tag)
+
+    @classmethod
+    async def get_weighted_random_by_tag(
+        cls,
+        pool: asyncpg.Pool,
+        tag: str,
+        exclude_ids: set[str] | None = None,
+    ) -> ResolvedEntity | None:
+        """Select random entity by tag with weighted rarity.
+
+        Queries entities matching the tag (excluding 'none' rarity),
+        optionally filters out exclude_ids, does weighted random selection.
+
+        Args:
+            pool: Database connection pool
+            tag: Tag to filter entities by
+            exclude_ids: Entity IDs to exclude (for no_duplicates pools)
+
+        Returns:
+            ResolvedEntity with weighted random selection, or None if no matches
+        """
         candidates = await pool.fetch(
             """
             SELECT DISTINCT e.id, e.rarity
@@ -128,6 +150,13 @@ class ResolvedEntity:
             """,
             tag,
         )
+
+        if not candidates:
+            return None
+
+        # Filter out excluded entity IDs
+        if exclude_ids:
+            candidates = [c for c in candidates if c["id"] not in exclude_ids]
 
         if not candidates:
             return None
@@ -383,8 +412,10 @@ class EntityInstance:
         entity_id: str,
         *,
         room: IRoom | None = None,
+        room_id: str | None = None,
         owner_id: int | None = None,
         container_entity_id: str | None = None,
+        spawning_pool_id: str | None = None,
     ) -> EntityInstance | None:
         """Create a new entity instance.
 
@@ -392,8 +423,10 @@ class EntityInstance:
             pool: Database connection pool
             entity_id: Entity definition ID
             room: Room to place the instance (mutually exclusive with owner_id)
+            room_id: Alternative to room object - room ID string
             owner_id: Owner's Discord ID for inventory (mutually exclusive with room)
             container_entity_id: Optional container entity ID
+            spawning_pool_id: Optional spawning pool ID for spawned instances
 
         Returns:
             New EntityInstance, or None if entity_id is invalid
@@ -402,18 +435,19 @@ class EntityInstance:
         if entity is None:
             return None
 
-        room_id = room.id if room else None
+        resolved_room_id = room.id if room else room_id
         row = await pool.fetchrow(
             """
             INSERT INTO entity_instances
-                (entity_id, room, owner_id, container_entity_id)
-            VALUES ($1, $2, $3, $4)
+                (entity_id, room, owner_id, container_entity_id, spawning_pool_id)
+            VALUES ($1, $2, $3, $4, $5)
             RETURNING id AS instance_id, room, owner_id, container_entity_id
             """,
             entity_id,
-            room_id,
+            resolved_room_id,
             owner_id,
             container_entity_id,
+            spawning_pool_id,
         )
 
         if row is None:

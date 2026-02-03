@@ -3,15 +3,19 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 import asyncpg
 
+from mudd.events.types import EntitySpawnedEvent
 from mudd.models.zone import SyncStats
 
 if TYPE_CHECKING:
+    from mudd.events.observer import Observer
     from mudd.loaders.zone_loader import SpawningPoolData
+    from mudd.models.entity import EntityInstance
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +35,114 @@ class SpawningPool:
     max_count: int
     respawn_interval_minutes: int
     no_duplicates: bool
+
+    # Runtime state (from query, not rec file)
+    last_spawn_at: datetime | None = None
+    current_count: int = 0
+    spawned_entity_ids: tuple[str, ...] = ()
+    _pool: asyncpg.Pool | None = field(repr=False, compare=False, default=None)
+    _observers: tuple[Observer, ...] = field(
+        repr=False, compare=False, default_factory=tuple
+    )
+
+    def with_observers(self, *observers: Observer) -> SpawningPool:
+        """Return new instance with additional observers."""
+        return replace(self, _observers=self._observers + observers)
+
+    @classmethod
+    async def get_all_with_counts(cls, pool: asyncpg.Pool) -> list[SpawningPool]:
+        """Fetch all spawning pools with current instance counts."""
+        rows = await pool.fetch(
+            """
+            SELECT
+                sp.id, sp.room, sp.container_id, sp.tag_query,
+                sp.max_count, sp.respawn_interval_minutes, sp.no_duplicates,
+                sp.last_spawn_at,
+                COUNT(ei.id) AS current_count,
+                ARRAY_REMOVE(ARRAY_AGG(ei.entity_id), NULL) AS spawned_entity_ids
+            FROM spawning_pools sp
+            LEFT JOIN entity_instances ei ON ei.spawning_pool_id = sp.id
+            GROUP BY sp.id
+            """
+        )
+        return [
+            cls(
+                id=r["id"],
+                room=r["room"],
+                container_id=r["container_id"],
+                tag_query=r["tag_query"],
+                max_count=r["max_count"],
+                respawn_interval_minutes=r["respawn_interval_minutes"],
+                no_duplicates=r["no_duplicates"],
+                last_spawn_at=r["last_spawn_at"],
+                current_count=r["current_count"],
+                spawned_entity_ids=tuple(r["spawned_entity_ids"] or []),
+                _pool=pool,
+            )
+            for r in rows
+        ]
+
+    def can_spawn(self, now: datetime) -> bool:
+        """Check if pool can spawn (capacity and interval)."""
+        if self.current_count >= self.max_count:
+            return False
+        if self.last_spawn_at is not None:
+            elapsed = (now - self.last_spawn_at).total_seconds() / 60
+            if elapsed < self.respawn_interval_minutes:
+                return False
+        return True
+
+    async def try_spawn(self, now: datetime) -> EntityInstance | None:
+        """Attempt to spawn an entity. Returns instance or None.
+
+        Emits EntitySpawnedEvent to observers on success.
+        """
+        from mudd.models.entity import EntityInstance, ResolvedEntity
+
+        if self._pool is None:
+            return None
+
+        if not self.can_spawn(now):
+            return None
+
+        # Select entity using ResolvedEntity classmethod
+        exclude_ids = set(self.spawned_entity_ids) if self.no_duplicates else None
+        entity = await ResolvedEntity.get_weighted_random_by_tag(
+            self._pool, self.tag_query, exclude_ids
+        )
+        if entity is None:
+            return None
+
+        # Create instance via EntityInstance.create()
+        instance = await EntityInstance.create(
+            self._pool,
+            entity.id,
+            room_id=self.room,
+            container_entity_id=self.container_id,
+            spawning_pool_id=self.id,
+        )
+
+        if instance is None:
+            return None
+
+        # Update last_spawn_at
+        await self._pool.execute(
+            "UPDATE spawning_pools SET last_spawn_at = $1 WHERE id = $2",
+            now,
+            self.id,
+        )
+
+        # Emit event
+        for observer in self._observers:
+            observer.notify(
+                EntitySpawnedEvent(
+                    instance=instance,
+                    spawning_pool_id=self.id,
+                    room=self.room,
+                )
+            )
+
+        return instance
 
     @classmethod
     def _validate_pools(

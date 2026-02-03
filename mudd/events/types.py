@@ -86,6 +86,15 @@ class EntityDestroyedEvent:
 
 
 @dataclass(frozen=True)
+class EntitySpawnedEvent:
+    """Entity was spawned from a spawning pool."""
+
+    instance: "EntityInstance"
+    spawning_pool_id: str
+    room: str
+
+
+@dataclass(frozen=True)
 class ZoneSyncedEvent:
     """Zone was synced to database (created or updated)."""
 
@@ -180,6 +189,7 @@ GameEvent = (
     | EntityPickedUpEvent
     | EntityDroppedEvent
     | EntityDestroyedEvent
+    | EntitySpawnedEvent
     | ZoneSyncedEvent
     | RoomSyncedEvent
     | OrphanChannelDetectedEvent

@@ -272,101 +272,27 @@ class Sync(commands.Cog):
         await self.bot.wait_until_ready()
 
     async def _process_spawning_pools(self) -> None:
-        """Check and process all spawning pools."""
-        pool = self._pool
+        """Process spawning pools using MVC pattern."""
+        from mudd.models.spawning_pool import SpawningPool
+
         now = datetime.now(UTC)
 
-        # Get all spawning pools with current instance counts and spawned entity IDs
-        pools = await pool.fetch(
-            """
-            SELECT
-                sp.id,
-                sp.room,
-                sp.container_id,
-                sp.tag_query,
-                sp.max_count,
-                sp.respawn_interval_minutes,
-                sp.last_spawn_at,
-                sp.no_duplicates,
-                COUNT(ei.id) AS current_count,
-                ARRAY_REMOVE(ARRAY_AGG(ei.entity_id), NULL) AS spawned_entity_ids
-            FROM spawning_pools sp
-            LEFT JOIN entity_instances ei ON ei.spawning_pool_id = sp.id
-            GROUP BY sp.id
-            """
-        )
+        pools = await SpawningPool.get_all_with_counts(self._pool)
 
         spawned = 0
         for sp in pools:
-            # Check if at capacity
-            if sp["current_count"] >= sp["max_count"]:
-                continue
+            instance = await sp.try_spawn(now)
 
-            # Check if interval has elapsed
-            last_spawn = sp["last_spawn_at"]
-            if last_spawn is not None:
-                elapsed_minutes = (now - last_spawn).total_seconds() / 60
-                if elapsed_minutes < sp["respawn_interval_minutes"]:
-                    continue
-
-            # Select random entity by tag with weighted rarity
-            if sp["no_duplicates"]:
-                # Exclude already-spawned entity types
-                exclude_ids = set(sp["spawned_entity_ids"] or [])
-                entity = await self.entity_service.get_random_entity_by_tag_excluding(
-                    sp["tag_query"], exclude_ids
+            if instance is not None:
+                spawned += 1
+                logger.debug(
+                    "Spawned '%s' in room '%s' from pool '%s'",
+                    instance.entity.name,
+                    sp.room,
+                    sp.id,
                 )
-                if entity is None:
-                    # All entity types already spawned - skip silently
-                    logger.debug(
-                        "Pool '%s': all entity types already spawned (no_duplicates)",
-                        sp["id"],
-                    )
-                    continue
-            else:
-                entity = await self.entity_service.get_random_entity_by_tag(
-                    sp["tag_query"]
-                )
-                if entity is None:
-                    logger.warning(
-                        "No entities found for spawning pool '%s' with tag '%s'",
-                        sp["id"],
-                        sp["tag_query"],
-                    )
-                    continue
-
-            # Create instance (with container if spawning pool has one)
-            await pool.execute(
-                """
-                INSERT INTO entity_instances
-                    (entity_id, room, spawning_pool_id, container_entity_id)
-                VALUES ($1, $2, $3, $4)
-                """,
-                entity.id,
-                sp["room"],
-                sp["id"],
-                sp["container_id"],
-            )
-
-            # Update last_spawn_at
-            await pool.execute(
-                "UPDATE spawning_pools SET last_spawn_at = $1 WHERE id = $2",
-                now,
-                sp["id"],
-            )
-
-            spawned += 1
-            logger.debug(
-                "Spawned '%s' in room '%s' from pool '%s'",
-                entity.name,
-                sp["room"],
-                sp["id"],
-            )
 
         if spawned > 0:
-            # Invalidate caches since entities changed
-            self.entity_service.invalidate_cache()
-            self.entity_resolution.invalidate_cache()
             logger.info(f"Spawned {spawned} items from spawning pools")
 
     async def sync_wallets(
