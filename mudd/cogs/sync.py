@@ -21,6 +21,7 @@ from mudd.events import OrphanChannelDetectedEvent
 from mudd.loaders.entity_loader import sync_entities
 from mudd.loaders.verb_loader import sync_verbs
 from mudd.loaders.zone_loader import (
+    ZoneData,
     get_default_room,
     load_rooms_from_rec,
     load_zones_from_rec,
@@ -178,29 +179,7 @@ class Sync(commands.Cog):
 
         # Detect orphans and emit events
         room_ids = {r.id for r in rooms}
-        for guild in self.bot.guilds:
-            for zone in zones:
-                # Find category for this zone
-                normalized_name = zone.name.lower().replace(" ", "-")
-                category = None
-                for cat in guild.categories:
-                    if cat.name.lower().replace(" ", "-") == normalized_name:
-                        category = cat
-                        break
-
-                if category is None:
-                    continue
-
-                # Find orphan channels in this category
-                for channel in category.channels:
-                    if channel.name not in room_ids:
-                        reconciler.notify(
-                            OrphanChannelDetectedEvent(
-                                guild_id=guild.id,
-                                channel_name=channel.name,
-                                category_name=category.name,
-                            )
-                        )
+        self._detect_orphan_channels(zones, room_ids, reconciler)
 
         # Flush orphan notifications
         try:
@@ -429,3 +408,43 @@ class Sync(commands.Cog):
                 stats["errors"] += 1
 
         return stats
+
+    def _detect_orphan_channels(
+        self,
+        zones: list[ZoneData],
+        room_ids: set[str],
+        reconciler: DiscordReconciler,
+    ) -> None:
+        """Detect orphan channels and emit events.
+
+        Scans all guilds for channels in zone categories that don't
+        correspond to known room IDs.
+
+        Args:
+            zones: List of zones to check
+            room_ids: Set of valid room IDs
+            reconciler: DiscordReconciler to notify of orphans
+        """
+        for guild in self.bot.guilds:
+            for zone in zones:
+                # Find category for this zone
+                normalized_name = zone.name.lower().replace(" ", "-")
+                category = None
+                for cat in guild.categories:
+                    if cat.name.lower().replace(" ", "-") == normalized_name:
+                        category = cat
+                        break
+
+                if category is None:
+                    continue
+
+                # Find orphan channels in this category
+                for channel in category.channels:
+                    if channel.name not in room_ids:
+                        reconciler.notify(
+                            OrphanChannelDetectedEvent(
+                                guild_id=guild.id,
+                                channel_name=channel.name,
+                                category_name=category.name,
+                            )
+                        )
