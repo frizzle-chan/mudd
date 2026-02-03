@@ -87,7 +87,7 @@ async def entity_instance_id_autocomplete(
     In inventory threads, only shows the thread's item (no Room option).
     """
     return [
-        app_commands.Choice(name=e.entity.name, value=str(e.instance_id))
+        app_commands.Choice(name=ViewEntity(e).display_name, value=str(e.instance_id))
         for e in await autocomplete_entities(
             await Scene.from_interaction(pool, interaction), current
         )

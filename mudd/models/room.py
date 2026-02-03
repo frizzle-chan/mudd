@@ -11,6 +11,7 @@ from mudd.models.entity import ResolvedEntity
 
 if TYPE_CHECKING:
     from mudd.models.entity import EntityInstance
+    from mudd.models.interfaces import IEntityInstance, IUser
 
 
 @dataclass(frozen=True)
@@ -147,6 +148,22 @@ class Room:
 
         return result
 
+    @property
+    def current_container(self) -> EntityInstance | None:
+        """The container entity if this is a container context, else None.
+
+        Regular rooms are not containers, so this always returns None.
+        """
+        return None
+
+    async def get_drop_target(self) -> Room:
+        """Return the room where dropped items should land."""
+        return self
+
+    def allows_pickup(self, entity: IEntityInstance) -> bool:
+        """Check if picking up the given entity is allowed."""
+        return True
+
     async def get_exits(self) -> list[dict[str, str]]:
         """Get available exits from this room.
 
@@ -175,15 +192,18 @@ class Room:
 
 @dataclass(frozen=True)
 class EntityModal:
-    """
-    Rooms are immutable and represent a location in the game world.
-    """
+    """Context for interacting with a focused container."""
 
     id: str
     zone_id: str
     entity_instance: EntityInstance
     _pool: asyncpg.Pool = field(repr=False, compare=False)
-    allow_close: bool = True
+    is_container: bool = False
+
+    @property
+    def current_container(self) -> EntityInstance | None:
+        """The container entity if this is a container context, else None."""
+        return self.entity_instance if self.is_container else None
 
     async def get_entities(self) -> list[EntityInstance]:
         """Get all entity instances in this room.
@@ -203,3 +223,47 @@ class EntityModal:
             List of EntityInstance objects visible in the room
         """
         return await self.get_entities()
+
+    async def get_drop_target(self) -> EntityModal:
+        """Return the room where dropped items should land."""
+        return self
+
+    def allows_pickup(self, entity: IEntityInstance) -> bool:
+        """Check if picking up the given entity is allowed."""
+        return True
+
+
+@dataclass(frozen=True)
+class InventoryThread:
+    """Context for interacting within an inventory thread.
+
+    Unlike EntityModal (for focus/container context), InventoryThread
+    represents a Discord thread view of a single inventory item.
+    """
+
+    id: str  # Discord thread ID (not a room ID)
+    entity_instance: EntityInstance
+    owner: IUser  # User who owns this inventory
+    _pool: asyncpg.Pool = field(repr=False, compare=False)
+
+    @property
+    def zone_id(self) -> str:
+        return "Inventory"
+
+    @property
+    def current_container(self) -> EntityInstance | None:
+        return None  # Inventory items are not containers
+
+    async def get_entities(self) -> list[EntityInstance]:
+        return [self.entity_instance]
+
+    async def get_visible_entities(self) -> list[EntityInstance]:
+        return [self.entity_instance]
+
+    async def get_drop_target(self) -> Room | None:
+        """Return the user's actual room for drops from inventory."""
+        return await Room.get(self._pool, self.owner.current_room)
+
+    def allows_pickup(self, entity: IEntityInstance) -> bool:
+        """Disallow picking up the thread's own entity."""
+        return entity.instance_id != self.entity_instance.instance_id

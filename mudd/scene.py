@@ -10,7 +10,7 @@ from discord import Interaction
 from mudd.events import Observer
 from mudd.models.entity import EntityInstance
 from mudd.models.interfaces import IRoom, IUser
-from mudd.models.room import EntityModal, Room
+from mudd.models.room import EntityModal, InventoryThread, Room
 from mudd.models.user import User
 from mudd.observers import EffectsObserver
 
@@ -59,12 +59,11 @@ class Scene:
         ):
             if inventory_entity.owner_id != user.id:
                 raise ValueError("User does not own this inventory thread")
-            room = EntityModal(
+            room = InventoryThread(
                 _pool=pool,
                 id=str(interaction.channel.id),
-                zone_id="Inventory",
                 entity_instance=inventory_entity,
-                allow_close=False,
+                owner=user,
             )
         elif focus := await user.get_focus():
             room = EntityModal(
@@ -72,7 +71,7 @@ class Scene:
                 id=f"Focus:{focus.current_container.instance_id}",
                 zone_id="Focus",
                 entity_instance=focus.current_container,
-                allow_close=True,
+                is_container=True,
             )
         else:
             room = await Room.get(pool, user.current_room)
@@ -153,7 +152,9 @@ class Scene:
         if effects.has_pickup:
             await target.move_to_inventory(self.user)
         if effects.has_drop:
-            await target.drop_to_room(self.room)
+            drop_room = await self.room.get_drop_target()
+            if drop_room:
+                await target.drop_to_room(drop_room)
         if effects.has_destroy:
             await target.destroy()
 

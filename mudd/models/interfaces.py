@@ -61,6 +61,27 @@ class IRoom(Protocol):
         """Room identifier."""
         ...
 
+    async def get_drop_target(self) -> IRoom | None:
+        """Return the room where dropped items should land.
+
+        Most rooms return self. InventoryThread returns the user's actual room
+        since items dropped from inventory should appear in the physical room.
+        """
+        ...
+
+    def allows_pickup(self, entity: IEntityInstance) -> bool:
+        """Check if picking up the given entity is allowed in this room context.
+
+        Most rooms allow all pickups. InventoryThread disallows picking up
+        the thread's own entity (you can't take an item from its own thread).
+        """
+        ...
+
+    @property
+    def current_container(self) -> EntityInstance | None:
+        """The container entity if this is a container context, else None."""
+        ...
+
     @property
     def zone_id(self) -> str:
         """Parent zone ID."""

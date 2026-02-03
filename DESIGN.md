@@ -425,197 +425,135 @@ The `VisibilityService.sync_guild()` method ensures Discord channel permissions 
 
 This runs as part of the unified sync flow described above.
 
-## Entity Service
+## Scene
 
-The `EntityService` provides cached runtime access to entity data.
+The `Scene` class (`mudd/scene.py`) represents the game context for a user's interaction. It encapsulates the user, their location, and attached observers.
 
-### Service Methods (Core)
+### Construction
 
-- `get_entity(entity_id)` - Get resolved entity by ID (cached)
-- `get_room_entities(room)` - Get all entity instances in a room with resolved properties
-- `get_entity_instance(instance_id)` - Get specific instance by UUID
-- `get_container_contents(container_id, room)` - Get direct children of a container in a room
-- `invalidate_cache()` - Clear cache (called by `sync_entities()`)
+`Scene.from_interaction(pool, interaction)` builds a Scene from a Discord interaction:
+- If in an inventory thread → wraps thread entity as `EntityModal`
+- If user has active focus → wraps focused entity as `EntityModal`
+- Otherwise → loads the user's current room
 
-Additional methods exist for specialized queries (inventory, visibility, random selection). See `mudd/services/entity.py` for the full interface.
+### Key Methods
 
-### Caching Strategy
-
-- Resolved entities are cached in memory as `dict[entity_id, ResolvedEntity]`
-- Cache is populated lazily on first access to each entity
-- Cache is invalidated entirely after `sync_entities()` completes
-- Instance queries always hit the database (instances can move to inventory)
-
-### Usage
-
-Services are instantiated in `main.py:setup_hook()` and injected into cogs via constructor parameters:
-
-```python
-# In main.py:
-entity_service = EntityService(pool)
-cog = InteractCog(bot, entity_service, ...)
-await bot.add_cog(cog)
-
-# In cogs - use the injected service:
-entities = await self.entity_service.get_room_entities(channel.name)
-```
+- `with_observers(*observers)` - Returns new Scene with observers attached (immutable)
+- `contains(entity)` - Checks if entity is visible (in room or inventory)
+- `execute(command, entity)` - Executes command and processes signals
+- `flush_observers()` - Runs deferred async operations after response sent
 
 ### Data Flow
 
 ```
-sync_entities() [startup]
-    ├─ Upsert entity definitions
-    ├─ Create entity instances (ON CONFLICT DO NOTHING)
-    └─ invalidate_cache() ─→ Clear entity cache
+Scene.from_interaction(pool, interaction)
+    ├─ Determine location (room, focus, or thread)
+    ├─ Load user and room/modal
+    └─ Return Scene(user, room, observers)
 
-get_entity(entity_id)
-    ├─ Check cache → HIT: Return cached
-    └─ MISS: Query resolve_entity(), cache result, return
+scene.execute(command, entity)
+    ├─ Attach observers to entity
+    ├─ Run command.execute() → render template
+    ├─ Map signals to mutations:
+    │   ├─ has_pickup → entity.move_to_inventory()
+    │   ├─ has_drop → entity.drop_to_room()
+    │   └─ has_destroy → entity.destroy()
+    └─ Return ActionResult(output)
 
-get_room_entities(room)
-    └─ Query entity_instances + resolve_entity()
-       └─ Cache resolved entities as side effect
+scene.flush_observers()
+    └─ DiscordReconciler creates/deletes inventory threads
 ```
 
-## Focus Context Service
+## Entity Resolution
 
-The `FocusContextService` manages per-user focus state for modal interactions (ADR 0003).
+Entity resolution is handled by utility functions in `mudd/cogs/shared.py`.
 
-### Service Methods
+### Functions
 
-- `get_focus(user_id, room)` - Get active focus or None (includes lazy timeout cleanup)
-- `set_focus(user_id, room, entity)` - Establish focus on a container/modal entity
-- `clear_focus(user_id, reason)` - Clear focus, optionally returns close message template
-- `is_entity_in_focus(user_id, room, entity_id)` - Check if entity is focused or in focused contents
-- `get_focused_contents(user_id, room)` - Get entity IDs accessible through focus
-- `update_focus_timestamp(user_id)` - Refresh timestamp to prevent timeout
+- `resolve_entity(pool, scene, query, ambiguous_handler)` - Resolves a query string to an EntityInstance
+  - Tries UUID parse first
+  - Falls back to fuzzy name matching via `autocomplete_entities()`
+  - Shows disambiguation message if multiple matches
+  - Returns single entity or None
 
-### Design Decisions
+- `autocomplete_entities(scene, current)` - Returns matching entities for Discord autocomplete
+  - Filters entities visible in the scene by fuzzy name matching
+  - Supports "i." prefix for inventory-only search
+  - Returns exact matches first, then partial matches (75% threshold)
 
-- **No caching**: Always queries database to ensure consistency (focus changes are rare)
-- **Lazy timeout**: Checks `updated_at` when getting focus, deletes stale entries (no background task)
-- **Direct method calls**: Cogs call service methods directly (no pub/sub events)
-- **Optional messages**: `clear_focus()` returns on_close template for rendering
+- `entity_instance_id_autocomplete(pool, interaction, current)` - Discord autocomplete callback
+  - Builds Scene from interaction
+  - Returns up to 25 choices
 
-### Usage
+### Focus Handling
 
-Services are instantiated in `main.py:setup_hook()` and injected into cogs via constructor parameters:
+Focus state is integrated into Scene construction:
+- `EntityModal` wraps a focused container as a pseudo-room
+- When focused, `scene.room` returns the modal with container contents
+- Autocomplete shows only focused contents until closed
+
+## Commands
+
+Commands (`mudd/commands2.py`) implement the command pattern for entity interactions.
+
+### ActionCommand Base
+
+Abstract base class with:
+- `get_handler_text(entity)` - Returns the entity field to render (e.g., `on_look`)
+- `execute(scene, entity)` - Renders template and returns `ActionResult`
+
+### Concrete Commands
+
+| Command | Handler Field |
+|---------|---------------|
+| `LookCommand` | `on_look` |
+| `TouchCommand` | `on_touch` |
+| `AttackCommand` | `on_attack` |
+| `UseCommand` | `on_use` |
+| `TakeCommand` | `on_take` |
+| `DropCommand` | `on_drop` |
+| `OpenCommand` | `on_open` |
+| `CloseCommand` | `on_close` |
+
+### Factory
+
+`get_command(action: VerbAction)` maps verb actions to command instances.
+
+## Observers and Events
+
+The observer pattern (`mudd/observers/`, `mudd/events/`) handles side effects from template execution.
+
+### Observer Protocol
 
 ```python
-# In main.py:
-focus_service = FocusContextService(pool, entity_service)
-cog = InteractCog(bot, entity_service, focus_service, ...)
-await bot.add_cog(cog)
-
-# In cogs - use the injected service:
-focus = await self.focus_service.get_focus(user_id, room)
+class Observer(Protocol):
+    def notify(self, event: GameEvent) -> None: ...  # Sync, during rendering
+    async def flush(self) -> None: ...               # Async, after response sent
 ```
 
-### Focus-Aware Autocomplete
+### EffectsObserver
 
-When a user has an active focus, autocomplete shows only the focused container contents with an escape option to close it:
+Collects template events during rendering:
+- **Signals**: `has_pickup`, `has_drop`, `has_destroy`, `has_dispense`
+- **Effects**: `broadcasts`, `grants`, `grant_randoms`, `currency_grants`
 
-```
-[Close Wooden Chest] Room                    <- Escape option (clears focus)
-Vinyl Record - Abbey Road                    <- Focused content
-Gold Ring                                    <- Focused content
-```
+### DiscordReconciler
 
-Room entities are hidden while focused. Selecting the escape option clears focus and shows the room.
+Syncs Discord state when entities change:
+- `EntityPickedUpEvent` → Creates inventory thread
+- `EntityDroppedEvent` → Deletes inventory thread
+- `EntityDestroyedEvent` → Deletes inventory thread
 
-## Entity Resolution Service
+### Event Types
 
-The `EntityResolutionService` consolidates entity visibility, focus context, and autocomplete logic into a unified API. It provides source-prefixed autocomplete values for unambiguous entity resolution.
+**Signals** (control entity state):
+- `PickupSignal`, `DropSignal`, `DestroySignal`, `DispenseSignal`
 
-### Service Methods
+**Effects** (template side effects):
+- `BroadcastEvent(message)`, `GrantEvent(entity_id)`, `GrantRandomEvent(tag)`, `GrantCurrencyEvent(amount)`
 
-**Context Building:**
-- `build_context(interaction, query)` - Build InteractionContext from Discord state (detects thread/prefix/room mode)
-- `get_autocomplete_choices(ctx, query)` - Get source-prefixed autocomplete choices
-
-**Entity Resolution:**
-- `resolve_target(ctx, encoded_value)` - Resolve encoded value to EntityInstance or error
-
-**Focus Operations (delegated):**
-- `get_focus(user_id, room)` - Get active focus
-- `set_focus(user_id, room, entity)` - Establish focus
-- `clear_focus(user_id, reason)` - Clear focus
-- `update_focus_timestamp(user_id)` - Refresh timeout
-- `is_entity_in_focus(user_id, room, entity_id)` - Check focus membership
-
-**Cache:**
-- `invalidate_cache()` - Clear autocomplete cache
-- `prepopulate_cache(rooms)` - Warm cache for rooms
-
-### InteractionContext
-
-Frozen dataclass capturing all context needed for resolution:
-
-```python
-class ViewMode(str, Enum):
-    ROOM = "room"           # Normal room view (with optional focus)
-    INVENTORY = "inventory" # Typed "i." prefix
-    INVENTORY_THREAD = "thread"  # In inventory forum thread
-
-@dataclass(frozen=True)
-class InteractionContext:
-    user_id: int
-    room: str                           # Always populated (for action execution)
-    view_mode: ViewMode
-    focus_entity_id: str | None = None  # Only for ROOM mode
-    thread_instance_id: UUID | None = None  # Only for INVENTORY_THREAD
-```
-
-### Autocomplete Value Encoding
-
-Autocomplete choices use source-prefixed values for unambiguous resolution:
-
-```
-{source}:{entity_name}
-
-Sources: room, inventory, container, escape
-
-Examples:
-- room:Wooden Table              # Room entity
-- inventory:Rusty Sword          # Inventory item
-- container:Gold Key             # Item inside focused container
-- escape:room                    # Special: close focus, show room
-```
-
-**Why human-readable names:**
-- Users can read and understand the value in the Discord UI
-- Source prefix adds helpful context ("this is from my inventory")
-- Exact name matching within scope is sufficient since autocomplete selected the name
-
-**Resolution strategy:**
-1. Parse source prefix to scope the search
-2. Try exact name match within that scope first
-3. Fallback to prefix matching if exact match fails (handles user edits)
-4. If no source prefix (legacy), use current behavior
-
-### Container Behavior
-
-**Recursive pickup:** When picking up a container, all its contents move to inventory with it. Contents retain their `container_entity_id` link.
-
-**Recursive drop:** When dropping a container, all its contents move to the room with it.
-
-**Implicit focus in container threads:** When in an inventory thread for a container (`focus_mode != 'none'`), the system implicitly focuses on that container's contents - autocomplete shows contents immediately.
-
-### Usage
-
-```python
-# In main.py:
-entity_resolution = EntityResolutionService(
-    entity_service, focus_service, inventory_service, pool
-)
-cog = InteractCog(bot, entity_service, entity_resolution, ...)
-await bot.add_cog(cog)
-
-# In cogs - use unified API:
-ctx = await self.entity_resolution.build_context(interaction, current)
-choices = await self.entity_resolution.get_autocomplete_choices(ctx, current)
-result = await self.entity_resolution.resolve_target(ctx, selected_value)
-```
+**Model Events** (from entity mutations):
+- `EntityPickedUpEvent`, `EntityDroppedEvent`, `EntityDestroyedEvent`
 
 ## Template Rendering
 
@@ -729,6 +667,8 @@ Result:
 All effect functions return an empty string, allowing inline use without affecting output.
 
 **Implementation:**
-- `TriggerEffects` dataclass collects side effects during rendering
-- `RenderingService.render_with_effects()` returns `(output, effects)` tuple
-- Interact cog checks `effects.has_pickup`, `effects.has_drop`, and executes `effects.broadcasts`
+- `EffectsCollector` wraps an Observer and provides the template-facing `effects` API
+- `ActionCommand.execute()` creates the `ActionContext` and renders the template
+- `Scene.execute()` maps signals to entity mutations after rendering
+- Entity mutations emit model events to all attached observers
+- `scene.flush_observers()` processes deferred Discord operations

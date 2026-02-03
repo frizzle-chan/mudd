@@ -2,16 +2,15 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 from typing import TYPE_CHECKING
 
+import asyncpg
 import discord
 
 if TYPE_CHECKING:
-    import asyncpg
-
-    from mudd.services.inventory import InventoryService
-    from mudd.services.rendering import RenderingService
+    pass
 
 from mudd.events import (
     EntityDestroyedEvent,
@@ -22,6 +21,13 @@ from mudd.events import (
 from mudd.models.entity import EntityInstance
 
 logger = logging.getLogger(__name__)
+
+INVENTORY_CATEGORY_NAME = "Inventory"
+
+
+def _get_inventory_forum_name(username: str) -> str:
+    """Get the forum channel name for a user's inventory."""
+    return f"{username}-inventory"
 
 
 class DiscordReconciler:
@@ -37,7 +43,7 @@ class DiscordReconciler:
     sending the response to execute queued Discord operations.
 
     Usage:
-        reconciler = DiscordReconciler(bot, pool, inventory_service, rendering_service)
+        reconciler = DiscordReconciler(bot, pool)
         instance = instance.with_observers(reconciler)
         new_instance = await instance.move_to_inventory(user)
         await interaction.response.send_message(...)
@@ -48,22 +54,18 @@ class DiscordReconciler:
         self,
         bot: discord.Client,
         pool: asyncpg.Pool,
-        inventory_service: InventoryService,
-        rendering_service: RenderingService,
     ) -> None:
         """Initialize the Discord reconciler.
 
         Args:
             bot: Discord bot client
             pool: Database connection pool
-            inventory_service: Service for inventory thread management
-            rendering_service: Service for rendering entity descriptions
         """
         self.bot = bot
         self.pool = pool
-        self.inventory_service = inventory_service
-        self.rendering_service = rendering_service
         self._pending: list[tuple[EntityInstance, str]] = []
+        # Cache category ID per guild to avoid repeated lookups
+        self._category_cache: dict[int, int] = {}
 
     def notify(self, event: GameEvent) -> None:
         """Receive notification (sync). Queue for async processing.
@@ -114,6 +116,176 @@ class DiscordReconciler:
             case "dropped" | "destroyed":
                 await self._delete_inventory_thread(guild, instance)
 
+    async def _render_on_look(self, instance: EntityInstance) -> str:
+        """Render on_look using LookCommand with EntityModal context.
+
+        Creates a minimal scene with the inventory item and executes
+        LookCommand to render the item's description.
+
+        Args:
+            instance: The entity instance to render
+
+        Returns:
+            Rendered on_look output
+        """
+        from mudd.commands2 import LookCommand
+        from mudd.models.room import InventoryThread
+        from mudd.models.user import User
+        from mudd.observers import EffectsObserver
+        from mudd.scene import Scene
+
+        if instance.owner_id is None:
+            return "You see nothing special."
+
+        # Get user who owns the item
+        user = await User.get(self.pool, instance.owner_id)
+        if user is None:
+            return "You see nothing special."
+
+        # Create modal for the inventory item
+        modal = InventoryThread(
+            _pool=self.pool,
+            id=f"inventory:{instance.instance_id}",
+            entity_instance=instance,
+            owner=user,
+        )
+
+        # Create scene with effects observer (required by execute)
+        effects = EffectsObserver()
+        scene = Scene(_pool=self.pool, user=user, room=modal)
+        scene = scene.with_observers(effects)
+
+        # Execute look command
+        command = LookCommand()
+        result = await command.execute(scene, instance)
+
+        return result.output
+
+    async def _ensure_inventory_category(
+        self, guild: discord.Guild
+    ) -> discord.CategoryChannel:
+        """Ensure the Inventory category exists, create if missing.
+
+        The category is created with @everyone view_channel=False (hidden by default).
+
+        Args:
+            guild: Discord guild
+
+        Returns:
+            The Inventory category channel
+        """
+        # Check cache first
+        if guild.id in self._category_cache:
+            category = guild.get_channel(self._category_cache[guild.id])
+            if category and isinstance(category, discord.CategoryChannel):
+                return category
+            # Cache is stale, clear it
+            del self._category_cache[guild.id]
+
+        # Look for existing category
+        for category in guild.categories:
+            if category.name == INVENTORY_CATEGORY_NAME:
+                self._category_cache[guild.id] = category.id
+                return category
+
+        # Create new category with fog-of-war permissions
+        overwrites = {
+            guild.default_role: discord.PermissionOverwrite(view_channel=False)
+        }
+        category = await guild.create_category(
+            INVENTORY_CATEGORY_NAME, overwrites=overwrites
+        )
+        self._category_cache[guild.id] = category.id
+        logger.info(f"Created Inventory category in {guild.name}")
+        return category
+
+    async def _ensure_user_forum(
+        self, guild: discord.Guild, user_id: int
+    ) -> discord.ForumChannel | None:
+        """Ensure user has an inventory forum, create if missing.
+
+        Args:
+            guild: Discord guild
+            user_id: Discord user ID
+
+        Returns:
+            The user's forum channel, or None if user not found in guild or is a bot
+        """
+        member = guild.get_member(user_id)
+        if member is None:
+            logger.warning(f"User {user_id} not found in guild {guild.name}")
+            return None
+
+        if member.bot:
+            return None
+
+        # Ensure category exists first
+        category = await self._ensure_inventory_category(guild)
+        forum_name = _get_inventory_forum_name(member.name)
+
+        # Check database for existing forum
+        forum_data = await self.pool.fetchrow(
+            """SELECT user_id, forum_id, category_id
+            FROM user_inventory_forums WHERE user_id = $1""",
+            user_id,
+        )
+
+        if forum_data:
+            # Verify forum still exists in Discord
+            forum = guild.get_channel(forum_data["forum_id"])
+            if forum and isinstance(forum, discord.ForumChannel):
+                return forum
+            # Forum was deleted from Discord, clear stale DB record
+            logger.info(
+                f"Forum {forum_data['forum_id']} was deleted from Discord, "
+                f"clearing DB record for user {user_id}"
+            )
+            await self.pool.execute(
+                "DELETE FROM user_inventory_forums WHERE user_id = $1", user_id
+            )
+
+        # Ensure user exists in users table first
+        await self.pool.execute(
+            """
+            INSERT INTO users (id, current_room)
+            SELECT $1, (SELECT id FROM rooms WHERE is_default = TRUE)
+            WHERE NOT EXISTS (SELECT 1 FROM users WHERE id = $1)
+            """,
+            user_id,
+        )
+
+        # Permissions: only owner can see and reply to threads (not create)
+        overwrites = {
+            guild.default_role: discord.PermissionOverwrite(view_channel=False),
+            member: discord.PermissionOverwrite(
+                view_channel=True,
+                send_messages_in_threads=True,
+                create_public_threads=False,
+                send_messages=False,
+            ),
+        }
+
+        forum = await category.create_forum(
+            name=forum_name,
+            topic=f"Personal inventory for {member.display_name}",
+            overwrites=overwrites,
+        )
+
+        # Store in database
+        await self.pool.execute(
+            """
+            INSERT INTO user_inventory_forums (user_id, forum_id, category_id)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (user_id) DO UPDATE SET forum_id = $2, category_id = $3
+            """,
+            user_id,
+            forum.id,
+            category.id,
+        )
+
+        logger.info(f"Created inventory forum '{forum_name}' for user {user_id}")
+        return forum
+
     async def _create_inventory_thread(
         self, guild: discord.Guild, instance: EntityInstance
     ) -> None:
@@ -126,19 +298,43 @@ class DiscordReconciler:
         if instance.owner_id is None:
             return
 
-        # Fetch balance for template context
-        balance = await self.pool.fetchval(
-            "SELECT balance FROM currency_accounts WHERE user_id = $1",
-            instance.owner_id,
-        )
-        balance_str = f"\u00a5{balance:,}" if balance else "\u00a50"
+        # Ensure user has an inventory forum
+        forum = await self._ensure_user_forum(guild, instance.owner_id)
+        if forum is None:
+            return
 
-        # Render description
-        description = await self.rendering_service.render_entity_on_look_v2(
-            instance, balance_str
-        )
+        # Render description using LookCommand
+        description = await self._render_on_look(instance)
 
-        await self.inventory_service.create_item_thread_v2(guild, instance, description)
+        thread: discord.Thread | None = None
+        try:
+            thread, message = await forum.create_thread(
+                name=instance.entity.name,
+                content=description or f"You have a {instance.entity.name}.",
+            )
+
+            # Store thread ID and description message ID on instance
+            await self.pool.execute(
+                """UPDATE entity_instances
+                SET discord_thread_id = $1, discord_description_msg_id = $2
+                WHERE id = $3""",
+                thread.id,
+                message.id,
+                instance.instance_id,
+            )
+
+            logger.info(
+                f"Created thread '{instance.entity.name}' for instance "
+                f"{instance.instance_id}"
+            )
+
+        except discord.HTTPException as e:
+            logger.error(f"Failed to create item thread: {e}")
+        except asyncpg.PostgresError as e:
+            logger.error(f"Failed to store thread ID, deleting orphaned thread: {e}")
+            if thread:
+                with contextlib.suppress(discord.HTTPException):
+                    await thread.delete()
 
     async def _delete_inventory_thread(
         self, guild: discord.Guild, instance: EntityInstance
@@ -149,4 +345,32 @@ class DiscordReconciler:
             guild: Discord guild
             instance: The entity instance that was dropped or destroyed
         """
-        await self.inventory_service.delete_item_thread_v2(guild, instance)
+        # Get thread ID from database
+        row = await self.pool.fetchrow(
+            "SELECT discord_thread_id FROM entity_instances WHERE id = $1",
+            instance.instance_id,
+        )
+        if row is None or row["discord_thread_id"] is None:
+            return
+
+        thread_id = row["discord_thread_id"]
+
+        # Delete Discord thread first (before DB update to avoid orphaning)
+        thread = guild.get_thread(thread_id)
+        if thread:
+            try:
+                await thread.delete()
+                logger.info(
+                    f"Deleted thread {thread_id} for instance {instance.instance_id}"
+                )
+            except discord.HTTPException as e:
+                logger.error(f"Failed to delete thread {thread_id}: {e}")
+                return
+
+        # Only clear DB reference after successful Discord deletion
+        await self.pool.execute(
+            """UPDATE entity_instances
+            SET discord_thread_id = NULL, discord_description_msg_id = NULL
+            WHERE id = $1""",
+            instance.instance_id,
+        )

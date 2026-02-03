@@ -291,7 +291,7 @@ class EntityInstance:
     async def get_by_inventory_thread_id(
         cls, pool: asyncpg.Pool, thread_id: int
     ) -> EntityInstance | None:
-        with await pool.acquire() as conn:
+        async with pool.acquire() as conn:
             instance_row = await conn.fetchrow(
                 """
                 SELECT ei.id AS instance_id, ei.room, ei.owner_id,

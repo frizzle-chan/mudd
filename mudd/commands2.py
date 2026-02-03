@@ -27,9 +27,13 @@ class ViewEntity:
     @property
     def name(self) -> str:
         """Entity name formatted with rarity emoji and markdown italics."""
+        return f"*{self.display_name}*"
+
+    @property
+    def display_name(self) -> str:
+        """Entity name formatted with rarity emoji"""
         emoji = RARITY_EMOJI[self._entity.rarity]
-        display_name = f"{self._entity.name} {emoji}" if emoji else self._entity.name
-        return f"*{display_name}*"
+        return f"{self._entity.name} {emoji}" if emoji else self._entity.name
 
     @property
     def description_long(self) -> str | None:
@@ -90,6 +94,7 @@ class ActionContext:
     e: ViewEntity
     user: ViewUser
     effects: EffectsCollector
+    container: ViewEntity | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dict for template rendering.
@@ -97,7 +102,12 @@ class ActionContext:
         Note: We don't use asdict() because it tries to recursively copy nested
         objects, which fails for objects with unpicklable attributes.
         """
-        return {"e": self.e, "user": self.user, "effects": self.effects}
+        return {
+            "e": self.e,
+            "user": self.user,
+            "effects": self.effects,
+            "container": self.container,
+        }
 
 
 class ActionCommand(ABC):
@@ -147,10 +157,12 @@ class ActionCommand(ABC):
         if not effects:
             raise ValueError("EffectsObserver not attached to scene")
 
+        container_entity = scene.room.current_container
         context = ActionContext(
             e=ViewEntity(entity),
             user=ViewUser(scene.user),
             effects=EffectsCollector(effects),
+            container=ViewEntity(container_entity) if container_entity else None,
         )
         output = await template.render(handler_text, context.to_dict())
 
@@ -195,6 +207,12 @@ class TakeCommand(ActionCommand):
     def get_handler_text(self, entity: IEntityInstance) -> str | None:
         """Return the entity's on_take handler template."""
         return entity.entity.on_take
+
+    async def execute(self, scene: Scene, entity: IEntityInstance) -> ActionResult:
+        """Execute take command with pickup validation."""
+        if not scene.room.allows_pickup(entity):
+            return ActionResult(output="You already have that.")
+        return await super().execute(scene, entity)
 
 
 class DropCommand(ActionCommand):
