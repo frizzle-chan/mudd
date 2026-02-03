@@ -86,13 +86,8 @@ async def setup_hook():
     await bot.add_cog(
         Sync(
             bot,
-            entity_service,
-            entity_resolution,
             visibility_service,
             pool,
-            rendering_service,
-            inventory_service,
-            currency_service,
         )
     )
     await bot.add_cog(

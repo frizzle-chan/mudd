@@ -27,11 +27,6 @@ from mudd.loaders.zone_loader import (
 )
 from mudd.models import Room, Zone
 from mudd.observers.discord import DiscordReconciler
-from mudd.services.currency import CurrencyService
-from mudd.services.entity import EntityService
-from mudd.services.entity_resolution import EntityResolutionService
-from mudd.services.inventory import InventoryService
-from mudd.services.rendering import RenderingService
 from mudd.services.visibility import VisibilityService
 
 logger = logging.getLogger(__name__)
@@ -51,22 +46,12 @@ class Sync(commands.Cog):
     def __init__(
         self,
         bot: "MuddBot",
-        entity_service: EntityService,
-        entity_resolution: EntityResolutionService,
         visibility_service: VisibilityService,
         pool: asyncpg.Pool,
-        rendering_service: RenderingService,
-        inventory_service: InventoryService,
-        currency_service: CurrencyService,
     ) -> None:
         self.bot = bot
-        self.entity_service = entity_service
-        self.entity_resolution = entity_resolution
         self.visibility_service = visibility_service
         self._pool = pool
-        self._rendering = rendering_service
-        self.inventory_service = inventory_service
-        self.currency_service = currency_service
         self._seen_orphans: set[tuple[int, str, str]] = set()
         self._console_channel = os.environ.get("MUDD_CONSOLE_CHANNEL", "console")
         self._first_sync_done = False
@@ -160,9 +145,6 @@ class Sync(commands.Cog):
         # Sync entity definitions and instances (global, once per sync)
         try:
             await sync_entities(pool, world_file)
-            self.entity_service.invalidate_cache()
-            self.entity_resolution.invalidate_cache()
-            self._rendering.clear_cache()
         except Exception:
             logger.exception("Failed to sync entities")
             if fail_fast:
