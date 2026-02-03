@@ -9,7 +9,6 @@ import logging
 import os
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
-from uuid import UUID
 
 import asyncpg
 import discord
@@ -26,7 +25,7 @@ from mudd.loaders.zone_loader import (
     load_rooms_from_rec,
     load_zones_from_rec,
 )
-from mudd.models import Room, Zone
+from mudd.models import Room, User, Zone
 from mudd.observers.discord import DiscordReconciler
 from mudd.services.currency import CurrencyService
 from mudd.services.entity import EntityService
@@ -169,12 +168,6 @@ class Sync(commands.Cog):
             if fail_fast:
                 raise
 
-        # Prepopulate autocomplete cache (non-fatal)
-        try:
-            await self._prepopulate_autocomplete_cache(pool)
-        except Exception:
-            logger.exception("Failed to prepopulate autocomplete cache")
-
         # Flush reconciler to sync Discord state (idempotent)
         try:
             await reconciler.flush()
@@ -238,10 +231,16 @@ class Sync(commands.Cog):
 
             # Wallet sync (non-fatal)
             try:
-                wallet_stats = await self.sync_wallets(guild)
+                wallet_stats = await self.sync_wallets(guild, reconciler)
                 logger.info(f"Wallet sync for {guild.name}: {wallet_stats}")
             except Exception:
                 logger.exception(f"Failed wallet sync for {guild.name}")
+
+            # Flush wallet events
+            try:
+                await reconciler.flush()
+            except Exception:
+                logger.exception(f"Failed to flush wallet events for {guild.name}")
 
             # Inventory description sync (non-fatal)
             try:
@@ -268,16 +267,6 @@ class Sync(commands.Cog):
         if not self._first_sync_done:
             logger.critical("Initial sync failed - shutting down")
             await self.bot.close()
-
-    async def _prepopulate_autocomplete_cache(self, pool) -> None:
-        """Prepopulate autocomplete cache for all rooms with entities."""
-        rows = await pool.fetch(
-            "SELECT DISTINCT room FROM entity_instances WHERE room IS NOT NULL"
-        )
-        rooms = [row["room"] for row in rows]
-        if rooms:
-            count = await self.entity_resolution.prepopulate_cache(rooms)
-            logger.info(f"Prepopulated autocomplete cache for {count} rooms")
 
     @tasks.loop(minutes=1)
     async def respawn_task(self):
@@ -401,83 +390,42 @@ class Sync(commands.Cog):
             self.entity_resolution.invalidate_cache()
             logger.info(f"Spawned {spawned} items from spawning pools")
 
-    async def sync_wallets(self, guild: discord.Guild) -> dict[str, int]:
+    async def sync_wallets(
+        self, guild: discord.Guild, reconciler: DiscordReconciler
+    ) -> dict[str, int]:
         """Bootstrap wallets for all guild members.
 
-        For each member without a wallet:
-        1. Create currency account with starting balance
-        2. Create wallet entity instance in inventory
-        3. Create inventory thread for wallet
-        4. Link wallet instance to currency account
+        Uses User.ensure_wallet() to create wallets via the model layer,
+        emitting WalletEnsuredEvent for the reconciler to handle Discord
+        thread creation and pinning.
 
         Args:
             guild: Discord guild
+            reconciler: DiscordReconciler to handle Discord operations
 
         Returns:
             Stats dict with 'created', 'existing', 'errors' counts
         """
         stats = {"created": 0, "existing": 0, "errors": 0}
 
-        # Verify wallet entity exists (must exist after entity sync)
-        if await self.entity_service.get_entity("wallet") is None:
-            logger.error("Wallet entity not found - cannot bootstrap wallets")
-            return stats
-
         for member in guild.members:
             if member.bot:
                 continue
 
             try:
-                # Check if user already has a wallet instance
-                wallet_instance_id = await self.currency_service.get_wallet_instance_id(
-                    member.id
-                )
-                if wallet_instance_id is not None:
-                    # Check if the wallet instance still exists
-                    existing_instance = await self.entity_service.get_entity_instance(
-                        UUID(wallet_instance_id)
-                    )
-                    if existing_instance is not None:
-                        # Ensure existing wallet thread is pinned
-                        row = await self._pool.fetchrow(
-                            """SELECT discord_thread_id FROM entity_instances
-                            WHERE id = $1""",
-                            UUID(wallet_instance_id),
-                        )
-                        if row and row["discord_thread_id"]:
-                            thread = guild.get_thread(row["discord_thread_id"])
-                            if thread and not thread.flags.pinned:
-                                await thread.edit(pinned=True)
-                        stats["existing"] += 1
-                        continue
-
-                # Create currency account (idempotent) - must exist before thread
-                # creation so balance can be fetched
-                await self.currency_service.ensure_account(member.id)
-
-                # Create wallet in inventory (handles forum, instance, thread)
-                result = await self.inventory_service.grant_item(
-                    guild, member.id, "wallet", pinned=True
-                )
-                if not result.success:
-                    logger.error(
-                        f"Failed to create wallet for user {member.id}: {result.error}"
-                    )
-                    stats["errors"] += 1
-                    continue
-
-                # Link wallet instance to currency account
-                instance_id = str(result.instance_id)
-                await self.currency_service.link_wallet(member.id, instance_id)
-
-                stats["created"] += 1
-                logger.info(f"Created wallet for user {member.id} ({member.name})")
-
-            except discord.HTTPException as e:
-                logger.error(f"Discord error creating wallet for {member.id}: {e}")
+                user = await User.get_or_create(self._pool, member.id)
+                _, is_new = await user.ensure_wallet(observers=(reconciler,))
+                if is_new:
+                    stats["created"] += 1
+                    logger.info(f"Created wallet for user {member.id} ({member.name})")
+                else:
+                    stats["existing"] += 1
+            except ValueError as e:
+                # Wallet entity definition not found
+                logger.error(f"Failed to ensure wallet for {member.id}: {e}")
                 stats["errors"] += 1
             except Exception:
-                logger.exception(f"Failed to create wallet for {member.id}")
+                logger.exception(f"Failed to ensure wallet for {member.id}")
                 stats["errors"] += 1
 
         return stats

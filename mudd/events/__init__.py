@@ -8,6 +8,7 @@ which notifies observers that collect and process the events.
 from mudd.events.collector import EffectsCollector
 from mudd.events.observer import Observer, OutputObserver
 from mudd.events.types import (
+    BalanceChangedEvent,
     BroadcastEvent,
     DestroySignal,
     DispenseSignal,
@@ -22,6 +23,7 @@ from mudd.events.types import (
     OrphanChannelDetectedEvent,
     PickupSignal,
     RoomSyncedEvent,
+    WalletEnsuredEvent,
     ZoneSyncedEvent,
 )
 
@@ -47,4 +49,6 @@ __all__ = [
     "ZoneSyncedEvent",
     "RoomSyncedEvent",
     "OrphanChannelDetectedEvent",
+    "WalletEnsuredEvent",
+    "BalanceChangedEvent",
 ]

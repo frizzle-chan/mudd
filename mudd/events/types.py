@@ -112,6 +112,25 @@ class OrphanChannelDetectedEvent:
     category_name: str
 
 
+@dataclass(frozen=True)
+class WalletEnsuredEvent:
+    """Wallet was created or verified for a user."""
+
+    user_id: int
+    instance: "EntityInstance"
+    is_new: bool  # True if newly created, False if already existed
+
+
+@dataclass(frozen=True)
+class BalanceChangedEvent:
+    """User's balance changed (for future use by economy cog)."""
+
+    user_id: int
+    new_balance: int
+    delta: int  # Positive for credit, negative for debit
+    memo: str
+
+
 GameEvent = (
     BroadcastEvent
     | GrantEvent
@@ -127,4 +146,6 @@ GameEvent = (
     | ZoneSyncedEvent
     | RoomSyncedEvent
     | OrphanChannelDetectedEvent
+    | WalletEnsuredEvent
+    | BalanceChangedEvent
 )

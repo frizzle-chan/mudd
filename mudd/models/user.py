@@ -10,8 +10,10 @@ from uuid import UUID
 import asyncpg
 
 if TYPE_CHECKING:
+    from mudd.events import Observer
     from mudd.models.room import Room
 
+from mudd.events import WalletEnsuredEvent
 from mudd.models.entity import EntityInstance
 
 FOCUS_TIMEOUT_MINUTES = 5
@@ -343,3 +345,91 @@ class User:
         )
 
         return replace(self, current_room=room_id)
+
+    async def get_wallet(self) -> EntityInstance | None:
+        """Get user's wallet instance, if any.
+
+        Returns:
+            EntityInstance for the wallet, or None if no wallet exists
+        """
+        row = await self._pool.fetchrow(
+            """
+            SELECT wallet_instance_id FROM currency_accounts
+            WHERE user_id = $1 AND wallet_instance_id IS NOT NULL
+            """,
+            self.id,
+        )
+
+        if row is None:
+            return None
+
+        return await EntityInstance.get(self._pool, row["wallet_instance_id"])
+
+    async def ensure_wallet(
+        self,
+        observers: tuple[Observer, ...] = (),
+    ) -> tuple[EntityInstance, bool]:
+        """Ensure user has a wallet. Creates if missing.
+
+        Creates a currency account and wallet entity instance if needed.
+        Emits WalletEnsuredEvent to observers.
+
+        Args:
+            observers: Observers to notify with WalletEnsuredEvent
+
+        Returns:
+            Tuple of (wallet_instance, is_new) where is_new is True if
+            a new wallet was created.
+
+        Raises:
+            ValueError: If wallet entity definition doesn't exist
+        """
+        from mudd.services.currency import STARTING_BALANCE
+
+        # Check for existing wallet
+        existing = await self.get_wallet()
+        if existing is not None:
+            for observer in observers:
+                observer.notify(
+                    WalletEnsuredEvent(user_id=self.id, instance=existing, is_new=False)
+                )
+            return (existing, False)
+
+        # Create currency account (idempotent)
+        await self._pool.execute(
+            """
+            INSERT INTO currency_accounts (user_id, balance)
+            VALUES ($1, $2)
+            ON CONFLICT (user_id) DO NOTHING
+            """,
+            self.id,
+            STARTING_BALANCE,
+        )
+
+        # Create wallet instance in user's inventory
+        wallet = await EntityInstance.create(
+            self._pool,
+            "wallet",
+            owner_id=self.id,
+        )
+
+        if wallet is None:
+            raise ValueError("Wallet entity definition not found")
+
+        # Link wallet instance to currency account
+        await self._pool.execute(
+            """
+            UPDATE currency_accounts
+            SET wallet_instance_id = $2
+            WHERE user_id = $1
+            """,
+            self.id,
+            str(wallet.instance_id),
+        )
+
+        for observer in observers:
+            observer.notify(
+                WalletEnsuredEvent(user_id=self.id, instance=wallet, is_new=True)
+            )
+
+        return (wallet, True)

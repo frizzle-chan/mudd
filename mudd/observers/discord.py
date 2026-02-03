@@ -19,6 +19,7 @@ from mudd.events import (
     GameEvent,
     OrphanChannelDetectedEvent,
     RoomSyncedEvent,
+    WalletEnsuredEvent,
     ZoneSyncedEvent,
 )
 from mudd.models.entity import EntityInstance
@@ -29,6 +30,7 @@ type PendingEvent = (
     | tuple[ZoneSyncedEvent, str]
     | tuple[RoomSyncedEvent, str]
     | tuple[OrphanChannelDetectedEvent, str]
+    | tuple[WalletEnsuredEvent, str]
 )
 
 logger = logging.getLogger(__name__)
@@ -110,6 +112,8 @@ class DiscordReconciler:
                 self._pending.append((evt, "room_synced"))
             case OrphanChannelDetectedEvent() as evt:
                 self._pending.append((evt, "orphan_detected"))
+            case WalletEnsuredEvent() as evt:
+                self._pending.append((evt, "wallet_ensured"))
             # Ignore template signals - they're handled by EffectsObserver
 
     async def flush(self) -> None:
@@ -135,6 +139,7 @@ class DiscordReconciler:
         zone_events: list[ZoneSyncedEvent] = []
         room_events: list[RoomSyncedEvent] = []
         orphan_events: list[OrphanChannelDetectedEvent] = []
+        wallet_events: list[WalletEnsuredEvent] = []
         entity_events: list[tuple[EntityInstance, str]] = []
 
         for item, event_type in pending:
@@ -145,6 +150,8 @@ class DiscordReconciler:
                     room_events.append(item)  # type: ignore[arg-type]
                 case "orphan_detected":
                     orphan_events.append(item)  # type: ignore[arg-type]
+                case "wallet_ensured":
+                    wallet_events.append(item)  # type: ignore[arg-type]
                 case _:
                     entity_events.append((item, event_type))  # type: ignore[arg-type]
 
@@ -163,7 +170,11 @@ class DiscordReconciler:
                 if evt.guild_id == guild.id:
                     await self._report_orphan(guild, evt)
 
-        # 4. Process entity events (original behavior)
+            # 4. Process wallet events (create/pin inventory threads)
+            for evt in wallet_events:
+                await self._handle_wallet_event(guild, evt)
+
+        # 5. Process entity events (original behavior)
         for instance, event_type in entity_events:
             await self._handle_entity_event(instance, event_type)
 
@@ -612,3 +623,52 @@ class DiscordReconciler:
             WHERE id = $1""",
             instance.instance_id,
         )
+
+    async def _handle_wallet_event(
+        self, guild: discord.Guild, event: WalletEnsuredEvent
+    ) -> None:
+        """Handle a wallet ensured event.
+
+        Creates inventory thread for the wallet if needed and pins it.
+        Idempotent - safe to call multiple times.
+
+        Args:
+            guild: Discord guild
+            event: The wallet ensured event
+        """
+        instance = event.instance
+
+        # Check if thread already exists
+        row = await self.pool.fetchrow(
+            "SELECT discord_thread_id FROM entity_instances WHERE id = $1",
+            instance.instance_id,
+        )
+        if row and row["discord_thread_id"] is not None:
+            # Thread exists - ensure it's pinned
+            thread = guild.get_thread(row["discord_thread_id"])
+            if thread and not thread.flags.pinned:
+                try:
+                    await thread.edit(pinned=True)
+                    logger.debug(f"Pinned existing wallet thread {thread.id}")
+                except discord.HTTPException as e:
+                    logger.error(f"Failed to pin wallet thread {thread.id}: {e}")
+            return
+
+        # Create thread via existing method
+        await self._create_inventory_thread(guild, instance)
+
+        # Now pin the newly created thread
+        row = await self.pool.fetchrow(
+            "SELECT discord_thread_id FROM entity_instances WHERE id = $1",
+            instance.instance_id,
+        )
+        if row and row["discord_thread_id"]:
+            thread = guild.get_thread(row["discord_thread_id"])
+            if thread and not thread.flags.pinned:
+                try:
+                    await thread.edit(pinned=True)
+                    logger.info(
+                        f"Pinned wallet thread {thread.id} for user {event.user_id}"
+                    )
+                except discord.HTTPException as e:
+                    logger.error(f"Failed to pin wallet thread {thread.id}: {e}")
