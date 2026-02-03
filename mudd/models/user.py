@@ -10,15 +10,8 @@ from uuid import UUID
 import asyncpg
 
 if TYPE_CHECKING:
-    from mudd.events import Observer
     from mudd.models.room import Room
 
-from mudd.events import (
-    InventoryForumAction,
-    InventoryForumContext,
-    InventoryForumEnsuredEvent,
-    WalletEnsuredEvent,
-)
 from mudd.models.entity import EntityInstance
 
 FOCUS_TIMEOUT_MINUTES = 5
@@ -370,17 +363,12 @@ class User:
 
         return await EntityInstance.get(self._pool, row["wallet_instance_id"])
 
-    async def ensure_wallet(
-        self,
-        observers: tuple[Observer, ...] = (),
-    ) -> tuple[EntityInstance, bool]:
+    async def ensure_wallet(self) -> tuple[EntityInstance, bool]:
         """Ensure user has a wallet. Creates if missing.
 
         Creates a currency account and wallet entity instance if needed.
-        Emits WalletEnsuredEvent to observers.
-
-        Args:
-            observers: Observers to notify with WalletEnsuredEvent
+        Discord thread creation is handled by DiscordReconciler via
+        InventorySyncEvent, not this method.
 
         Returns:
             Tuple of (wallet_instance, is_new) where is_new is True if
@@ -394,10 +382,6 @@ class User:
         # Check for existing wallet
         existing = await self.get_wallet()
         if existing is not None:
-            for observer in observers:
-                observer.notify(
-                    WalletEnsuredEvent(user_id=self.id, instance=existing, is_new=False)
-                )
             return (existing, False)
 
         # Create currency account (idempotent)
@@ -432,55 +416,4 @@ class User:
             str(wallet.instance_id),
         )
 
-        for observer in observers:
-            observer.notify(
-                WalletEnsuredEvent(user_id=self.id, instance=wallet, is_new=True)
-            )
-
         return (wallet, True)
-
-    async def ensure_inventory_forum(
-        self,
-        context: InventoryForumContext,
-        observers: tuple[Observer, ...] = (),
-    ) -> InventoryForumAction:
-        """Ensure user has an inventory forum. Emits event for reconciler to handle.
-
-        This method determines the action needed based on the pre-computed
-        InventoryForumContext and emits an InventoryForumEnsuredEvent.
-        The actual Discord operations are handled by the reconciler.
-
-        Args:
-            context: Pre-computed Discord state for this user
-            observers: Observers to notify with InventoryForumEnsuredEvent
-
-        Returns:
-            The action that will be taken (CREATE, RECOVER, or EXISTING)
-        """
-        # Check DB for existing forum record
-        forum_data = await self._pool.fetchrow(
-            """SELECT forum_id FROM user_inventory_forums WHERE user_id = $1""",
-            self.id,
-        )
-
-        if forum_data is not None and context.existing_forum_id is not None:
-            # Forum exists in both DB and Discord
-            action = InventoryForumAction.EXISTING
-        elif context.existing_forum_id is not None:
-            # Forum exists in Discord but not DB - recovery case
-            action = InventoryForumAction.RECOVER
-        else:
-            # No forum exists - need to create
-            action = InventoryForumAction.CREATE
-
-        event = InventoryForumEnsuredEvent(
-            user_id=self.id,
-            guild_id=context.guild_id,
-            action=action,
-            context=context,
-        )
-
-        for observer in observers:
-            observer.notify(event)
-
-        return action
