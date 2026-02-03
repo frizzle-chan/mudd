@@ -1,6 +1,16 @@
 # Services
 
-This package contains **DI service classes** that manage runtime state, caching, and database access.
+> **⚠️ DEPRECATED**: This directory is being phased out. Do not add new services here.
+>
+> We are migrating to an MVC + events architecture:
+> - **Models** (`mudd/models/`): Domain objects with async DB access
+> - **Events** (`mudd/events/`): Event types and observer protocol
+> - **Observers** (`mudd/observers/`): React to events after command execution
+> - **Scene** (`mudd/scene.py`): Command execution context
+>
+> See `mudd/cogs/look.py` and `mudd/cogs/interact.py` for example implementations.
+
+This package contains **legacy DI service classes** that manage runtime state, caching, and database access. These are being migrated to the models/events/observers pattern.
 
 ## What makes a service
 A service is a class that:

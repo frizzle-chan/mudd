@@ -26,8 +26,9 @@ just
 
 # Individual checks
 just lint      # ruff check
-just format    # ruff format
+just format    # ruff format --check (use `ruff format .` to auto-fix)
 just types     # ty check
+just test      # pytest (use `just testq` for quick/quiet mode)
 
 # Run the bot (requires .env with DISCORD_TOKEN)
 just dev
@@ -50,6 +51,29 @@ PGPASSWORD=mudd psql -h db -U mudd -d mudd -c "SELECT * FROM table_name"
 - Inherits from `commands.Cog`
 - Defines slash commands via `@app_commands.command`
 - Gets loaded in `main.py`
+
+### MVC Architecture (Active Migration)
+
+**The `mudd/services/` directory is deprecated.** We are migrating to an MVC + events architecture:
+
+- **Models** (`mudd/models/`): Domain objects with async factory methods for DB access
+  - `User`, `Room`, `Zone`, `EntityInstance`, `EntityDefinition`, `SpawningPool`
+  - Models encapsulate queries and business logic
+- **Events** (`mudd/events/`): Event types and the observer protocol
+  - `EventCollector`, `Observer`, event dataclasses
+- **Observers** (`mudd/observers/`): React to events after command execution
+  - `EffectsObserver`: Collects in-template effects (pickup, drop, broadcast)
+  - `DiscordReconciler`: Syncs Discord state (threads, permissions, channels)
+- **Scene** (`mudd/scene.py`): Ties together user, room, focus, and observers for command execution
+
+**Example cogs using MVC pattern**: `mudd/cogs/look.py`, `mudd/cogs/interact.py`
+
+**Pattern for new commands**:
+1. Build a `Scene` from the interaction
+2. Attach observers (`EffectsObserver`, `DiscordReconciler`)
+3. Resolve target entities via `resolve_entity()`
+4. Execute command via `scene.execute(command, entity)`
+5. Flush observers via `scene.flush_observers()`
 
 **Sync cog** (`mudd/cogs/sync.py`): Owns ALL synchronization:
 - First iteration: Zone/room sync, VisibilityService initialization, permission sync

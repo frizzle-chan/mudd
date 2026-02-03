@@ -10,5 +10,5 @@ Loaders are **not services** - they are async functions that take a database poo
 - Dataclasses representing the data being loaded
 
 ## What does NOT belong here
-- Runtime entity/state management (use services/)
-- Query functions for runtime lookups (use services/)
+- Runtime entity/state management (use models/)
+- Query functions for runtime lookups (use models/)
