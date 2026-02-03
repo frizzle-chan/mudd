@@ -365,13 +365,11 @@ This prompt is a living document. Improve it as you test.
 
 ## Cleanup
 
-After testing, remember to:
+After testing, restore the sync interval to its original value (15 minutes):
 
-1. Restore the sync interval to 15 minutes in `mudd/cogs/sync.py`
-2. Discard any uncommitted changes:
-   ```bash
-   git checkout mudd/cogs/sync.py
-   ```
+```bash
+git checkout mudd/cogs/sync.py
+```
 
 ## Success Criteria
 
