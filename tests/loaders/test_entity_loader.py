@@ -19,7 +19,7 @@ import pytest_asyncio
 
 from mudd.loaders.entity_loader import sync_entities
 from mudd.loaders.zone_loader import (
-    Entity,
+    EntityData,
     load_entities_from_rec,
     load_rooms_from_rec,
 )
@@ -27,8 +27,8 @@ from mudd.models.entity_definition import EntityDefinition
 
 
 def _validate_and_sort_entities(
-    entities: list[Entity], room_ids: set[str]
-) -> list[Entity]:
+    entities: list[EntityData], room_ids: set[str]
+) -> list[EntityData]:
     """Wrapper to call EntityDefinition validation and sorting for tests."""
     EntityDefinition._validate_entities(entities, room_ids)
     return EntityDefinition._topological_sort(entities)
@@ -115,7 +115,7 @@ class TestValidateEntities:
     def test_invalid_prototype_reference_raises(self):
         """Invalid prototype reference raises ValueError."""
         entities = [
-            Entity(id="child", name="Child", prototype_id="nonexistent"),
+            EntityData(id="child", name="Child", prototype_id="nonexistent"),
         ]
         with pytest.raises(ValueError, match="invalid prototype 'nonexistent'"):
             _validate_and_sort_entities(entities, set())
@@ -123,7 +123,7 @@ class TestValidateEntities:
     def test_invalid_container_reference_raises(self):
         """Invalid container reference raises ValueError."""
         entities = [
-            Entity(id="item", name="Item", container_id="nonexistent"),
+            EntityData(id="item", name="Item", container_id="nonexistent"),
         ]
         with pytest.raises(ValueError, match="invalid container 'nonexistent'"):
             _validate_and_sort_entities(entities, set())
@@ -131,7 +131,7 @@ class TestValidateEntities:
     def test_invalid_room_reference_raises(self):
         """Invalid room reference raises ValueError."""
         entities = [
-            Entity(id="item", name="Item", room="nonexistent"),
+            EntityData(id="item", name="Item", room="nonexistent"),
         ]
         with pytest.raises(ValueError, match="invalid room 'nonexistent'"):
             _validate_and_sort_entities(entities, set())
@@ -139,8 +139,8 @@ class TestValidateEntities:
     def test_circular_prototype_inheritance_raises(self):
         """Circular prototype chain raises ValueError."""
         entities = [
-            Entity(id="a", name="A", prototype_id="b"),
-            Entity(id="b", name="B", prototype_id="a"),
+            EntityData(id="a", name="A", prototype_id="b"),
+            EntityData(id="b", name="B", prototype_id="a"),
         ]
         with pytest.raises(ValueError, match="Circular prototype inheritance"):
             _validate_and_sort_entities(entities, set())
@@ -148,7 +148,7 @@ class TestValidateEntities:
     def test_self_prototype_raises(self):
         """Self-referencing prototype raises ValueError."""
         entities = [
-            Entity(id="a", name="A", prototype_id="a"),
+            EntityData(id="a", name="A", prototype_id="a"),
         ]
         with pytest.raises(ValueError, match="Circular prototype inheritance"):
             _validate_and_sort_entities(entities, set())
@@ -156,8 +156,8 @@ class TestValidateEntities:
     def test_circular_containment_raises(self):
         """Circular containment chain raises ValueError."""
         entities = [
-            Entity(id="a", name="A", container_id="b"),
-            Entity(id="b", name="B", container_id="a"),
+            EntityData(id="a", name="A", container_id="b"),
+            EntityData(id="b", name="B", container_id="a"),
         ]
         with pytest.raises(ValueError, match="Circular containment"):
             _validate_and_sort_entities(entities, set())
@@ -165,7 +165,7 @@ class TestValidateEntities:
     def test_self_containment_raises(self):
         """Self-referencing container raises ValueError."""
         entities = [
-            Entity(id="a", name="A", container_id="a"),
+            EntityData(id="a", name="A", container_id="a"),
         ]
         with pytest.raises(ValueError, match="Circular containment"):
             _validate_and_sort_entities(entities, set())
@@ -173,9 +173,9 @@ class TestValidateEntities:
     def test_three_node_prototype_cycle_raises(self):
         """Three-node prototype cycle raises ValueError."""
         entities = [
-            Entity(id="a", name="A", prototype_id="b"),
-            Entity(id="b", name="B", prototype_id="c"),
-            Entity(id="c", name="C", prototype_id="a"),
+            EntityData(id="a", name="A", prototype_id="b"),
+            EntityData(id="b", name="B", prototype_id="c"),
+            EntityData(id="c", name="C", prototype_id="a"),
         ]
         with pytest.raises(ValueError, match="Circular prototype inheritance"):
             _validate_and_sort_entities(entities, set())
@@ -183,9 +183,9 @@ class TestValidateEntities:
     def test_three_node_containment_cycle_raises(self):
         """Three-node containment cycle raises ValueError."""
         entities = [
-            Entity(id="a", name="A", container_id="b"),
-            Entity(id="b", name="B", container_id="c"),
-            Entity(id="c", name="C", container_id="a"),
+            EntityData(id="a", name="A", container_id="b"),
+            EntityData(id="b", name="B", container_id="c"),
+            EntityData(id="c", name="C", container_id="a"),
         ]
         with pytest.raises(ValueError, match="Circular containment"):
             _validate_and_sort_entities(entities, set())
@@ -197,8 +197,8 @@ class TestTopologicalSort:
     def test_prototypes_sorted_before_children(self):
         """Prototypes appear before entities that depend on them."""
         entities = [
-            Entity(id="child", name="Child", prototype_id="parent"),
-            Entity(id="parent", name="Parent"),
+            EntityData(id="child", name="Child", prototype_id="parent"),
+            EntityData(id="parent", name="Parent"),
         ]
         sorted_entities = _validate_and_sort_entities(entities, set())
 
@@ -209,9 +209,9 @@ class TestTopologicalSort:
     def test_deep_inheritance_chain_sorted(self):
         """Deep inheritance chains are sorted correctly."""
         entities = [
-            Entity(id="c", name="C", prototype_id="b"),
-            Entity(id="a", name="A"),
-            Entity(id="b", name="B", prototype_id="a"),
+            EntityData(id="c", name="C", prototype_id="b"),
+            EntityData(id="a", name="A"),
+            EntityData(id="b", name="B", prototype_id="a"),
         ]
         sorted_entities = _validate_and_sort_entities(entities, set())
 
@@ -223,9 +223,9 @@ class TestTopologicalSort:
     def test_no_prototype_entities_first(self):
         """Entities without prototypes can appear in any order at the start."""
         entities = [
-            Entity(id="child", name="Child", prototype_id="parent"),
-            Entity(id="standalone", name="Standalone"),
-            Entity(id="parent", name="Parent"),
+            EntityData(id="child", name="Child", prototype_id="parent"),
+            EntityData(id="standalone", name="Standalone"),
+            EntityData(id="parent", name="Parent"),
         ]
         sorted_entities = _validate_and_sort_entities(entities, set())
 
@@ -240,8 +240,8 @@ class TestTopologicalSort:
         # Container relationships are stored on instances now, not entities.
         # The topological sort only needs to order by prototype_id.
         entities = [
-            Entity(id="item", name="Item", container_id="box"),
-            Entity(id="box", name="Box"),
+            EntityData(id="item", name="Item", container_id="box"),
+            EntityData(id="box", name="Box"),
         ]
         # Should not raise - container order doesn't matter
         sorted_entities = _validate_and_sort_entities(entities, set())
@@ -251,9 +251,11 @@ class TestTopologicalSort:
         """Entity with both prototype and container is sorted after prototype only."""
         # Container order doesn't matter (no FK), but prototype order does.
         entities = [
-            Entity(id="item", name="Item", prototype_id="object", container_id="box"),
-            Entity(id="box", name="Box"),
-            Entity(id="object", name="Object"),
+            EntityData(
+                id="item", name="Item", prototype_id="object", container_id="box"
+            ),
+            EntityData(id="box", name="Box"),
+            EntityData(id="object", name="Object"),
         ]
         sorted_entities = _validate_and_sort_entities(entities, set())
 

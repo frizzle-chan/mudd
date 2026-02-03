@@ -14,7 +14,7 @@ import pytest
 import pytest_asyncio
 
 from mudd.loaders.zone_loader import (
-    Room,
+    RoomData,
     get_default_room,
     load_rooms_from_rec,
     load_zones_from_rec,
@@ -155,8 +155,8 @@ class TestGetDefaultRoom:
     def test_raises_if_no_default(self):
         """get_default_room raises ValueError if no room is marked as default."""
         rooms = [
-            Room(id="room1", name="Room 1", description="A room", zone_id="zone1"),
-            Room(id="room2", name="Room 2", description="A room", zone_id="zone1"),
+            RoomData(id="room1", name="Room 1", description="A room", zone_id="zone1"),
+            RoomData(id="room2", name="Room 2", description="A room", zone_id="zone1"),
         ]
         with pytest.raises(ValueError, match="No default room found"):
             get_default_room(rooms)
@@ -164,14 +164,14 @@ class TestGetDefaultRoom:
     def test_raises_if_multiple_defaults(self):
         """get_default_room raises ValueError if multiple rooms marked as default."""
         rooms = [
-            Room(
+            RoomData(
                 id="room1",
                 name="Room 1",
                 description="A room",
                 zone_id="zone1",
                 is_default=True,
             ),
-            Room(
+            RoomData(
                 id="room2",
                 name="Room 2",
                 description="A room",

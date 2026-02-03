@@ -10,7 +10,7 @@ import asyncpg
 
 if TYPE_CHECKING:
     from mudd.events import Observer
-    from mudd.loaders.zone_loader import Zone as ZoneData
+    from mudd.loaders.zone_loader import ZoneData
 
 from mudd.events import ZoneSyncedEvent
 

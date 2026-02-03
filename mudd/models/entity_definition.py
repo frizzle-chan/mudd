@@ -12,7 +12,7 @@ import asyncpg
 from mudd.models.zone import SyncStats
 
 if TYPE_CHECKING:
-    from mudd.loaders.zone_loader import Entity as EntityData
+    from mudd.loaders.zone_loader import EntityData
 
 logger = logging.getLogger(__name__)
 

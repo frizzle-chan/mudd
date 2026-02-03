@@ -21,7 +21,7 @@ VALID_RARITIES: set[str] = set(get_args(Rarity))
 
 
 @dataclass
-class Zone:
+class ZoneData:
     """Zone data from rec file."""
 
     id: str
@@ -30,7 +30,7 @@ class Zone:
 
 
 @dataclass
-class Room:
+class RoomData:
     """Room data from rec file."""
 
     id: str
@@ -42,7 +42,7 @@ class Room:
 
 
 @dataclass
-class Entity:
+class EntityData:
     """Entity data from rec file."""
 
     id: str
@@ -67,7 +67,7 @@ class Entity:
 
 
 @dataclass
-class SpawningPool:
+class SpawningPoolData:
     """Spawning pool data from rec file."""
 
     id: str
@@ -115,22 +115,22 @@ def _load_records_from_rec[T](
     return records
 
 
-def _parse_zone_row(row: dict[str, str]) -> Zone:
-    """Parse a CSV row into a Zone object."""
-    return Zone(
+def _parse_zone_row(row: dict[str, str]) -> ZoneData:
+    """Parse a CSV row into a ZoneData object."""
+    return ZoneData(
         id=row["Id"],
         name=row["Name"],
         description=row.get("Description") or None,
     )
 
 
-def _parse_room_row(row: dict[str, str]) -> Room:
-    """Parse a CSV row into a Room object."""
+def _parse_room_row(row: dict[str, str]) -> RoomData:
+    """Parse a CSV row into a RoomData object."""
     has_voice_str = row.get("HasVoice", "").lower()
     has_voice = has_voice_str in ("yes", "true", "1")
     is_default_str = row.get("IsDefault", "").lower()
     is_default = is_default_str in ("yes", "true", "1")
-    return Room(
+    return RoomData(
         id=row["Id"],
         name=row["Name"],
         description=row["Description"],
@@ -140,18 +140,18 @@ def _parse_room_row(row: dict[str, str]) -> Room:
     )
 
 
-def load_zones_from_rec(world_file: Path) -> list[Zone]:
+def load_zones_from_rec(world_file: Path) -> list[ZoneData]:
     """Load Zone records from a world rec file using rec2csv."""
     return _load_records_from_rec(world_file, "Zone", _parse_zone_row)
 
 
-def load_rooms_from_rec(world_file: Path) -> list[Room]:
+def load_rooms_from_rec(world_file: Path) -> list[RoomData]:
     """Load Room records from a world rec file using rec2csv."""
     return _load_records_from_rec(world_file, "Room", _parse_room_row)
 
 
-def _parse_entity_row(row: dict[str, str]) -> Entity:
-    """Parse a CSV row into an Entity object."""
+def _parse_entity_row(row: dict[str, str]) -> EntityData:
+    """Parse a CSV row into an EntityData object."""
     # Parse boolean with None support
     contents_visible_str = row.get("ContentsVisible", "").lower()
     contents_visible: bool | None = None
@@ -184,7 +184,7 @@ def _parse_entity_row(row: dict[str, str]) -> Entity:
     tags_str = row.get("Tags", "").strip()
     tags = tags_str.split() if tags_str else None
 
-    return Entity(
+    return EntityData(
         id=row["Id"],
         name=row["Name"],
         prototype_id=row.get("Prototype") or None,
@@ -207,13 +207,13 @@ def _parse_entity_row(row: dict[str, str]) -> Entity:
     )
 
 
-def load_entities_from_rec(world_file: Path) -> list[Entity]:
+def load_entities_from_rec(world_file: Path) -> list[EntityData]:
     """Load Entity records from a world rec file using rec2csv."""
     return _load_records_from_rec(world_file, "Entity", _parse_entity_row)
 
 
-def _parse_spawning_pool_row(row: dict[str, str]) -> SpawningPool:
-    """Parse a CSV row into a SpawningPool object."""
+def _parse_spawning_pool_row(row: dict[str, str]) -> SpawningPoolData:
+    """Parse a CSV row into a SpawningPoolData object."""
     # Parse max_count with default
     max_count_str = row.get("MaxCount", "1")
     try:
@@ -238,7 +238,7 @@ def _parse_spawning_pool_row(row: dict[str, str]) -> SpawningPool:
     no_duplicates_str = row.get("NoDuplicates", "").lower()
     no_duplicates = no_duplicates_str in ("yes", "true", "1")
 
-    return SpawningPool(
+    return SpawningPoolData(
         id=row["Id"],
         room=row["Room"],
         tag_query=row["TagQuery"],
@@ -249,7 +249,7 @@ def _parse_spawning_pool_row(row: dict[str, str]) -> SpawningPool:
     )
 
 
-def load_spawning_pools_from_rec(world_file: Path) -> list[SpawningPool]:
+def load_spawning_pools_from_rec(world_file: Path) -> list[SpawningPoolData]:
     """Load SpawningPool records from a world rec file using rec2csv.
 
     Returns empty list if no SpawningPool records exist (graceful handling).
@@ -263,7 +263,7 @@ def load_spawning_pools_from_rec(world_file: Path) -> list[SpawningPool]:
         return []
 
 
-def get_default_room(rooms: list[Room]) -> str:
+def get_default_room(rooms: list[RoomData]) -> str:
     """Get the default room ID from loaded rooms.
 
     Raises ValueError if no default or multiple defaults found.
@@ -279,8 +279,8 @@ def get_default_room(rooms: list[Room]) -> str:
 
 async def sync_zones_and_rooms_to_db(
     pool: asyncpg.Pool,
-    zones: list[Zone],
-    rooms: list[Room],
+    zones: list[ZoneData],
+    rooms: list[RoomData],
     default_room: str,
 ) -> dict[str, int]:
     """
@@ -420,7 +420,7 @@ def _find_channels_by_name(
 
 async def _sync_channel(
     guild: discord.Guild,
-    room: Room,
+    room: RoomData,
     category: discord.CategoryChannel,
     stats: dict[str, int],
     channel_type: Literal["text", "voice"],
@@ -528,8 +528,8 @@ async def _sync_channel(
 
 async def sync_zones_and_rooms_to_discord(
     guild: discord.Guild,
-    zones: list[Zone],
-    rooms: list[Room],
+    zones: list[ZoneData],
+    rooms: list[RoomData],
     console_channel_name: str = "console",
     seen_orphans: set[tuple[int, str, str]] | None = None,
 ) -> tuple[dict[str, int], list[tuple[int, str, str]]]:

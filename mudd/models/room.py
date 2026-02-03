@@ -13,7 +13,7 @@ from mudd.models.entity import ResolvedEntity
 
 if TYPE_CHECKING:
     from mudd.events import Observer
-    from mudd.loaders.zone_loader import Room as RoomData
+    from mudd.loaders.zone_loader import RoomData
     from mudd.models.entity import EntityInstance
     from mudd.models.interfaces import IEntityInstance, IUser
     from mudd.models.zone import SyncStats

@@ -11,7 +11,7 @@ import asyncpg
 from mudd.models.zone import SyncStats
 
 if TYPE_CHECKING:
-    from mudd.loaders.zone_loader import SpawningPool as SpawningPoolData
+    from mudd.loaders.zone_loader import SpawningPoolData
 
 logger = logging.getLogger(__name__)
 
