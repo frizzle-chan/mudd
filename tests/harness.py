@@ -15,11 +15,7 @@ from mudd.cogs.economy import Economy
 from mudd.cogs.interact import Interact
 from mudd.cogs.look import Look
 from mudd.cogs.movement import Movement
-from mudd.services.entity import EntityService
-from mudd.services.entity_resolution import EntityResolutionService
-from mudd.services.focus_context import FocusContextService
-from mudd.services.inventory import InventoryService
-from mudd.services.rendering import RenderingService
+from mudd.models.entity import EntityInstance, ResolvedEntity
 from tests.mocks.discord import (
     MockGuild,
     MockInteraction,
@@ -73,15 +69,6 @@ class TestClient:
 
     def __init__(self, pool: asyncpg.Pool) -> None:
         self.pool = pool
-
-        # Create real services with test database
-        self.entity_service = EntityService(pool)
-        self.focus_service = FocusContextService(pool)
-        self.rendering_service = RenderingService()
-        self.inventory_service = InventoryService(pool, self.entity_service)
-        self.entity_resolution = EntityResolutionService(
-            self.entity_service, self.focus_service, self.inventory_service, pool
-        )
 
         # Create stub room cache (populated lazily from DB)
         self._room_cache = StubRoomChannelCache(pool)
@@ -349,7 +336,7 @@ class TestClient:
         Returns:
             List of (entity_id, entity_name) tuples.
         """
-        instances = await self.entity_service.get_user_inventory(user.id)
+        instances = await EntityInstance.get_by_owner(self.pool, owner_id=user.id)
         return [(inst.entity.id, inst.entity.name) for inst in instances]
 
     async def is_entity_in_room(self, entity_id: str, room: str) -> bool:
@@ -447,8 +434,8 @@ class TestClient:
             return None
 
         # Get a random entity matching the tag (using weighted rarity)
-        entity = await self.entity_service.get_random_entity_by_tag(
-            pool_config["tag_query"]
+        entity = await ResolvedEntity.get_random_by_tag(
+            self.pool, pool_config["tag_query"]
         )
         if entity is None:
             return None
@@ -463,9 +450,6 @@ class TestClient:
             pool_id,
             pool_config["container_id"],
         )
-
-        # Invalidate cache
-        self.entity_service.invalidate_cache()
 
         return entity.id
 

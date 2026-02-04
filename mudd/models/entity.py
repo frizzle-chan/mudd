@@ -230,6 +230,11 @@ class EntityInstance:
         """Item rarity tier."""
         return self.entity.rarity
 
+    @property
+    def room(self) -> str | None:
+        """Alias for room_id for backward compatibility."""
+        return self.room_id
+
     def with_observers(self, *observers: Observer) -> EntityInstance:
         """Return a new instance with additional observers appended.
 

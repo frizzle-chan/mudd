@@ -12,7 +12,8 @@ from typing import Literal, cast, get_args, overload
 import asyncpg
 import discord
 
-from mudd.services.entity import FocusMode, Rarity
+from mudd.models.types import FocusMode
+from mudd.utils.text import Rarity
 
 logger = logging.getLogger(__name__)
 

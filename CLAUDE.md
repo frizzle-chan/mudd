@@ -52,9 +52,9 @@ PGPASSWORD=mudd psql -h db -U mudd -d mudd -c "SELECT * FROM table_name"
 - Defines slash commands via `@app_commands.command`
 - Gets loaded in `main.py`
 
-### MVC Architecture (Active Migration)
+### MVC Architecture
 
-**The `mudd/services/` directory is deprecated.** We are migrating to an MVC + events architecture:
+The codebase uses an MVC + events architecture:
 
 - **Models** (`mudd/models/`): Domain objects with async factory methods for DB access
   - `User`, `Room`, `Zone`, `EntityInstance`, `EntityDefinition`, `SpawningPool`
@@ -67,7 +67,7 @@ PGPASSWORD=mudd psql -h db -U mudd -d mudd -c "SELECT * FROM table_name"
   - `FocusClearingObserver`: Clears user focus on movement events
 - **Scene** (`mudd/scene.py`): Ties together user, room, focus, and observers for command execution
 
-**Example cogs using MVC pattern**: `mudd/cogs/look.py`, `mudd/cogs/interact.py`
+**Reference cogs**: `mudd/cogs/look.py`, `mudd/cogs/interact.py`
 
 **Pattern for new commands**:
 1. Build a `Scene` from the interaction
