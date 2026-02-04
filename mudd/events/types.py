@@ -149,6 +149,52 @@ class InventorySyncEvent:
     user_id: int
 
 
+@dataclass(frozen=True)
+class UserMovedEvent:
+    """User moved from one room to another.
+
+    Game logic event - observed by FocusClearingObserver and other
+    gameplay observers. Does NOT directly trigger permission sync.
+    """
+
+    user_id: int
+    from_room: str | None
+    to_room: str
+    guild_id: int
+
+
+@dataclass(frozen=True)
+class UserLocationSyncEvent:
+    """Request permission sync for a user's current location.
+
+    Infrastructure event - triggers DiscordReconciler to sync
+    Discord permissions to match the user's database location.
+    Emitted after UserMovedEvent, or directly during periodic sync.
+    """
+
+    user_id: int
+    from_room: str | None  # None = grant-only (no revoke)
+    to_room: str
+    guild_id: int
+
+
+@dataclass(frozen=True)
+class UserJoinedEvent:
+    """New user joined the guild."""
+
+    user_id: int
+    default_room: str
+    guild_id: int
+
+
+@dataclass(frozen=True)
+class UserLeftEvent:
+    """User left the guild."""
+
+    user_id: int
+    guild_id: int
+
+
 GameEvent = (
     BroadcastEvent
     | GrantEvent
@@ -167,4 +213,8 @@ GameEvent = (
     | OrphanChannelDetectedEvent
     | BalanceChangedEvent
     | InventorySyncEvent
+    | UserMovedEvent
+    | UserLocationSyncEvent
+    | UserJoinedEvent
+    | UserLeftEvent
 )

@@ -8,13 +8,13 @@
 - **Only mock Discord**: Mock `discord.Interaction`, `discord.Member`, `discord.Channel` etc. since we cannot control Discord's API in tests. Use mock factories in `tests/mocks/discord.py`
 - **Session-scoped DB**: One test database per test run, cleaned up after. Use `clean_user_state` fixture for test isolation when modifying user-mutable data
 
-## VisibilityService Protocol
+## RoomChannelCache Stub
 
-The `VisibilityService` is tightly coupled to Discord API (permissions, channels), so tests use `StubVisibilityService` which implements the same protocol interface (`VisibilityServiceProtocol`):
+The `RoomChannelCache` is coupled to Discord API (channel/category lookups), so tests use `StubRoomChannelCache`:
 
-- Cogs accept `VisibilityServiceProtocol` type hint
-- Production: `VisibilityService` (real Discord operations)
-- Tests: `StubVisibilityService` (in-memory, no Discord)
+- Cogs accept `RoomChannelCache` for room<->channel mappings
+- Production: `RoomChannelCache` (real Discord operations)
+- Tests: `StubRoomChannelCache` (in-memory, populated from mock guild)
 - See `tests/mocks/discord.py` for the stub implementation
 
 ## Scenario-Driven Integration Tests

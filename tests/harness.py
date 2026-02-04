@@ -26,13 +26,11 @@ from tests.mocks.discord import (
     MockInteraction,
     MockMember,
     MockTextChannel,
-    StubVisibilityService,
+    StubRoomChannelCache,
 )
 
 if TYPE_CHECKING:
     from discord import Interaction
-
-    from mudd.services.visibility import VisibilityServiceProtocol
 
 
 @dataclass
@@ -80,7 +78,6 @@ class TestClient:
         # Create real services with test database
         self.entity_service = EntityService(pool)
         self.focus_service = FocusContextService(pool)
-        self._stub_visibility_service = StubVisibilityService()
         self.rendering_service = RenderingService()
         self.inventory_service = InventoryService(pool, self.entity_service)
         self.currency_service = CurrencyService(pool)
@@ -88,34 +85,28 @@ class TestClient:
             self.entity_service, self.focus_service, self.inventory_service, pool
         )
 
-        # Cast stub to VisibilityServiceProtocol for type checking
-        # (StubVisibilityService implements the protocol interface)
-        visibility_service = cast(
-            "VisibilityServiceProtocol", self._stub_visibility_service
-        )
-        self._visibility_service = visibility_service
+        # Create stub room cache (populated lazily from DB)
+        self._room_cache = StubRoomChannelCache(pool)
+
+        # Cached mock guild (built lazily from DB room data)
+        self._mock_guild: MockGuild | None = None
 
         # Create cogs with injected services
         self.look_cog = Look(bot=None, pool=pool)
         self.interact_cog = Interact(bot=None, pool=pool)
         self.movement_cog = Movement(
             bot=None,
-            visibility_service=visibility_service,
-            entity_resolution=self.entity_resolution,
-            inventory_service=self.inventory_service,
+            pool=pool,
+            room_cache=self._room_cache,  # type: ignore[arg-type]
         )
         self.economy_cog = Economy(
             bot=None,
             currency_service=self.currency_service,
-            visibility_service=visibility_service,
-            inventory_service=self.inventory_service,
+            room_cache=self._room_cache,  # type: ignore[arg-type]
             entity_service=self.entity_service,
             rendering_service=self.rendering_service,
             pool=pool,
         )
-
-        # Cached mock guild (built lazily from DB room data)
-        self._mock_guild: MockGuild | None = None
 
     async def create_user(self, user_id: int, room: str = "foyer") -> TestUser:
         """Create a test user starting in the given room.
@@ -132,8 +123,6 @@ class TestClient:
             user_id,
             room,
         )
-        # Set room in visibility stub for same-room checks
-        self._stub_visibility_service.set_user_room(user_id, room)
         return TestUser(user_id, room)
 
     async def _get_room_topic(self, room: str) -> str | None:
@@ -247,6 +236,7 @@ class TestClient:
         """Build MockGuild from database room data.
 
         Caches the result to avoid repeated database queries.
+        Also populates the room cache with room -> channel mappings.
         """
         if self._mock_guild is not None:
             return self._mock_guild
@@ -256,6 +246,11 @@ class TestClient:
             MockTextChannel(name=row["id"], topic=row["description"]) for row in rows
         ]
         self._mock_guild = MockGuild(channels)
+
+        # Populate room cache with room -> channel mappings
+        for ch in channels:
+            self._room_cache.add_room(ch.name, ch.id)
+
         return self._mock_guild
 
     async def look_autocomplete(
@@ -337,13 +332,6 @@ class TestClient:
         mock_member.id = user.id
         mock_member.display_name = f"TestUser{user.id}"
         interaction.user = mock_member
-
-        # Set up user location in visibility service for movement tracking
-        current_channel = next(
-            (ch for ch in guild.text_channels if ch.name == user.room), None
-        )
-        if current_channel:
-            self._stub_visibility_service.set_user_location(user.id, current_channel.id)
 
         await self.movement_cog.move.callback(
             self.movement_cog, interaction, destination=destination
@@ -490,22 +478,6 @@ class TestClient:
 
         return entity.id
 
-    def _setup_user_channel_location(self, user_id: int, guild: MockGuild) -> None:
-        """Set up user's channel location from their room for same-room checks.
-
-        Uses the stub's room data (set by create_user) to find the matching
-        channel and set the channel location.
-
-        Args:
-            user_id: The user's ID.
-            guild: The mock guild.
-        """
-        room = self._stub_visibility_service._user_rooms.get(user_id)
-        if room:
-            channel = next((ch for ch in guild.text_channels if ch.name == room), None)
-            if channel:
-                self._stub_visibility_service.set_user_location(user_id, channel.id)
-
     def _ensure_guild_member(self, user_id: int, guild: MockGuild) -> None:
         """Ensure a user is in the guild's member list.
 
@@ -538,11 +510,9 @@ class TestClient:
         interaction = MockInteraction(user.id, user.room, topic, guild=guild)
         interaction.user = mock_member
 
-        # Set up channel locations for same-room check
-        self._setup_user_channel_location(user.id, guild)
+        # Ensure recipient is in guild
         try:
             recipient_id = int(recipient)
-            self._setup_user_channel_location(recipient_id, guild)
             self._ensure_guild_member(recipient_id, guild)
         except (ValueError, TypeError):
             pass  # Invalid recipient ID - let the command handle it

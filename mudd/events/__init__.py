@@ -25,6 +25,10 @@ from mudd.events.types import (
     OrphanChannelDetectedEvent,
     PickupSignal,
     RoomSyncedEvent,
+    UserJoinedEvent,
+    UserLeftEvent,
+    UserLocationSyncEvent,
+    UserMovedEvent,
     ZoneSyncedEvent,
 )
 
@@ -53,4 +57,8 @@ __all__ = [
     "OrphanChannelDetectedEvent",
     "BalanceChangedEvent",
     "InventorySyncEvent",
+    "UserMovedEvent",
+    "UserLocationSyncEvent",
+    "UserJoinedEvent",
+    "UserLeftEvent",
 ]

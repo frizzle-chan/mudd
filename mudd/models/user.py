@@ -12,6 +12,7 @@ import asyncpg
 if TYPE_CHECKING:
     from mudd.models.room import Room
 
+from mudd.events import Observer, UserLocationSyncEvent, UserMovedEvent
 from mudd.models.entity import EntityInstance
 
 FOCUS_TIMEOUT_MINUTES = 5
@@ -58,11 +59,25 @@ class User:
     id: int
     current_room: str
     _pool: asyncpg.Pool = field(repr=False, compare=False)
+    _observers: tuple[Observer, ...] = field(
+        repr=False, compare=False, default_factory=tuple
+    )
 
     @property
     def mention(self) -> str:
         """Discord mention string for this user."""
         return f"<@{self.id}>"
+
+    def with_observers(self, *observers: Observer) -> User:
+        """Return a new instance with additional observers appended.
+
+        Args:
+            *observers: Observer callbacks to add
+
+        Returns:
+            New User with observers appended
+        """
+        return replace(self, _observers=self._observers + observers)
 
     @classmethod
     async def get(cls, pool: asyncpg.Pool, user_id: int) -> User | None:
@@ -325,24 +340,39 @@ class User:
 
         return row["balance"]
 
-    async def move_to(self, room_id: str) -> User:
+    async def move_to(self, room_id: str, *, guild_id: int) -> User:
         """Move the user to a different room.
 
         Updates the database and returns a new User instance.
+        Emits UserMovedEvent (game logic) and UserLocationSyncEvent (Discord sync).
 
         Args:
             room_id: Target room ID
+            guild_id: Discord guild ID for event emission
 
         Returns:
             New User instance with updated location
         """
+        from_room = self.current_room
         await self._pool.execute(
             "UPDATE users SET current_room = $2 WHERE id = $1",
             self.id,
             room_id,
         )
 
-        return replace(self, current_room=room_id)
+        new_user = replace(self, current_room=room_id)
+
+        # Emit game event (focus clearing, etc.)
+        for observer in new_user._observers:
+            observer.notify(UserMovedEvent(self.id, from_room, room_id, guild_id))
+
+        # Emit infra event (permission sync)
+        for observer in new_user._observers:
+            observer.notify(
+                UserLocationSyncEvent(self.id, from_room, room_id, guild_id)
+            )
+
+        return new_user
 
     async def get_wallet(self) -> EntityInstance | None:
         """Get user's wallet instance, if any.
@@ -417,3 +447,15 @@ class User:
         )
 
         return (wallet, True)
+
+    @classmethod
+    async def delete(cls, pool: asyncpg.Pool, user_id: int) -> None:
+        """Delete a user from the database.
+
+        CASCADE will handle related records (user_focus, user_inventory_forums, etc.)
+
+        Args:
+            pool: Database connection pool
+            user_id: Discord user ID to delete
+        """
+        await pool.execute("DELETE FROM users WHERE id = $1", user_id)

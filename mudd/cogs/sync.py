@@ -16,7 +16,11 @@ from discord.ext import commands, tasks
 if TYPE_CHECKING:
     from main import MuddBot
 
-from mudd.events import InventorySyncEvent, OrphanChannelDetectedEvent
+from mudd.events import (
+    InventorySyncEvent,
+    OrphanChannelDetectedEvent,
+    UserLocationSyncEvent,
+)
 from mudd.loaders.entity_loader import sync_entities
 from mudd.loaders.verb_loader import sync_verbs
 from mudd.loaders.zone_loader import (
@@ -26,8 +30,7 @@ from mudd.loaders.zone_loader import (
     load_zones_from_rec,
 )
 from mudd.models import Room, Zone
-from mudd.observers.discord import DiscordReconciler
-from mudd.services.visibility import VisibilityService
+from mudd.observers import DiscordReconciler, RoomChannelCache
 
 logger = logging.getLogger(__name__)
 
@@ -42,16 +45,17 @@ class Sync(commands.Cog):
     """
 
     bot: "MuddBot"
+    room_cache: RoomChannelCache
 
     def __init__(
         self,
         bot: "MuddBot",
-        visibility_service: VisibilityService,
         pool: asyncpg.Pool,
+        room_cache: RoomChannelCache,
     ) -> None:
         self.bot = bot
-        self.visibility_service = visibility_service
         self._pool = pool
+        self.room_cache = room_cache
         self._seen_orphans: set[tuple[int, str, str]] = set()
         self._console_channel = os.environ.get("MUDD_CONSOLE_CHANNEL", "console")
         self._first_sync_done = False
@@ -80,7 +84,7 @@ class Sync(commands.Cog):
         await self._sync(pool, fail_fast=is_first)
         self._first_sync_done = True
 
-    async def _sync(self, pool, *, fail_fast: bool) -> None:
+    async def _sync(self, pool: asyncpg.Pool, *, fail_fast: bool) -> None:
         """Sync all data.
 
         Args:
@@ -110,9 +114,10 @@ class Sync(commands.Cog):
 
         default_room = get_default_room(rooms)
 
-        # Create reconciler for Discord operations
+        # Create reconciler for Discord operations (without room_cache initially
+        # since it needs to be rebuilt after channels are created)
         reconciler = DiscordReconciler(
-            self.bot, pool, console_channel=self._console_channel
+            self.bot, pool, room_cache=None, console_channel=self._console_channel
         )
         # Transfer seen orphans to reconciler
         reconciler._seen_orphans = self._seen_orphans
@@ -173,9 +178,26 @@ class Sync(commands.Cog):
 
         for guild in self.bot.guilds:
             logger.info(f"Starting remaining sync for {guild.name}")
+
+            # Rebuild room cache after channels are created
             try:
-                # Visibility sync
-                vis_stats = await self.visibility_service.sync_guild(guild)
+                await self.room_cache.rebuild(guild)
+            except Exception:
+                logger.exception(f"Failed to rebuild room cache for {guild.name}")
+                if fail_fast:
+                    raise
+
+            # Create reconciler with room_cache for permission sync
+            perm_reconciler = DiscordReconciler(
+                self.bot,
+                pool,
+                room_cache=self.room_cache,
+                console_channel=self._console_channel,
+            )
+
+            # Visibility sync via UserLocationSyncEvent
+            try:
+                vis_stats = await self._sync_user_visibility(guild, perm_reconciler)
                 logger.info(f"Visibility sync for {guild.name}: {vis_stats}")
             except Exception:
                 logger.exception(f"Failed visibility sync for {guild.name}")
@@ -184,18 +206,18 @@ class Sync(commands.Cog):
 
             # Inventory sync via unified event (forums, wallets, threads, descriptions)
             # Reset stats before sync
-            reconciler.reset_inventory_forum_stats()
+            perm_reconciler.reset_inventory_forum_stats()
             member_count = 0
             for member in guild.members:
                 if not member.bot:
                     member_count += 1
-                    reconciler.notify(
+                    perm_reconciler.notify(
                         InventorySyncEvent(guild_id=guild.id, user_id=member.id)
                     )
 
             try:
-                await reconciler.flush()
-                inv_stats = reconciler.get_inventory_forum_stats()
+                await perm_reconciler.flush()
+                inv_stats = perm_reconciler.get_inventory_forum_stats()
                 logger.info(
                     f"Inventory sync for {guild.name}: "
                     f"{member_count} users, {inv_stats}"
@@ -205,6 +227,89 @@ class Sync(commands.Cog):
 
         if fail_fast:
             logger.info("Initial sync complete")
+
+    async def _sync_user_visibility(
+        self, guild, reconciler: DiscordReconciler
+    ) -> dict[str, int]:
+        """Sync all users' Discord permissions to match database state.
+
+        Uses UserLocationSyncEvent to sync permissions. Unlike movement,
+        we use from_room=None which means grant-only (no revoke needed
+        since this is a full sync).
+
+        Args:
+            guild: Discord guild
+            reconciler: DiscordReconciler with room_cache attached
+
+        Returns:
+            Stats dict with counts of users synced/assigned
+        """
+        default_channel_id = await self.room_cache.get_default_channel_id()
+        if default_channel_id is None:
+            default_room = await self.room_cache.get_default_room()
+            raise RuntimeError(
+                f"Default room '{default_room}' not found in any zone category. "
+                f"Ensure the room exists in Discord."
+            )
+
+        default_room = await self.room_cache.get_default_room()
+        stats = {"synced": 0, "assigned_default": 0, "errors": 0}
+
+        for member in guild.members:
+            if member.bot:
+                continue
+
+            try:
+                # Get user's current room from database
+                user_room = await self.room_cache.get_user_room(member.id)
+
+                if user_room is None:
+                    # New user - assign to default room
+                    await self._pool.execute(
+                        """
+                        INSERT INTO users (id, current_room)
+                        VALUES ($1, $2)
+                        ON CONFLICT (id) DO UPDATE SET current_room = $2
+                        """,
+                        member.id,
+                        default_room,
+                    )
+                    user_room = default_room
+                    stats["assigned_default"] += 1
+                else:
+                    # Check if room still exists
+                    channel_id = self.room_cache.get_channel_for_room(user_room)
+                    if channel_id is None:
+                        # Room no longer exists, relocate to default
+                        await self._pool.execute(
+                            "UPDATE users SET current_room = $2 WHERE id = $1",
+                            member.id,
+                            default_room,
+                        )
+                        user_room = default_room
+                        stats["assigned_default"] += 1
+                    else:
+                        stats["synced"] += 1
+
+                # Emit UserLocationSyncEvent for permission sync
+                # from_room=None means grant-only (no old permissions to revoke)
+                reconciler.notify(
+                    UserLocationSyncEvent(
+                        user_id=member.id,
+                        from_room=None,
+                        to_room=user_room,
+                        guild_id=guild.id,
+                    )
+                )
+
+            except Exception:
+                logger.exception(f"Failed to sync user {member.id}")
+                stats["errors"] += 1
+
+        # Flush all permission changes
+        await reconciler.flush()
+
+        return stats
 
     @periodic_sync.before_loop
     async def before_periodic_sync(self):

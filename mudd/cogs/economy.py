@@ -9,14 +9,13 @@ import discord
 from discord import Interaction, app_commands
 from discord.ext import commands
 
+from mudd.observers import RoomChannelCache
 from mudd.services.currency import TransferError
 
 if TYPE_CHECKING:
     from mudd.services.currency import CurrencyService
     from mudd.services.entity import EntityService
-    from mudd.services.inventory import InventoryService
     from mudd.services.rendering import RenderingService
-    from mudd.services.visibility import VisibilityServiceProtocol
 
 logger = logging.getLogger(__name__)
 
@@ -28,16 +27,14 @@ class Economy(commands.Cog):
         self,
         bot: commands.Bot | None,
         currency_service: "CurrencyService",
-        visibility_service: "VisibilityServiceProtocol",
-        inventory_service: "InventoryService",
+        room_cache: RoomChannelCache,
         entity_service: "EntityService",
         rendering_service: "RenderingService",
         pool: asyncpg.Pool,
     ) -> None:
         self.bot = bot
         self.currency_service = currency_service
-        self.visibility_service = visibility_service
-        self.inventory_service = inventory_service
+        self.room_cache = room_cache
         self.entity_service = entity_service
         self.rendering_service = rendering_service
         self._pool = pool
@@ -54,7 +51,7 @@ class Economy(commands.Cog):
             return []
 
         # Get sender's current room (room name, not channel ID)
-        sender_room = await self.visibility_service.get_user_room(user.id)
+        sender_room = await self.room_cache.get_user_room(user.id)
         if sender_room is None:
             return [app_commands.Choice(name="You're not in a room", value="invalid")]
 
@@ -173,8 +170,8 @@ class Economy(commands.Cog):
             return
 
         # Check both players are in the same room
-        sender_location = await self.visibility_service.get_user_location(sender.id)
-        recipient_location = await self.visibility_service.get_user_location(
+        sender_location = await self.room_cache.get_user_location(sender.id)
+        recipient_location = await self.room_cache.get_user_location(
             recipient_member.id
         )
 

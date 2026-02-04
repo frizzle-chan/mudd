@@ -409,6 +409,78 @@ class StubVisibilityService:
         self._user_rooms[user_id] = room
 
 
+class StubRoomChannelCache:
+    """Test stub implementing RoomChannelCache interface.
+
+    Provides in-memory implementation for tests without Discord.
+    Maps room names to channel IDs and vice versa.
+    """
+
+    def __init__(
+        self,
+        pool,
+        default_room: str = "foyer",
+        channels: list[MockTextChannel] | None = None,
+    ) -> None:
+        self._pool = pool
+        self._default_room = default_room
+        # Build room <-> channel mappings from provided channels
+        self._room_to_channel: dict[str, int] = {}
+        self._channel_to_room: dict[int, str] = {}
+        if channels:
+            for ch in channels:
+                self._room_to_channel[ch.name] = ch.id
+                self._channel_to_room[ch.id] = ch.name
+
+    async def rebuild(self, guild) -> None:
+        """Rebuild cache from guild channels (no-op in tests, use add_room)."""
+        pass
+
+    def get_channel_for_room(self, room_id: str) -> int | None:
+        """Get channel ID for a room name."""
+        return self._room_to_channel.get(room_id)
+
+    def get_room_for_channel(self, channel_id: int) -> str | None:
+        """Get room name for a channel ID."""
+        return self._channel_to_room.get(channel_id)
+
+    async def get_default_room(self) -> str:
+        """Get the default room ID."""
+        return self._default_room
+
+    async def get_default_channel_id(self) -> int | None:
+        """Get the default room's channel ID."""
+        return self._room_to_channel.get(self._default_room)
+
+    async def get_user_location(self, user_id: int) -> int | None:
+        """Get the channel ID of the user's current location."""
+        row = await self._pool.fetchrow(
+            "SELECT current_room FROM users WHERE id = $1",
+            user_id,
+        )
+        if row and row["current_room"]:
+            return self.get_channel_for_room(row["current_room"])
+        return None
+
+    async def get_user_room(self, user_id: int) -> str | None:
+        """Get the room name of the user's current location."""
+        row = await self._pool.fetchrow(
+            "SELECT current_room FROM users WHERE id = $1",
+            user_id,
+        )
+        return row["current_room"] if row else None
+
+    def get_paired_voice_channel(self, text_channel) -> None:
+        """No voice channels in tests."""
+        return None
+
+    # Test helper methods
+    def add_room(self, room: str, channel_id: int) -> None:
+        """Add a room -> channel mapping for testing."""
+        self._room_to_channel[room] = channel_id
+        self._channel_to_room[channel_id] = room
+
+
 def make_mock_channel(
     name: str,
     topic: str | None = None,

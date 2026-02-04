@@ -2,16 +2,16 @@
 
 import logging
 import re
-from typing import TYPE_CHECKING
+from typing import cast
 
+import asyncpg
 import discord
 from discord import Interaction, app_commands
 from discord.ext import commands
 
-if TYPE_CHECKING:
-    from mudd.services.entity_resolution import EntityResolutionService
-    from mudd.services.inventory import InventoryService
-    from mudd.services.visibility import VisibilityServiceProtocol
+from mudd.events import InventorySyncEvent, UserJoinedEvent, UserLeftEvent
+from mudd.models.user import User
+from mudd.observers import DiscordReconciler, FocusClearingObserver, RoomChannelCache
 
 logger = logging.getLogger(__name__)
 
@@ -39,8 +39,7 @@ def extract_exits_from_topic(
 def find_exit_in_input(
     text: str, valid_exits: list[discord.TextChannel]
 ) -> discord.TextChannel | None:
-    """
-    Find the first valid exit mentioned in user input.
+    """Find the first valid exit mentioned in user input.
 
     Scans for #channel mentions first, then channel names (case-insensitive).
     """
@@ -68,14 +67,12 @@ class Movement(commands.Cog):
     def __init__(
         self,
         bot: commands.Bot | None,
-        visibility_service: "VisibilityServiceProtocol",
-        entity_resolution: "EntityResolutionService",
-        inventory_service: "InventoryService",
+        pool: asyncpg.Pool,
+        room_cache: RoomChannelCache,
     ) -> None:
         self.bot = bot
-        self.visibility_service = visibility_service
-        self.entity_resolution = entity_resolution
-        self.inventory_service = inventory_service
+        self._pool = pool
+        self.room_cache = room_cache
 
     async def destination_autocomplete(
         self, interaction: Interaction, current: str
@@ -136,38 +133,71 @@ class Movement(commands.Cog):
             )
             return
 
-        old_location_id = await self.visibility_service.get_user_location(member.id)
+        # Get user via model
+        user = await User.get(self._pool, member.id)
+        if user is None:
+            user = await User.get_or_create(self._pool, member.id)
+
+        # Check if already in target room
+        target_room = self.room_cache.get_room_for_channel(target.id)
+        if target_room is None:
+            await interaction.response.send_message(
+                "That destination is not a valid room.", ephemeral=True
+            )
+            return
+
+        if user.current_room == target_room:
+            await interaction.response.send_message(
+                "You're already there.", ephemeral=True
+            )
+            return
+
+        old_room = user.current_room
+        old_channel_id = self.room_cache.get_channel_for_room(old_room)
         old_channel = (
-            interaction.guild.get_channel(old_location_id) if old_location_id else None
+            interaction.guild.get_channel(old_channel_id) if old_channel_id else None
         )
 
         try:
-            moved = await self.visibility_service.move_user_to_channel(
-                member, target.id
+            # Create observers
+            focus_observer = FocusClearingObserver(self._pool)
+            reconciler = DiscordReconciler(
+                cast(discord.Client, self.bot),
+                self._pool,
+                room_cache=self.room_cache,
             )
 
-            if moved:
-                # Clear focus when moving rooms (per ADR 0003)
-                await self.entity_resolution.clear_focus(member.id, reason="movement")
+            # Attach observers and move
+            user_with_observers = user.with_observers(focus_observer, reconciler)
+            await user_with_observers.move_to(
+                target_room, guild_id=interaction.guild.id
+            )
 
-                await interaction.response.send_message(
-                    f"You moved! Click {target.mention} to enter.", ephemeral=True
+            # Defer response to give us time for permission sync
+            await interaction.response.defer(ephemeral=True)
+
+            # Flush observers (syncs permissions, clears focus)
+            await reconciler.flush()
+            await focus_observer.flush()
+
+            # Send followup (user now has access to target channel)
+            await interaction.followup.send(
+                f"You moved! Click {target.mention} to enter.", ephemeral=True
+            )
+
+            # Announce movement
+            if old_channel and isinstance(old_channel, discord.TextChannel):
+                await old_channel.send(
+                    f"**{member.display_name}** moved to {target.name}"
                 )
 
-                if old_channel and isinstance(old_channel, discord.TextChannel):
-                    await old_channel.send(
-                        f"**{member.display_name}** moved to {target.name}"
-                    )
+            await target.send(f"{member.mention} entered")
 
-                await target.send(f"{member.mention} entered")
-            else:
-                await interaction.response.send_message(
-                    "You're already there.", ephemeral=True
-                )
         except Exception:
-            await interaction.response.send_message(
-                "Failed to move. Please try again.", ephemeral=True
-            )
+            if not interaction.response.is_done():
+                await interaction.response.send_message(
+                    "Failed to move. Please try again.", ephemeral=True
+                )
             raise
 
     @commands.Cog.listener()
@@ -177,50 +207,60 @@ class Movement(commands.Cog):
             return
 
         try:
-            default_channel_id = await self.visibility_service.get_default_channel_id()
-            if default_channel_id:
-                await self.visibility_service.move_user_to_channel(
-                    member, default_channel_id
-                )
-            else:
-                default_room = await self.visibility_service.get_default_room()
-                logger.error(
-                    f"Cannot assign default location to {member.id}: "
-                    f"default room '{default_room}' not found"
-                )
-        except Exception:
-            logger.exception("Failed to assign default location to %s", member.id)
+            # Get default room
+            default_room = await self.room_cache.get_default_room()
 
-        # Create inventory forum for new member
-        try:
-            await self.inventory_service.ensure_user_forum(member.guild, member.id)
+            # Create user in database with default room
+            await User.get_or_create(self._pool, member.id)
+
+            # Create reconciler and emit events
+            reconciler = DiscordReconciler(
+                cast(discord.Client, self.bot),
+                self._pool,
+                room_cache=self.room_cache,
+            )
+
+            # Emit UserJoinedEvent for permission sync
+            reconciler.notify(
+                UserJoinedEvent(
+                    user_id=member.id,
+                    default_room=default_room,
+                    guild_id=member.guild.id,
+                )
+            )
+
+            # Emit InventorySyncEvent for inventory forum creation
+            reconciler.notify(
+                InventorySyncEvent(guild_id=member.guild.id, user_id=member.id)
+            )
+
+            await reconciler.flush()
+
+            logger.info(f"New member {member.id} spawned in {default_room}")
         except Exception:
-            logger.exception("Failed to create inventory forum for %s", member.id)
+            logger.exception("Failed to handle member join for %s", member.id)
 
     @commands.Cog.listener()
     async def on_member_remove(self, member: discord.Member):
-        """Clean up user location, focus, and inventory forum when member leaves."""
+        """Clean up user data when member leaves."""
         try:
-            # Delete inventory forum first (needs guild context before DB cleanup)
-            forum_data = await self.inventory_service.get_user_forum_from_db(member.id)
-            if forum_data:
-                forum = member.guild.get_channel(forum_data.forum_id)
-                if forum:
-                    try:
-                        await forum.delete()
-                        logger.info(
-                            f"Deleted inventory forum for departing user {member.id}"
-                        )
-                    except discord.HTTPException as e:
-                        logger.error(
-                            f"Failed to delete inventory forum for {member.id}: {e}"
-                        )
-                        return  # Don't proceed with DB cleanup if forum deletion failed
+            # Create reconciler and emit event
+            reconciler = DiscordReconciler(
+                cast(discord.Client, self.bot),
+                self._pool,
+                room_cache=self.room_cache,
+            )
 
-            # Database cleanup (CASCADE will handle user_inventory_forums)
-            await self.visibility_service.delete_user_location(member.id)
+            reconciler.notify(
+                UserLeftEvent(user_id=member.id, guild_id=member.guild.id)
+            )
 
-            # Clean up focus context
-            await self.entity_resolution.clear_focus(member.id, reason="interaction")
+            # Flush to delete inventory forum
+            await reconciler.flush()
+
+            # Delete user from database (CASCADE handles related records)
+            await User.delete(self._pool, member.id)
+
+            logger.info(f"Cleaned up data for departing member {member.id}")
         except Exception:
             logger.exception("Failed to clean up for member %s", member.id)

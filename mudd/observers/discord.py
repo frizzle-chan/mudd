@@ -20,6 +20,9 @@ from mudd.events import (
     InventorySyncEvent,
     OrphanChannelDetectedEvent,
     RoomSyncedEvent,
+    UserJoinedEvent,
+    UserLeftEvent,
+    UserLocationSyncEvent,
     ZoneSyncedEvent,
 )
 from mudd.models.entity import EntityInstance
@@ -31,11 +34,154 @@ type PendingEvent = (
     | tuple[RoomSyncedEvent, str]
     | tuple[OrphanChannelDetectedEvent, str]
     | tuple[InventorySyncEvent, str]
+    | tuple[UserLocationSyncEvent, str]
+    | tuple[UserJoinedEvent, str]
+    | tuple[UserLeftEvent, str]
 )
 
 logger = logging.getLogger(__name__)
 
 INVENTORY_CATEGORY_NAME = "Inventory"
+
+
+class RoomChannelCache:
+    """Cache mapping rooms to Discord channels.
+
+    Extracted from VisibilityService. Provides room <-> channel lookups
+    for movement and permission operations.
+    """
+
+    def __init__(self, pool: asyncpg.Pool) -> None:
+        self._pool = pool
+        self._default_room: str | None = None
+        # Room name caches (rebuilt on each sync)
+        self._room_to_channel: dict[str, int] = {}
+        self._channel_to_room: dict[int, str] = {}
+        # Zone tracking (rebuilt on each sync)
+        self._zone_to_category: dict[str, int] = {}
+        self._category_to_zone: dict[int, str] = {}
+        self._room_to_zone: dict[str, str] = {}
+
+    async def rebuild(self, guild: discord.Guild) -> None:
+        """Build the room name <-> channel ID caches from database and Discord."""
+        # Query zones from database
+        zone_rows = await self._pool.fetch("SELECT id, name FROM zones")
+
+        # Query rooms with zone_id from database
+        room_rows = await self._pool.fetch("SELECT id, zone_id FROM rooms")
+
+        # Build zone -> room mapping
+        room_to_zone: dict[str, str] = {}
+        for row in room_rows:
+            room_to_zone[row["id"]] = row["zone_id"]
+
+        # Precompute zone lookup by id to avoid nested loops
+        zone_id_map = {row["id"]: row for row in zone_rows}
+
+        # Match Discord categories to zones by name
+        zone_to_category: dict[str, int] = {}
+        category_to_zone: dict[int, str] = {}
+        for category in guild.categories:
+            # Match category name to zone id (both are lowercase, hyphenated)
+            category_name = category.name.lower().replace(" ", "-")
+            zone_row = zone_id_map.get(category_name)
+            if zone_row is not None:
+                zone_to_category[zone_row["id"]] = category.id
+                category_to_zone[category.id] = zone_row["id"]
+
+        # Build room caches only for channels in matched categories
+        room_to_channel: dict[str, int] = {}
+        channel_to_room: dict[int, str] = {}
+        for channel in guild.text_channels:
+            if channel.category_id in category_to_zone:
+                room_name = channel.name
+                # Only cache if this room exists in our database
+                if room_name in room_to_zone:
+                    room_to_channel[room_name] = channel.id
+                    channel_to_room[channel.id] = room_name
+
+        # Atomic swap
+        self._room_to_channel = room_to_channel
+        self._channel_to_room = channel_to_room
+        self._zone_to_category = zone_to_category
+        self._category_to_zone = category_to_zone
+        self._room_to_zone = room_to_zone
+
+        logger.info(
+            f"Built room cache with {len(self._room_to_channel)} rooms "
+            f"across {len(self._zone_to_category)} zones"
+        )
+
+    def get_channel_for_room(self, room_id: str) -> int | None:
+        """Get channel ID for a room name."""
+        return self._room_to_channel.get(room_id)
+
+    def get_room_for_channel(self, channel_id: int) -> str | None:
+        """Get room name for a channel ID."""
+        return self._channel_to_room.get(channel_id)
+
+    async def get_default_room(self) -> str:
+        """Get the default room ID from the database (cached after first call)."""
+        if self._default_room is None:
+            self._default_room = await self._pool.fetchval(
+                "SELECT id FROM rooms WHERE is_default = TRUE"
+            )
+            if self._default_room is None:
+                raise RuntimeError("No default room found in database.")
+        return self._default_room
+
+    async def get_default_channel_id(self) -> int | None:
+        """Get the default room's channel ID."""
+        default_room = await self.get_default_room()
+        return self.get_channel_for_room(default_room)
+
+    def is_mud_location(self, channel: discord.abc.GuildChannel) -> bool:
+        """Check if a channel is a MUD location (in a zone category)."""
+        return (
+            isinstance(channel, discord.TextChannel)
+            and channel.category_id in self._category_to_zone
+        )
+
+    def get_mud_locations(self, guild: discord.Guild) -> list[discord.TextChannel]:
+        """Get all MUD location channels in a guild."""
+        return [
+            ch for ch in guild.text_channels if ch.category_id in self._category_to_zone
+        ]
+
+    def get_paired_voice_channel(
+        self, text_channel: discord.TextChannel
+    ) -> discord.VoiceChannel | None:
+        """Find a voice channel paired with a text channel.
+
+        A voice channel is considered paired if it has the same name and is in the
+        same category as the text channel.
+        """
+        guild = text_channel.guild
+        for voice_channel in guild.voice_channels:
+            if (
+                voice_channel.name == text_channel.name
+                and voice_channel.category_id == text_channel.category_id
+            ):
+                return voice_channel
+        return None
+
+    async def get_user_location(self, user_id: int) -> int | None:
+        """Get the channel ID of the user's current location."""
+        row = await self._pool.fetchrow(
+            "SELECT current_room FROM users WHERE id = $1",
+            user_id,
+        )
+        if row and row["current_room"]:
+            return self.get_channel_for_room(row["current_room"])
+        return None
+
+    async def get_user_room(self, user_id: int) -> str | None:
+        """Get the room name of the user's current location."""
+        row = await self._pool.fetchrow(
+            "SELECT current_room FROM users WHERE id = $1",
+            user_id,
+        )
+        return row["current_room"] if row else None
 
 
 def _get_inventory_forum_name(username: str) -> str:
@@ -51,6 +197,7 @@ class DiscordReconciler:
     - Zone events: Creates Discord categories idempotently
     - Room events: Creates Discord channels idempotently
     - Orphan events: Reports new orphan channels to console
+    - Movement events: Syncs Discord permissions for user location changes
 
     The reconciler implements the Observer protocol: notify() is sync
     and queues notifications for async processing. Call flush() after
@@ -60,7 +207,7 @@ class DiscordReconciler:
     the resource once and noops thereafter.
 
     Usage:
-        reconciler = DiscordReconciler(bot, pool)
+        reconciler = DiscordReconciler(bot, pool, room_cache)
         await Zone.sync_all(pool, zones, observers=(reconciler,))
         await Room.sync_all(pool, rooms, default_room, observers=(reconciler,))
         await reconciler.flush()  # Idempotently reconciles Discord state
@@ -70,6 +217,7 @@ class DiscordReconciler:
         self,
         bot: discord.Client,
         pool: asyncpg.Pool,
+        room_cache: RoomChannelCache | None = None,
         console_channel: str = "console",
     ) -> None:
         """Initialize the Discord reconciler.
@@ -77,10 +225,12 @@ class DiscordReconciler:
         Args:
             bot: Discord bot client
             pool: Database connection pool
+            room_cache: Room-to-channel mapping cache (required for movement events)
             console_channel: Channel name for orphan notifications
         """
         self.bot = bot
         self.pool = pool
+        self.room_cache = room_cache
         self._console_channel = console_channel
         self._pending: list[PendingEvent] = []
         # Cache category ID per guild to avoid repeated lookups
@@ -139,7 +289,13 @@ class DiscordReconciler:
                         "inventory_sync",
                     )
                 )
-            # Ignore template signals - they're handled by EffectsObserver
+            case UserLocationSyncEvent() as evt:
+                self._pending.append((evt, "user_location_sync"))
+            case UserJoinedEvent() as evt:
+                self._pending.append((evt, "user_joined"))
+            case UserLeftEvent() as evt:
+                self._pending.append((evt, "user_left"))
+            # Ignore template signals and UserMovedEvent - handled by other observers
 
     async def flush(self) -> None:
         """Process queued notifications. Call after response sent.
@@ -165,6 +321,9 @@ class DiscordReconciler:
         room_events: list[RoomSyncedEvent] = []
         orphan_events: list[OrphanChannelDetectedEvent] = []
         inventory_sync_events: list[InventorySyncEvent] = []
+        location_sync_events: list[UserLocationSyncEvent] = []
+        user_joined_events: list[UserJoinedEvent] = []
+        user_left_events: list[UserLeftEvent] = []
         entity_events: list[tuple[EntityInstance, str]] = []
 
         for item, event_type in pending:
@@ -177,6 +336,12 @@ class DiscordReconciler:
                     orphan_events.append(item)  # type: ignore[arg-type]
                 case "inventory_sync":
                     inventory_sync_events.append(item)  # type: ignore[arg-type]
+                case "user_location_sync":
+                    location_sync_events.append(item)  # type: ignore[arg-type]
+                case "user_joined":
+                    user_joined_events.append(item)  # type: ignore[arg-type]
+                case "user_left":
+                    user_left_events.append(item)  # type: ignore[arg-type]
                 case _:
                     entity_events.append((item, event_type))  # type: ignore[arg-type]
 
@@ -208,7 +373,25 @@ class DiscordReconciler:
                 synced_users.add(evt.user_id)
                 await self._ensure_user_inventory(guild, evt.user_id)
 
-        # 5. Process entity events (drop/destroy - pickup handled by inventory sync)
+            # 5. Process user location sync events (permission changes)
+            for evt in location_sync_events:
+                if evt.guild_id != guild.id:
+                    continue
+                await self._sync_user_location(guild, evt)
+
+            # 6. Process user joined events
+            for evt in user_joined_events:
+                if evt.guild_id != guild.id:
+                    continue
+                await self._handle_user_joined(guild, evt)
+
+            # 7. Process user left events
+            for evt in user_left_events:
+                if evt.guild_id != guild.id:
+                    continue
+                await self._handle_user_left(guild, evt)
+
+        # 8. Process entity events (drop/destroy - pickup handled by inventory sync)
         for instance, event_type in entity_events:
             await self._handle_entity_event(instance, event_type)
 
@@ -230,6 +413,247 @@ class DiscordReconciler:
         match event:
             case "dropped" | "destroyed":
                 await self._delete_inventory_thread(guild, instance)
+
+    async def _set_voice_permissions(
+        self,
+        text_channel: discord.TextChannel,
+        member: discord.Member,
+        overwrite: discord.PermissionOverwrite | None,
+        reason: str,
+        *,
+        disconnect_if_leaving: bool = False,
+    ) -> None:
+        """Set voice channel permissions (best-effort, non-blocking on errors).
+
+        Voice channel permissions are supplementary to text channel permissions.
+        Failures are logged but don't raise exceptions.
+
+        Args:
+            text_channel: The text channel whose paired voice channel to update
+            member: The guild member to set permissions for
+            overwrite: The permission overwrite to apply (None to remove)
+            reason: Audit log reason for the permission change
+            disconnect_if_leaving: If True and overwrite is None, disconnect user
+                                   from voice channel if they're in it
+        """
+        if self.room_cache is None:
+            return
+
+        paired_voice = self.room_cache.get_paired_voice_channel(text_channel)
+        if not paired_voice:
+            return
+
+        # Disconnect user from voice before removing permissions if requested
+        if (
+            disconnect_if_leaving
+            and overwrite is None
+            and member.voice
+            and member.voice.channel == paired_voice
+        ):
+            try:
+                await member.move_to(None)
+            except discord.HTTPException as e:
+                logger.warning(
+                    f"Failed to disconnect {member} from voice channel "
+                    f"{paired_voice}: {e}"
+                )
+
+        try:
+            await paired_voice.set_permissions(
+                member, overwrite=overwrite, reason=reason
+            )
+        except discord.HTTPException as e:
+            logger.error(
+                f"Failed to set voice channel {paired_voice.id} "
+                f"permissions for {member.id}: {e}"
+            )
+
+    async def _sync_user_location(
+        self, guild: discord.Guild, event: UserLocationSyncEvent
+    ) -> None:
+        """Sync Discord permissions for a user's location change.
+
+        Uses Alter-Ego order: revoke old channel first, then grant new channel.
+
+        When from_room is None (sync mode), performs full reconciliation:
+        revokes permissions from ALL rooms except the current one.
+
+        Args:
+            guild: Discord guild
+            event: User location sync event
+        """
+        if self.room_cache is None:
+            logger.warning("RoomChannelCache not available, skipping location sync")
+            return
+
+        member = guild.get_member(event.user_id)
+        if member is None:
+            logger.debug(f"User {event.user_id} not found in guild {guild.name}")
+            return
+
+        new_channel_id = self.room_cache.get_channel_for_room(event.to_room)
+        new_channel = guild.get_channel(new_channel_id) if new_channel_id else None
+
+        # Phase 1: Revoke stale permissions
+        if event.from_room is None:
+            # Full sync mode: revoke permissions from ALL rooms except current
+            for channel in self.room_cache.get_mud_locations(guild):
+                room_name = self.room_cache.get_room_for_channel(channel.id)
+                if room_name == event.to_room:
+                    continue  # Skip current room
+
+                # Check if user has any permission overwrite on this channel
+                overwrites = channel.overwrites_for(member)
+                if overwrites.view_channel is True:
+                    # Stale permission - revoke it
+                    try:
+                        await channel.set_permissions(
+                            member,
+                            overwrite=None,
+                            reason="MUDD sync - revoking stale permission",
+                        )
+                        logger.debug(
+                            f"Revoked stale permission for {member.id} "
+                            f"on {channel.name}"
+                        )
+                    except discord.HTTPException as e:
+                        logger.error(
+                            f"Failed to revoke stale permissions on {channel.id}: {e}"
+                        )
+
+                    # Also handle paired voice channel
+                    await self._set_voice_permissions(
+                        channel,
+                        member,
+                        overwrite=None,
+                        reason="MUDD sync - revoking stale permission",
+                        disconnect_if_leaving=True,
+                    )
+        else:
+            # Normal movement: just revoke from old channel
+            old_channel_id = self.room_cache.get_channel_for_room(event.from_room)
+            old_channel = guild.get_channel(old_channel_id) if old_channel_id else None
+
+            if old_channel and isinstance(old_channel, discord.TextChannel):
+                try:
+                    await old_channel.set_permissions(
+                        member,
+                        overwrite=None,
+                        reason="MUDD movement - leaving",
+                    )
+                except discord.HTTPException as e:
+                    logger.error(
+                        f"Failed to revoke permissions on {old_channel.id}: {e}"
+                    )
+
+                await self._set_voice_permissions(
+                    old_channel,
+                    member,
+                    overwrite=None,
+                    reason="MUDD movement - leaving",
+                    disconnect_if_leaving=True,
+                )
+
+        # Phase 2: Grant access to new channel
+        if new_channel:
+            try:
+                await new_channel.set_permissions(
+                    member,
+                    overwrite=discord.PermissionOverwrite(view_channel=True),
+                    reason="MUDD movement - entering",
+                )
+            except discord.HTTPException as e:
+                logger.error(f"Failed to grant permissions on {new_channel.id}: {e}")
+
+            if isinstance(new_channel, discord.TextChannel):
+                await self._set_voice_permissions(
+                    new_channel,
+                    member,
+                    overwrite=discord.PermissionOverwrite(
+                        view_channel=True, connect=True, speak=True
+                    ),
+                    reason="MUDD movement - entering",
+                )
+
+        logger.debug(
+            f"Synced location for {member.id}: {event.from_room} -> {event.to_room}"
+        )
+
+    async def _handle_user_joined(
+        self, guild: discord.Guild, event: UserJoinedEvent
+    ) -> None:
+        """Handle a new user joining: sync to default room.
+
+        Args:
+            guild: Discord guild
+            event: User joined event
+        """
+        if self.room_cache is None:
+            logger.warning(
+                "RoomChannelCache not available, skipping user join handling"
+            )
+            return
+
+        member = guild.get_member(event.user_id)
+        if member is None:
+            logger.debug(f"User {event.user_id} not found in guild {guild.name}")
+            return
+
+        # Grant access to default room
+        channel_id = self.room_cache.get_channel_for_room(event.default_room)
+        if channel_id:
+            channel = guild.get_channel(channel_id)
+            if channel:
+                try:
+                    await channel.set_permissions(
+                        member,
+                        overwrite=discord.PermissionOverwrite(view_channel=True),
+                        reason="MUDD - new user spawn",
+                    )
+                except discord.HTTPException as e:
+                    logger.error(f"Failed to grant permissions for new user: {e}")
+
+                if isinstance(channel, discord.TextChannel):
+                    await self._set_voice_permissions(
+                        channel,
+                        member,
+                        overwrite=discord.PermissionOverwrite(
+                            view_channel=True, connect=True, speak=True
+                        ),
+                        reason="MUDD - new user spawn",
+                    )
+
+        logger.info(f"User {event.user_id} joined, spawned in {event.default_room}")
+
+    async def _handle_user_left(
+        self, guild: discord.Guild, event: UserLeftEvent
+    ) -> None:
+        """Handle a user leaving: clean up their inventory forum.
+
+        Note: Database cleanup is handled separately by the cog.
+        This only handles Discord-side cleanup.
+
+        Args:
+            guild: Discord guild
+            event: User left event
+        """
+        # Get and delete inventory forum
+        forum_data = await self.pool.fetchrow(
+            "SELECT forum_id FROM user_inventory_forums WHERE user_id = $1",
+            event.user_id,
+        )
+        if forum_data:
+            forum = guild.get_channel(forum_data["forum_id"])
+            if forum:
+                try:
+                    await forum.delete()
+                    logger.info(
+                        f"Deleted inventory forum for departing user {event.user_id}"
+                    )
+                except discord.HTTPException as e:
+                    logger.error(
+                        f"Failed to delete inventory forum for {event.user_id}: {e}"
+                    )
 
     async def _ensure_zone_category(
         self, guild: discord.Guild, event: ZoneSyncedEvent

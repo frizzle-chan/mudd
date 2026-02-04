@@ -1,12 +1,10 @@
 import argparse
-import atexit
 import logging
 import os
 from pathlib import Path
 
 import discord
 from dotenv import load_dotenv
-from mudd.services.visibility import VisibilityService
 
 from mudd.bot import MuddBot
 from mudd.cogs.economy import Economy
@@ -16,11 +14,9 @@ from mudd.cogs.movement import Movement
 from mudd.cogs.ping import Ping
 from mudd.cogs.sync import Sync
 from mudd.database import get_pool, init_database
+from mudd.observers import RoomChannelCache
 from mudd.services.currency import CurrencyService
 from mudd.services.entity import EntityService
-from mudd.services.entity_resolution import EntityResolutionService
-from mudd.services.focus_context import FocusContextService
-from mudd.services.inventory import InventoryService
 from mudd.services.rendering import RenderingService
 
 # Suppress PyNaCl warning since we don't use voice features
@@ -66,37 +62,25 @@ async def setup_hook():
     # Get database pool
     pool = await get_pool()
 
+    # Create shared room cache (rebuilt by Sync cog on startup)
+    room_cache = RoomChannelCache(pool)
+
     # Create services with explicit dependencies
     entity_service = EntityService(pool)
-    focus_service = FocusContextService(pool)
-    visibility_service = VisibilityService(pool)
     rendering_service = RenderingService()
-    inventory_service = InventoryService(pool, entity_service, rendering_service)
     currency_service = CurrencyService(pool)
-    entity_resolution = EntityResolutionService(
-        entity_service, focus_service, inventory_service, pool
-    )
 
     # Create cogs with explicit dependencies
     await bot.add_cog(Look(bot, pool))
     await bot.add_cog(Interact(bot, pool))
     await bot.add_cog(Ping(bot))
-    await bot.add_cog(
-        Movement(bot, visibility_service, entity_resolution, inventory_service)
-    )
-    await bot.add_cog(
-        Sync(
-            bot,
-            visibility_service,
-            pool,
-        )
-    )
+    await bot.add_cog(Movement(bot, pool, room_cache))
+    await bot.add_cog(Sync(bot, pool, room_cache))
     await bot.add_cog(
         Economy(
             bot,
             currency_service,
-            visibility_service,
-            inventory_service,
+            room_cache,
             entity_service,
             rendering_service,
             pool,
@@ -106,23 +90,12 @@ async def setup_hook():
 
 @bot.event
 async def on_ready():
-    # Sync cog handles zone/room sync and visibility service initialization
+    # Sync cog handles zone/room sync and room cache initialization
     # on first periodic_sync iteration. This just syncs slash commands.
     await bot.tree.sync()
     logger.info(f"Logged in as {bot.user} (world: {bot.world_file})")
 
 
 PID_FILE = Path("mudd.pid")
-
-
-def write_pid() -> None:
-    PID_FILE.write_text(str(os.getpid()))
-
-
-def cleanup_pid() -> None:
-    PID_FILE.unlink(missing_ok=True)
-
-
-atexit.register(cleanup_pid)
-write_pid()
+PID_FILE.write_text(str(os.getpid()))
 bot.run(os.environ["DISCORD_TOKEN"])
