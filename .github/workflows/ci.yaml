@@ -49,6 +49,9 @@ jobs:
       - name: Run type check
         run: uv run ty check
 
+      - name: Run dead code check
+        run: uv run vulture
+
       - name: Validate entity definitions
         run: |
           for file in data/worlds/*.rec; do

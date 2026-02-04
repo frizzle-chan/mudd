@@ -1,4 +1,4 @@
-default: lint format types entities verbs squawk
+default: lint format types entities verbs squawk vulture
 
 test:
     uv run pytest
@@ -32,6 +32,9 @@ verbs:
 
 squawk:
     uv run squawk migrations/*.sql
+
+vulture:
+    uv run vulture
 
 # Generate room map from mansion.rec
 map:

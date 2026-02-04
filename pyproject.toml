@@ -20,6 +20,7 @@ dev = [
     "ruff>=0.14.10",
     "squawk-cli>=2.36.0",
     "ty>=0.0.8",
+    "vulture>=2.14",
 ]
 
 [tool.pytest.ini_options]
@@ -29,6 +30,10 @@ asyncio_default_fixture_loop_scope = "session"
 
 [tool.ty.src]
 exclude = [".claude/skills/skill-creator/"]
+
+[tool.vulture]
+paths = ["main.py", "mudd/", "scripts/"]
+min_confidence = 90
 
 [tool.ruff.lint]
 select = [
