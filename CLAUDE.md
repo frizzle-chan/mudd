@@ -31,10 +31,10 @@ just types     # ty check
 just test      # pytest (use `just testq` for quick/quiet mode)
 
 # Run the bot (requires .env with DISCORD_TOKEN)
-just dev
+./dev
 ```
 
-When asked to debug the last run, inspect the logs in .tasks/lastrun.log
+When asked to debug the last run, inspect the logs in ./mudd.log
 
 Pre-commit hooks (lefthook) auto-run ruff and ty on staged files.
 
@@ -64,6 +64,7 @@ PGPASSWORD=mudd psql -h db -U mudd -d mudd -c "SELECT * FROM table_name"
 - **Observers** (`mudd/observers/`): React to events after command execution
   - `EffectsObserver`: Collects in-template effects (pickup, drop, broadcast)
   - `DiscordReconciler`: Syncs Discord state (threads, permissions, channels)
+  - `FocusClearingObserver`: Clears user focus on movement events
 - **Scene** (`mudd/scene.py`): Ties together user, room, focus, and observers for command execution
 
 **Example cogs using MVC pattern**: `mudd/cogs/look.py`, `mudd/cogs/interact.py`
@@ -76,9 +77,15 @@ PGPASSWORD=mudd psql -h db -U mudd -d mudd -c "SELECT * FROM table_name"
 5. Flush observers via `scene.flush_observers()`
 
 **Sync cog** (`mudd/cogs/sync.py`): Owns ALL synchronization:
-- First iteration: Zone/room sync, VisibilityService initialization, permission sync
+- First iteration: Zone/room sync, RoomChannelCache rebuild, permission sync
 - Every 15 minutes: Full zone/room sync (recreates deleted channels, fixes topics) + permission sync
 - Tracks orphan channels and only reports NEW ones to #console
+
+**RoomChannelCache** (`mudd/observers/discord.py`): Shared cache mapping room names to Discord channel IDs. Created in `main.py`, passed to cogs. Rebuilt by Sync cog after channel creation.
+
+**Observer pattern in models**: Models like `User` and `EntityInstance` support observers via `_observers` field and `with_observers()` method. Mutation methods (e.g., `move_to()`) emit events to attached observers. Always flush observers after the response is sent.
+
+**Event separation**: Game logic events (e.g., `UserMovedEvent`) and infrastructure events (e.g., `UserLocationSyncEvent`) are separate. Game events trigger gameplay observers (focus clearing). Infrastructure events trigger Discord reconciliation (permission sync).
 
 **MUD concept**: Channel topics = room descriptions. Movement hides/shows channels via Discord permissions.
 

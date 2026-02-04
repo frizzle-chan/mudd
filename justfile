@@ -1,10 +1,5 @@
 default: lint format types entities verbs squawk
 
-dev:
-    @mkdir -p .tasks
-    @test -f mudd.pid && kill "$(cat mudd.pid)" 2>/dev/null || true
-    uv run main.py 2>&1 | tee .tasks/lastrun.log
-
 test:
     uv run pytest
 
