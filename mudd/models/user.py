@@ -16,6 +16,7 @@ from mudd.events import Observer, UserLocationSyncEvent, UserMovedEvent
 from mudd.models.entity import EntityInstance
 
 FOCUS_TIMEOUT_MINUTES = 5
+STARTING_BALANCE = 1000
 
 
 @dataclass(frozen=True)
@@ -407,8 +408,6 @@ class User:
         Raises:
             ValueError: If wallet entity definition doesn't exist
         """
-        from mudd.services.currency import STARTING_BALANCE
-
         # Check for existing wallet
         existing = await self.get_wallet()
         if existing is not None:

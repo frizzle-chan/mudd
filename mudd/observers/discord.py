@@ -1226,8 +1226,7 @@ class DiscordReconciler:
             user_id: Discord user ID
             forum: User's inventory forum
         """
-        from mudd.models.user import User
-        from mudd.services.currency import STARTING_BALANCE
+        from mudd.models.user import STARTING_BALANCE, User
 
         # Get or create user
         user = await User.get_or_create(self.pool, user_id)
