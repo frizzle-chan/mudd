@@ -18,8 +18,8 @@ class TestPayCommandSuccess:
         recipient = await test_client.create_user(user_id=500000002, room="foyer")
 
         # Ensure both users have currency accounts
-        await test_client.currency_service.ensure_account(sender.id, 1000)
-        await test_client.currency_service.ensure_account(recipient.id, 1000)
+        await test_client.ensure_currency_account(sender.id, 1000)
+        await test_client.ensure_currency_account(recipient.id, 1000)
 
         # Sender pays recipient 100 yen
         response = await test_client.pay(sender, str(recipient.id), 100)
@@ -28,8 +28,8 @@ class TestPayCommandSuccess:
         assert "You paid" in response
 
         # Verify balances
-        sender_balance = await test_client.currency_service.get_balance(sender.id)
-        recipient_balance = await test_client.currency_service.get_balance(recipient.id)
+        sender_balance = await test_client.get_user_balance(sender.id)
+        recipient_balance = await test_client.get_user_balance(recipient.id)
         assert sender_balance == 900
         assert recipient_balance == 1100
 
@@ -43,8 +43,8 @@ class TestPayCommandValidation:
         recipient = await test_client.create_user(user_id=500000011, room="foyer")
 
         # Sender has only 500 yen
-        await test_client.currency_service.ensure_account(sender.id, 500)
-        await test_client.currency_service.ensure_account(recipient.id, 1000)
+        await test_client.ensure_currency_account(sender.id, 500)
+        await test_client.ensure_currency_account(recipient.id, 1000)
 
         # Try to pay 1000 yen
         response = await test_client.pay(sender, str(recipient.id), 1000)
@@ -53,8 +53,8 @@ class TestPayCommandValidation:
         assert "don't have enough" in response
 
         # Balances should be unchanged
-        sender_balance = await test_client.currency_service.get_balance(sender.id)
-        recipient_balance = await test_client.currency_service.get_balance(recipient.id)
+        sender_balance = await test_client.get_user_balance(sender.id)
+        recipient_balance = await test_client.get_user_balance(recipient.id)
         assert sender_balance == 500
         assert recipient_balance == 1000
 
@@ -63,8 +63,8 @@ class TestPayCommandValidation:
         sender = await test_client.create_user(user_id=500000020, room="foyer")
         recipient = await test_client.create_user(user_id=500000021, room="library")
 
-        await test_client.currency_service.ensure_account(sender.id, 1000)
-        await test_client.currency_service.ensure_account(recipient.id, 1000)
+        await test_client.ensure_currency_account(sender.id, 1000)
+        await test_client.ensure_currency_account(recipient.id, 1000)
 
         # Try to pay someone in a different room
         response = await test_client.pay(sender, str(recipient.id), 100)
@@ -73,8 +73,8 @@ class TestPayCommandValidation:
         assert "not in the same room" in response
 
         # Balances should be unchanged
-        sender_balance = await test_client.currency_service.get_balance(sender.id)
-        recipient_balance = await test_client.currency_service.get_balance(recipient.id)
+        sender_balance = await test_client.get_user_balance(sender.id)
+        recipient_balance = await test_client.get_user_balance(recipient.id)
         assert sender_balance == 1000
         assert recipient_balance == 1000
 
@@ -82,7 +82,7 @@ class TestPayCommandValidation:
         """User tries to pay themselves."""
         user = await test_client.create_user(user_id=500000030, room="foyer")
 
-        await test_client.currency_service.ensure_account(user.id, 1000)
+        await test_client.ensure_currency_account(user.id, 1000)
 
         # Try to pay self
         response = await test_client.pay(user, str(user.id), 100)
@@ -91,7 +91,7 @@ class TestPayCommandValidation:
         assert "can't pay yourself" in response
 
         # Balance should be unchanged
-        balance = await test_client.currency_service.get_balance(user.id)
+        balance = await test_client.get_user_balance(user.id)
         assert balance == 1000
 
     async def test_invalid_amount_zero(self, test_client):
@@ -99,8 +99,8 @@ class TestPayCommandValidation:
         sender = await test_client.create_user(user_id=500000040, room="foyer")
         recipient = await test_client.create_user(user_id=500000041, room="foyer")
 
-        await test_client.currency_service.ensure_account(sender.id, 1000)
-        await test_client.currency_service.ensure_account(recipient.id, 1000)
+        await test_client.ensure_currency_account(sender.id, 1000)
+        await test_client.ensure_currency_account(recipient.id, 1000)
 
         # Try to pay 0 yen
         response = await test_client.pay(sender, str(recipient.id), 0)
@@ -109,8 +109,8 @@ class TestPayCommandValidation:
         assert "must be positive" in response
 
         # Balances should be unchanged
-        sender_balance = await test_client.currency_service.get_balance(sender.id)
-        recipient_balance = await test_client.currency_service.get_balance(recipient.id)
+        sender_balance = await test_client.get_user_balance(sender.id)
+        recipient_balance = await test_client.get_user_balance(recipient.id)
         assert sender_balance == 1000
         assert recipient_balance == 1000
 
@@ -119,8 +119,8 @@ class TestPayCommandValidation:
         sender = await test_client.create_user(user_id=500000050, room="foyer")
         recipient = await test_client.create_user(user_id=500000051, room="foyer")
 
-        await test_client.currency_service.ensure_account(sender.id, 1000)
-        await test_client.currency_service.ensure_account(recipient.id, 1000)
+        await test_client.ensure_currency_account(sender.id, 1000)
+        await test_client.ensure_currency_account(recipient.id, 1000)
 
         # Try to pay -100 yen
         response = await test_client.pay(sender, str(recipient.id), -100)
@@ -129,8 +129,8 @@ class TestPayCommandValidation:
         assert "must be positive" in response
 
         # Balances should be unchanged
-        sender_balance = await test_client.currency_service.get_balance(sender.id)
-        recipient_balance = await test_client.currency_service.get_balance(recipient.id)
+        sender_balance = await test_client.get_user_balance(sender.id)
+        recipient_balance = await test_client.get_user_balance(recipient.id)
         assert sender_balance == 1000
         assert recipient_balance == 1000
 
@@ -139,7 +139,7 @@ class TestPayCommandValidation:
         sender = await test_client.create_user(user_id=500000060, room="foyer")
         bot_user = await test_client.create_user(user_id=500000061, room="foyer")
 
-        await test_client.currency_service.ensure_account(sender.id, 1000)
+        await test_client.ensure_currency_account(sender.id, 1000)
 
         # Add a bot member to the guild
         await test_client.add_guild_member(bot_user.id, bot=True)
@@ -151,7 +151,7 @@ class TestPayCommandValidation:
         assert "bot" in response.lower()
 
         # Balance should be unchanged
-        balance = await test_client.currency_service.get_balance(sender.id)
+        balance = await test_client.get_user_balance(sender.id)
         assert balance == 1000
 
     async def test_payment_without_account(self, test_client):
@@ -160,7 +160,7 @@ class TestPayCommandValidation:
         recipient = await test_client.create_user(user_id=500000071, room="foyer")
 
         # Recipient has account, sender doesn't
-        await test_client.currency_service.ensure_account(recipient.id, 1000)
+        await test_client.ensure_currency_account(recipient.id, 1000)
 
         # Try to pay
         response = await test_client.pay(sender, str(recipient.id), 100)
@@ -169,7 +169,7 @@ class TestPayCommandValidation:
         assert "don't have a currency account" in response
 
         # Recipient balance should be unchanged
-        recipient_balance = await test_client.currency_service.get_balance(recipient.id)
+        recipient_balance = await test_client.get_user_balance(recipient.id)
         assert recipient_balance == 1000
 
     async def test_payment_to_user_without_account(self, test_client):
@@ -178,7 +178,7 @@ class TestPayCommandValidation:
         recipient = await test_client.create_user(user_id=500000081, room="foyer")
 
         # Sender has account, recipient doesn't
-        await test_client.currency_service.ensure_account(sender.id, 1000)
+        await test_client.ensure_currency_account(sender.id, 1000)
 
         # Try to pay
         response = await test_client.pay(sender, str(recipient.id), 100)
@@ -187,7 +187,7 @@ class TestPayCommandValidation:
         assert "doesn't have a currency account" in response
 
         # Sender balance should be unchanged
-        sender_balance = await test_client.currency_service.get_balance(sender.id)
+        sender_balance = await test_client.get_user_balance(sender.id)
         assert sender_balance == 1000
 
 

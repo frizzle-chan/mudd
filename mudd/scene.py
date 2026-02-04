@@ -9,7 +9,7 @@ from discord import Interaction
 
 from mudd.events import Observer
 from mudd.models.entity import EntityInstance
-from mudd.models.interfaces import IRoom, IUser
+from mudd.models.interfaces import IRoom
 from mudd.models.room import EntityModal, InventoryThread, Room
 from mudd.models.user import User
 from mudd.observers import EffectsObserver
@@ -28,7 +28,7 @@ class Scene:
     that collect events during command execution.
     """
 
-    user: IUser
+    user: User
     room: IRoom
     _pool: asyncpg.Pool = field(repr=False, compare=False, default=None)  # ty:ignore[invalid-assignment]
     _observers: tuple[Observer, ...] = field(default=(), repr=False, compare=False)
@@ -85,6 +85,11 @@ class Scene:
         visible = {e.instance_id for e in await self.room.get_visible_entities()}
         inventory = {e.instance_id for e in await self.user.get_inventory()}
         return entity.instance_id in visible | inventory
+
+    async def other_players(self) -> list[User]:
+        """Get other players in the same room (excluding self)."""
+        all_players = await User.get_players_in_room(self._pool, self.user.current_room)
+        return [p for p in all_players if p.id != self.user.id]
 
     def with_observers(self, *observers: Observer) -> Scene:
         """Return a new Scene with the given observers attached.

@@ -15,9 +15,6 @@ from mudd.cogs.ping import Ping
 from mudd.cogs.sync import Sync
 from mudd.database import get_pool, init_database
 from mudd.observers import RoomChannelCache
-from mudd.services.currency import CurrencyService
-from mudd.services.entity import EntityService
-from mudd.services.rendering import RenderingService
 
 # Suppress PyNaCl warning since we don't use voice features
 discord.VoiceClient.warn_nacl = False
@@ -65,27 +62,13 @@ async def setup_hook():
     # Create shared room cache (rebuilt by Sync cog on startup)
     room_cache = RoomChannelCache(pool)
 
-    # Create services with explicit dependencies
-    entity_service = EntityService(pool)
-    rendering_service = RenderingService()
-    currency_service = CurrencyService(pool)
-
     # Create cogs with explicit dependencies
     await bot.add_cog(Look(bot, pool))
     await bot.add_cog(Interact(bot, pool))
     await bot.add_cog(Ping(bot))
     await bot.add_cog(Movement(bot, pool, room_cache))
     await bot.add_cog(Sync(bot, pool, room_cache))
-    await bot.add_cog(
-        Economy(
-            bot,
-            currency_service,
-            room_cache,
-            entity_service,
-            rendering_service,
-            pool,
-        )
-    )
+    await bot.add_cog(Economy(bot, pool))
 
 
 @bot.event

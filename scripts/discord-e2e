@@ -192,6 +192,27 @@ async def cmd_create_thread(args: argparse.Namespace) -> None:
         await http.close()
 
 
+async def cmd_get_message(args: argparse.Namespace) -> None:
+    """Get a specific message from a channel/thread."""
+    http = await get_http_client()
+    try:
+        result = await http.get_message(int(args.channel_id), int(args.message_id))
+        output_json(result)
+    finally:
+        await http.close()
+
+
+async def cmd_get_messages(args: argparse.Namespace) -> None:
+    """Get recent messages from a channel/thread."""
+    http = await get_http_client()
+    try:
+        limit = int(args.limit) if args.limit else 10
+        result = await http.logs_from(int(args.channel_id), limit=limit)
+        output_json(result)
+    finally:
+        await http.close()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Discord E2E CLI - REST API operations for testing and debugging"
@@ -248,6 +269,16 @@ def main() -> None:
     p.add_argument("name", help="Thread name")
     p.add_argument("content", help="Initial message content")
 
+    # get-message
+    p = subparsers.add_parser("get-message", help="Get a specific message")
+    p.add_argument("channel_id", help="Channel/thread ID")
+    p.add_argument("message_id", help="Message ID")
+
+    # get-messages
+    p = subparsers.add_parser("get-messages", help="Get recent messages from channel/thread")
+    p.add_argument("channel_id", help="Channel/thread ID")
+    p.add_argument("--limit", help="Number of messages (default 10)")
+
     args = parser.parse_args()
 
     commands = {
@@ -262,6 +293,8 @@ def main() -> None:
         "rename-channel": cmd_rename_channel,
         "unpin": cmd_unpin,
         "create-thread": cmd_create_thread,
+        "get-message": cmd_get_message,
+        "get-messages": cmd_get_messages,
     }
 
     asyncio.run(commands[args.command](args))

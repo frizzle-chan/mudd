@@ -1,21 +1,14 @@
 """Economy commands for MUDD."""
 
 import logging
-from typing import TYPE_CHECKING
-from uuid import UUID
 
 import asyncpg
 import discord
 from discord import Interaction, app_commands
 from discord.ext import commands
 
-from mudd.observers import RoomChannelCache
-from mudd.services.currency import TransferError
-
-if TYPE_CHECKING:
-    from mudd.services.currency import CurrencyService
-    from mudd.services.entity import EntityService
-    from mudd.services.rendering import RenderingService
+from mudd.observers import DiscordReconciler, EffectsObserver
+from mudd.scene import Scene
 
 logger = logging.getLogger(__name__)
 
@@ -26,17 +19,9 @@ class Economy(commands.Cog):
     def __init__(
         self,
         bot: commands.Bot | None,
-        currency_service: "CurrencyService",
-        room_cache: RoomChannelCache,
-        entity_service: "EntityService",
-        rendering_service: "RenderingService",
         pool: asyncpg.Pool,
     ) -> None:
         self.bot = bot
-        self.currency_service = currency_service
-        self.room_cache = room_cache
-        self.entity_service = entity_service
-        self.rendering_service = rendering_service
         self._pool = pool
 
     async def recipient_autocomplete(
@@ -50,27 +35,24 @@ class Economy(commands.Cog):
         if not isinstance(user, discord.Member):
             return []
 
-        # Get sender's current room (room name, not channel ID)
-        sender_room = await self.room_cache.get_user_room(user.id)
-        if sender_room is None:
+        # Build scene to get other players
+        try:
+            scene = await Scene.from_interaction(self._pool, interaction)
+        except ValueError:
             return [app_commands.Choice(name="You're not in a room", value="invalid")]
 
-        # Get all user IDs in the same room
-        rows = await self._pool.fetch(
-            "SELECT id FROM users WHERE current_room = $1", sender_room
-        )
-        user_ids_in_room = {row["id"] for row in rows}
+        other_players = await scene.other_players()
+        if not other_players:
+            return [app_commands.Choice(name="There's nobody to pay", value="invalid")]
 
-        # Get guild members for those IDs, filtering out bots and self
+        # Get guild members for those IDs, filtering out bots
         valid_recipients: list[discord.Member] = []
-        for user_id in user_ids_in_room:
-            if user_id == user.id:
-                continue
+        for player in other_players:
             # Try cache first, then fetch from API
-            member = interaction.guild.get_member(user_id)
+            member = interaction.guild.get_member(player.id)
             if member is None:
                 try:
-                    member = await interaction.guild.fetch_member(user_id)
+                    member = await interaction.guild.fetch_member(player.id)
                 except discord.NotFound:
                     continue
             if not member.bot:
@@ -169,158 +151,70 @@ class Economy(commands.Cog):
             )
             return
 
-        # Check both players are in the same room
-        sender_location = await self.room_cache.get_user_location(sender.id)
-        recipient_location = await self.room_cache.get_user_location(
-            recipient_member.id
-        )
-
-        if sender_location is None or recipient_location is None:
+        # Build scene with observers
+        effects = EffectsObserver()
+        try:
+            scene = await Scene.from_interaction(self._pool, interaction)
+        except ValueError:
             await interaction.response.send_message(
-                "Could not determine player locations.", ephemeral=True
+                "Could not determine your location.", ephemeral=True
             )
             return
 
-        if sender_location != recipient_location:
+        if self.bot:
+            reconciler = DiscordReconciler(self.bot, self._pool)
+            scene = scene.with_observers(effects, reconciler)
+        else:
+            scene = scene.with_observers(effects)
+
+        # Get recipient from other_players
+        other_players = await scene.other_players()
+        recipient_user = next((p for p in other_players if p.id == recipient_id), None)
+        if recipient_user is None:
             await interaction.response.send_message(
                 f"**{recipient_member.display_name}** is not in the same room.",
                 ephemeral=True,
             )
             return
 
-        # Execute transfer
-        result = await self.currency_service.transfer(
-            sender_id=sender.id,
-            recipient_id=recipient_member.id,
-            amount=amount,
-            memo=f"Payment to {recipient_member.display_name}",
-        )
+        # Execute transfer with observers attached
+        sender_user = scene.user.with_observers(*scene._observers)
+        memo = f"Payment to {recipient_member.display_name}"
+        result = await sender_user.transfer_currency_to(recipient_user, amount, memo)
 
-        if not result.success:
-            if result.error == TransferError.INSUFFICIENT_BALANCE:
-                await interaction.response.send_message(
-                    "You don't have enough yen.", ephemeral=True
-                )
-            elif result.error == TransferError.SENDER_NOT_FOUND:
+        if result is None:
+            # Check specific failure reason
+            sender_balance = await sender_user.get_balance()
+            if sender_balance == 0:
                 await interaction.response.send_message(
                     "You don't have a currency account. Try looking at your wallet.",
                     ephemeral=True,
                 )
-            elif result.error == TransferError.RECIPIENT_NOT_FOUND:
+            elif sender_balance < amount:
+                await interaction.response.send_message(
+                    "You don't have enough yen.", ephemeral=True
+                )
+            else:
+                # Recipient likely doesn't have account
                 name = recipient_member.display_name
                 await interaction.response.send_message(
                     f"**{name}** doesn't have a currency account.",
                     ephemeral=True,
                 )
-            else:
-                await interaction.response.send_message(
-                    "Transfer failed. Please try again.", ephemeral=True
-                )
             return
 
-        # Format balances for display
-        sender_balance = f"\u00a5{result.sender_new_balance:,}"
-        recipient_balance = f"\u00a5{result.recipient_new_balance:,}"
-        amount_str = f"\u00a5{amount:,}"
+        sender_new, _recipient_new = result
 
-        # Update wallet thread descriptions and post notifications
-        await self._update_wallet_thread(
-            interaction.guild,
-            sender.id,
-            sender_balance,
-            f"\U0001f4e4 Paid {amount_str} to **{recipient_member.display_name}**",
-        )
-        await self._update_wallet_thread(
-            interaction.guild,
-            recipient_member.id,
-            recipient_balance,
-            f"\U0001f4e5 Received {amount_str} from **{sender.display_name}**",
-        )
+        # Format balances for display
+        sender_balance_str = f"\u00a5{sender_new:,}"
+        amount_str = f"\u00a5{amount:,}"
 
         # Respond with confirmation
         await interaction.response.send_message(
             f"You paid {amount_str} to **{recipient_member.display_name}**.\n"
-            f"Your balance: {sender_balance}",
+            f"Your balance: {sender_balance_str}",
             ephemeral=True,
         )
 
-    async def _update_wallet_thread(
-        self,
-        guild: discord.Guild,
-        user_id: int,
-        balance_str: str,
-        notification: str,
-    ) -> None:
-        """Update a user's wallet thread description and post a notification.
-
-        Args:
-            guild: Discord guild
-            user_id: User whose wallet to update
-            balance_str: Formatted balance string (e.g., "\\u00a51,000")
-            notification: Notification message to post
-        """
-        try:
-            # Get wallet instance ID from currency account
-            wallet_instance_id = await self.currency_service.get_wallet_instance_id(
-                user_id
-            )
-            if wallet_instance_id is None:
-                logger.warning(f"No wallet instance found for user {user_id}")
-                return
-
-            # Get entity instance to find thread ID
-            wallet_instance = await self.entity_service.get_entity_instance(
-                UUID(wallet_instance_id)
-            )
-            if wallet_instance is None:
-                logger.warning(f"Wallet instance {wallet_instance_id} not found")
-                return
-
-            # Get thread ID from database
-            row = await self._pool.fetchrow(
-                """
-                SELECT discord_thread_id, discord_description_msg_id
-                FROM entity_instances WHERE id = $1
-                """,
-                wallet_instance_id,
-            )
-            if row is None or row["discord_thread_id"] is None:
-                logger.warning(f"No thread for wallet instance {wallet_instance_id}")
-                return
-
-            thread_id = row["discord_thread_id"]
-            msg_id = row["discord_description_msg_id"]
-
-            # Get thread
-            thread = guild.get_thread(thread_id)
-            if thread is None:
-                logger.warning(f"Thread {thread_id} not found in guild")
-                return
-
-            # Render new description with updated balance
-            new_description = await self.rendering_service.render_entity_on_look(
-                wallet_instance,
-                self.entity_service,
-                None,  # room is None for inventory items
-                balance_str,
-                include_heading=False,  # Thread title shows the item name
-            )
-
-            # Update thread description message
-            if msg_id:
-                try:
-                    message = await thread.fetch_message(msg_id)
-                    await message.edit(content=new_description)
-                except discord.NotFound:
-                    logger.warning(f"Description message {msg_id} not found")
-                except discord.HTTPException as e:
-                    logger.error(f"Failed to update wallet description: {e}")
-
-            # Post notification
-            try:
-                await thread.send(notification)
-            except discord.HTTPException as e:
-                logger.error(f"Failed to post wallet notification: {e}")
-
-        except Exception:
-            logger.exception(f"Failed to update wallet thread for user {user_id}")
+        # Flush observers after response (wallet thread updates happen here)
+        await scene.flush_observers()

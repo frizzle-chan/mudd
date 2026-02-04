@@ -12,7 +12,12 @@ import asyncpg
 if TYPE_CHECKING:
     from mudd.models.room import Room
 
-from mudd.events import Observer, UserLocationSyncEvent, UserMovedEvent
+from mudd.events import (
+    BalanceChangedEvent,
+    Observer,
+    UserLocationSyncEvent,
+    UserMovedEvent,
+)
 from mudd.models.entity import EntityInstance
 
 FOCUS_TIMEOUT_MINUTES = 5
@@ -341,6 +346,26 @@ class User:
 
         return row["balance"]
 
+    @classmethod
+    async def get_players_in_room(cls, pool: asyncpg.Pool, room_id: str) -> list[User]:
+        """Get all players in a room.
+
+        Args:
+            pool: Database connection pool
+            room_id: Room ID to query
+
+        Returns:
+            List of User objects for players in the room
+        """
+        rows = await pool.fetch(
+            "SELECT id, current_room FROM users WHERE current_room = $1",
+            room_id,
+        )
+        return [
+            cls(id=row["id"], current_room=row["current_room"], _pool=pool)
+            for row in rows
+        ]
+
     async def move_to(self, room_id: str, *, guild_id: int) -> User:
         """Move the user to a different room.
 
@@ -446,6 +471,83 @@ class User:
         )
 
         return (wallet, True)
+
+    async def transfer_currency_to(
+        self, recipient: User, amount: int, memo: str
+    ) -> tuple[int, int] | None:
+        """Transfer currency to another user.
+
+        Returns (sender_new_balance, recipient_new_balance) or None on failure.
+        Emits BalanceChangedEvent for both users.
+        """
+        if amount <= 0:
+            raise ValueError("Amount must be positive")
+        if self.id == recipient.id:
+            raise ValueError("Cannot transfer to self")
+
+        # Sort IDs to prevent deadlocks
+        first_id, second_id = sorted([self.id, recipient.id])
+
+        async with self._pool.acquire() as conn, conn.transaction():
+            # Lock accounts in sorted order
+            first_row = await conn.fetchrow(
+                "SELECT balance FROM currency_accounts WHERE user_id = $1 FOR UPDATE",
+                first_id,
+            )
+            second_row = await conn.fetchrow(
+                "SELECT balance FROM currency_accounts WHERE user_id = $1 FOR UPDATE",
+                second_id,
+            )
+
+            if first_id == self.id:
+                sender_row, recipient_row = first_row, second_row
+            else:
+                sender_row, recipient_row = second_row, first_row
+
+            if sender_row is None or recipient_row is None:
+                return None
+            if sender_row["balance"] < amount:
+                return None
+
+            # Create transaction + ledger entries
+            tx_row = await conn.fetchrow(
+                "INSERT INTO currency_transactions (memo) VALUES ($1) RETURNING id",
+                memo,
+            )
+            await conn.execute(
+                """
+                INSERT INTO currency_ledger (transaction_id, account_id, amount)
+                VALUES ($1, $2, $3), ($1, $4, $5)
+                """,
+                tx_row["id"],
+                self.id,
+                -amount,
+                recipient.id,
+                amount,
+            )
+
+            # Update balances
+            sender_new = sender_row["balance"] - amount
+            recipient_new = recipient_row["balance"] + amount
+            await conn.execute(
+                "UPDATE currency_accounts SET balance = $1 WHERE user_id = $2",
+                sender_new,
+                self.id,
+            )
+            await conn.execute(
+                "UPDATE currency_accounts SET balance = $1 WHERE user_id = $2",
+                recipient_new,
+                recipient.id,
+            )
+
+        # Emit events (outside transaction)
+        for observer in self._observers:
+            observer.notify(BalanceChangedEvent(self.id, sender_new, -amount, memo))
+            observer.notify(
+                BalanceChangedEvent(recipient.id, recipient_new, amount, memo)
+            )
+
+        return (sender_new, recipient_new)
 
     @classmethod
     async def delete(cls, pool: asyncpg.Pool, user_id: int) -> None:

@@ -15,7 +15,6 @@ from mudd.cogs.economy import Economy
 from mudd.cogs.interact import Interact
 from mudd.cogs.look import Look
 from mudd.cogs.movement import Movement
-from mudd.services.currency import CurrencyService
 from mudd.services.entity import EntityService
 from mudd.services.entity_resolution import EntityResolutionService
 from mudd.services.focus_context import FocusContextService
@@ -80,7 +79,6 @@ class TestClient:
         self.focus_service = FocusContextService(pool)
         self.rendering_service = RenderingService()
         self.inventory_service = InventoryService(pool, self.entity_service)
-        self.currency_service = CurrencyService(pool)
         self.entity_resolution = EntityResolutionService(
             self.entity_service, self.focus_service, self.inventory_service, pool
         )
@@ -99,14 +97,7 @@ class TestClient:
             pool=pool,
             room_cache=self._room_cache,  # type: ignore[arg-type]
         )
-        self.economy_cog = Economy(
-            bot=None,
-            currency_service=self.currency_service,
-            room_cache=self._room_cache,  # type: ignore[arg-type]
-            entity_service=self.entity_service,
-            rendering_service=self.rendering_service,
-            pool=pool,
-        )
+        self.economy_cog = Economy(bot=None, pool=pool)
 
     async def create_user(self, user_id: int, room: str = "foyer") -> TestUser:
         """Create a test user starting in the given room.
@@ -549,3 +540,35 @@ class TestClient:
         interaction = cast("Interaction[Any]", mock_interaction)
         choices = await self.economy_cog.recipient_autocomplete(interaction, current)
         return [AutocompleteResult(name=c.name, value=c.value) for c in choices]
+
+    async def ensure_currency_account(self, user_id: int, balance: int) -> None:
+        """Ensure a user has a currency account with the given balance.
+
+        Args:
+            user_id: Discord user ID
+            balance: Initial balance for the account
+        """
+        await self.pool.execute(
+            """
+            INSERT INTO currency_accounts (user_id, balance)
+            VALUES ($1, $2)
+            ON CONFLICT (user_id) DO UPDATE SET balance = $2
+            """,
+            user_id,
+            balance,
+        )
+
+    async def get_user_balance(self, user_id: int) -> int:
+        """Get a user's currency balance.
+
+        Args:
+            user_id: Discord user ID
+
+        Returns:
+            Balance in yen, or 0 if no account exists
+        """
+        row = await self.pool.fetchrow(
+            "SELECT balance FROM currency_accounts WHERE user_id = $1",
+            user_id,
+        )
+        return row["balance"] if row else 0
