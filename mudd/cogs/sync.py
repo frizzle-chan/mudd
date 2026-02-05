@@ -5,6 +5,8 @@ The first sync iteration handles startup initialization, subsequent iterations
 perform full syncs every 15 minutes.
 """
 
+from __future__ import annotations
+
 import logging
 import os
 from datetime import UTC, datetime
@@ -44,12 +46,12 @@ class Sync(commands.Cog):
     - Orphan tracking: Only report NEW orphans to console (not previously seen)
     """
 
-    bot: "MuddBot"
+    bot: MuddBot
     room_cache: RoomChannelCache
 
     def __init__(
         self,
-        bot: "MuddBot",
+        bot: MuddBot,
         pool: asyncpg.Pool,
         room_cache: RoomChannelCache,
     ) -> None:

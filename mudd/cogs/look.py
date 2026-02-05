@@ -1,8 +1,9 @@
 """Look command for viewing surroundings and examining entities."""
 
+from __future__ import annotations
+
 import logging
 from functools import partial
-from typing import TYPE_CHECKING
 
 import asyncpg
 from discord import Interaction, app_commands
@@ -12,9 +13,6 @@ from mudd.cogs.shared import entity_instance_id_autocomplete, resolve_entity
 from mudd.commands2 import LookCommand
 from mudd.observers import EffectsObserver
 from mudd.scene import Scene
-
-if TYPE_CHECKING:
-    pass
 
 logger = logging.getLogger(__name__)
 

@@ -1,5 +1,7 @@
 """Event dataclasses for the observer pattern."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -67,28 +69,28 @@ class DispenseSignal:
 class EntityPickedUpEvent:
     """Fact: entity was picked up by a user."""
 
-    instance: "EntityInstance"
+    instance: EntityInstance
 
 
 @dataclass(frozen=True)
 class EntityDroppedEvent:
     """Fact: entity was dropped to a room."""
 
-    instance: "EntityInstance"
+    instance: EntityInstance
 
 
 @dataclass(frozen=True)
 class EntityDestroyedEvent:
     """Fact: entity was destroyed."""
 
-    instance: "EntityInstance"
+    instance: EntityInstance
 
 
 @dataclass(frozen=True)
 class EntitySpawnedEvent:
     """Entity was spawned from a spawning pool."""
 
-    instance: "EntityInstance"
+    instance: EntityInstance
     spawning_pool_id: str
     room: str
 

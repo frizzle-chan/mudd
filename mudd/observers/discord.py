@@ -3,13 +3,9 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
 
 import asyncpg
 import discord
-
-if TYPE_CHECKING:
-    pass
 
 from mudd.events import (
     BalanceChangedEvent,

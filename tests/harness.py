@@ -4,12 +4,15 @@ Provides a TestClient that wires up cogs with test services and allows
 executing commands in sequence without patching.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, cast
+from typing import Any, cast
 from unittest.mock import MagicMock
 
 import asyncpg
 import discord
+from discord import Interaction
 
 from mudd.cogs.economy import Economy
 from mudd.cogs.interact import Interact
@@ -23,9 +26,6 @@ from tests.mocks.discord import (
     MockTextChannel,
     StubRoomChannelCache,
 )
-
-if TYPE_CHECKING:
-    from discord import Interaction
 
 
 @dataclass
@@ -250,7 +250,7 @@ class TestClient:
         topic = await self._get_room_topic(user.room)
         mock_interaction = MockInteraction(user.id, user.room, topic)
         # Cast for type checker (MockInteraction provides needed interface)
-        interaction = cast("Interaction[Any]", mock_interaction)
+        interaction = cast(Interaction[Any], mock_interaction)
         choices = await self.look_cog.entity_instance_id_autocomplete(
             interaction, current
         )
@@ -271,7 +271,7 @@ class TestClient:
         topic = await self._get_room_topic(user.room)
         mock_interaction = MockInteraction(user.id, user.room, topic)
         # Cast for type checker (MockInteraction provides needed interface)
-        interaction = cast("Interaction[Any]", mock_interaction)
+        interaction = cast(Interaction[Any], mock_interaction)
         choices = await self.interact_cog.target_autocomplete(interaction, current)
         return [AutocompleteResult(name=c.name, value=c.value) for c in choices]
 
@@ -291,7 +291,7 @@ class TestClient:
         topic = await self._get_room_topic(user.room)
         mock_interaction = MockInteraction(user.id, user.room, topic, guild=guild)
         # Cast for type checker (MockInteraction provides needed interface)
-        interaction = cast("Interaction[Any]", mock_interaction)
+        interaction = cast(Interaction[Any], mock_interaction)
         choices = await self.movement_cog.destination_autocomplete(interaction, current)
         return [AutocompleteResult(name=c.name, value=c.value) for c in choices]
 
@@ -525,7 +525,7 @@ class TestClient:
         mock_interaction.user = mock_member
 
         # Cast for type checker (MockInteraction provides needed interface)
-        interaction = cast("Interaction[Any]", mock_interaction)
+        interaction = cast(Interaction[Any], mock_interaction)
         choices = await self.economy_cog.recipient_autocomplete(interaction, current)
         return [AutocompleteResult(name=c.name, value=c.value) for c in choices]
 

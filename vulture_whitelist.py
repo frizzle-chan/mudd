@@ -1,9 +1,5 @@
 # Vulture whitelist for TYPE_CHECKING false positives
-from typing import Any
-
-from discord import Interaction
-
+# MuddBot is imported under TYPE_CHECKING in sync.py to avoid circular imports
 from main import MuddBot
 
-# Mark as used for vulture
-_ = (MuddBot, Any, Interaction)
+_ = MuddBot  # Mark as used

@@ -116,9 +116,13 @@ The codebase uses an MVC + events architecture:
 ## Code Style
 
 **Type checking**: Fix root causes of type errors rather than using `# type: ignore`. Common fixes:
-- Use `TYPE_CHECKING` imports to properly type cross-module references
+- Use `from __future__ import annotations` in all files - enables forward references without quotes
+- Use `TYPE_CHECKING` imports only for circular import prevention, not forward references
+- Remove empty `TYPE_CHECKING` blocks
 - Use `typing.cast()` when you've validated a value but the type checker can't infer it
 - Use `@overload` for functions with return types that depend on literal argument values
+
+**Vulture whitelist**: For TYPE_CHECKING imports that vulture flags as unused (circular import cases), add to `vulture_whitelist.py`: `from module import Type` then `_ = Type`.
 
 **Return values**: Prefer dataclasses over tuples when returning more than 2 values. Tuples are acceptable for simple pairs (e.g., `(value, error)`) but become unwieldy with 3+ elements. Named fields improve readability and make refactoring safer.
 

@@ -6,13 +6,9 @@ database connections in integration tests.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
 from unittest.mock import MagicMock
 
 import discord
-
-if TYPE_CHECKING:
-    pass
 
 
 class MockResponse:
