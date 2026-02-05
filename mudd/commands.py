@@ -210,6 +210,8 @@ class TakeCommand(ActionCommand):
 
     async def execute(self, scene: Scene, entity: IEntityInstance) -> ActionResult:
         """Execute take command with pickup validation."""
+        if not entity.can_pickup:
+            return ActionResult(output="You can't take that.")
         if not scene.room.allows_pickup(entity):
             return ActionResult(output="You already have that.")
         return await super().execute(scene, entity)
@@ -222,6 +224,12 @@ class DropCommand(ActionCommand):
         """Return the entity's on_drop handler template."""
         return entity.entity.on_drop
 
+    async def execute(self, scene: Scene, entity: IEntityInstance) -> ActionResult:
+        """Execute drop command with capability validation."""
+        if not entity.can_drop:
+            return ActionResult(output="You can't drop that.")
+        return await super().execute(scene, entity)
+
 
 class OpenCommand(ActionCommand):
     """Command for the 'open' action."""
@@ -229,6 +237,12 @@ class OpenCommand(ActionCommand):
     def get_handler_text(self, entity: IEntityInstance) -> str | None:
         """Return the entity's on_open handler template."""
         return entity.entity.on_open
+
+    async def execute(self, scene: Scene, entity: IEntityInstance) -> ActionResult:
+        """Execute open command with capability validation."""
+        if not entity.is_focusable:
+            return ActionResult(output="You can't open that.")
+        return await super().execute(scene, entity)
 
 
 class CloseCommand(ActionCommand):

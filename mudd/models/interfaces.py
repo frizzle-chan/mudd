@@ -8,8 +8,9 @@ from uuid import UUID
 from mudd.utils.text import Rarity
 
 if TYPE_CHECKING:
+    from mudd.events import Observer
     from mudd.models.entity import EntityInstance, ResolvedEntity
-    from mudd.models.room import Room
+    from mudd.models.room import Room, RoomEntityInstance
     from mudd.models.user import FocusContext
 
 
@@ -94,13 +95,25 @@ class IRoom(Protocol):
         """Get visible entities (top-level + visible container contents)."""
         ...
 
+    async def get_room_entity(self, user: IUser) -> RoomEntityInstance | None:
+        """Return a virtual room entity for autocomplete, or None.
+
+        Physical rooms return themselves as an entity. Container/focus contexts
+        delegate to the underlying room. Inventory threads return None.
+        """
+        ...
+
 
 class IEntityInstance(Protocol):
     """Protocol for EntityInstance model."""
 
     @property
-    def instance_id(self) -> UUID:
-        """Unique instance identifier."""
+    def instance_id(self) -> UUID | str:
+        """Unique instance identifier.
+
+        Returns UUID for database-backed entities, or scheme-based string
+        (e.g., 'room://main_hall') for virtual entities.
+        """
         ...
 
     @property
@@ -165,4 +178,29 @@ class IEntityInstance(Protocol):
 
     async def get_contents(self) -> list[EntityInstance]:
         """Get direct children of this container entity."""
+        ...
+
+    def with_observers(self, *observers: Observer) -> IEntityInstance:
+        """Return a new instance with additional observers attached."""
+        ...
+
+    # Capability properties - determine what operations are valid
+    @property
+    def is_focusable(self) -> bool:
+        """Whether this entity can be focused on."""
+        ...
+
+    @property
+    def can_pickup(self) -> bool:
+        """Whether this entity can be picked up."""
+        ...
+
+    @property
+    def can_drop(self) -> bool:
+        """Whether this entity can be dropped."""
+        ...
+
+    @property
+    def can_destroy(self) -> bool:
+        """Whether this entity can be destroyed."""
         ...

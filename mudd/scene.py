@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
-from typing import TYPE_CHECKING, TypeVar
+from typing import TYPE_CHECKING, TypeVar, cast
+from uuid import UUID
 
 import asyncpg
 import discord
@@ -9,7 +10,7 @@ from discord import Interaction
 
 from mudd.events import Observer
 from mudd.models.entity import EntityInstance
-from mudd.models.interfaces import IRoom
+from mudd.models.interfaces import IEntityInstance, IRoom
 from mudd.models.room import EntityModal, InventoryThread, Room
 from mudd.models.user import User
 from mudd.observers import EffectsObserver
@@ -79,12 +80,12 @@ class Scene:
                 raise ValueError("User is in an invalid room")
         return cls(_pool=pool, user=user, room=room)
 
-    async def contains(self, entity: EntityInstance) -> bool:
+    async def contains(self, entity: IEntityInstance) -> bool:
         """Check if the scene contains the given entity instance."""
-        # Check if the entity is in the room
         visible = {e.instance_id for e in await self.room.get_visible_entities()}
         inventory = {e.instance_id for e in await self.user.get_inventory()}
-        return entity.instance_id in visible | inventory
+        room = {f"room://{self.user.current_room}"}
+        return entity.instance_id in visible | inventory | room
 
     async def other_players(self) -> list[User]:
         """Get other players in the same room (excluding self)."""
@@ -131,7 +132,7 @@ class Scene:
             await observer.flush()
 
     async def execute(
-        self, command: ActionCommand, target: EntityInstance
+        self, command: ActionCommand, target: IEntityInstance
     ) -> ActionResult:
         """Execute a command and process all effects.
 
@@ -141,6 +142,10 @@ class Scene:
         4. Entity mutations emit events to all observers
         5. Flush observers (Discord thread creation, etc.)
         6. Return result
+
+        Commands validate capabilities before signaling effects. If a command
+        signals an effect, the entity must support it. NotImplementedError
+        from entity methods is a safety net for bugs in command validation.
 
         Args:
             command: The action command to execute
@@ -154,11 +159,13 @@ class Scene:
             raise ValueError("EffectsObserver not attached to scene")
 
         # Attach scene observers to target so mutations notify them
+        # (no-op for RoomEntityInstance since rooms don't emit events)
         target = target.with_observers(*self._observers)
 
         result = await command.execute(self, target)
 
-        # Map signals to actions
+        # Apply effects - commands already validated capabilities
+        # NotImplementedError is safety net if something sneaks through
         if effects.has_pickup:
             await target.move_to_inventory(self.user)
         if effects.has_drop:
@@ -167,10 +174,8 @@ class Scene:
                 await target.drop_to_room(drop_room)
         if effects.has_destroy:
             await target.destroy()
-
-        # Handle focus signals
         if effects.has_set_focus:
-            await self.user.set_focus(target.instance_id)
+            await self.user.set_focus(cast(UUID, target.instance_id))
         if effects.has_clear_focus:
             await self.user.clear_focus()
 

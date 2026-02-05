@@ -10,12 +10,13 @@ import asyncpg
 
 from mudd.events import RoomSyncedEvent
 from mudd.models.entity import ResolvedEntity
+from mudd.utils.text import Rarity
 
 if TYPE_CHECKING:
     from mudd.events import Observer
     from mudd.loaders.zone_loader import RoomData
     from mudd.models.entity import EntityInstance
-    from mudd.models.interfaces import IEntityInstance, IUser
+    from mudd.models.interfaces import IEntityInstance, IRoom, IUser
     from mudd.models.zone import SyncStats
 
 logger = logging.getLogger(__name__)
@@ -105,8 +106,9 @@ class Room:
 
     def make_entity(self, visible: list[EntityInstance]) -> ResolvedEntity:
         on_look = (
+            """{{ effects.clear_focus() }}"""
             """{{ e.description_long or "You see nothing special." }}"""
-            """{{ contents }}"""
+            """{{ e.contents }}"""
         )
         return ResolvedEntity(
             f"room::{self.id}",
@@ -311,6 +313,128 @@ class Room:
             synced=len(room_data), deleted=deleted, users_relocated=users_relocated
         )
 
+    async def get_room_entity(self, user: IUser) -> RoomEntityInstance:
+        """Return this room as a virtual entity for autocomplete."""
+        focus = await user.get_focus()
+        focus_name = focus.current_container.name if focus else None
+        return self.as_entity(focus_name=focus_name)
+
+    def as_entity(self, focus_name: str | None = None) -> RoomEntityInstance:
+        """Create a virtual entity instance representing this room.
+
+        Args:
+            focus_name: If set, prepends "[Close {focus_name}]" to the display name
+                       to indicate this will close the current focus.
+
+        Returns:
+            RoomEntityInstance that implements IEntityInstance protocol
+        """
+        room_name = f"📍 {self.name}"
+        display_name = f"[Close {focus_name}] {room_name}" if focus_name else room_name
+        return RoomEntityInstance(_room=self, _display_name=display_name)
+
+
+@dataclass(frozen=True)
+class RoomEntityInstance:
+    """Virtual entity instance representing a room.
+
+    Implements IEntityInstance protocol so rooms can appear in entity
+    autocomplete and be targeted by commands like /look.
+    """
+
+    _room: Room
+    _display_name: str
+
+    @property
+    def instance_id(self) -> str:
+        """Entity reference in scheme format (room://{room_id})."""
+        return f"room://{self._room.id}"
+
+    @property
+    def entity(self) -> ResolvedEntity:
+        """Resolved entity definition for this room."""
+        return self._room.make_entity([])
+
+    @property
+    def room_id(self) -> str | None:
+        """Room ID - returns the room's own ID."""
+        return self._room.id
+
+    @property
+    def owner_id(self) -> int | None:
+        """Owner's Discord ID - rooms are not owned."""
+        return None
+
+    # Proxy properties delegating to self.entity for template access
+    @property
+    def id(self) -> str:
+        """Entity definition ID."""
+        return self.entity.id
+
+    @property
+    def name(self) -> str:
+        """Entity name (with optional [Close X] prefix)."""
+        return self._display_name
+
+    @property
+    def description_short(self) -> str | None:
+        """Short description template."""
+        return self.entity.description_short
+
+    @property
+    def description_long(self) -> str | None:
+        """Long description template."""
+        return self.entity.description_long
+
+    @property
+    def contents_visible(self) -> bool:
+        """Whether container contents are visible."""
+        return self.entity.contents_visible
+
+    @property
+    def rarity(self) -> Rarity:
+        """Item rarity tier - rooms have no rarity."""
+        return "none"
+
+    # Capability properties - virtual room entities don't support mutations
+    @property
+    def is_focusable(self) -> bool:
+        return False
+
+    @property
+    def can_pickup(self) -> bool:
+        return False
+
+    @property
+    def can_drop(self) -> bool:
+        return False
+
+    @property
+    def can_destroy(self) -> bool:
+        return False
+
+    async def get_contents(self) -> list[EntityInstance]:
+        """Get visible entities in the room."""
+        return await self._room.get_visible_entities()
+
+    async def move_to_inventory(self, user: IUser) -> EntityInstance:
+        """Rooms cannot be picked up - raises error."""
+        raise NotImplementedError("Rooms cannot be picked up")
+
+    async def drop_to_room(
+        self, room: IRoom, container: EntityInstance | None = None
+    ) -> EntityInstance:
+        """Rooms cannot be dropped - raises error."""
+        raise NotImplementedError("Rooms cannot be dropped")
+
+    async def destroy(self) -> None:
+        """Rooms cannot be destroyed - raises error."""
+        raise NotImplementedError("Rooms cannot be destroyed")
+
+    def with_observers(self, *observers: Observer) -> RoomEntityInstance:
+        """No-op: rooms don't emit events, so observers are ignored."""
+        return self
+
 
 @dataclass(frozen=True)
 class EntityModal:
@@ -350,6 +474,15 @@ class EntityModal:
         """Return the room where dropped items should land."""
         return self
 
+    async def get_room_entity(self, user: IUser) -> RoomEntityInstance | None:
+        """Return the underlying room as a virtual entity for autocomplete."""
+        room = await Room.get(self._pool, user.current_room)
+        if not room:
+            return None
+        focus = await user.get_focus()
+        focus_name = focus.current_container.name if focus else None
+        return room.as_entity(focus_name=focus_name)
+
     def allows_pickup(self, entity: IEntityInstance) -> bool:
         """Check if picking up the given entity is allowed."""
         return True
@@ -385,6 +518,10 @@ class InventoryThread:
     async def get_drop_target(self) -> Room | None:
         """Return the user's actual room for drops from inventory."""
         return await Room.get(self._pool, self.owner.current_room)
+
+    async def get_room_entity(self, user: IUser) -> RoomEntityInstance | None:
+        """Inventory threads have no room entity for autocomplete."""
+        return None
 
     def allows_pickup(self, entity: IEntityInstance) -> bool:
         """Disallow picking up the thread's own entity."""

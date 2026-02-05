@@ -227,6 +227,23 @@ class EntityInstance:
         """Alias for room_id for backward compatibility."""
         return self.room_id
 
+    # Capability properties - real entities support all operations
+    @property
+    def is_focusable(self) -> bool:
+        return True
+
+    @property
+    def can_pickup(self) -> bool:
+        return True
+
+    @property
+    def can_drop(self) -> bool:
+        return True
+
+    @property
+    def can_destroy(self) -> bool:
+        return True
+
     def with_observers(self, *observers: Observer) -> EntityInstance:
         """Return a new instance with additional observers appended.
 
