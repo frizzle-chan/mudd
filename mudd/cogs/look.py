@@ -10,7 +10,7 @@ from discord import Interaction, app_commands
 from discord.ext import commands
 
 from mudd.cogs.shared import entity_instance_id_autocomplete, resolve_entity
-from mudd.commands2 import LookCommand
+from mudd.commands import LookCommand
 from mudd.observers import EffectsObserver
 from mudd.scene import Scene
 

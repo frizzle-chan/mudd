@@ -15,7 +15,7 @@ from mudd.models.user import User
 from mudd.observers import EffectsObserver
 
 if TYPE_CHECKING:
-    from mudd.commands2 import ActionCommand, ActionResult
+    from mudd.commands import ActionCommand, ActionResult
 
 T = TypeVar("T")
 

@@ -2,7 +2,7 @@
 
 import pytest
 
-from mudd.commands2 import LookCommand
+from mudd.commands import LookCommand
 from mudd.models.entity import EntityInstance, ResolvedEntity
 from mudd.models.room import Room
 from mudd.models.user import User

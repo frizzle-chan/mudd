@@ -495,7 +495,7 @@ Focus state is integrated into Scene construction:
 
 ## Commands
 
-Commands (`mudd/commands2.py`) implement the command pattern for entity interactions.
+Commands (`mudd/commands.py`) implement the command pattern for entity interactions.
 
 ### ActionCommand Base
 

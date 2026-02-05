@@ -8,7 +8,7 @@ from discord import Interaction, app_commands
 from discord.ext import commands
 
 from mudd.cogs.shared import entity_instance_id_autocomplete, resolve_entity
-from mudd.commands2 import get_command
+from mudd.commands import get_command
 from mudd.matching.verb_matcher import match_verb
 from mudd.observers import DiscordReconciler, EffectsObserver
 from mudd.scene import Scene

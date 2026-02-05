@@ -34,6 +34,7 @@ exclude = [".claude/skills/skill-creator/", "vulture_whitelist.py"]
 [tool.vulture]
 paths = ["main.py", "mudd/", "scripts/", "tests/", "vulture_whitelist.py"]
 min_confidence = 90
+ignore_names = ["clean_user_state"]
 
 [tool.ruff.lint]
 select = [

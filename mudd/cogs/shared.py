@@ -10,7 +10,7 @@ import asyncpg
 from discord import Interaction, app_commands
 from rapidfuzz import fuzz
 
-from mudd.commands2 import ViewEntity
+from mudd.commands import ViewEntity
 from mudd.models import EntityInstance
 from mudd.scene import Scene
 
