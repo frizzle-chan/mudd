@@ -339,68 +339,6 @@ class MockInteraction:
         return self.response.messages
 
 
-class StubVisibilityService:
-    """Test stub implementing VisibilityServiceProtocol.
-
-    Provides in-memory implementation for tests without Discord.
-    The VisibilityService manages Discord permissions and is tightly
-    coupled to Discord API - we use this stub in tests.
-    """
-
-    def __init__(self, default_room: str = "foyer") -> None:
-        self._default_room = default_room
-        self._room_names: dict[str, str] = {}
-        self._user_locations: dict[int, int] = {}
-        self._user_rooms: dict[int, str] = {}  # user_id -> room name
-
-    async def get_default_room(self) -> str:
-        """Get the default room name."""
-        return self._default_room
-
-    async def get_default_channel_id(self) -> int | None:
-        """Get the default room's channel ID."""
-        return None  # Tests don't use real channel IDs
-
-    async def delete_user_location(self, user_id: int) -> None:
-        """Remove user's location assignment."""
-        self._user_locations.pop(user_id, None)
-
-    async def move_user_to_channel(self, member, channel_id: int) -> bool:
-        """Move user to a new location."""
-        current = self._user_locations.get(member.id)
-        if current == channel_id:
-            return False
-        self._user_locations[member.id] = channel_id
-        return True
-
-    async def get_room_name(self, room_id: str | None) -> str | None:
-        """Return a display name for a room."""
-        if room_id is None:
-            return None
-        return self._room_names.get(room_id)
-
-    async def get_user_room(self, user_id: int) -> str | None:
-        """Get the room name of the user's current location."""
-        return self._user_rooms.get(user_id)
-
-    async def sync_guild(self, guild) -> dict[str, int]:
-        """No-op in tests - returns empty stats."""
-        return {}
-
-    # Test helper methods
-    def set_room_name(self, room: str, name: str) -> None:
-        """Set a display name for testing."""
-        self._room_names[room] = name
-
-    def set_user_location(self, user_id: int, channel_id: int) -> None:
-        """Set user location (channel ID) directly for testing."""
-        self._user_locations[user_id] = channel_id
-
-    def set_user_room(self, user_id: int, room: str) -> None:
-        """Set user room (room name) directly for testing."""
-        self._user_rooms[user_id] = room
-
-
 class StubRoomChannelCache:
     """Test stub implementing RoomChannelCache interface.
 
@@ -498,18 +436,6 @@ def make_mock_interaction(
         MockInteraction instance.
     """
     return MockInteraction(user_id, room, topic)
-
-
-def make_stub_visibility_service(default_room: str = "foyer") -> StubVisibilityService:
-    """Create a StubVisibilityService for tests.
-
-    Args:
-        default_room: The default room name.
-
-    Returns:
-        StubVisibilityService instance.
-    """
-    return StubVisibilityService(default_room)
 
 
 def make_mock_guild_with_rooms(room_topics: dict[str, str | None]) -> MockGuild:

@@ -48,10 +48,6 @@ class IUser(Protocol):
         """Get the user's currency balance."""
         ...
 
-    async def get_focused_contents(self) -> list[str]:
-        """Get entity IDs accessible through current focus."""
-        ...
-
 
 class IRoom(Protocol):
     """Protocol for Room model."""

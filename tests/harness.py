@@ -438,7 +438,7 @@ class TestClient:
             return None
 
         # Get a random entity matching the tag (using weighted rarity)
-        entity = await ResolvedEntity.get_random_by_tag(
+        entity = await ResolvedEntity.get_weighted_random_by_tag(
             self.pool, pool_config["tag_query"]
         )
         if entity is None:

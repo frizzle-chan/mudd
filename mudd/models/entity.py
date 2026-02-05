@@ -104,21 +104,6 @@ class ResolvedEntity:
         return cls._from_row(row)
 
     @classmethod
-    async def get_random_by_tag(
-        cls, pool: asyncpg.Pool, tag: str
-    ) -> ResolvedEntity | None:
-        """Select random entity by tag with weighted rarity.
-
-        Args:
-            pool: Database connection pool
-            tag: Tag to filter entities by
-
-        Returns:
-            ResolvedEntity with weighted random selection, or None if no matches
-        """
-        return await cls.get_weighted_random_by_tag(pool, tag)
-
-    @classmethod
     async def get_weighted_random_by_tag(
         cls,
         pool: asyncpg.Pool,

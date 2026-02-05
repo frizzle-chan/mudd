@@ -37,20 +37,6 @@ class Room:
     # Fields below have defaults
     has_voice: bool = field(default=False)
     is_default: bool = field(default=False)
-    _observers: tuple[Observer, ...] = field(default=(), repr=False, compare=False)
-
-    def with_observers(self, *observers: Observer) -> Room:
-        """Return a new Room with additional observers attached."""
-        return Room(
-            id=self.id,
-            name=self.name,
-            description=self.description,
-            zone_id=self.zone_id,
-            has_voice=self.has_voice,
-            is_default=self.is_default,
-            _pool=self._pool,
-            _observers=self._observers + observers,
-        )
 
     @classmethod
     async def get(cls, pool: asyncpg.Pool, room_id: str) -> Room | None:
@@ -104,7 +90,7 @@ class Room:
             _pool=pool,
         )
 
-    def make_entity(self, visible: list[EntityInstance]) -> ResolvedEntity:
+    def make_entity(self) -> ResolvedEntity:
         on_look = (
             """{{ effects.clear_focus() }}"""
             """{{ e.description_long or "You see nothing special." }}"""
@@ -353,7 +339,7 @@ class RoomEntityInstance:
     @property
     def entity(self) -> ResolvedEntity:
         """Resolved entity definition for this room."""
-        return self._room.make_entity([])
+        return self._room.make_entity()
 
     @property
     def room_id(self) -> str | None:

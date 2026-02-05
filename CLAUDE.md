@@ -82,11 +82,13 @@ The codebase uses an MVC + events architecture:
 
 **RoomChannelCache** (`mudd/observers/discord.py`): Shared cache mapping room names to Discord channel IDs. Created in `main.py`, passed to cogs. Rebuilt by Sync cog after channel creation.
 
-**Observer pattern in models**: Models like `User` and `EntityInstance` support observers via `_observers` field and `with_observers()` method. Mutation methods (e.g., `move_to()`) emit events to attached observers. Always flush observers after the response is sent.
+**Observer pattern in models**: `User` and `EntityInstance` support observers via `_observers` field and `with_observers()` method. Mutation methods (e.g., `move_to()`) emit events to attached observers. Always flush observers after the response is sent. Other models (`Zone`, `Room`, `SpawningPool`) pass observers as function parameters to `sync_all()` instead.
 
 **Event separation**: Game logic events (e.g., `UserMovedEvent`) and infrastructure events (e.g., `UserLocationSyncEvent`) are separate. Game events trigger gameplay observers (focus clearing). Infrastructure events trigger Discord reconciliation (permission sync).
 
 **Adding new events**: Update `mudd/events/types.py` (add dataclass, update `GameEvent` union), `mudd/events/__init__.py` (import and export), and the observer that handles the event (e.g., `DiscordReconciler`). Prefer model class methods for database logic over inline SQL in observers.
+
+**Default room**: Use `Room.get_default(pool)` to find the default spawn room. Do not inline `SELECT ... WHERE is_default = TRUE` queries.
 
 **MUD concept**: Channel topics = room descriptions. Movement hides/shows channels via Discord permissions.
 
@@ -117,6 +119,7 @@ The codebase uses an MVC + events architecture:
 **Type checking**: Fix root causes of type errors rather than using `# type: ignore`. Common fixes:
 - Use `from __future__ import annotations` in all files - enables forward references without quotes
 - Use `TYPE_CHECKING` imports only for circular import prevention, not forward references
+- No local imports inside method bodies -- there are no circular deps between `mudd/models/` and `mudd/observers/`, so use top-level imports
 - Remove empty `TYPE_CHECKING` blocks
 - Use `typing.cast()` when you've validated a value but the type checker can't infer it
 - Use `@overload` for functions with return types that depend on literal argument values

@@ -5,13 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
 from enum import Enum, auto
-from typing import TYPE_CHECKING
 from uuid import UUID
 
 import asyncpg
-
-if TYPE_CHECKING:
-    from mudd.models.room import Room
 
 from mudd.events import (
     BalanceChangedEvent,
@@ -20,6 +16,7 @@ from mudd.events import (
     UserMovedEvent,
 )
 from mudd.models.entity import EntityInstance
+from mudd.models.room import Room
 
 FOCUS_TIMEOUT_MINUTES = 5
 STARTING_BALANCE = 1000
@@ -55,16 +52,6 @@ class FocusContext:
 
     current_container: EntityInstance
     updated_at: datetime
-
-    @property
-    def is_expired(self) -> bool:
-        """Check if the focus context has expired.
-
-        Returns:
-            True if expired, False otherwise
-        """
-        cutoff = datetime.now(UTC) - timedelta(minutes=FOCUS_TIMEOUT_MINUTES)
-        return self.updated_at < cutoff
 
     async def contains(self, entity: EntityInstance) -> bool:
         contents = {e.instance_id for e in await self.current_container.get_contents()}
@@ -142,22 +129,24 @@ class User:
         Returns:
             User model instance (existing or newly created)
         """
-        row = await pool.fetchrow(
-            """
-            INSERT INTO users (id, current_room)
-            SELECT $1, r.id FROM rooms r WHERE r.is_default = TRUE
-            ON CONFLICT (id) DO UPDATE SET id = EXCLUDED.id
-            RETURNING id, current_room, display_name
-            """,
-            user_id,
-        )
-
-        if row is None:
-            # Fallback: no default room configured, try to get existing user
+        default = await Room.get_default(pool)
+        if default is None:
+            # No default room configured, try to get existing user
             existing = await cls.get(pool, user_id)
             if existing:
                 return existing
             raise ValueError("No default room configured and user does not exist")
+
+        row = await pool.fetchrow(
+            """
+            INSERT INTO users (id, current_room)
+            VALUES ($1, $2)
+            ON CONFLICT (id) DO UPDATE SET id = EXCLUDED.id
+            RETURNING id, current_room, display_name
+            """,
+            user_id,
+            default.id,
+        )
 
         return cls(
             id=row["id"],
@@ -206,36 +195,6 @@ class User:
             _pool=pool,
         )
 
-    async def can_see(self, entity: EntityInstance) -> bool:
-        """Check if the user can see a given entity.
-
-        Args:
-            entity: EntityInstance to check visibility for
-        Returns:
-            True if the user can see the entity, False otherwise
-        """
-
-        async def is_in_focus() -> bool:
-            focus = await self.get_focus()
-            return focus is None or await focus.contains(entity)
-
-        async def in_room_and_visible() -> bool:
-            if entity.room_id != self.current_room:
-                return False
-
-            # It's in the room
-            # It's either not in a container, or the container's contents are visible
-            container = await entity.get_container()
-            return not container or container.entity.contents_visible
-
-        return any(
-            e()
-            for e in [
-                lambda: entity.owner_id == self.id,  # it's in your inventory
-                is_in_focus or in_room_and_visible,
-            ]
-        )
-
     async def get_room(self) -> Room:
         """Get the user's current room.
 
@@ -245,8 +204,6 @@ class User:
         Raises:
             ValueError: If room not found (should never happen with FK constraint)
         """
-        from mudd.models.room import Room
-
         room = await Room.get(self._pool, self.current_room)
         if room is None:
             raise ValueError(f"Room not found: {self.current_room}")
@@ -340,33 +297,6 @@ class User:
             "UPDATE user_focus SET updated_at = now() WHERE user_id = $1",
             self.id,
         )
-
-    async def get_focused_contents(self) -> list[str]:
-        """Get entity IDs accessible through current focus (container contents).
-
-        Returns:
-            List of entity IDs (including the focused entity itself),
-            or empty list if no focus
-        """
-        focus = await self.get_focus()
-        if not focus:
-            return []
-
-        # Use focus.entity.entity.id (entity_id from the instance's resolved entity)
-        entity_id = focus.current_container.entity.id
-        rows = await self._pool.fetch(
-            """
-            SELECT DISTINCT entity_id FROM entity_instances
-            WHERE container_entity_id = $1 AND room = $2
-            """,
-            entity_id,
-            self.current_room,
-        )
-
-        entity_ids = [entity_id]
-        entity_ids.extend([row["entity_id"] for row in rows])
-
-        return entity_ids
 
     async def get_balance(self) -> int:
         """Get the user's currency balance.
@@ -465,59 +395,6 @@ class User:
             return None
 
         return await EntityInstance.get(self._pool, row["wallet_instance_id"])
-
-    async def ensure_wallet(self) -> tuple[EntityInstance, bool]:
-        """Ensure user has a wallet. Creates if missing.
-
-        Creates a currency account and wallet entity instance if needed.
-        Discord thread creation is handled by DiscordReconciler via
-        InventorySyncEvent, not this method.
-
-        Returns:
-            Tuple of (wallet_instance, is_new) where is_new is True if
-            a new wallet was created.
-
-        Raises:
-            ValueError: If wallet entity definition doesn't exist
-        """
-        # Check for existing wallet
-        existing = await self.get_wallet()
-        if existing is not None:
-            return (existing, False)
-
-        # Create currency account (idempotent)
-        await self._pool.execute(
-            """
-            INSERT INTO currency_accounts (user_id, balance)
-            VALUES ($1, $2)
-            ON CONFLICT (user_id) DO NOTHING
-            """,
-            self.id,
-            STARTING_BALANCE,
-        )
-
-        # Create wallet instance in user's inventory
-        wallet = await EntityInstance.create(
-            self._pool,
-            "wallet",
-            owner_id=self.id,
-        )
-
-        if wallet is None:
-            raise ValueError("Wallet entity definition not found")
-
-        # Link wallet instance to currency account
-        await self._pool.execute(
-            """
-            UPDATE currency_accounts
-            SET wallet_instance_id = $2
-            WHERE user_id = $1
-            """,
-            self.id,
-            str(wallet.instance_id),
-        )
-
-        return (wallet, True)
 
     async def transfer_currency_to(
         self, recipient: User, amount: int, memo: str

@@ -22,6 +22,8 @@ from mudd.events import (
     ZoneSyncedEvent,
 )
 from mudd.models.entity import EntityInstance
+from mudd.models.room import InventoryThread, Room
+from mudd.models.user import STARTING_BALANCE, User
 
 # Type alias for pending events
 type PendingEvent = (
@@ -117,11 +119,10 @@ class RoomChannelCache:
     async def get_default_room(self) -> str:
         """Get the default room ID from the database (cached after first call)."""
         if self._default_room is None:
-            self._default_room = await self._pool.fetchval(
-                "SELECT id FROM rooms WHERE is_default = TRUE"
-            )
-            if self._default_room is None:
+            room = await Room.get_default(self._pool)
+            if room is None:
                 raise RuntimeError("No default room found in database.")
+            self._default_room = room.id
         return self._default_room
 
     async def get_default_channel_id(self) -> int | None:
@@ -569,8 +570,6 @@ class DiscordReconciler:
             guild: Discord guild
             event: User sync event
         """
-        from mudd.models.user import User
-
         if self.room_cache is None:
             logger.warning(
                 "RoomChannelCache not available, skipping user sync handling"
@@ -805,8 +804,6 @@ class DiscordReconciler:
             Rendered on_look output
         """
         from mudd.commands import LookCommand
-        from mudd.models.room import InventoryThread
-        from mudd.models.user import User
         from mudd.observers import EffectsObserver
         from mudd.scene import Scene
 
@@ -1189,13 +1186,17 @@ class DiscordReconciler:
             category_id: Discord category ID
         """
         # Ensure user exists in users table
+        default = await Room.get_default(self.pool)
+        if default is None:
+            raise RuntimeError("No default room found in database.")
         await self.pool.execute(
             """
             INSERT INTO users (id, current_room)
-            SELECT $1, (SELECT id FROM rooms WHERE is_default = TRUE)
-            WHERE NOT EXISTS (SELECT 1 FROM users WHERE id = $1)
+            VALUES ($1, $2)
+            ON CONFLICT (id) DO NOTHING
             """,
             user_id,
+            default.id,
         )
 
         # Store forum in database
@@ -1220,8 +1221,6 @@ class DiscordReconciler:
             user_id: Discord user ID
             forum: User's inventory forum
         """
-        from mudd.models.user import STARTING_BALANCE, User
-
         # Get or create user
         user = await User.get_or_create(self.pool, user_id)
 

@@ -3,17 +3,15 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import TYPE_CHECKING
 
 import asyncpg
 
-from mudd.events.types import EntitySpawnedEvent
 from mudd.models.zone import SyncStats
 
 if TYPE_CHECKING:
-    from mudd.events.observer import Observer
     from mudd.loaders.zone_loader import SpawningPoolData
     from mudd.models.entity import EntityInstance
 
@@ -41,13 +39,6 @@ class SpawningPool:
     current_count: int = 0
     spawned_entity_ids: tuple[str, ...] = ()
     _pool: asyncpg.Pool | None = field(repr=False, compare=False, default=None)
-    _observers: tuple[Observer, ...] = field(
-        repr=False, compare=False, default_factory=tuple
-    )
-
-    def with_observers(self, *observers: Observer) -> SpawningPool:
-        """Return new instance with additional observers."""
-        return replace(self, _observers=self._observers + observers)
 
     @classmethod
     async def get_all_with_counts(cls, pool: asyncpg.Pool) -> list[SpawningPool]:
@@ -93,10 +84,7 @@ class SpawningPool:
         return True
 
     async def try_spawn(self, now: datetime) -> EntityInstance | None:
-        """Attempt to spawn an entity. Returns instance or None.
-
-        Emits EntitySpawnedEvent to observers on success.
-        """
+        """Attempt to spawn an entity. Returns instance or None."""
         from mudd.models.entity import EntityInstance, ResolvedEntity
 
         if self._pool is None:
@@ -131,16 +119,6 @@ class SpawningPool:
             now,
             self.id,
         )
-
-        # Emit event
-        for observer in self._observers:
-            observer.notify(
-                EntitySpawnedEvent(
-                    instance=instance,
-                    spawning_pool_id=self.id,
-                    room=self.room,
-                )
-            )
 
         return instance
 

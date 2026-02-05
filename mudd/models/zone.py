@@ -37,43 +37,6 @@ class Zone:
     name: str
     description: str | None
     _pool: asyncpg.Pool = field(repr=False, compare=False)
-    _observers: tuple[Observer, ...] = field(default=(), repr=False, compare=False)
-
-    def with_observers(self, *observers: Observer) -> Zone:
-        """Return a new Zone with additional observers attached."""
-        return Zone(
-            id=self.id,
-            name=self.name,
-            description=self.description,
-            _pool=self._pool,
-            _observers=self._observers + observers,
-        )
-
-    @classmethod
-    async def get(cls, pool: asyncpg.Pool, zone_id: str) -> Zone | None:
-        """Get zone by ID.
-
-        Args:
-            pool: Database connection pool
-            zone_id: Zone identifier
-
-        Returns:
-            Zone model instance, or None if not found
-        """
-        row = await pool.fetchrow(
-            "SELECT id, name, description FROM zones WHERE id = $1",
-            zone_id,
-        )
-
-        if row is None:
-            return None
-
-        return cls(
-            id=row["id"],
-            name=row["name"],
-            description=row["description"],
-            _pool=pool,
-        )
 
     @classmethod
     async def sync_all(
