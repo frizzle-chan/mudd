@@ -179,12 +179,21 @@ class UserLocationSyncEvent:
 
 
 @dataclass(frozen=True)
-class UserJoinedEvent:
-    """New user joined the guild."""
+class UserSyncEvent:
+    """Sync user data from Discord to database (idempotent).
+
+    Upserts user with display_name and syncs permissions to current room.
+    For new users, creates them in the default room.
+    """
 
     user_id: int
-    default_room: str
+    display_name: str
+    default_room: str  # Used for new users
     guild_id: int
+
+
+# Alias for semantic distinction - currently does the same thing
+UserJoinedEvent = UserSyncEvent
 
 
 @dataclass(frozen=True)
@@ -215,6 +224,6 @@ GameEvent = (
     | InventorySyncEvent
     | UserMovedEvent
     | UserLocationSyncEvent
-    | UserJoinedEvent
+    | UserSyncEvent
     | UserLeftEvent
 )

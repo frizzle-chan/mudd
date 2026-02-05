@@ -94,13 +94,18 @@ class Scene:
     def with_observers(self, *observers: Observer) -> Scene:
         """Return a new Scene with the given observers attached.
 
+        Also propagates observers to the scene's user, so user mutations
+        (like transfer_currency_to) emit events to attached observers.
+
         Args:
             observers: Observer instances to attach
 
         Returns:
-            New Scene with observers attached
+            New Scene with observers attached to both scene and user
         """
-        return replace(self, _observers=self._observers + observers)
+        new_observers = self._observers + observers
+        new_user = self.user.with_observers(*new_observers)
+        return replace(self, _observers=new_observers, user=new_user)
 
     def get_observer(self, cls: type[T]) -> T | None:
         """Get an attached observer by type.

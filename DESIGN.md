@@ -15,6 +15,7 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 |--------|------|-------------|
 | `id` | BIGINT (PK) | Discord user snowflake ID |
 | `current_room` | TEXT (FK to rooms.id) | Logical room name (e.g., "foyer") |
+| `display_name` | TEXT NOT NULL DEFAULT '' | Cached Discord display name for DB-driven autocomplete |
 | `created_at` | TIMESTAMPTZ | When the record was created |
 | `updated_at` | TIMESTAMPTZ | When the record was last modified |
 

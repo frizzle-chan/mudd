@@ -9,7 +9,7 @@ import discord
 from discord import Interaction, app_commands
 from discord.ext import commands
 
-from mudd.events import InventorySyncEvent, UserJoinedEvent, UserLeftEvent
+from mudd.events import InventorySyncEvent, UserLeftEvent, UserSyncEvent
 from mudd.models.user import User
 from mudd.observers import DiscordReconciler, FocusClearingObserver, RoomChannelCache
 
@@ -210,9 +210,6 @@ class Movement(commands.Cog):
             # Get default room
             default_room = await self.room_cache.get_default_room()
 
-            # Create user in database with default room
-            await User.get_or_create(self._pool, member.id)
-
             # Create reconciler and emit events
             reconciler = DiscordReconciler(
                 cast(discord.Client, self.bot),
@@ -220,10 +217,11 @@ class Movement(commands.Cog):
                 room_cache=self.room_cache,
             )
 
-            # Emit UserJoinedEvent for permission sync
+            # Emit UserSyncEvent - creates user with display_name and grants permissions
             reconciler.notify(
-                UserJoinedEvent(
+                UserSyncEvent(
                     user_id=member.id,
+                    display_name=member.display_name,
                     default_room=default_room,
                     guild_id=member.guild.id,
                 )

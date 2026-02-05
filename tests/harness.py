@@ -86,20 +86,24 @@ class TestClient:
         )
         self.economy_cog = Economy(bot=None, pool=pool)
 
-    async def create_user(self, user_id: int, room: str = "foyer") -> TestUser:
+    async def create_user(
+        self, user_id: int, room: str = "foyer", display_name: str | None = None
+    ) -> TestUser:
         """Create a test user starting in the given room.
 
         Inserts the user into the database and returns a TestUser
         object that tracks their state.
         """
+        name = display_name or f"TestUser{user_id}"
         await self.pool.execute(
             """
-            INSERT INTO users (id, current_room)
-            VALUES ($1, $2)
-            ON CONFLICT (id) DO UPDATE SET current_room = $2
+            INSERT INTO users (id, current_room, display_name)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (id) DO UPDATE SET current_room = $2, display_name = $3
             """,
             user_id,
             room,
+            name,
         )
         return TestUser(user_id, room)
 

@@ -29,10 +29,10 @@ asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "session"
 
 [tool.ty.src]
-exclude = [".claude/skills/skill-creator/"]
+exclude = [".claude/skills/skill-creator/", "vulture_whitelist.py"]
 
 [tool.vulture]
-paths = ["main.py", "mudd/", "scripts/", "tests/"]
+paths = ["main.py", "mudd/", "scripts/", "tests/", "vulture_whitelist.py"]
 min_confidence = 90
 
 [tool.ruff.lint]

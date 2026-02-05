@@ -6,7 +6,9 @@ import asyncpg
 import discord
 from discord import Interaction, app_commands
 from discord.ext import commands
+from rapidfuzz import fuzz
 
+from mudd.models.user import TransferError
 from mudd.observers import DiscordReconciler, EffectsObserver
 from mudd.scene import Scene
 
@@ -27,7 +29,10 @@ class Economy(commands.Cog):
     async def recipient_autocomplete(
         self, interaction: Interaction, current: str
     ) -> list[app_commands.Choice[str]]:
-        """Autocomplete for pay recipients - only shows users in the same room."""
+        """Autocomplete for pay recipients - only shows users in the same room.
+
+        Uses database-driven autocomplete with fuzzy matching on display_name.
+        """
         if not interaction.guild:
             return []
 
@@ -35,7 +40,7 @@ class Economy(commands.Cog):
         if not isinstance(user, discord.Member):
             return []
 
-        # Build scene to get other players
+        # Build scene to get other players from DB
         try:
             scene = await Scene.from_interaction(self._pool, interaction)
         except ValueError:
@@ -45,42 +50,28 @@ class Economy(commands.Cog):
         if not other_players:
             return [app_commands.Choice(name="There's nobody to pay", value="invalid")]
 
-        # Get guild members for those IDs, filtering out bots
-        valid_recipients: list[discord.Member] = []
-        for player in other_players:
-            # Try cache first, then fetch from API
-            member = interaction.guild.get_member(player.id)
-            if member is None:
-                try:
-                    member = await interaction.guild.fetch_member(player.id)
-                except discord.NotFound:
-                    continue
-            if not member.bot:
-                valid_recipients.append(member)
+        # Filter to players with display names (skip unsynced users)
+        players_with_names = [p for p in other_players if p.display_name]
 
-        # If no valid recipients, return placeholder
-        if not valid_recipients:
+        # Fuzzy match on display_name (same pattern as entity autocomplete)
+        if current:
+            current_lower = current.lower()
+            matches = [
+                p
+                for p in players_with_names
+                if fuzz.partial_ratio(current_lower, p.display_name.lower()) >= 75
+            ]
+        else:
+            matches = players_with_names
+
+        if not matches:
             return [app_commands.Choice(name="There's nobody to pay", value="invalid")]
 
-        # Filter by current input (case-insensitive prefix match)
-        current_lower = current.lower()
-        filtered = [
-            m
-            for m in valid_recipients
-            if m.display_name.lower().startswith(current_lower)
-            or m.name.lower().startswith(current_lower)
-        ]
-
-        # If filtering yields no results but we have valid recipients,
-        # show all valid recipients
-        if not filtered and current == "":
-            filtered = valid_recipients
-
         # Sort by display name and limit to 25 (Discord limit)
-        filtered.sort(key=lambda m: m.display_name.lower())
+        matches.sort(key=lambda p: p.display_name.lower())
         return [
-            app_commands.Choice(name=m.display_name, value=str(m.id))
-            for m in filtered[:25]
+            app_commands.Choice(name=p.display_name, value=str(p.id))
+            for p in matches[:25]
         ]
 
     @app_commands.command(name="pay", description="Give yen to another player")
@@ -177,36 +168,28 @@ class Economy(commands.Cog):
             )
             return
 
-        # Execute transfer with observers attached
-        sender_user = scene.user.with_observers(*scene._observers)
+        # Execute transfer (scene.user already has observers from with_observers)
         memo = f"Payment to {recipient_member.display_name}"
-        result = await sender_user.transfer_currency_to(recipient_user, amount, memo)
+        result = await scene.user.transfer_currency_to(recipient_user, amount, memo)
 
-        if result is None:
-            # Check specific failure reason
-            sender_balance = await sender_user.get_balance()
-            if sender_balance == 0:
-                await interaction.response.send_message(
-                    "You don't have a currency account. Try looking at your wallet.",
-                    ephemeral=True,
-                )
-            elif sender_balance < amount:
-                await interaction.response.send_message(
-                    "You don't have enough yen.", ephemeral=True
-                )
-            else:
-                # Recipient likely doesn't have account
-                name = recipient_member.display_name
-                await interaction.response.send_message(
-                    f"**{name}** doesn't have a currency account.",
-                    ephemeral=True,
-                )
+        if not result.success:
+            match result.error:
+                case TransferError.INSUFFICIENT_FUNDS:
+                    msg = "You don't have enough yen."
+                case TransferError.NO_SENDER_ACCOUNT:
+                    msg = (
+                        "You don't have a currency account. Try looking at your wallet."
+                    )
+                case TransferError.NO_RECIPIENT_ACCOUNT:
+                    name = recipient_member.display_name
+                    msg = f"**{name}** doesn't have a currency account."
+                case _:
+                    msg = "Transfer failed."
+            await interaction.response.send_message(msg, ephemeral=True)
             return
 
-        sender_new, _recipient_new = result
-
         # Format balances for display
-        sender_balance_str = f"\u00a5{sender_new:,}"
+        sender_balance_str = f"\u00a5{result.sender_balance:,}"
         amount_str = f"\u00a5{amount:,}"
 
         # Respond with confirmation

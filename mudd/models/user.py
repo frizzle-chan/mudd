@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
+from enum import Enum, auto
 from typing import TYPE_CHECKING
 from uuid import UUID
 
@@ -22,6 +23,24 @@ from mudd.models.entity import EntityInstance
 
 FOCUS_TIMEOUT_MINUTES = 5
 STARTING_BALANCE = 1000
+
+
+class TransferError(Enum):
+    """Error types for currency transfer operations."""
+
+    INSUFFICIENT_FUNDS = auto()
+    NO_SENDER_ACCOUNT = auto()
+    NO_RECIPIENT_ACCOUNT = auto()
+
+
+@dataclass(frozen=True)
+class TransferResult:
+    """Result of a currency transfer operation."""
+
+    success: bool
+    sender_balance: int
+    recipient_balance: int
+    error: TransferError | None = None
 
 
 @dataclass(frozen=True)
@@ -64,6 +83,7 @@ class User:
 
     id: int
     current_room: str
+    display_name: str
     _pool: asyncpg.Pool = field(repr=False, compare=False)
     _observers: tuple[Observer, ...] = field(
         repr=False, compare=False, default_factory=tuple
@@ -97,7 +117,7 @@ class User:
             User model instance, or None if not found
         """
         row = await pool.fetchrow(
-            "SELECT id, current_room FROM users WHERE id = $1",
+            "SELECT id, current_room, display_name FROM users WHERE id = $1",
             user_id,
         )
 
@@ -107,6 +127,7 @@ class User:
         return cls(
             id=row["id"],
             current_room=row["current_room"],
+            display_name=row["display_name"],
             _pool=pool,
         )
 
@@ -126,7 +147,7 @@ class User:
             INSERT INTO users (id, current_room)
             SELECT $1, r.id FROM rooms r WHERE r.is_default = TRUE
             ON CONFLICT (id) DO UPDATE SET id = EXCLUDED.id
-            RETURNING id, current_room
+            RETURNING id, current_room, display_name
             """,
             user_id,
         )
@@ -141,6 +162,47 @@ class User:
         return cls(
             id=row["id"],
             current_room=row["current_room"],
+            display_name=row["display_name"],
+            _pool=pool,
+        )
+
+    @classmethod
+    async def create_or_update(
+        cls, pool: asyncpg.Pool, user_id: int, display_name: str, default_room: str
+    ) -> User:
+        """Create or update a user with display_name.
+
+        For new users, creates them in the default_room.
+        For existing users, updates their display_name (keeps current_room).
+
+        Args:
+            pool: Database connection pool
+            user_id: Discord user snowflake ID
+            display_name: User's current Discord display name
+            default_room: Room to assign new users to
+
+        Returns:
+            User model instance
+        """
+        row = await pool.fetchrow(
+            """
+            INSERT INTO users (id, current_room, display_name)
+            VALUES ($1, $2, $3)
+            ON CONFLICT (id) DO UPDATE SET display_name = $3
+            RETURNING id, current_room, display_name
+            """,
+            user_id,
+            default_room,
+            display_name,
+        )
+
+        # row can't be None here since we're doing an INSERT with RETURNING
+        assert row is not None
+
+        return cls(
+            id=row["id"],
+            current_room=row["current_room"],
+            display_name=row["display_name"],
             _pool=pool,
         )
 
@@ -358,11 +420,16 @@ class User:
             List of User objects for players in the room
         """
         rows = await pool.fetch(
-            "SELECT id, current_room FROM users WHERE current_room = $1",
+            "SELECT id, current_room, display_name FROM users WHERE current_room = $1",
             room_id,
         )
         return [
-            cls(id=row["id"], current_room=row["current_room"], _pool=pool)
+            cls(
+                id=row["id"],
+                current_room=row["current_room"],
+                display_name=row["display_name"],
+                _pool=pool,
+            )
             for row in rows
         ]
 
@@ -474,11 +541,11 @@ class User:
 
     async def transfer_currency_to(
         self, recipient: User, amount: int, memo: str
-    ) -> tuple[int, int] | None:
+    ) -> TransferResult:
         """Transfer currency to another user.
 
-        Returns (sender_new_balance, recipient_new_balance) or None on failure.
-        Emits BalanceChangedEvent for both users.
+        Returns TransferResult with success status, balances, and error if any.
+        Emits BalanceChangedEvent for both users on success.
         """
         if amount <= 0:
             raise ValueError("Amount must be positive")
@@ -504,10 +571,27 @@ class User:
             else:
                 sender_row, recipient_row = second_row, first_row
 
-            if sender_row is None or recipient_row is None:
-                return None
+            if sender_row is None:
+                return TransferResult(
+                    success=False,
+                    sender_balance=0,
+                    recipient_balance=recipient_row["balance"] if recipient_row else 0,
+                    error=TransferError.NO_SENDER_ACCOUNT,
+                )
+            if recipient_row is None:
+                return TransferResult(
+                    success=False,
+                    sender_balance=sender_row["balance"],
+                    recipient_balance=0,
+                    error=TransferError.NO_RECIPIENT_ACCOUNT,
+                )
             if sender_row["balance"] < amount:
-                return None
+                return TransferResult(
+                    success=False,
+                    sender_balance=sender_row["balance"],
+                    recipient_balance=recipient_row["balance"],
+                    error=TransferError.INSUFFICIENT_FUNDS,
+                )
 
             # Create transaction + ledger entries
             tx_row = await conn.fetchrow(
@@ -547,7 +631,11 @@ class User:
                 BalanceChangedEvent(recipient.id, recipient_new, amount, memo)
             )
 
-        return (sender_new, recipient_new)
+        return TransferResult(
+            success=True,
+            sender_balance=sender_new,
+            recipient_balance=recipient_new,
+        )
 
     @classmethod
     async def delete(cls, pool: asyncpg.Pool, user_id: int) -> None:

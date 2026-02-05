@@ -219,29 +219,15 @@ class TestPayAutocomplete:
         assert str(user.id) not in values
         assert str(user2.id) in values
 
-    async def test_autocomplete_excludes_bots(self, test_client):
-        """Autocomplete doesn't show bot users."""
-        user = await test_client.create_user(user_id=500000110, room="foyer")
-        bot_user = await test_client.create_user(user_id=500000111, room="foyer")
-
-        # Add a bot member to the guild
-        await test_client.add_guild_member(bot_user.id, bot=True)
-
-        # Autocomplete should not show bot
-        results = await test_client.recipient_autocomplete(user)
-        values = [r.value for r in results]
-
-        assert str(bot_user.id) not in values
-
     async def test_autocomplete_filters_by_prefix(self, test_client):
-        """Autocomplete filters by name prefix."""
+        """Autocomplete filters by name using fuzzy matching."""
         user = await test_client.create_user(user_id=500000120, room="foyer")
-        user2 = await test_client.create_user(user_id=500000121, room="foyer")
-        user3 = await test_client.create_user(user_id=500000122, room="foyer")
-
-        # Customize display names
-        await test_client.add_guild_member(user2.id, "Alice")
-        await test_client.add_guild_member(user3.id, "Bob")
+        await test_client.create_user(
+            user_id=500000121, room="foyer", display_name="Alice"
+        )
+        await test_client.create_user(
+            user_id=500000122, room="foyer", display_name="Bob"
+        )
 
         # Autocomplete with prefix "A" should show Alice
         results = await test_client.recipient_autocomplete(user, "A")

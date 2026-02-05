@@ -29,6 +29,7 @@ from mudd.events.types import (
     UserLeftEvent,
     UserLocationSyncEvent,
     UserMovedEvent,
+    UserSyncEvent,
     ZoneSyncedEvent,
 )
 
@@ -58,6 +59,7 @@ __all__ = [
     "InventorySyncEvent",
     "UserMovedEvent",
     "UserLocationSyncEvent",
+    "UserSyncEvent",
     "UserJoinedEvent",
     "UserLeftEvent",
 ]

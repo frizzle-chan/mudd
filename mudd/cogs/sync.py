@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 from mudd.events import (
     InventorySyncEvent,
     OrphanChannelDetectedEvent,
-    UserLocationSyncEvent,
+    UserSyncEvent,
 )
 from mudd.loaders.entity_loader import sync_entities
 from mudd.loaders.verb_loader import sync_verbs
@@ -231,18 +231,18 @@ class Sync(commands.Cog):
     async def _sync_user_visibility(
         self, guild, reconciler: DiscordReconciler
     ) -> dict[str, int]:
-        """Sync all users' Discord permissions to match database state.
+        """Sync all users' data and Discord permissions.
 
-        Uses UserLocationSyncEvent to sync permissions. Unlike movement,
-        we use from_room=None which means grant-only (no revoke needed
-        since this is a full sync).
+        Uses UserSyncEvent to:
+        1. Upsert user with display_name (keeping display names in sync)
+        2. Grant permissions to current room (or default for new users)
 
         Args:
             guild: Discord guild
             reconciler: DiscordReconciler with room_cache attached
 
         Returns:
-            Stats dict with counts of users synced/assigned
+            Stats dict with counts of users synced
         """
         default_channel_id = await self.room_cache.get_default_channel_id()
         if default_channel_id is None:
@@ -253,60 +253,30 @@ class Sync(commands.Cog):
             )
 
         default_room = await self.room_cache.get_default_room()
-        stats = {"synced": 0, "assigned_default": 0, "errors": 0}
+        stats = {"synced": 0, "errors": 0}
 
         for member in guild.members:
             if member.bot:
                 continue
 
             try:
-                # Get user's current room from database
-                user_room = await self.room_cache.get_user_room(member.id)
-
-                if user_room is None:
-                    # New user - assign to default room
-                    await self._pool.execute(
-                        """
-                        INSERT INTO users (id, current_room)
-                        VALUES ($1, $2)
-                        ON CONFLICT (id) DO UPDATE SET current_room = $2
-                        """,
-                        member.id,
-                        default_room,
-                    )
-                    user_room = default_room
-                    stats["assigned_default"] += 1
-                else:
-                    # Check if room still exists
-                    channel_id = self.room_cache.get_channel_for_room(user_room)
-                    if channel_id is None:
-                        # Room no longer exists, relocate to default
-                        await self._pool.execute(
-                            "UPDATE users SET current_room = $2 WHERE id = $1",
-                            member.id,
-                            default_room,
-                        )
-                        user_room = default_room
-                        stats["assigned_default"] += 1
-                    else:
-                        stats["synced"] += 1
-
-                # Emit UserLocationSyncEvent for permission sync
-                # from_room=None means grant-only (no old permissions to revoke)
+                # Emit UserSyncEvent - handles user upsert with display_name
+                # and grants permissions to current room (or default for new users)
                 reconciler.notify(
-                    UserLocationSyncEvent(
+                    UserSyncEvent(
                         user_id=member.id,
-                        from_room=None,
-                        to_room=user_room,
+                        display_name=member.display_name,
+                        default_room=default_room,
                         guild_id=guild.id,
                     )
                 )
+                stats["synced"] += 1
 
             except Exception:
                 logger.exception(f"Failed to sync user {member.id}")
                 stats["errors"] += 1
 
-        # Flush all permission changes
+        # Flush all user sync events
         await reconciler.flush()
 
         return stats

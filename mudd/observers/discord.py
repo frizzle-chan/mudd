@@ -20,9 +20,9 @@ from mudd.events import (
     InventorySyncEvent,
     OrphanChannelDetectedEvent,
     RoomSyncedEvent,
-    UserJoinedEvent,
     UserLeftEvent,
     UserLocationSyncEvent,
+    UserSyncEvent,
     ZoneSyncedEvent,
 )
 from mudd.models.entity import EntityInstance
@@ -35,7 +35,7 @@ type PendingEvent = (
     | tuple[OrphanChannelDetectedEvent, str]
     | tuple[InventorySyncEvent, str]
     | tuple[UserLocationSyncEvent, str]
-    | tuple[UserJoinedEvent, str]
+    | tuple[UserSyncEvent, str]
     | tuple[UserLeftEvent, str]
 )
 
@@ -272,8 +272,8 @@ class DiscordReconciler:
                 )
             case UserLocationSyncEvent() as evt:
                 self._pending.append((evt, "user_location_sync"))
-            case UserJoinedEvent() as evt:
-                self._pending.append((evt, "user_joined"))
+            case UserSyncEvent() as evt:
+                self._pending.append((evt, "user_sync"))
             case UserLeftEvent() as evt:
                 self._pending.append((evt, "user_left"))
             # Ignore template signals and UserMovedEvent - handled by other observers
@@ -303,7 +303,7 @@ class DiscordReconciler:
         orphan_events: list[OrphanChannelDetectedEvent] = []
         inventory_sync_events: list[InventorySyncEvent] = []
         location_sync_events: list[UserLocationSyncEvent] = []
-        user_joined_events: list[UserJoinedEvent] = []
+        user_sync_events: list[UserSyncEvent] = []
         user_left_events: list[UserLeftEvent] = []
         entity_events: list[tuple[EntityInstance, str]] = []
 
@@ -319,8 +319,8 @@ class DiscordReconciler:
                     inventory_sync_events.append(item)  # type: ignore[arg-type]
                 case "user_location_sync":
                     location_sync_events.append(item)  # type: ignore[arg-type]
-                case "user_joined":
-                    user_joined_events.append(item)  # type: ignore[arg-type]
+                case "user_sync":
+                    user_sync_events.append(item)  # type: ignore[arg-type]
                 case "user_left":
                     user_left_events.append(item)  # type: ignore[arg-type]
                 case _:
@@ -360,11 +360,11 @@ class DiscordReconciler:
                     continue
                 await self._sync_user_location(guild, evt)
 
-            # 6. Process user joined events
-            for evt in user_joined_events:
+            # 6. Process user sync events (upsert with display_name, grant permissions)
+            for evt in user_sync_events:
                 if evt.guild_id != guild.id:
                     continue
-                await self._handle_user_joined(guild, evt)
+                await self._handle_user_sync(guild, evt)
 
             # 7. Process user left events
             for evt in user_left_events:
@@ -560,18 +560,24 @@ class DiscordReconciler:
             f"Synced location for {member.id}: {event.from_room} -> {event.to_room}"
         )
 
-    async def _handle_user_joined(
-        self, guild: discord.Guild, event: UserJoinedEvent
+    async def _handle_user_sync(
+        self, guild: discord.Guild, event: UserSyncEvent
     ) -> None:
-        """Handle a new user joining: sync to default room.
+        """Handle user sync: upsert user with display_name and grant permissions.
+
+        This is an idempotent operation that:
+        1. Upserts user with display_name (creates new or updates existing)
+        2. Grants permissions to current room (or default for new users)
 
         Args:
             guild: Discord guild
-            event: User joined event
+            event: User sync event
         """
+        from mudd.models.user import User
+
         if self.room_cache is None:
             logger.warning(
-                "RoomChannelCache not available, skipping user join handling"
+                "RoomChannelCache not available, skipping user sync handling"
             )
             return
 
@@ -580,8 +586,16 @@ class DiscordReconciler:
             logger.debug(f"User {event.user_id} not found in guild {guild.name}")
             return
 
-        # Grant access to default room
-        channel_id = self.room_cache.get_channel_for_room(event.default_room)
+        # Upsert user with display_name via model
+        user = await User.create_or_update(
+            self.pool,
+            event.user_id,
+            event.display_name,
+            event.default_room,
+        )
+
+        # Grant access to current room
+        channel_id = self.room_cache.get_channel_for_room(user.current_room)
         if channel_id:
             channel = guild.get_channel(channel_id)
             if channel:
@@ -589,10 +603,10 @@ class DiscordReconciler:
                     await channel.set_permissions(
                         member,
                         overwrite=discord.PermissionOverwrite(view_channel=True),
-                        reason="MUDD - new user spawn",
+                        reason="MUDD - user sync",
                     )
                 except discord.HTTPException as e:
-                    logger.error(f"Failed to grant permissions for new user: {e}")
+                    logger.error(f"Failed to grant permissions for user: {e}")
 
                 if isinstance(channel, discord.TextChannel):
                     await self._set_voice_permissions(
@@ -601,10 +615,13 @@ class DiscordReconciler:
                         overwrite=discord.PermissionOverwrite(
                             view_channel=True, connect=True, speak=True
                         ),
-                        reason="MUDD - new user spawn",
+                        reason="MUDD - user sync",
                     )
 
-        logger.info(f"User {event.user_id} joined, spawned in {event.default_room}")
+        logger.debug(
+            f"Synced user {event.user_id} (display_name={event.display_name}) "
+            f"to room {user.current_room}"
+        )
 
     async def _handle_user_left(
         self, guild: discord.Guild, event: UserLeftEvent

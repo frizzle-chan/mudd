@@ -12,7 +12,7 @@ from mudd.models.entity_definition import EntityDefinition
 from mudd.models.interfaces import IEntityInstance, IRoom, IUser
 from mudd.models.room import EntityModal, InventoryThread, Room
 from mudd.models.spawning_pool import SpawningPool
-from mudd.models.user import FocusContext, User
+from mudd.models.user import FocusContext, TransferError, TransferResult, User
 from mudd.models.zone import SyncStats, Zone
 
 __all__ = [
@@ -26,6 +26,8 @@ __all__ = [
     # User model
     "User",
     "FocusContext",
+    "TransferError",
+    "TransferResult",
     # Room model
     "Room",
     "EntityModal",
