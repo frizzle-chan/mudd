@@ -23,96 +23,55 @@ Similar challenges arise with other modal interactions:
 
 In the context of **container and modal interactions**, facing **the poor UX of stateless interactions with many-item containers**, we decided to **introduce a "focus context" that tracks the entity a user is currently interacting with**, to achieve **contextual autocomplete that prioritizes relevant items**, accepting **database storage overhead for persistence across bot restarts**.
 
-**Focus context structure:**
-```python
-@dataclass(frozen=True)
-class FocusContext:
-    user_id: int
-    room: str
-    entity_id: str           # The focused entity (e.g., chest)
-    entity_name: str         # Display name for autocomplete prefix
-    focus_mode: FocusMode    # Type of focus: 'none' or 'container'
-    updated_at: datetime     # For timeout calculation
-```
+A focus context tracks:
+- The user and their current room
+- The focused entity (e.g., the chest being examined)
+- The focus mode (type of interaction)
+- A timestamp for timeout calculation
 
-Note: Container contents are retrieved dynamically via `get_focused_contents()` rather than stored in the FocusContext dataclass, avoiding stale data if container contents change.
+Container contents are retrieved dynamically rather than stored in the focus context, avoiding stale data if contents change.
 
 ### Focus Persistence
 
-In the context of **frequent bot deployments**, facing **the need for focus state to survive restarts**, we decided to **store focus context in PostgreSQL**, to achieve **seamless UX across deployments**, accepting **additional database queries on interaction**.
+In the context of **frequent bot deployments**, facing **the need for focus state to survive restarts**, we decided to **store focus context in the database**, to achieve **seamless UX across deployments**, accepting **additional database queries on interaction**.
 
-**Schema:**
-```sql
-CREATE TABLE user_focus (
-    user_id BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-    room TEXT NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
-    entity_id TEXT NOT NULL REFERENCES entities(id) ON DELETE CASCADE,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
-CREATE INDEX idx_user_focus_updated ON user_focus(updated_at);
-```
-
-**Foreign keys:**
-- `user_id` -> `users(id)` with `ON DELETE CASCADE`: If user is deleted, their focus is deleted
-- `room` -> `rooms(id)` with `ON DELETE CASCADE`: If room is deleted, focus in that room is deleted
-- `entity_id` -> `entities(id)` with `ON DELETE CASCADE`: If entity is deleted, focus on it is deleted
-
-**Why not in-memory?** The bot is frequently deployed. Losing focus state on restart would frustrate users who just opened a container.
+Foreign key relationships ensure focus is automatically cleaned up when users, rooms, or entities are deleted.
 
 ### Focus Context Service
 
-In the context of **managing per-user focus state**, facing **the need for global access to focus contexts across cogs**, we decided to **create a FocusContextService singleton following the pattern of VisibilityService and EntityService**, to achieve **consistent state management with familiar patterns**, accepting **database persistence with in-memory caching for performance**.
+In the context of **managing per-user focus state**, facing **the need for global access to focus contexts across the application**, we decided to **create a focus context service following the pattern of other services**, to achieve **consistent state management with familiar patterns**, accepting **database persistence with in-memory caching for performance**.
 
-> **Note:** *Superseded by ADR 0004 "Entity Resolution Unification"*: The `FocusContextService` still exists but is now wrapped by `EntityResolutionService`, which provides unified entity resolution including focus management. Cogs should use `EntityResolutionService` rather than `FocusContextService` directly.
+> **Note:** *Superseded by ADR 0004*: The focus context service is now wrapped by a unified entity resolution service. Application code should use the unified service rather than the focus service directly.
 
-**Service interface:**
-
-~~The standalone `FocusContextService` interface is now accessed through `EntityResolutionService`:~~
-
-```python
-class EntityResolutionService:
-    # Focus operations (delegated to FocusContextService internally)
-    async def get_focus(self, user_id: int, room: str) -> FocusContext | None
-    async def set_focus(self, user_id: int, room: str, entity: ResolvedEntity) -> str | None
-    async def clear_focus(self, user_id: int, reason: str = "interaction") -> str | None
-    async def update_focus_timestamp(self, user_id: int) -> None
-    async def is_entity_in_focus(self, user_id: int, room: str, entity_id: str) -> bool
-```
-
-- `get_focus`: Returns None if no focus, stale (different room), or expired (>5 min). Stale/expired focus is lazily cleaned up.
-- `set_focus`: Creates or updates focus. Returns None (no extra message needed for opening).
-- `clear_focus`: Clears focus. When `reason="close"`, returns the `on_close` template for rendering.
-- `update_focus_timestamp`: Refreshes the timestamp to prevent timeout when interacting with focused content.
-- `is_entity_in_focus`: Checks if an entity is the focused container or contained within it.
-- ~~`get_focused_contents`: Returns entity IDs accessible through current focus (container + contents).~~ *Removed: Container contents are now resolved via `EntityResolutionService.get_autocomplete_choices()`*
+**Service operations:**
+- **Get focus**: Returns the current focus, or nothing if none exists, the user moved rooms, or the focus expired
+- **Set focus**: Creates or updates focus on an entity
+- **Clear focus**: Removes focus, optionally returning a close message
+- **Update timestamp**: Refreshes the timestamp to prevent timeout during interaction
+- **Check focus membership**: Determines if an entity is within the current focus context
 
 ### Focus Establishment Rules
 
-In the context of **determining when focus is established**, facing **the need for intuitive, predictable behavior**, we decided to **establish focus only when OnOpen executes on an entity with `focus_mode != 'none'`**, to achieve **explicit user intent without surprises**, accepting **that looking at or using entities doesn't change autocomplete behavior**.
+In the context of **determining when focus is established**, facing **the need for intuitive, predictable behavior**, we decided to **establish focus only when an open action executes on an entity with focus mode enabled**, to achieve **explicit user intent without surprises**, accepting **that looking at or using entities doesn't change autocomplete behavior**.
 
 **Focus is established when:**
-1. User executes an `ON_OPEN` action (verbs like "open", "unlock", "unseal")
-2. Target entity has `focus_mode != 'none'`
+1. User executes an open action (verbs like "open", "unlock")
+2. Target entity has a focus mode other than "none"
 
-**Why not OnLook?** Looking at a container shows its contents in the response, but doesn't change autocomplete. This keeps `/look` as a read-only action that doesn't establish new state.
+**Why not on look?** Looking at a container shows its contents in the response, but doesn't change autocomplete. This keeps looking as a read-only action that doesn't establish new state.
 
-**Why not OnUse?** "Use" has different semantics than "open". You can "use" an open door to walk through it without re-opening it. Separating open/use/close gives entities cleaner, more composable behaviors.
+**Why not on use?** "Use" has different semantics than "open". You can "use" an open door to walk through it without re-opening it. Separating open/use/close gives entities cleaner, more composable behaviors.
 
 ### Focus Mode as First-Class Field
 
-In the context of **determining which entities can establish focus**, facing **the original design's reliance on inferring focus behavior from `contents_visible=False`**, we decided to **introduce an explicit `focus_mode` enum field on entities**, to achieve **clear separation between visibility (presentation) and focus behavior (interaction)**, accepting **an additional schema column**.
+In the context of **determining which entities can establish focus**, facing **the original design's reliance on inferring focus behavior from `contents_visible`**, we decided to **introduce an explicit `focus_mode` field on entities**, to achieve **clear separation between visibility (presentation) and focus behavior (interaction)**, accepting **an additional schema field**.
 
-**The problem with `contents_visible` inference:**
-- `contents_visible` answers "should contents appear in room descriptions?" (presentation concern)
+**The problem with inferring from visibility:**
+- Visibility answers "should contents appear in room descriptions?" (presentation concern)
 - Focus behavior answers "should this entity capture user attention state?" (interaction concern)
 - Conflating these prevents future focus types that aren't about hidden contents (documents, terminals, conversations)
 
-**Focus mode enum:**
-```sql
-CREATE TYPE focus_mode AS ENUM ('none', 'container');
--- Future values: 'document', 'terminal', 'conversation'
-```
+**Focus modes:**
 
 | Mode | Behavior | Example |
 |------|----------|---------|
@@ -124,145 +83,101 @@ CREATE TYPE focus_mode AS ENUM ('none', 'container');
 - `terminal` - Focus on commands/subsystems within a computer
 - `conversation` - Focus on dialogue options with an NPC
 
-**Design principle:** `contents_visible` controls what players *see* in room descriptions; `focus_mode` controls what players *interact with* after opening. A chest might have `contents_visible=False` (hidden in room view) and `focus_mode='container'` (establishes focus when opened). A shelf might have `contents_visible=True` (items shown in room) and `focus_mode='none'` (opening doesn't change autocomplete priority).
+**Design principle:** Visibility controls what players *see* in room descriptions; focus mode controls what players *interact with* after opening. A chest might have hidden contents (not shown in room view) but establish focus when opened. A shelf might have visible contents (shown in room) but not establish focus when opened.
 
 ### Focus Lifecycle
 
-In the context of **managing when focus contexts are destroyed**, facing **the need for intuitive, predictable behavior**, we decided to **clear focus when interacting with unrelated entities, changing rooms, or after 5 minutes of inactivity**, to achieve **a simple mental model where focus follows interaction**, accepting **that users must re-open containers after switching context**.
+In the context of **managing when focus contexts are destroyed**, facing **the need for intuitive, predictable behavior**, we decided to **clear focus when interacting with unrelated entities, changing rooms, or after inactivity**, to achieve **a simple mental model where focus follows interaction**, accepting **that users must re-open containers after switching context**.
 
 **Focus is cleared when:**
 - User interacts with a different entity NOT in current focus contents
-- User selects "Room" from autocomplete (the `[Close <container>] Room` option)
+- User selects an escape option from autocomplete
 - User moves to a different room
-- 5 minutes pass without interaction
-- User explicitly closes via `/interact close <container>`
+- Inactivity timeout (e.g., 5 minutes)
+- User explicitly closes via close action
 
 **Focus is NOT cleared when:**
 - User interacts with an item inside the focused container
 - User looks at any entity (looking is read-only and doesn't affect focus)
-- User looks at the room itself (`/look` with no target)
+- User looks at the room itself
 
 ### OnOpen and OnClose Handlers
 
-In the context of **distinguishing opening, using, and closing actions**, facing **the need for clear separation of concerns**, we decided to **add separate OnOpen and OnClose handler fields to entities**, to achieve **clean semantics where "open" opens, "use" uses, and "close" closes**, accepting **two new schema columns and verb action types**.
+In the context of **distinguishing opening, using, and closing actions**, facing **the need for clear separation of concerns**, we decided to **add separate OnOpen and OnClose handler fields to entities**, to achieve **clean semantics where "open" opens, "use" uses, and "close" closes**, accepting **new schema fields and verb action types**.
 
 **New entity fields:**
-- `on_open TEXT` - Handler for opening (chest, door, book)
-- `on_close TEXT` - Handler for closing
+- `on_open` - Handler for opening (chest, door, book)
+- `on_close` - Handler for closing
 
 **New verb actions:**
-- `ON_OPEN` added to `verb_action` enum
-- `ON_CLOSE` added to `verb_action` enum
-
-**Verb files:**
-- `data/verbs/on_open.txt`:
-  ```
-  open
-  pry
-  unlock
-  unseal
-  ```
-- `data/verbs/on_close.txt`:
-  ```
-  close
-  lock
-  seal
-  shut
-  ```
-
-**Example templates:**
-```jinja
-{# OnOpen - for opening a chest #}
-You open the {{ name }}.{{ contents }}
-
-{# OnClose - for closing a chest #}
-You close the {{ name }}.
-
-{# OnUse - for using something (e.g., walking through an open door) #}
-You walk through the {{ name }}.
-```
+- Open verbs (open, pry, unlock, unseal)
+- Close verbs (close, lock, seal, shut)
 
 **Focus behavior:**
-- `ON_OPEN` on closed container -> establish focus
-- `ON_CLOSE` -> clear focus
-- `ON_USE` -> no focus change (use is independent of open/close)
+- Open action on container with focus mode → establish focus
+- Close action → clear focus
+- Use action → no focus change
 
 ### Autocomplete Enhancement
 
 In the context of **helping users interact with focused container contents**, facing **autocomplete showing all room entities equally**, we decided to **show only focused contents when a container is open, with an escape option to close it**, to achieve **clean autocomplete that prioritizes contextually relevant items**, accepting **that room entities are hidden while focused**.
 
-> **Note:** *Superseded by ADR 0004 "Entity Resolution Unification"*: Autocomplete values are now source-prefixed (e.g., `room:Wooden Table`, `container:Gold Key`, `escape:room`) for unambiguous resolution. The display names remain the same but the underlying values encode the source context.
+> **Note:** *Superseded by ADR 0004*: Autocomplete values are now prefixed for unambiguous resolution. The display names remain the same but the underlying values encode the source context.
 
 **Behavior:**
 - When focused on a container, autocomplete shows only the container's contents
-- A special `[Close {container}] Room` option appears at the top as the escape mechanism
-- Selecting this option clears focus and shows the room description
+- A special escape option appears at the top to close the container and return to room view
+- Selecting the escape option clears focus and shows the room description
 
 **Example autocomplete when focused on "Wooden Chest":**
 ```
-[Close Wooden Chest] Room        <- escape option (value: escape:room)
-Vinyl Record - Abbey Road        <- focused content (value: container:Vinyl Record - Abbey Road)
-Vinyl Record - Dark Side         <- focused content (value: container:Vinyl Record - Dark Side)
-Gold Ring                        <- focused content (value: container:Gold Ring)
+[Close Wooden Chest] Room        <- escape option
+Vinyl Record - Abbey Road        <- focused content
+Vinyl Record - Dark Side         <- focused content
+Gold Ring                        <- focused content
 ```
 
 **Example autocomplete with no focus:**
 ```
-Room                             <- view room description (value: escape:room)
-Wooden Chest                     <- room entity (value: room:Wooden Chest)
-Wooden Table                     <- room entity (value: room:Wooden Table)
-Brass Lamp                       <- room entity (value: room:Brass Lamp)
+Room                             <- view room description
+Wooden Chest                     <- room entity
+Wooden Table                     <- room entity
+Brass Lamp                       <- room entity
 ```
 
 ### Focus-Aware Interaction Flow
 
-In the context of **the /interact command flow**, facing **the need to check and update focus state**, we decided to **integrate focus checks into the existing interaction pipeline**, to achieve **transparent focus management without changing command syntax**, accepting **additional service calls in the interact cog**.
+In the context of **the interaction command flow**, facing **the need to check and update focus state**, we decided to **integrate focus checks into the existing interaction pipeline**, to achieve **transparent focus management without changing command syntax**, accepting **additional service calls in the interaction handler**.
 
 **Updated flow:**
 1. Resolve target entity (unchanged)
 2. **NEW:** Check if target is in current focus contents or is the focused container
-3. **NEW:** If target is unrelated room entity -> clear focus
+3. **NEW:** If target is unrelated room entity → clear focus
 4. Execute handler (unchanged)
 5. **NEW:** After handler executes:
-   - If action is `ON_OPEN` AND entity is closed container -> establish focus
-   - If action is `ON_CLOSE` -> clear focus
+   - If action is open AND entity has container focus mode → establish focus
+   - If action is close → clear focus
 
 ### Focus-Aware Look Flow
 
-**Current implementation:** The `/look` command does NOT clear focus. Focus is only cleared by:
+The look command does NOT clear focus. Focus is only cleared by:
 - Room movement
-- `/interact` with an unrelated entity
-- Explicit close action (`/interact close <container>`)
-- 5-minute timeout
+- Interaction with an unrelated entity
+- Explicit close action
+- Inactivity timeout
 
-**Note:** `/look` with no target (view room) does NOT clear focus. Looking at entities also does not clear focus - only explicit interaction does.
+Looking at entities or the room does not clear focus—only explicit interaction does.
 
 ### Entity Schema Changes
 
-In the context of **adding open and close behaviors to entities**, facing **the need for custom open/close responses and explicit focus control**, we decided to **add `on_open`, `on_close`, and `focus_mode` columns to the entities table**, to achieve **separate open, use, and close behaviors with custom templates and explicit focus intent**, accepting **schema migration and loader updates**.
+In the context of **adding open and close behaviors to entities**, facing **the need for custom open/close responses and explicit focus control**, we decided to **add open handler, close handler, and focus mode fields to entities**, to achieve **separate open, use, and close behaviors with custom templates and explicit focus intent**, accepting **schema migration and loader updates**.
 
-**Schema change:**
-```sql
--- Focus mode enum
-CREATE TYPE focus_mode AS ENUM ('none', 'container');
--- Future: 'document', 'terminal', 'conversation'
+**New fields:**
+- `on_open` - Template for open actions
+- `on_close` - Template for close actions
+- `focus_mode` - Enum controlling focus behavior (none, container)
 
--- Handler columns
-ALTER TABLE entities ADD COLUMN on_open TEXT;
-ALTER TABLE entities ADD COLUMN on_close TEXT;
-
--- Focus mode column (nullable for prototype inheritance)
-ALTER TABLE entities ADD COLUMN focus_mode focus_mode DEFAULT NULL;
-```
-
-**Recutils fields:** `OnOpen`, `OnClose`, `FocusMode` (same pattern as OnLook, OnUse, etc.)
-
-**Inheritance:** `on_open`, `on_close`, and `focus_mode` inherit from prototypes like other handler fields. Include `focus_mode` in `resolve_entity()` inheritance chain. `focus_mode` is nullable: NULL means "inherit from prototype", explicit values override.
-
-**Focus behavior** is controlled by the resolved `focus_mode` field:
-- `focus_mode=NULL` -> inherit from prototype (default for derived entities)
-- `focus_mode='none'` -> explicitly no focus (open door, visible shelf)
-- `focus_mode='container'` -> focus established on OnOpen, cleared on OnClose (chest, vault)
+**Inheritance:** All new fields inherit from prototypes like other handler fields. A null focus mode means "inherit from prototype"; explicit values override.
 
 ## Consequences
 
@@ -273,21 +188,21 @@ ALTER TABLE entities ADD COLUMN focus_mode focus_mode DEFAULT NULL;
 - Natural mental model: focus follows attention
 - Focus persists across bot restarts
 - Graceful degradation: stateless interaction still works if focus is lost
-- Clean separation of open (OnOpen), use (OnUse), and close (OnClose) behaviors
+- Clean separation of open, use, and close behaviors
 - Composable entity behaviors (door can be opened, walked through, closed as separate actions)
-- Explicit focus intent per entity via `focus_mode` field
-- Separation of visibility concerns (`contents_visible`) from focus behavior (`focus_mode`)
-- Extensible to future focus types (document, terminal, conversation) via enum values
+- Explicit focus intent per entity via focus mode field
+- Separation of visibility concerns from focus behavior
+- Extensible to future focus types via enum values
 
 ### Negative
 
-- New database table required (`user_focus`)
-- Entity schema changes required (new `on_open`, `on_close`, and `focus_mode` columns)
-- Two new verb action types (`ON_OPEN`, `ON_CLOSE`) and verb files
-- Additional database queries on interaction/look
-- Slightly longer autocomplete entries due to prefix
+- New database table required for focus state
+- Entity schema changes required for new fields
+- Two new verb action types and verb files
+- Additional database queries on interaction
+- Slightly longer autocomplete entries due to escape option
 
 ### Future Considerations
 
-- Nested focus (computer -> directory -> file) - currently single-level only
+- Nested focus (computer → directory → file) - currently single-level only
 - Focus-specific actions (e.g., certain verbs only valid when focused)
