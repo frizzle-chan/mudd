@@ -168,4 +168,10 @@ class Scene:
         if effects.has_destroy:
             await target.destroy()
 
+        # Handle focus signals
+        if effects.has_set_focus:
+            await self.user.set_focus(target.instance_id)
+        if effects.has_clear_focus:
+            await self.user.clear_focus()
+
         return result

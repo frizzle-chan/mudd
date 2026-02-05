@@ -3,6 +3,7 @@
 from mudd.events.observer import Observer
 from mudd.events.types import (
     BroadcastEvent,
+    ClearFocusSignal,
     DestroySignal,
     DispenseSignal,
     DropSignal,
@@ -10,6 +11,7 @@ from mudd.events.types import (
     GrantEvent,
     GrantRandomEvent,
     PickupSignal,
+    SetFocusSignal,
 )
 
 
@@ -118,4 +120,22 @@ class EffectsCollector:
             Empty string (allows inline use in templates)
         """
         self._observer.notify(DispenseSignal())
+        return ""
+
+    def set_focus(self) -> str:
+        """Signal that focus should be set on the current entity.
+
+        Returns:
+            Empty string (allows inline use in templates)
+        """
+        self._observer.notify(SetFocusSignal())
+        return ""
+
+    def clear_focus(self) -> str:
+        """Signal that user focus should be cleared.
+
+        Returns:
+            Empty string (allows inline use in templates)
+        """
+        self._observer.notify(ClearFocusSignal())
         return ""

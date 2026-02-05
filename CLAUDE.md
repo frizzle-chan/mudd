@@ -64,7 +64,6 @@ The codebase uses an MVC + events architecture:
 - **Observers** (`mudd/observers/`): React to events after command execution
   - `EffectsObserver`: Collects in-template effects (pickup, drop, broadcast)
   - `DiscordReconciler`: Syncs Discord state (threads, permissions, channels)
-  - `FocusClearingObserver`: Clears user focus on movement events
 - **Scene** (`mudd/scene.py`): Ties together user, room, focus, and observers for command execution
 
 **Reference cogs**: `mudd/cogs/look.py`, `mudd/cogs/interact.py`
@@ -93,7 +92,7 @@ The codebase uses an MVC + events architecture:
 
 **Design docs**: See `DESIGN.md` for PostgreSQL schema and data persistence details. **Always update DESIGN.md when modifying the database schema.**
 
-**Entity resolution**: When querying entity fields that support prototype inheritance (like `focus_mode`, `on_close`, etc.), use the `resolve_entity()` SQL function instead of joining directly to the `entities` table. Direct joins return NULL for inherited values, while `resolve_entity()` follows the prototype chain and applies defaults.
+**Entity resolution**: When querying entity fields that support prototype inheritance (like `on_close`, `contents_visible`, etc.), use the `resolve_entity()` SQL function instead of joining directly to the `entities` table. Direct joins return NULL for inherited values, while `resolve_entity()` follows the prototype chain and applies defaults.
 
 **Docker**: The `.dockerignore` uses an allowlist pattern (starts with `*`, then `!` to include specific paths). **When adding new top-level directories needed at runtime, you must add them to `.dockerignore`.**
 

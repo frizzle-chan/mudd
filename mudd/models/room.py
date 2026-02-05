@@ -122,7 +122,6 @@ class Room:
             on_close=on_look,
             on_drop=on_look,
             contents_visible=True,
-            focus_mode="none",
             rarity="none",
         )
 

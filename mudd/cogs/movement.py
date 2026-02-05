@@ -11,7 +11,7 @@ from discord.ext import commands
 
 from mudd.events import InventorySyncEvent, UserLeftEvent, UserSyncEvent
 from mudd.models.user import User
-from mudd.observers import DiscordReconciler, FocusClearingObserver, RoomChannelCache
+from mudd.observers import DiscordReconciler, RoomChannelCache
 
 logger = logging.getLogger(__name__)
 
@@ -159,16 +159,15 @@ class Movement(commands.Cog):
         )
 
         try:
-            # Create observers
-            focus_observer = FocusClearingObserver(self._pool)
+            # Create observer for Discord sync
             reconciler = DiscordReconciler(
                 cast(discord.Client, self.bot),
                 self._pool,
                 room_cache=self.room_cache,
             )
 
-            # Attach observers and move
-            user_with_observers = user.with_observers(focus_observer, reconciler)
+            # Attach observer and move (move_to clears focus internally)
+            user_with_observers = user.with_observers(reconciler)
             await user_with_observers.move_to(
                 target_room, guild_id=interaction.guild.id
             )
@@ -176,9 +175,8 @@ class Movement(commands.Cog):
             # Defer response to give us time for permission sync
             await interaction.response.defer(ephemeral=True)
 
-            # Flush observers (syncs permissions, clears focus)
+            # Flush observer (syncs permissions)
             await reconciler.flush()
-            await focus_observer.flush()
 
             # Send followup (user now has access to target channel)
             await interaction.followup.send(

@@ -87,8 +87,7 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 | `on_open` | TEXT | Handler response for open action (NULL = inherit from prototype) |
 | `on_close` | TEXT | Handler response for close action (NULL = inherit from prototype) |
 | `on_drop` | TEXT | Handler response for drop action (NULL = inherit from prototype) |
-| `contents_visible` | BOOLEAN | Whether child entities appear in room descriptions (NULL = inherit, TRUE = auto-list, FALSE = hidden until examined). Note: This controls *visibility* only; interaction context is controlled by `focus_mode` |
-| `focus_mode` | focus_mode | Focus behavior: `none` (no focus), `container` (establish focus on open). NULL = inherit from prototype |
+| `contents_visible` | BOOLEAN | Whether child entities appear in room descriptions (NULL = inherit, TRUE = auto-list, FALSE = hidden until examined) |
 | `rarity` | rarity NOT NULL DEFAULT 'none' | Item rarity affecting name display and pickup behavior |
 
 **Constraints:**
@@ -99,9 +98,11 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 - If template calls `pickup()`: item moves to inventory
 - If template doesn't call `pickup()`: message shown, item stays
 
-**Focus Mode Enum:**
-- `none`: No focus established when opened (default)
-- `container`: Focus established on open, contents become autocomplete targets
+**Focus Behavior:**
+- Controlled by `effects.set_focus()` and `effects.clear_focus()` in templates
+- Call `effects.set_focus()` in `on_open` or `on_use` to establish focus on the entity
+- Call `effects.clear_focus()` in `on_close` to clear focus
+- When focused, autocomplete shows only container contents
 
 **Indexes:**
 - Primary key on `id`
@@ -229,8 +230,8 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 - Persists across bot restarts (stored in PostgreSQL, not memory)
 
 **Focus Lifecycle (ADR 0003):**
-- Established: When user executes ON_OPEN action on entity with `focus_mode != 'none'`
-- Cleared: Room movement, looking at room, looking at unrelated entity, interacting with unrelated entity, ON_CLOSE action, 5-minute timeout
+- Established: When template calls `effects.set_focus()` (typically in `on_open` or `on_use` handlers)
+- Cleared: When template calls `effects.clear_focus()` (typically in `on_close` handler), room movement, looking at room, looking at unrelated entity, interacting with unrelated entity, 5-minute timeout
 - Preserved: Looking at focused entity or its contents, interacting with focused entity or its contents
 
 **Constraints:**
@@ -318,7 +319,7 @@ The `resolve_entity(target_id TEXT)` function resolves entity properties by walk
 - First non-NULL value wins for each property
 - Supports up to 10 levels of inheritance depth (prevents infinite loops from circular references)
 - Used to materialize the final entity state including inherited properties
-- Returns: `id`, `name`, `description_short`, `description_long`, `on_*` handlers (including `on_open`, `on_close`), `contents_visible`, `focus_mode`, `rarity`
+- Returns: `id`, `name`, `description_short`, `description_long`, `on_*` handlers (including `on_open`, `on_close`), `contents_visible`, `rarity`
 
 ## Sync System
 
@@ -458,7 +459,9 @@ scene.execute(command, entity)
     ├─ Map signals to mutations:
     │   ├─ has_pickup → entity.move_to_inventory()
     │   ├─ has_drop → entity.drop_to_room()
-    │   └─ has_destroy → entity.destroy()
+    │   ├─ has_destroy → entity.destroy()
+    │   ├─ has_set_focus → user.set_focus(entity)
+    │   └─ has_clear_focus → user.clear_focus()
     └─ Return ActionResult(output)
 
 scene.flush_observers()
@@ -535,7 +538,7 @@ class Observer(Protocol):
 ### EffectsObserver
 
 Collects template events during rendering:
-- **Signals**: `has_pickup`, `has_drop`, `has_destroy`, `has_dispense`
+- **Signals**: `has_pickup`, `has_drop`, `has_destroy`, `has_dispense`, `has_set_focus`, `has_clear_focus`
 - **Effects**: `broadcasts`, `grants`, `grant_randoms`, `currency_grants`
 
 ### DiscordReconciler
@@ -548,7 +551,7 @@ Syncs Discord state when entities change:
 ### Event Types
 
 **Signals** (control entity state):
-- `PickupSignal`, `DropSignal`, `DestroySignal`, `DispenseSignal`
+- `PickupSignal`, `DropSignal`, `DestroySignal`, `DispenseSignal`, `SetFocusSignal`, `ClearFocusSignal`
 
 **Effects** (template side effects):
 - `BroadcastEvent(message)`, `GrantEvent(entity_id)`, `GrantRandomEvent(tag)`, `GrantCurrencyEvent(amount)`
@@ -664,6 +667,29 @@ Result:
 - **Public to channel**: "**Frizzle** smashes the *Flower Vase*!"
 - Entity instance is deleted from the database
 - If paired with a spawning pool, the entity will respawn
+
+**`effects.set_focus()`** - Signals that focus should be set on this entity (used in `on_open` or `on_use` handlers for containers).
+
+```jinja
+{# Container that establishes focus when opened #}
+{{ effects.set_focus() }}You open the {{ name }}.{% if e.contents %} Inside:{{ e.contents }}{% else %} It's empty.{% endif %}
+```
+
+Result:
+- User's focus is set to this entity
+- Autocomplete now shows only this entity's contents plus "close" option
+- Focus persists until `clear_focus()` or room movement
+
+**`effects.clear_focus()`** - Signals that user focus should be cleared (used in `on_close` handlers).
+
+```jinja
+{# Container close handler #}
+{{ effects.clear_focus() }}You close the {{ name }}.
+```
+
+Result:
+- User's focus is cleared
+- Autocomplete returns to showing room entities
 
 All effect functions return an empty string, allowing inline use without affecting output.
 

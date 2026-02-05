@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 
 from mudd.events.types import (
     BroadcastEvent,
+    ClearFocusSignal,
     DestroySignal,
     DispenseSignal,
     DropSignal,
@@ -15,6 +16,7 @@ from mudd.events.types import (
     GrantEvent,
     GrantRandomEvent,
     PickupSignal,
+    SetFocusSignal,
 )
 
 
@@ -48,6 +50,8 @@ class EffectsObserver:
     _drop_signaled: bool = False
     _destroy_signaled: bool = False
     _dispense_signaled: bool = False
+    _set_focus_signaled: bool = False
+    _clear_focus_signaled: bool = False
 
     def notify(self, event: GameEvent) -> None:
         """Receive an event notification.
@@ -72,6 +76,10 @@ class EffectsObserver:
                 self._destroy_signaled = True
             case DispenseSignal():
                 self._dispense_signaled = True
+            case SetFocusSignal():
+                self._set_focus_signaled = True
+            case ClearFocusSignal():
+                self._clear_focus_signaled = True
             case EntityPickedUpEvent() | EntityDroppedEvent() | EntityDestroyedEvent():
                 pass  # Model events - handled by DiscordReconciler
 
@@ -121,6 +129,16 @@ class EffectsObserver:
     def has_dispense(self) -> bool:
         """Whether dispense() was called during template rendering."""
         return self._dispense_signaled
+
+    @property
+    def has_set_focus(self) -> bool:
+        """Whether set_focus() was called during template rendering."""
+        return self._set_focus_signaled
+
+    @property
+    def has_clear_focus(self) -> bool:
+        """Whether clear_focus() was called during template rendering."""
+        return self._clear_focus_signaled
 
     def merge_from(self, other: "EffectsObserver") -> None:
         """Merge effects from another observer into this one.

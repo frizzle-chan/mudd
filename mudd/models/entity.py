@@ -14,7 +14,6 @@ from mudd.events import (
     EntityDroppedEvent,
     EntityPickedUpEvent,
 )
-from mudd.models.types import FocusMode
 from mudd.models.zone import SyncStats
 from mudd.utils.random import weighted_choice
 from mudd.utils.text import Rarity
@@ -59,7 +58,6 @@ class ResolvedEntity:
     on_close: str | None
     on_drop: str | None
     contents_visible: bool
-    focus_mode: FocusMode
     rarity: Rarity
 
     @classmethod
@@ -84,7 +82,6 @@ class ResolvedEntity:
             on_close=row["on_close"],
             on_drop=row["on_drop"],
             contents_visible=contents_visible,
-            focus_mode=row["focus_mode"],
             rarity=row["rarity"],
         )
 
@@ -219,11 +216,6 @@ class EntityInstance:
     def contents_visible(self) -> bool:
         """Whether container contents are visible."""
         return self.entity.contents_visible
-
-    @property
-    def focus_mode(self) -> FocusMode:
-        """Focus mode (none or container)."""
-        return self.entity.focus_mode
 
     @property
     def rarity(self) -> Rarity:

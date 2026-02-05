@@ -80,10 +80,9 @@ Description: A grand foyer with marble floors. To your right is a #hallway.
 %type: Container rec Entity
 %type: Room rec Room
 %type: ContentsVisible bool
-%type: FocusMode enum none container
 %type: Rarity enum none common uncommon rare epic legendary mythic quest
 %mandatory: Id Name
-%allowed: Id Name Prototype Container Room ContentsVisible FocusMode DescriptionShort DescriptionLong
+%allowed: Id Name Prototype Container Room ContentsVisible DescriptionShort DescriptionLong
 %allowed: OnLook OnTouch OnAttack OnUse OnTake OnOpen OnClose OnDrop
 %allowed: Tags Rarity
 
@@ -103,7 +102,6 @@ ContentsVisible: yes
 - `Room` - Room where this entity spawns (omit for prototypes)
 - `Container` - Parent entity for containment (e.g., lamp on table)
 - `ContentsVisible` - Whether children auto-list (`yes` for tables, `no` for chests)
-- `FocusMode` - Focus behavior on open: `none` (default), `container` (establishes focus, prioritizes contents in autocomplete)
 - `Rarity` - Item rarity for loot pools: `none` (default, static items), `common`, `uncommon`, `rare`, `epic`, `legendary`, `mythic`, `quest`
 - `Tags` - Space-separated tags for categorization (used by spawning pools)
 - `DescriptionShort` - One-line description for `/look`
@@ -122,6 +120,13 @@ ContentsVisible: yes
 - Items are dropped when `OnDrop` calls `{{ effects.drop() }}`
 - If the effect isn't called, only the message is shown (item doesn't move)
 - Quest items (`Rarity: quest`) work like regular items; use spawning pools for respawn
+
+**Focus Behavior:**
+- Focus is controlled by `{{ effects.set_focus() }}` and `{{ effects.clear_focus() }}` template effects
+- Call `effects.set_focus()` in `OnOpen` or `OnUse` to establish focus on a container
+- Call `effects.clear_focus()` in `OnClose` to clear focus when closing
+- When focused on a container, autocomplete shows only container contents
+- Focus clears automatically on room movement
 
 ### Templates
 

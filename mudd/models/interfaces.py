@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Protocol
 from uuid import UUID
 
-from mudd.models.types import FocusMode
 from mudd.utils.text import Rarity
 
 if TYPE_CHECKING:
@@ -143,11 +142,6 @@ class IEntityInstance(Protocol):
     @property
     def contents_visible(self) -> bool:
         """Whether container contents are visible."""
-        ...
-
-    @property
-    def focus_mode(self) -> FocusMode:
-        """Focus mode (none or container)."""
         ...
 
     @property

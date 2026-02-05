@@ -142,10 +142,9 @@ Description: A dimly lit lounge.
 %type: Container rec Entity
 %type: Room rec Room
 %type: ContentsVisible bool
-%type: FocusMode enum none container
 %type: Rarity enum none common uncommon rare epic legendary mythic quest
 %mandatory: Id Name
-%allowed: Id Name Prototype Container Room ContentsVisible FocusMode DescriptionShort DescriptionLong
+%allowed: Id Name Prototype Container Room ContentsVisible DescriptionShort DescriptionLong
 %allowed: OnLook OnTouch OnAttack OnUse OnTake OnOpen OnClose OnDrop
 %allowed: Tags Rarity
 
@@ -172,11 +171,10 @@ Id: chest
 Name: chest
 Prototype: object
 DescriptionShort: A {{ e.name }} sits here.
-FocusMode: container
 OnLook: {{ e.description_long or e.description_short or "You see nothing special." }}
-OnUse: You open the {{ e.name }}.{% if e.contents %} Inside:{{ e.contents }}{% else %} It's empty.{% endif %}
-OnOpen: You open the {{ e.name }}.{% if e.contents %} Inside:{{ e.contents }}{% else %} It's empty.{% endif %}
-OnClose: You close the {{ e.name }}.
+OnUse: {{ effects.set_focus() }}You open the {{ e.name }}.{% if e.contents %} Inside:{{ e.contents }}{% else %} It's empty.{% endif %}
+OnOpen: {{ effects.set_focus() }}You open the {{ e.name }}.{% if e.contents %} Inside:{{ e.contents }}{% else %} It's empty.{% endif %}
+OnClose: {{ effects.clear_focus() }}You close the {{ e.name }}.
 
 Id: glass_object
 Name: Glass Object
@@ -392,13 +390,13 @@ Id: restroom_sinks
 Name: Row of Sinks
 Prototype: furniture
 Room: restroom
-FocusMode: container
 ContentsVisible: no
 DescriptionShort: A {{ e.name }} lines the wall beneath a long mirror, with soap and paper towel dispensers mounted above.
 DescriptionLong: Four white porcelain sinks with chrome fixtures. Above them stretches a long mirror, and mounted on the wall are soap dispensers and paper towel dispensers.
 OnTouch: You run your hand under the faucet. The water is lukewarm.
 OnUse: You turn on the faucet and wash your hands. The soap smells vaguely of industrial lavender.
-OnOpen: You step up to the sinks and survey your options.{% if e.contents %} Above:{{ e.contents }}{% endif %}
+OnOpen: {{ effects.set_focus() }}You step up to the sinks and survey your options.{% if e.contents %} Above:{{ e.contents }}{% endif %}
+OnClose: {{ effects.clear_focus() }}You step back from the sinks.
 
 Id: restroom_mirror
 Name: Long Mirror
@@ -444,12 +442,11 @@ Id: restroom_stalls
 Name: Toilet Stalls
 Prototype: furniture
 Room: restroom
-FocusMode: container
 ContentsVisible: yes
 DescriptionShort: Three {{ e.name }} with wooden doors line the back wall{% if e.contents %}. Inside:{{ e.contents }}{% endif %}
 DescriptionLong: Three toilet stalls with honey-colored wooden doors. The gaps around the doors are uncomfortably wide, as is tradition.
-OnOpen: You push open a stall door.{% if e.contents %} Inside you see:{{ e.contents }}{% else %} Just an empty stall.{% endif %}
-OnClose: You let the stall door swing shut. It bounces a few times before settling.
+OnOpen: {{ effects.set_focus() }}You push open a stall door.{% if e.contents %} Inside you see:{{ e.contents }}{% else %} Just an empty stall.{% endif %}
+OnClose: {{ effects.clear_focus() }}You let the stall door swing shut. It bounces a few times before settling.
 
 Id: restroom_toilet
 Name: Toilet
@@ -511,19 +508,18 @@ Id: office_terminal
 Name: MUDD-OS Terminal
 Prototype: object
 Room: office
-FocusMode: container
 ContentsVisible: no
 DescriptionShort: An old {{ e.name }} hums on the desk.
 DescriptionLong: A bulky CRT monitor displaying green text on black. The case is beige plastic, yellowed with age. A small sticker reads "MUDD-OS v0.2.1".
 OnUse: The CRT hums as you press the power button. Green text flickers to life. You can now __login__.
-OnOpen: ```
+OnOpen: {{ effects.set_focus() }}```
 + ┏┳┓╻ ╻╺┳┓╺┳┓   ┏━┓┏━┓
 + ┃┃┃┃ ┃ ┃┃ ┃┃╺━╸┃ ┃┗━┓
 + ╹ ╹┗━┛╺┻┛╺┻┛   ┗━┛┗━┛
 + ```
 + *MUDD-OS v0.2.1 — Multi-User Dungeon (Discord)*
 + Welcome, GUEST. You have access to the following files:{% if e.contents %}{{ e.contents }}{% else %} (none){% endif %}
-OnClose: ```
+OnClose: {{ effects.clear_focus() }}```
 + LOGGING OUT...
 +
 + GOODBYE, GUEST.
@@ -753,12 +749,11 @@ Id: gallery_wall
 Name: Gallery Wall
 Prototype: furniture
 Room: gallery
-FocusMode: container
 DescriptionShort: A section of {{ e.name }} displays rotating artwork{% if e.contents %}:{{ e.contents }}{% endif %}
 DescriptionLong: A dedicated wall space where the curator rotates pieces from the collection. A small placard reads "Featured Works - Selection changes periodically. All artwork drawn by real human beings."
 ContentsVisible: yes
-OnOpen: You step closer to examine the {{ e.name }}.{% if e.contents %} Currently on display:{{ e.contents }}{% else %} The wall is bare.{% endif %}
-OnClose: You step back from the {{ e.name }}.
+OnOpen: {{ effects.set_focus() }}You step closer to examine the {{ e.name }}.{% if e.contents %} Currently on display:{{ e.contents }}{% else %} The wall is bare.{% endif %}
+OnClose: {{ effects.clear_focus() }}You step back from the {{ e.name }}.
 
 # Gallery wall paintings (spawned by gallery_wall_pool)
 
@@ -896,24 +891,22 @@ Id: lounge_globe_minibar
 Name: Globe Minibar
 Prototype: furniture
 Room: lounge
-FocusMode: container
 DescriptionShort: An oversized {{ e.name }} sits in the corner.
 DescriptionLong: A vintage wooden globe on a brass stand. You can __open__ the northern hemisphere to reveal the minibar inside.
 ContentsVisible: no
 OnUse: You swing open the globe and pour yourself a drink. It restores health.
-OnOpen: You swing open the northern hemisphere.{% if e.contents %} Inside:{{ e.contents }}{% else %} It's empty.{% endif %}
-OnClose: You swing the globe closed.
+OnOpen: {{ effects.set_focus() }}You swing open the northern hemisphere.{% if e.contents %} Inside:{{ e.contents }}{% else %} It's empty.{% endif %}
+OnClose: {{ effects.clear_focus() }}You swing the globe closed.
 
 Id: lounge_fridge
 Name: Drink Fridge
 Prototype: furniture
 Room: lounge
-FocusMode: container
 DescriptionShort: A windowed {{ e.name }} sits against the east wall.
 DescriptionLong: A glass-door mini fridge humming quietly. The glass is fogged with condensation. You can __open__ it to see what's inside.
 OnTouch: The glass is cold and slightly damp with condensation.
-OnOpen: You swing open the fridge door.{% if e.contents %} Inside:{{ e.contents }}{% else %} It's empty.{% endif %}
-OnClose: You close the fridge door.
+OnOpen: {{ effects.set_focus() }}You swing open the fridge door.{% if e.contents %} Inside:{{ e.contents }}{% else %} It's empty.{% endif %}
+OnClose: {{ effects.clear_focus() }}You close the fridge door.
 
 Id: lounge_chairs
 Name: Comfy Chairs
@@ -1225,7 +1218,7 @@ DescriptionLong: A Post-it note with tiny handwriting. It reads:
 +
 + The original design was stateless - containers had no 'opened' state. But opening a chest with 20 items meant a wall of text and no autocomplete help.
 +
-+ Solution: track what the user is 'focused' on. When you open a container with FocusMode='container', we store that focus in the database. Now autocomplete shows ONLY the container contents, plus an escape option to close it.
++ Solution: track what the user is 'focused' on. When a template calls effects.set_focus(), we store that focus in the database. Now autocomplete shows ONLY the container contents, plus an escape option to close it.
 +
 + Focus persists across bot restarts (stored in PostgreSQL), clears on room movement or 5-minute timeout, and is per-user. Looking at things doesn't affect focus - only explicit open/close/interact actions do.
 +
@@ -1596,13 +1589,12 @@ Id: sitting_room_chairs
 Name: Comfy Chairs
 Prototype: chest
 Room: sitting-room
-FocusMode: container
 ContentsVisible: no
 DescriptionShort: Several {{ e.name }} are arranged around the room.
 DescriptionLong: Plush armchairs upholstered in faded floral fabric. They look well-loved. You could __search__ between the cushions.
 OnUse: You settle into one of the armchairs near the fire. The warmth and comfort wash over you. You feel your health regenerating.
-OnOpen: You dig around between the cushions.{% if e.contents %} You find:{{ e.contents }}{% else %} Nothing but lint and crumbs.{% endif %}
-OnClose: You stop rummaging through the cushions.
+OnOpen: {{ effects.set_focus() }}You dig around between the cushions.{% if e.contents %} You find:{{ e.contents }}{% else %} Nothing but lint and crumbs.{% endif %}
+OnClose: {{ effects.clear_focus() }}You stop rummaging through the cushions.
 
 Id: sitting_room_fireplace
 Name: Fireplace

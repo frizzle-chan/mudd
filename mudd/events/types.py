@@ -66,6 +66,20 @@ class DispenseSignal:
 
 
 @dataclass(frozen=True)
+class SetFocusSignal:
+    """Signal that focus should be set on the current entity."""
+
+    pass
+
+
+@dataclass(frozen=True)
+class ClearFocusSignal:
+    """Signal that user focus should be cleared."""
+
+    pass
+
+
+@dataclass(frozen=True)
 class EntityPickedUpEvent:
     """Fact: entity was picked up by a user."""
 
@@ -155,8 +169,9 @@ class InventorySyncEvent:
 class UserMovedEvent:
     """User moved from one room to another.
 
-    Game logic event - observed by FocusClearingObserver and other
-    gameplay observers. Does NOT directly trigger permission sync.
+    Game logic event for gameplay observers. Focus is cleared by
+    User.move_to() directly, not via observer. Does NOT directly
+    trigger permission sync - that's UserLocationSyncEvent.
     """
 
     user_id: int
@@ -215,6 +230,8 @@ GameEvent = (
     | DropSignal
     | DestroySignal
     | DispenseSignal
+    | SetFocusSignal
+    | ClearFocusSignal
     | EntityPickedUpEvent
     | EntityDroppedEvent
     | EntityDestroyedEvent

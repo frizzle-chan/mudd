@@ -7,7 +7,7 @@ Models are frozen dataclasses with classmethods for queries and instance
 methods for mutations. Mutations return new instances (immutable pattern).
 """
 
-from mudd.models.entity import EntityInstance, FocusMode, ResolvedEntity
+from mudd.models.entity import EntityInstance, ResolvedEntity
 from mudd.models.entity_definition import EntityDefinition
 from mudd.models.interfaces import IEntityInstance, IRoom, IUser
 from mudd.models.room import EntityModal, InventoryThread, Room
@@ -20,7 +20,6 @@ __all__ = [
     "ResolvedEntity",
     "EntityInstance",
     "EntityDefinition",
-    "FocusMode",
     # SpawningPool model
     "SpawningPool",
     # User model

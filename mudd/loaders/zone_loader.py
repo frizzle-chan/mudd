@@ -12,7 +12,6 @@ from typing import Literal, cast, get_args, overload
 import asyncpg
 import discord
 
-from mudd.models.types import FocusMode
 from mudd.utils.text import Rarity
 
 logger = logging.getLogger(__name__)
@@ -52,7 +51,6 @@ class EntityData:
     container_id: str | None = None
     room: str | None = None
     contents_visible: bool | None = None
-    focus_mode: FocusMode | None = None  # None = inherit from prototype
     rarity: Rarity = "none"
     tags: list[str] | None = None  # Space-separated in rec files
     description_short: str | None = None
@@ -161,17 +159,6 @@ def _parse_entity_row(row: dict[str, str]) -> EntityData:
     elif contents_visible_str in ("no", "false", "0"):
         contents_visible = False
 
-    # Parse focus_mode - None means inherit from prototype
-    focus_mode: FocusMode | None = None
-    focus_mode_raw = row.get("FocusMode", "").lower()
-    if focus_mode_raw:
-        if focus_mode_raw not in ("none", "container"):
-            raise ValueError(
-                f"Entity '{row['Id']}' has invalid FocusMode '{focus_mode_raw}'. "
-                f"Valid values: none, container"
-            )
-        focus_mode = cast(FocusMode, focus_mode_raw)
-
     # Parse rarity with default and validation
     rarity_raw = row.get("Rarity", "").lower() or "none"
     if rarity_raw not in VALID_RARITIES:
@@ -192,7 +179,6 @@ def _parse_entity_row(row: dict[str, str]) -> EntityData:
         container_id=row.get("Container") or None,
         room=row.get("Room") or None,
         contents_visible=contents_visible,
-        focus_mode=focus_mode,
         rarity=rarity,
         tags=tags,
         description_short=row.get("DescriptionShort") or None,

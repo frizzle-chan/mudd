@@ -330,33 +330,9 @@ class User:
             entity_instance_id,
         )
 
-    async def clear_focus(self) -> str | None:
-        """Clear user's focus.
-
-        Returns:
-            The on_close template if the focused entity has one, else None
-        """
-        row = await self._pool.fetchrow(
-            """
-            DELETE FROM user_focus uf
-            USING entity_instances ei
-            WHERE uf.user_id = $1 AND uf.entity_instance_id = ei.id
-            RETURNING
-                ei.entity_id,
-                (SELECT on_close FROM resolve_entity(ei.entity_id)) AS on_close
-            """,
-            self.id,
-        )
-
-        if not row:
-            # No focus existed (or instance was already deleted)
-            # Try simple delete in case instance was cascade-deleted
-            await self._pool.execute(
-                "DELETE FROM user_focus WHERE user_id = $1", self.id
-            )
-            return None
-
-        return row["on_close"]
+    async def clear_focus(self) -> None:
+        """Clear user's focus."""
+        await self._pool.execute("DELETE FROM user_focus WHERE user_id = $1", self.id)
 
     async def refresh_focus(self) -> None:
         """Update the timestamp on user's focus to prevent timeout."""
@@ -436,7 +412,7 @@ class User:
     async def move_to(self, room_id: str, *, guild_id: int) -> User:
         """Move the user to a different room.
 
-        Updates the database and returns a new User instance.
+        Updates the database, clears focus, and returns a new User instance.
         Emits UserMovedEvent (game logic) and UserLocationSyncEvent (Discord sync).
 
         Args:
@@ -447,6 +423,10 @@ class User:
             New User instance with updated location
         """
         from_room = self.current_room
+
+        # Clear focus when moving rooms (per ADR 0003)
+        await self.clear_focus()
+
         await self._pool.execute(
             "UPDATE users SET current_room = $2 WHERE id = $1",
             self.id,
@@ -455,7 +435,7 @@ class User:
 
         new_user = replace(self, current_room=room_id)
 
-        # Emit game event (focus clearing, etc.)
+        # Emit game event (for other observers that care about movement)
         for observer in new_user._observers:
             observer.notify(UserMovedEvent(self.id, from_room, room_id, guild_id))
 

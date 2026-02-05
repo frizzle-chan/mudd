@@ -39,7 +39,6 @@ class EntityDefinition:
     on_close: str | None
     on_drop: str | None
     contents_visible: bool | None
-    focus_mode: str | None
     rarity: str
     tags: list[str] | None
 
@@ -270,9 +269,9 @@ class EntityDefinition:
                         description_short, description_long,
                         on_look, on_touch, on_attack, on_use, on_take,
                         on_open, on_close, on_drop,
-                        contents_visible, focus_mode, rarity
+                        contents_visible, rarity
                     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
-                              $13, $14, $15::focus_mode, $16::rarity)
+                              $13, $14, $15::rarity)
                     ON CONFLICT (id) DO UPDATE SET
                         name = $2,
                         prototype_id = $3,
@@ -287,8 +286,7 @@ class EntityDefinition:
                         on_close = $12,
                         on_drop = $13,
                         contents_visible = $14,
-                        focus_mode = $15::focus_mode,
-                        rarity = $16::rarity
+                        rarity = $15::rarity
                     """,
                     entity.id,
                     entity.name,
@@ -304,7 +302,6 @@ class EntityDefinition:
                     entity.on_close,
                     entity.on_drop,
                     entity.contents_visible,
-                    entity.focus_mode,
                     entity.rarity,
                 )
 
