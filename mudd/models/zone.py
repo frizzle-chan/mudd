@@ -49,11 +49,6 @@ class Zone:
             _observers=self._observers + observers,
         )
 
-    def _notify(self, event: ZoneSyncedEvent) -> None:
-        """Notify all observers of an event."""
-        for observer in self._observers:
-            observer.notify(event)
-
     @classmethod
     async def get(cls, pool: asyncpg.Pool, zone_id: str) -> Zone | None:
         """Get zone by ID.
@@ -79,27 +74,6 @@ class Zone:
             description=row["description"],
             _pool=pool,
         )
-
-    @classmethod
-    async def get_all(cls, pool: asyncpg.Pool) -> list[Zone]:
-        """Get all zones.
-
-        Args:
-            pool: Database connection pool
-
-        Returns:
-            List of all Zone model instances
-        """
-        rows = await pool.fetch("SELECT id, name, description FROM zones")
-        return [
-            cls(
-                id=row["id"],
-                name=row["name"],
-                description=row["description"],
-                _pool=pool,
-            )
-            for row in rows
-        ]
 
     @classmethod
     async def sync_all(

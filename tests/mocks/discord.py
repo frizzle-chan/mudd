@@ -23,12 +23,12 @@ class MockResponse:
         self._deferred = False
 
     async def send_message(
-        self, content: str, *, ephemeral: bool = False, **kwargs
+        self, content: str, *, _ephemeral: bool = False, **_kwargs
     ) -> None:
         """Capture the message content."""
         self.messages.append(content)
 
-    async def defer(self, *, ephemeral: bool = False) -> None:
+    async def defer(self, *, _ephemeral: bool = False) -> None:
         """Mock defer for long operations."""
         self._deferred = True
 
@@ -68,7 +68,7 @@ class MockTextChannel(discord.TextChannel):
         """Return Discord-style channel mention."""
         return f"<#{self.id}>"
 
-    async def send(self, content: str, **kwargs) -> None:  # type: ignore[override]
+    async def send(self, content: str, **_kwargs) -> None:  # type: ignore[override]
         """Capture messages sent to the channel."""
         self.sent_messages.append(content)
 
@@ -117,12 +117,12 @@ class MockForumChannel:
         self._threads[thread_id] = thread
         return thread, message
 
-    async def edit(self, *, name: str | None = None, **kwargs) -> None:
+    async def edit(self, *, name: str | None = None, **_kwargs) -> None:
         """Edit forum properties."""
         if name is not None:
             self.name = name
 
-    def set_permissions(self, member: MockMember, **kwargs) -> None:
+    def set_permissions(self, member: MockMember, **_kwargs) -> None:
         """Mock permission setting (no-op for tests)."""
         pass
 
@@ -365,10 +365,6 @@ class StubVisibilityService:
         """Get the default room's channel ID."""
         return None  # Tests don't use real channel IDs
 
-    async def get_user_location(self, user_id: int) -> int | None:
-        """Get the channel ID of the user's current location."""
-        return self._user_locations.get(user_id)
-
     async def delete_user_location(self, user_id: int) -> None:
         """Remove user's location assignment."""
         self._user_locations.pop(user_id, None)
@@ -451,16 +447,6 @@ class StubRoomChannelCache:
     async def get_default_channel_id(self) -> int | None:
         """Get the default room's channel ID."""
         return self._room_to_channel.get(self._default_room)
-
-    async def get_user_location(self, user_id: int) -> int | None:
-        """Get the channel ID of the user's current location."""
-        row = await self._pool.fetchrow(
-            "SELECT current_room FROM users WHERE id = $1",
-            user_id,
-        )
-        if row and row["current_room"]:
-            return self.get_channel_for_room(row["current_room"])
-        return None
 
     async def get_user_room(self, user_id: int) -> str | None:
         """Get the room name of the user's current location."""

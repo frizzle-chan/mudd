@@ -351,36 +351,6 @@ class EntityInstance:
         return cls._from_row(instance_row, entity, pool)
 
     @classmethod
-    async def get_visible_by_room(
-        cls, pool: asyncpg.Pool, room: IRoom
-    ) -> list[EntityInstance]:
-        """Get all entity instances in a room.
-
-        Args:
-            pool: Database connection pool
-            room: Room model instance
-
-        Returns:
-            List of EntityInstance objects in the room
-        """
-        rows = await pool.fetch(
-            """
-            SELECT ei.id AS instance_id, ei.room, ei.owner_id,
-                   ei.container_entity_id, r.*
-            FROM entity_instances ei
-            CROSS JOIN LATERAL resolve_entity(ei.entity_id) r
-            WHERE ei.room = $1 AND rc.contents_visible = TRUE
-            """,
-            room.id,
-        )
-
-        instances = []
-        for row in rows:
-            entity = ResolvedEntity._from_row(row)
-            instances.append(cls._from_row(row, entity, pool))
-        return instances
-
-    @classmethod
     async def get_by_owner(
         cls, pool: asyncpg.Pool, owner_id: int
     ) -> list[EntityInstance]:

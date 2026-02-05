@@ -28,15 +28,3 @@ class Observer(Protocol):
         Called after the response is sent to execute side effects.
         """
         ...
-
-
-class OutputObserver(Observer, Protocol):
-    """Observer that also produces output text."""
-
-    def get_output(self) -> str:
-        """Get the accumulated output text.
-
-        Returns:
-            The output text to show the user
-        """
-        ...

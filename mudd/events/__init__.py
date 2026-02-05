@@ -6,7 +6,7 @@ which notifies observers that collect and process the events.
 """
 
 from mudd.events.collector import EffectsCollector
-from mudd.events.observer import Observer, OutputObserver
+from mudd.events.observer import Observer
 from mudd.events.types import (
     BalanceChangedEvent,
     BroadcastEvent,
@@ -37,7 +37,6 @@ __all__ = [
     "EffectsCollector",
     # Observer protocols
     "Observer",
-    "OutputObserver",
     # Event types
     "GameEvent",
     "BroadcastEvent",

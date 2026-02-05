@@ -58,8 +58,3 @@ async def render(template: str, context: dict[str, Any]) -> str:
         return await _cache[template].render_async(context)
     except TemplateError as e:
         raise TemplateRenderError(f"Template render failed: {e}") from e
-
-
-def clear_cache() -> None:
-    """Clear the template cache."""
-    _cache.clear()

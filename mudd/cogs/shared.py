@@ -44,7 +44,7 @@ async def resolve_entity(
     pool: asyncpg.Pool,
     scene: Scene,
     entity_instance_query: str,
-    ambiguous_handler: Callable[[str], Awaitable[Any]] = lambda msg: asyncio.sleep(0),
+    ambiguous_handler: Callable[[str], Awaitable[Any]] = lambda _: asyncio.sleep(0),
 ) -> EntityInstance | None:
     try:
         entity_instance_id = UUID(entity_instance_query)

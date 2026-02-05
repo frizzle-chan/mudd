@@ -60,7 +60,6 @@ class RoomChannelCache:
         # Zone tracking (rebuilt on each sync)
         self._zone_to_category: dict[str, int] = {}
         self._category_to_zone: dict[int, str] = {}
-        self._room_to_zone: dict[str, str] = {}
 
     async def rebuild(self, guild: discord.Guild) -> None:
         """Build the room name <-> channel ID caches from database and Discord."""
@@ -105,7 +104,6 @@ class RoomChannelCache:
         self._channel_to_room = channel_to_room
         self._zone_to_category = zone_to_category
         self._category_to_zone = category_to_zone
-        self._room_to_zone = room_to_zone
 
         logger.info(
             f"Built room cache with {len(self._room_to_channel)} rooms "
@@ -135,13 +133,6 @@ class RoomChannelCache:
         default_room = await self.get_default_room()
         return self.get_channel_for_room(default_room)
 
-    def is_mud_location(self, channel: discord.abc.GuildChannel) -> bool:
-        """Check if a channel is a MUD location (in a zone category)."""
-        return (
-            isinstance(channel, discord.TextChannel)
-            and channel.category_id in self._category_to_zone
-        )
-
     def get_mud_locations(self, guild: discord.Guild) -> list[discord.TextChannel]:
         """Get all MUD location channels in a guild."""
         return [
@@ -163,16 +154,6 @@ class RoomChannelCache:
                 and voice_channel.category_id == text_channel.category_id
             ):
                 return voice_channel
-        return None
-
-    async def get_user_location(self, user_id: int) -> int | None:
-        """Get the channel ID of the user's current location."""
-        row = await self._pool.fetchrow(
-            "SELECT current_room FROM users WHERE id = $1",
-            user_id,
-        )
-        if row and row["current_room"]:
-            return self.get_channel_for_room(row["current_room"])
         return None
 
     async def get_user_room(self, user_id: int) -> str | None:

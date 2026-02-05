@@ -1,19 +1,6 @@
 """Core type definitions for MUDD."""
 
-from dataclasses import dataclass
 from enum import Enum
-
-
-@dataclass(frozen=True)
-class UserContext:
-    """User information available in templates.
-
-    Provides user-specific context for template rendering, allowing
-    templates to reference the interacting user's name and mention.
-    """
-
-    name: str  # display_name
-    mention: str  # @mention string
 
 
 class VerbAction(str, Enum):
