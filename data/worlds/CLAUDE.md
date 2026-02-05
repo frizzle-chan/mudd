@@ -90,7 +90,7 @@ Id: foyer_table
 Name: Wooden Table
 Prototype: furniture
 Room: foyer
-DescriptionShort: a {{ name }} sits in the middle of the room
+DescriptionShort: a {{ e.name }} sits in the middle of the room
 ContentsVisible: yes
 ```
 
@@ -109,11 +109,10 @@ ContentsVisible: yes
 - `On*` - Action handlers: `OnLook`, `OnTouch`, `OnAttack`, `OnUse`, `OnTake`, `OnOpen`, `OnClose`, `OnDrop`
 
 **All text fields** (`DescriptionShort`, `DescriptionLong`, `On*`) are **Jinja2 templates** with access to:
-- `e`: The resolved entity with all properties
-- `name`: Entity name formatted with Discord italics (`*Name*`)
-- `contents`: Bullet list of container contents (only for entities with `ContentsVisible: yes`)
+- `e`: The resolved entity with all properties (use `e.name`, `e.contents`, `e.description_short`, etc.)
 - `user`: User context with `name` and `mention`
 - `effects`: Side effects object for scripting (see Pickup/Drop Behavior)
+- `container`: The target container entity (only set for drop actions into a container)
 
 **Pickup/Drop Behavior:**
 - Items are picked up when `OnTake` calls `{{ effects.pickup() }}`
@@ -132,7 +131,7 @@ ContentsVisible: yes
 
 The base `object` prototype's `OnLook` template is:
 ```jinja
-{{ e.description_long or e.description_short or "You see nothing special." }}{{ contents }}
+{{ e.description_long or e.description_short or "You see nothing special." }}{{ e.contents }}
 ```
 
 This means entities inherit the behavior of showing their description when examined. Override `OnLook` for custom behavior:
@@ -142,26 +141,26 @@ Id: magic_orb
 Name: Magic Orb
 Prototype: object
 Room: library
-DescriptionShort: a glowing {{ name }}
+DescriptionShort: a glowing {{ e.name }}
 DescriptionLong: A mysterious orb that pulses with arcane energy.
-OnLook: The {{ name }} pulses softly. {{ e.description_long }}
+OnLook: The {{ e.name }} pulses softly. {{ e.description_long }}
 ```
 
 ### Container Contents
 
-The `{{ contents }}` variable contains a bullet list of items inside a container. The format is `\n- item1\n- item2`. Use this to customize how containers display their contents:
+`e.contents` contains a bullet list of items inside a container. The format is `\n- item1\n- item2`. Use this to customize how containers display their contents:
 
 ```rec
 {# Table - shows contents "on it" #}
 Id: foyer_table
-DescriptionShort: a {{ name }} sits here{% if contents %}. On it:{{ contents }}{% endif %}
+DescriptionShort: a {{ e.name }} sits here{% if e.contents %}. On it:{{ e.contents }}{% endif %}
 
 {# Chest - shows contents "in it" #}
 Id: treasure_chest
-DescriptionShort: a {{ name }}{% if contents %}. In it:{{ contents }}{% endif %}
+DescriptionShort: a {{ e.name }}{% if e.contents %}. In it:{{ e.contents }}{% endif %}
 ```
 
-The `contents` variable uses each item's `DescriptionShort` template. For entities without `ContentsVisible: yes`, the `contents` variable is always empty.
+`e.contents` uses each item's `DescriptionShort` template. For entities without `ContentsVisible: yes`, `e.contents` is always empty.
 
 ### Template Examples
 
@@ -170,13 +169,13 @@ The `contents` variable uses each item's `DescriptionShort` template. For entiti
 {{ e.description_long or e.description_short }}
 
 {# Custom text with entity reference #}
-You touch the {{ name }}. It feels warm.
+You touch the {{ e.name }}. It feels warm.
 
 {# Conditional #}
 {% if e.description_long %}{{ e.description_long }}{% else %}Nothing special.{% endif %}
 
 {# Container with contents #}
-A sturdy {{ name }}.{% if contents %} On it:{{ contents }}{% endif %}
+A sturdy {{ e.name }}.{% if e.contents %} On it:{{ e.contents }}{% endif %}
 ```
 
 ### Template Errors
