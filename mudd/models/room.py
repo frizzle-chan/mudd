@@ -166,6 +166,19 @@ class Room:
         return True
 
     @classmethod
+    async def get_all_zone_mappings(cls, pool: asyncpg.Pool) -> dict[str, str]:
+        """Get a mapping of room IDs to their zone IDs.
+
+        Args:
+            pool: Database connection pool
+
+        Returns:
+            Dict mapping room ID to zone ID for all rooms
+        """
+        rows = await pool.fetch("SELECT id, zone_id FROM rooms")
+        return {row["id"]: row["zone_id"] for row in rows}
+
+    @classmethod
     async def sync_all(
         cls,
         pool: asyncpg.Pool,

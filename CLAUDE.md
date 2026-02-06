@@ -88,6 +88,8 @@ The codebase uses an MVC + events architecture:
 
 **Adding new events**: Update `mudd/events/types.py` (add dataclass, update `GameEvent` union), `mudd/events/__init__.py` (import and export), and the observer that handles the event (e.g., `DiscordReconciler`). Prefer model class methods for database logic over inline SQL in observers.
 
+**Model classmethod naming**: Use Rails-style CRUD names: `get` / `get_by_*` (read), `create` (insert), `get_or_create` / `create_or_update` (upsert), `update_*` (field mutation), `clear_*` (nullify fields), `delete` / `delete_by_*` (remove). Avoid `ensure_*`, `set_*`, or `upsert` as method names.
+
 **Default room**: Use `Room.get_default(pool)` to find the default spawn room. Do not inline `SELECT ... WHERE is_default = TRUE` queries.
 
 **MUD concept**: Channel topics = room descriptions. Movement hides/shows channels via Discord permissions.

@@ -39,6 +39,27 @@ class Zone:
     _pool: asyncpg.Pool = field(repr=False, compare=False)
 
     @classmethod
+    async def get_all(cls, pool: asyncpg.Pool) -> list[Zone]:
+        """Get all zones from the database.
+
+        Args:
+            pool: Database connection pool
+
+        Returns:
+            List of all Zone instances
+        """
+        rows = await pool.fetch("SELECT id, name, description FROM zones")
+        return [
+            cls(
+                id=row["id"],
+                name=row["name"],
+                description=row["description"],
+                _pool=pool,
+            )
+            for row in rows
+        ]
+
+    @classmethod
     async def sync_all(
         cls,
         pool: asyncpg.Pool,

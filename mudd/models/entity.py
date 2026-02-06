@@ -161,6 +161,20 @@ class ResolvedEntity:
         return await cls.get(pool, selected_id)
 
 
+@dataclass(frozen=True, slots=True)
+class InstanceThreadInfo:
+    """Lightweight projection of instance thread metadata.
+
+    Used by inventory sync to reconcile Discord threads without loading
+    full EntityInstance objects.
+    """
+
+    instance_id: UUID
+    entity_id: str
+    thread_id: int | None
+    msg_id: int | None
+
+
 @dataclass(frozen=True)
 class EntityInstance:
     """Entity instance with location, resolved properties, and mutation methods.
@@ -361,6 +375,117 @@ class EntityInstance:
             entity = ResolvedEntity._from_row(row)
             instances.append(cls._from_row(row, entity, pool))
         return instances
+
+    @classmethod
+    async def get_thread_id(cls, pool: asyncpg.Pool, instance_id: UUID) -> int | None:
+        """Get the Discord thread ID for an entity instance.
+
+        Args:
+            pool: Database connection pool
+            instance_id: Entity instance UUID
+
+        Returns:
+            Discord thread ID, or None if no thread exists
+        """
+        row = await pool.fetchrow(
+            "SELECT discord_thread_id FROM entity_instances WHERE id = $1",
+            instance_id,
+        )
+        return row["discord_thread_id"] if row else None
+
+    @classmethod
+    async def update_thread_ids(
+        cls,
+        pool: asyncpg.Pool,
+        instance_id: UUID,
+        thread_id: int,
+        msg_id: int,
+    ) -> None:
+        """Set the Discord thread and description message IDs for an instance.
+
+        Args:
+            pool: Database connection pool
+            instance_id: Entity instance UUID
+            thread_id: Discord thread ID
+            msg_id: Discord message ID for the description
+        """
+        await pool.execute(
+            """UPDATE entity_instances
+            SET discord_thread_id = $1, discord_description_msg_id = $2
+            WHERE id = $3""",
+            thread_id,
+            msg_id,
+            instance_id,
+        )
+
+    @classmethod
+    async def clear_thread_ids(cls, pool: asyncpg.Pool, instance_id: UUID) -> None:
+        """Clear the Discord thread and description message IDs for an instance.
+
+        Args:
+            pool: Database connection pool
+            instance_id: Entity instance UUID
+        """
+        await pool.execute(
+            """UPDATE entity_instances
+            SET discord_thread_id = NULL, discord_description_msg_id = NULL
+            WHERE id = $1""",
+            instance_id,
+        )
+
+    @classmethod
+    async def get_thread_ids_by_owner(
+        cls, pool: asyncpg.Pool, owner_id: int
+    ) -> set[int]:
+        """Get all Discord thread IDs for instances owned by a user.
+
+        Args:
+            pool: Database connection pool
+            owner_id: Discord user ID
+
+        Returns:
+            Set of Discord thread IDs (excludes NULL values)
+        """
+        rows = await pool.fetch(
+            """
+            SELECT discord_thread_id FROM entity_instances
+            WHERE owner_id = $1 AND discord_thread_id IS NOT NULL
+            """,
+            owner_id,
+        )
+        return {row["discord_thread_id"] for row in rows}
+
+    @classmethod
+    async def get_thread_info_by_owner(
+        cls, pool: asyncpg.Pool, owner_id: int
+    ) -> list[InstanceThreadInfo]:
+        """Get thread metadata for all instances owned by a user.
+
+        Args:
+            pool: Database connection pool
+            owner_id: Discord user ID
+
+        Returns:
+            List of InstanceThreadInfo with thread metadata
+        """
+        rows = await pool.fetch(
+            """
+            SELECT ei.id, ei.entity_id,
+                   ei.discord_thread_id, ei.discord_description_msg_id
+            FROM entity_instances ei
+            WHERE ei.owner_id = $1
+            """,
+            owner_id,
+        )
+        return [
+            InstanceThreadInfo(
+                instance_id=row["id"],
+                entity_id=row["entity_id"],
+                thread_id=row["discord_thread_id"],
+                msg_id=row["discord_description_msg_id"],
+            )
+            for row in rows
+        ]
 
     @classmethod
     async def get_top_level_by_room(

@@ -9,6 +9,8 @@ import discord
 
 from mudd.events import GameEvent
 from mudd.models.room import Room
+from mudd.models.user import User
+from mudd.models.zone import Zone
 from mudd.observers.inventory import InventoryReconciler
 from mudd.observers.permissions import PermissionReconciler
 from mudd.observers.zone_room import ZoneRoomReconciler
@@ -36,18 +38,13 @@ class RoomChannelCache:
     async def rebuild(self, guild: discord.Guild) -> None:
         """Build the room name <-> channel ID caches from database and Discord."""
         # Query zones from database
-        zone_rows = await self._pool.fetch("SELECT id, name FROM zones")
+        zones = await Zone.get_all(self._pool)
 
         # Query rooms with zone_id from database
-        room_rows = await self._pool.fetch("SELECT id, zone_id FROM rooms")
-
-        # Build zone -> room mapping
-        room_to_zone: dict[str, str] = {}
-        for row in room_rows:
-            room_to_zone[row["id"]] = row["zone_id"]
+        room_to_zone = await Room.get_all_zone_mappings(self._pool)
 
         # Precompute zone lookup by id to avoid nested loops
-        zone_id_map = {row["id"]: row for row in zone_rows}
+        zone_id_map = {z.id: z for z in zones}
 
         # Match Discord categories to zones by name
         zone_to_category: dict[str, int] = {}
@@ -55,10 +52,10 @@ class RoomChannelCache:
         for category in guild.categories:
             # Match category name to zone id (both are lowercase, hyphenated)
             category_name = category.name.lower().replace(" ", "-")
-            zone_row = zone_id_map.get(category_name)
-            if zone_row is not None:
-                zone_to_category[zone_row["id"]] = category.id
-                category_to_zone[category.id] = zone_row["id"]
+            zone = zone_id_map.get(category_name)
+            if zone is not None:
+                zone_to_category[zone.id] = category.id
+                category_to_zone[category.id] = zone.id
 
         # Build room caches only for channels in matched categories
         room_to_channel: dict[str, int] = {}
@@ -129,11 +126,7 @@ class RoomChannelCache:
 
     async def get_user_room(self, user_id: int) -> str | None:
         """Get the room name of the user's current location."""
-        row = await self._pool.fetchrow(
-            "SELECT current_room FROM users WHERE id = $1",
-            user_id,
-        )
-        return row["current_room"] if row else None
+        return await User.get_current_room(self._pool, user_id)
 
 
 class DiscordReconciler:

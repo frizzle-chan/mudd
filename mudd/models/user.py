@@ -395,6 +395,92 @@ class User:
         return new_balance
 
     @classmethod
+    async def create_if_not_exists(
+        cls, pool: asyncpg.Pool, user_id: int, default_room: str
+    ) -> None:
+        """Ensure a user row exists, inserting with default_room if missing.
+
+        Unlike get_or_create, this uses ON CONFLICT DO NOTHING, doesn't require
+        display_name, and returns nothing. Used by inventory setup where we just
+        need the FK to exist.
+
+        Args:
+            pool: Database connection pool
+            user_id: Discord user ID
+            default_room: Room to assign if creating a new user
+        """
+        await pool.execute(
+            """
+            INSERT INTO users (id, current_room)
+            VALUES ($1, $2)
+            ON CONFLICT (id) DO NOTHING
+            """,
+            user_id,
+            default_room,
+        )
+
+    @classmethod
+    async def get_current_room(cls, pool: asyncpg.Pool, user_id: int) -> str | None:
+        """Get the room ID of a user's current location.
+
+        Args:
+            pool: Database connection pool
+            user_id: Discord user ID
+
+        Returns:
+            Room ID string, or None if user not found
+        """
+        row = await pool.fetchrow(
+            "SELECT current_room FROM users WHERE id = $1",
+            user_id,
+        )
+        return row["current_room"] if row else None
+
+    @classmethod
+    async def create_currency_account(
+        cls, pool: asyncpg.Pool, user_id: int, starting_balance: int
+    ) -> None:
+        """Ensure a currency account exists for a user.
+
+        Uses ON CONFLICT DO NOTHING so existing accounts are preserved.
+
+        Args:
+            pool: Database connection pool
+            user_id: Discord user ID
+            starting_balance: Balance for new accounts
+        """
+        await pool.execute(
+            """
+            INSERT INTO currency_accounts (user_id, balance)
+            VALUES ($1, $2)
+            ON CONFLICT (user_id) DO NOTHING
+            """,
+            user_id,
+            starting_balance,
+        )
+
+    @classmethod
+    async def update_wallet_instance(
+        cls, pool: asyncpg.Pool, user_id: int, wallet_instance_id: str
+    ) -> None:
+        """Set the wallet entity instance ID on a user's currency account.
+
+        Args:
+            pool: Database connection pool
+            user_id: Discord user ID
+            wallet_instance_id: UUID string of the wallet EntityInstance
+        """
+        await pool.execute(
+            """
+            UPDATE currency_accounts
+            SET wallet_instance_id = $2
+            WHERE user_id = $1
+            """,
+            user_id,
+            wallet_instance_id,
+        )
+
+    @classmethod
     async def get_players_in_room(cls, pool: asyncpg.Pool, room_id: str) -> list[User]:
         """Get all players in a room.
 

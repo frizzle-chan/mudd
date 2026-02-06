@@ -17,6 +17,7 @@ from mudd.events import (
     UserLeftEvent,
 )
 from mudd.models.entity import EntityInstance
+from mudd.models.inventory_forum import UserInventoryForum
 from mudd.models.room import InventoryThread, Room
 from mudd.models.user import STARTING_BALANCE, User
 from mudd.observers.effects import EffectsObserver
@@ -141,12 +142,9 @@ class InventoryReconciler:
         self, guild: discord.Guild, event: UserLeftEvent
     ) -> None:
         """Handle a user leaving: clean up their inventory forum."""
-        forum_data = await self.pool.fetchrow(
-            "SELECT forum_id FROM user_inventory_forums WHERE user_id = $1",
-            event.user_id,
-        )
-        if forum_data:
-            forum = guild.get_channel(forum_data["forum_id"])
+        forum_id = await UserInventoryForum.get_forum_id(self.pool, event.user_id)
+        if forum_id:
+            forum = guild.get_channel(forum_id)
             if forum:
                 try:
                     await forum.delete()
@@ -211,14 +209,9 @@ class InventoryReconciler:
         self, guild: discord.Guild, instance: EntityInstance
     ) -> None:
         """Idempotent: delete inventory thread for a dropped/destroyed item."""
-        row = await self.pool.fetchrow(
-            "SELECT discord_thread_id FROM entity_instances WHERE id = $1",
-            instance.instance_id,
-        )
-        if row is None or row["discord_thread_id"] is None:
+        thread_id = await EntityInstance.get_thread_id(self.pool, instance.instance_id)
+        if thread_id is None:
             return
-
-        thread_id = row["discord_thread_id"]
 
         thread = guild.get_thread(thread_id)
         if thread:
@@ -235,25 +228,15 @@ class InventoryReconciler:
                 f"Thread {thread_id} not found in Discord, clearing DB reference"
             )
 
-        await self.pool.execute(
-            """UPDATE entity_instances
-            SET discord_thread_id = NULL, discord_description_msg_id = NULL
-            WHERE id = $1""",
-            instance.instance_id,
-        )
+        await EntityInstance.clear_thread_ids(self.pool, instance.instance_id)
 
     async def _prune_orphan_threads(
         self, forum: discord.ForumChannel, user_id: int
     ) -> int:
         """Delete threads that don't correspond to inventory items."""
-        rows = await self.pool.fetch(
-            """
-            SELECT discord_thread_id FROM entity_instances
-            WHERE owner_id = $1 AND discord_thread_id IS NOT NULL
-            """,
-            user_id,
+        valid_thread_ids = await EntityInstance.get_thread_ids_by_owner(
+            self.pool, user_id
         )
-        valid_thread_ids = {row["discord_thread_id"] for row in rows}
 
         pruned = 0
         for thread in forum.threads:
@@ -346,23 +329,18 @@ class InventoryReconciler:
         forum_name: str,
     ) -> discord.ForumChannel | None:
         """Find existing forum or create new one. Handles recovery from DB loss."""
-        forum_data = await self.pool.fetchrow(
-            """SELECT forum_id FROM user_inventory_forums WHERE user_id = $1""",
-            member.id,
-        )
+        forum_id = await UserInventoryForum.get_forum_id(self.pool, member.id)
 
-        if forum_data:
-            forum = guild.get_channel(forum_data["forum_id"])
+        if forum_id:
+            forum = guild.get_channel(forum_id)
             if forum and isinstance(forum, discord.ForumChannel):
                 self._inventory_forum_stats["existing"] += 1
                 return forum
             logger.info(
-                f"Forum {forum_data['forum_id']} was deleted from Discord, "
+                f"Forum {forum_id} was deleted from Discord, "
                 f"clearing DB record for user {member.id}"
             )
-            await self.pool.execute(
-                "DELETE FROM user_inventory_forums WHERE user_id = $1", member.id
-            )
+            await UserInventoryForum.delete_by_user(self.pool, member.id)
 
         matching_forums = [
             f
@@ -432,25 +410,9 @@ class InventoryReconciler:
         default = await Room.get_default(self.pool)
         if default is None:
             raise RuntimeError("No default room found in database.")
-        await self.pool.execute(
-            """
-            INSERT INTO users (id, current_room)
-            VALUES ($1, $2)
-            ON CONFLICT (id) DO NOTHING
-            """,
-            user_id,
-            default.id,
-        )
-
-        await self.pool.execute(
-            """
-            INSERT INTO user_inventory_forums (user_id, forum_id, category_id)
-            VALUES ($1, $2, $3)
-            ON CONFLICT (user_id) DO UPDATE SET forum_id = $2, category_id = $3
-            """,
-            user_id,
-            forum_id,
-            category_id,
+        await User.create_if_not_exists(self.pool, user_id, default.id)
+        await UserInventoryForum.create_or_update(
+            self.pool, user_id, forum_id, category_id
         )
 
     async def _ensure_wallet_thread(
@@ -461,15 +423,7 @@ class InventoryReconciler:
 
         wallet = await user.get_wallet()
         if wallet is None:
-            await self.pool.execute(
-                """
-                INSERT INTO currency_accounts (user_id, balance)
-                VALUES ($1, $2)
-                ON CONFLICT (user_id) DO NOTHING
-                """,
-                user_id,
-                STARTING_BALANCE,
-            )
+            await User.create_currency_account(self.pool, user_id, STARTING_BALANCE)
 
             wallet = await EntityInstance.create(
                 self.pool,
@@ -481,23 +435,16 @@ class InventoryReconciler:
                 logger.warning(f"Wallet entity not found, skipping for {user_id}")
                 return
 
-            await self.pool.execute(
-                """
-                UPDATE currency_accounts
-                SET wallet_instance_id = $2
-                WHERE user_id = $1
-                """,
-                user_id,
-                str(wallet.instance_id),
+            await User.update_wallet_instance(
+                self.pool, user_id, str(wallet.instance_id)
             )
             logger.info(f"Created wallet for user {user_id}")
 
-        row = await self.pool.fetchrow(
-            "SELECT discord_thread_id FROM entity_instances WHERE id = $1",
-            wallet.instance_id,
+        wallet_thread_id = await EntityInstance.get_thread_id(
+            self.pool, wallet.instance_id
         )
-        if row and row["discord_thread_id"]:
-            thread = guild.get_thread(row["discord_thread_id"])
+        if wallet_thread_id:
+            thread = guild.get_thread(wallet_thread_id)
             if thread:
                 if not thread.flags.pinned:
                     try:
@@ -514,13 +461,8 @@ class InventoryReconciler:
                 content=description or f"You have a {wallet.entity.name}.",
             )
 
-            await self.pool.execute(
-                """UPDATE entity_instances
-                SET discord_thread_id = $1, discord_description_msg_id = $2
-                WHERE id = $3""",
-                thread.id,
-                message.id,
-                wallet.instance_id,
+            await EntityInstance.update_thread_ids(
+                self.pool, wallet.instance_id, thread.id, message.id
             )
 
             await thread.edit(pinned=True)
@@ -532,20 +474,12 @@ class InventoryReconciler:
         self, guild: discord.Guild, user_id: int, forum: discord.ForumChannel
     ) -> None:
         """Ensure all inventory items have threads with current descriptions."""
-        rows = await self.pool.fetch(
-            """
-            SELECT ei.id, ei.entity_id,
-                   ei.discord_thread_id, ei.discord_description_msg_id
-            FROM entity_instances ei
-            WHERE ei.owner_id = $1
-            """,
-            user_id,
-        )
+        thread_infos = await EntityInstance.get_thread_info_by_owner(self.pool, user_id)
 
-        for row in rows:
-            instance_id = row["id"]
-            thread_id = row["discord_thread_id"]
-            msg_id = row["discord_description_msg_id"]
+        for info in thread_infos:
+            instance_id = info.instance_id
+            thread_id = info.thread_id
+            msg_id = info.msg_id
 
             instance = await EntityInstance.get(self.pool, instance_id)
             if instance is None:
@@ -557,12 +491,7 @@ class InventoryReconciler:
                     await self._update_thread_description(thread, msg_id, instance)
                     continue
                 if not thread:
-                    await self.pool.execute(
-                        """UPDATE entity_instances
-                        SET discord_thread_id = NULL, discord_description_msg_id = NULL
-                        WHERE id = $1""",
-                        instance_id,
-                    )
+                    await EntityInstance.clear_thread_ids(self.pool, instance_id)
 
             await self._create_item_thread(forum, instance)
 
@@ -597,13 +526,8 @@ class InventoryReconciler:
                 content=description or f"You have a {instance.entity.name}.",
             )
 
-            await self.pool.execute(
-                """UPDATE entity_instances
-                SET discord_thread_id = $1, discord_description_msg_id = $2
-                WHERE id = $3""",
-                thread.id,
-                message.id,
-                instance.instance_id,
+            await EntityInstance.update_thread_ids(
+                self.pool, instance.instance_id, thread.id, message.id
             )
 
             logger.info(
