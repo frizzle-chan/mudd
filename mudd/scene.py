@@ -1,15 +1,17 @@
 from __future__ import annotations
 
 import logging
+import random
 from dataclasses import dataclass, field, replace
-from typing import TYPE_CHECKING, TypeVar, cast
+from typing import TypeVar, cast
 from uuid import UUID
 
 import asyncpg
 import discord
 from discord import Interaction
 
-from mudd.events import EntityPickedUpEvent, Observer
+from mudd.commands import ActionCommand, ActionResult, TakeCommand
+from mudd.events import Observer
 from mudd.models.entity import EntityInstance, ResolvedEntity
 from mudd.models.interfaces import IEntityInstance, IRoom
 from mudd.models.room import EntityModal, InventoryThread, Room
@@ -17,9 +19,6 @@ from mudd.models.user import User
 from mudd.observers import EffectsObserver
 
 logger = logging.getLogger(__name__)
-
-if TYPE_CHECKING:
-    from mudd.commands import ActionCommand, ActionResult
 
 T = TypeVar("T")
 
@@ -134,6 +133,40 @@ class Scene:
         for observer in self._observers:
             await observer.flush()
 
+    async def _take_item(self, item: IEntityInstance) -> ActionResult:
+        """Execute TakeCommand on an item using a sub-scene.
+
+        Creates a sub-scene with a fresh EffectsObserver (keeping other
+        observers like DiscordReconciler) so sub-effects don't mix with
+        the parent. Merges broadcasts back into the parent for the cog
+        to send.
+
+        Args:
+            item: The entity instance to take
+
+        Returns:
+            ActionResult from the sub-scene's TakeCommand execution
+        """
+        parent_effects = self.get_observer(EffectsObserver)
+        if not parent_effects:
+            raise ValueError("EffectsObserver not attached to scene")
+
+        # Build sub-scene with fresh EffectsObserver, keeping other observers
+        sub_effects = EffectsObserver()
+        other_observers = tuple(
+            o for o in self._observers if not isinstance(o, EffectsObserver)
+        )
+        clean_user = replace(self.user, _observers=())
+        sub_scene = replace(self, _observers=(), user=clean_user)
+        sub_scene = sub_scene.with_observers(sub_effects, *other_observers)
+
+        result = await sub_scene.execute(TakeCommand(), item)
+
+        # Merge broadcasts back so the cog can send them
+        parent_effects._broadcasts.extend(sub_effects.broadcasts)
+
+        return result
+
     async def execute(
         self, command: ActionCommand, target: IEntityInstance
     ) -> ActionResult:
@@ -165,10 +198,19 @@ class Scene:
         # (no-op for RoomEntityInstance since rooms don't emit events)
         target = target.with_observers(*self._observers)
 
-        result = await command.execute(self, target)
+        result = await command.execute(self.user, self.room, effects, target)
 
         # Apply effects - commands already validated capabilities
         # NotImplementedError is safety net if something sneaks through
+
+        # Dispense: pick random item from container contents → _take_item
+        if effects.has_dispense:
+            contents = await target.get_contents()
+            if contents:
+                dispensed = random.choice(contents)
+                sub_result = await self._take_item(dispensed)
+                result = ActionResult(output=result.output + "\n" + sub_result.output)
+
         if effects.has_pickup:
             await target.move_to_inventory(self.user)
         if effects.has_drop:
@@ -182,32 +224,33 @@ class Scene:
         if effects.has_clear_focus:
             await self.user.clear_focus()
 
-        # Grant specific items to user's inventory
+        # Currency grants: credit from house account
+        for amount in effects.currency_grants:
+            await self.user.credit_from_house(amount, memo="Currency pickup")
+
+        # Grant specific items → create in room, then _take_item runs on_take
+        # (currency items destroy themselves + credit balance, normal items pick up)
         for entity_id in effects.grants:
             granted = await EntityInstance.create(
-                self._pool, entity_id, owner_id=self.user.id
+                self._pool, entity_id, room_id=self.user.current_room
             )
             if granted is None:
                 logger.warning("Grant failed: entity_id %r not found", entity_id)
                 continue
-            granted = granted.with_observers(*self._observers)
-            for observer in self._observers:
-                observer.notify(EntityPickedUpEvent(instance=granted))
+            await self._take_item(granted)
 
-        # Grant random items by tag to user's inventory
+        # Grant random items by tag → create in room, then _take_item
         for tag in effects.grant_randoms:
             resolved = await ResolvedEntity.get_weighted_random_by_tag(self._pool, tag)
             if resolved is None:
                 logger.warning("Grant random failed: no entities for tag %r", tag)
                 continue
             granted = await EntityInstance.create(
-                self._pool, resolved.id, owner_id=self.user.id
+                self._pool, resolved.id, room_id=self.user.current_room
             )
             if granted is None:
                 logger.warning("Grant random failed: could not create %r", resolved.id)
                 continue
-            granted = granted.with_observers(*self._observers)
-            for observer in self._observers:
-                observer.notify(EntityPickedUpEvent(instance=granted))
+            await self._take_item(granted)
 
         return result

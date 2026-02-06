@@ -1,14 +1,15 @@
 """Base types and abstract class for action commands (observer pattern version)."""
 
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any
 
 from mudd import template
 from mudd.events import EffectsCollector
-from mudd.models import IEntityInstance, IUser
+from mudd.models import IEntityInstance, IRoom, IUser
 from mudd.observers import EffectsObserver
-from mudd.scene import Scene
 from mudd.types import VerbAction
 from mudd.utils import async_cached_property
 from mudd.utils.text import RARITY_EMOJI
@@ -119,8 +120,7 @@ class ActionCommand(ABC):
     (like open/close) override execute() to add focus signals.
 
     Unlike the original ActionCommand in mudd/commands/base.py, this version
-    uses EffectsObserver attached to the Scene rather than returning
-    TriggerEffects directly.
+    uses EffectsObserver rather than returning TriggerEffects directly.
     """
 
     @abstractmethod
@@ -135,14 +135,22 @@ class ActionCommand(ABC):
         """
         pass
 
-    async def execute(self, scene: Scene, entity: IEntityInstance) -> ActionResult:
+    async def execute(
+        self,
+        user: IUser,
+        room: IRoom,
+        effects: EffectsObserver,
+        entity: IEntityInstance,
+    ) -> ActionResult:
         """Execute this command.
 
         Default implementation renders the handler template with full context.
         Override for custom behavior (e.g., focus changes).
 
         Args:
-            scene: Scene with user context and attached observers
+            user: The user executing the command
+            room: The room/context the user is in
+            effects: EffectsObserver for collecting side-effect signals
             entity: The entity instance being acted upon
 
         Returns:
@@ -152,15 +160,10 @@ class ActionCommand(ABC):
         if handler_text is None:
             return ActionResult(output="Nothing happens.")
 
-        # Get effects observer from scene
-        effects = scene.get_observer(EffectsObserver)
-        if not effects:
-            raise ValueError("EffectsObserver not attached to scene")
-
-        container_entity = scene.room.current_container
+        container_entity = room.current_container
         context = ActionContext(
             e=ViewEntity(entity),
-            user=ViewUser(scene.user),
+            user=ViewUser(user),
             effects=EffectsCollector(effects),
             container=ViewEntity(container_entity) if container_entity else None,
         )
@@ -208,13 +211,19 @@ class TakeCommand(ActionCommand):
         """Return the entity's on_take handler template."""
         return entity.entity.on_take
 
-    async def execute(self, scene: Scene, entity: IEntityInstance) -> ActionResult:
+    async def execute(
+        self,
+        user: IUser,
+        room: IRoom,
+        effects: EffectsObserver,
+        entity: IEntityInstance,
+    ) -> ActionResult:
         """Execute take command with pickup validation."""
         if not entity.can_pickup:
             return ActionResult(output="You can't take that.")
-        if not scene.room.allows_pickup(entity):
+        if not room.allows_pickup(entity):
             return ActionResult(output="You already have that.")
-        return await super().execute(scene, entity)
+        return await super().execute(user, room, effects, entity)
 
 
 class DropCommand(ActionCommand):
@@ -224,11 +233,17 @@ class DropCommand(ActionCommand):
         """Return the entity's on_drop handler template."""
         return entity.entity.on_drop
 
-    async def execute(self, scene: Scene, entity: IEntityInstance) -> ActionResult:
+    async def execute(
+        self,
+        user: IUser,
+        room: IRoom,
+        effects: EffectsObserver,
+        entity: IEntityInstance,
+    ) -> ActionResult:
         """Execute drop command with capability validation."""
         if not entity.can_drop:
             return ActionResult(output="You can't drop that.")
-        return await super().execute(scene, entity)
+        return await super().execute(user, room, effects, entity)
 
 
 class OpenCommand(ActionCommand):
@@ -238,11 +253,17 @@ class OpenCommand(ActionCommand):
         """Return the entity's on_open handler template."""
         return entity.entity.on_open
 
-    async def execute(self, scene: Scene, entity: IEntityInstance) -> ActionResult:
+    async def execute(
+        self,
+        user: IUser,
+        room: IRoom,
+        effects: EffectsObserver,
+        entity: IEntityInstance,
+    ) -> ActionResult:
         """Execute open command with capability validation."""
         if not entity.is_focusable:
             return ActionResult(output="You can't open that.")
-        return await super().execute(scene, entity)
+        return await super().execute(user, room, effects, entity)
 
 
 class CloseCommand(ActionCommand):

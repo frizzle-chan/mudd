@@ -119,7 +119,7 @@ The codebase uses an MVC + events architecture:
 **Type checking**: Fix root causes of type errors rather than using `# type: ignore`. Common fixes:
 - Use `from __future__ import annotations` in all files - enables forward references without quotes
 - Use `TYPE_CHECKING` imports only for circular import prevention, not forward references
-- No local imports inside method bodies -- there are no circular deps between `mudd/models/` and `mudd/observers/`, so use top-level imports
+- No local imports inside method bodies -- always use top-level imports. Break import cycles with protocols in `mudd/models/interfaces.py` (for model-level protocols)
 - Remove empty `TYPE_CHECKING` blocks
 - Use `typing.cast()` when you've validated a value but the type checker can't infer it
 - Use `@overload` for functions with return types that depend on literal argument values

@@ -20,6 +20,7 @@ from mudd.models.room import Room
 
 FOCUS_TIMEOUT_MINUTES = 5
 STARTING_BALANCE = 1000
+HOUSE_ACCOUNT_ID = 0
 
 
 class TransferError(Enum):
@@ -313,6 +314,84 @@ class User:
             return 0
 
         return row["balance"]
+
+    async def credit_from_house(self, amount: int, memo: str) -> int:
+        """Credit currency from the house account to this user.
+
+        Uses double-entry ledger: debit house (user_id=0), credit player.
+        Creates the player's currency account if it doesn't exist.
+
+        Args:
+            amount: Amount to credit (must be positive)
+            memo: Transaction memo
+
+        Returns:
+            New balance after credit
+        """
+        if amount <= 0:
+            raise ValueError("Amount must be positive")
+
+        async with self._pool.acquire() as conn, conn.transaction():
+            # Upsert player's currency account (creates if missing)
+            await conn.execute(
+                """
+                INSERT INTO currency_accounts (user_id, balance)
+                VALUES ($1, 0)
+                ON CONFLICT (user_id) DO NOTHING
+                """,
+                self.id,
+            )
+
+            # Lock accounts in sorted order (house=0 always first)
+            house_row = await conn.fetchrow(
+                "SELECT balance FROM currency_accounts WHERE user_id = $1 FOR UPDATE",
+                HOUSE_ACCOUNT_ID,
+            )
+            player_row = await conn.fetchrow(
+                "SELECT balance FROM currency_accounts WHERE user_id = $1 FOR UPDATE",
+                self.id,
+            )
+
+            if house_row is None:
+                raise ValueError("House account does not exist")
+            if player_row is None:
+                raise ValueError("Player account does not exist")
+
+            # Create transaction + ledger entries
+            tx_row = await conn.fetchrow(
+                "INSERT INTO currency_transactions (memo) VALUES ($1) RETURNING id",
+                memo,
+            )
+            await conn.execute(
+                """
+                INSERT INTO currency_ledger (transaction_id, account_id, amount)
+                VALUES ($1, $2, $3), ($1, $4, $5)
+                """,
+                tx_row["id"],
+                HOUSE_ACCOUNT_ID,
+                -amount,
+                self.id,
+                amount,
+            )
+
+            # Update balances
+            new_balance = player_row["balance"] + amount
+            await conn.execute(
+                "UPDATE currency_accounts SET balance = $1 WHERE user_id = $2",
+                house_row["balance"] - amount,
+                HOUSE_ACCOUNT_ID,
+            )
+            await conn.execute(
+                "UPDATE currency_accounts SET balance = $1 WHERE user_id = $2",
+                new_balance,
+                self.id,
+            )
+
+        # Emit event (outside transaction)
+        for observer in self._observers:
+            observer.notify(BalanceChangedEvent(self.id, new_balance, amount, memo))
+
+        return new_balance
 
     @classmethod
     async def get_players_in_room(cls, pool: asyncpg.Pool, room_id: str) -> list[User]:

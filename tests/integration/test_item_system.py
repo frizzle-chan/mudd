@@ -416,8 +416,6 @@ class TestContainerDrops:
 class TestDispenseEffect:
     """Tests for effects.dispense() - dispensing items from containers."""
 
-    # TODO: Re-enable after fixing e.contents template error in mansion.rec
-    @pytest.mark.skip(reason="e.contents template error - refactoring needed")
     async def test_slot_machine_dispenses_item_to_inventory(self, test_client):
         """Using slot machine with effects.dispense() gives item to user."""
         user = await test_client.create_user(user_id=500070, room="lounge")
@@ -445,14 +443,12 @@ class TestDispenseEffect:
         # Should have broadcast about spinning and getting item
         assert len(broadcasts) >= 2
         assert "spins the slot machine" in broadcasts[0].lower()
-        assert "got a" in broadcasts[1].lower()
+        assert "picks up" in broadcasts[1].lower()
 
         # User should have something in inventory
         inventory = await test_client.get_inventory(user)
         assert len(inventory) == 1
 
-    # TODO: Re-enable after fixing e.contents template error in mansion.rec
-    @pytest.mark.skip(reason="e.contents template error - refactoring needed")
     async def test_slot_machine_empty_shows_refill_message(self, test_client):
         """Using empty slot machine shows refill message (no broadcast)."""
         user = await test_client.create_user(user_id=500071, room="lounge")

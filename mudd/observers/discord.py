@@ -24,6 +24,7 @@ from mudd.events import (
 from mudd.models.entity import EntityInstance
 from mudd.models.room import InventoryThread, Room
 from mudd.models.user import STARTING_BALANCE, User
+from mudd.observers.effects import EffectsObserver
 
 # Type alias for pending events
 type PendingEvent = (
@@ -794,9 +795,6 @@ class DiscordReconciler:
     async def _render_on_look(self, instance: EntityInstance) -> str:
         """Render on_look using LookCommand with EntityModal context.
 
-        Creates a minimal scene with the inventory item and executes
-        LookCommand to render the item's description.
-
         Args:
             instance: The entity instance to render
 
@@ -804,8 +802,6 @@ class DiscordReconciler:
             Rendered on_look output
         """
         from mudd.commands import LookCommand
-        from mudd.observers import EffectsObserver
-        from mudd.scene import Scene
 
         if instance.owner_id is None:
             return "You see nothing special."
@@ -823,14 +819,10 @@ class DiscordReconciler:
             owner=user,
         )
 
-        # Create scene with effects observer (required by execute)
+        # Execute look command directly (no Scene needed)
         effects = EffectsObserver()
-        scene = Scene(_pool=self.pool, user=user, room=modal)
-        scene = scene.with_observers(effects)
-
-        # Execute look command
         command = LookCommand()
-        result = await command.execute(scene, instance)
+        result = await command.execute(user, modal, effects, instance)
 
         return result.output
 

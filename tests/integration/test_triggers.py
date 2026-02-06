@@ -249,8 +249,6 @@ class TestBroadcastEffects:
         assert len(broadcasts) == 0
 
 
-# TODO: Re-enable entire class after fixing e.contents template error in mansion.rec
-@pytest.mark.skip(reason="e.contents template error - refactoring needed")
 class TestDispenseEffects:
     """Tests for effects.dispense() executing on_take for dispensed items."""
 
@@ -259,7 +257,7 @@ class TestDispenseEffects:
         user = await test_client.create_user(user_id=600001, room="lounge")
 
         # Ensure user has a currency account (starting at 0)
-        await test_client.currency_service.ensure_account(user.id, 0)
+        await test_client.ensure_currency_account(user.id, 0)
 
         # Spawn loose_coins in slot machine container
         await test_client.pool.execute(
@@ -281,7 +279,7 @@ class TestDispenseEffects:
         assert not any(item[0] == "loose_coins" for item in inventory)
 
         # Currency should be granted
-        balance = await test_client.currency_service.get_balance(user.id)
+        balance = await test_client.get_user_balance(user.id)
         assert balance == 100
 
     async def test_dispense_normal_item_goes_to_inventory(self, test_client):
@@ -330,7 +328,7 @@ class TestDispenseEffects:
         user = await test_client.create_user(user_id=600004, room="lounge")
 
         # Ensure user has a currency account (starting at 0)
-        await test_client.currency_service.ensure_account(user.id, 0)
+        await test_client.ensure_currency_account(user.id, 0)
 
         # Spawn bundle_of_bills (¥1000 currency)
         await test_client.pool.execute(
@@ -346,5 +344,5 @@ class TestDispenseEffects:
         assert not any(item[0] == "bundle_of_bills" for item in inventory)
 
         # But balance should be increased
-        balance = await test_client.currency_service.get_balance(user.id)
+        balance = await test_client.get_user_balance(user.id)
         assert balance == 1000

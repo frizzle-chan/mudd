@@ -7,7 +7,6 @@ from mudd.models.entity import EntityInstance, ResolvedEntity
 from mudd.models.room import Room
 from mudd.models.user import User
 from mudd.observers import EffectsObserver
-from mudd.scene import Scene
 
 pytestmark = pytest.mark.asyncio(loop_scope="session")
 
@@ -60,12 +59,9 @@ class TestCommands:
                 if not room:
                     continue
 
-                # Build scene with effects observer
-                effects = EffectsObserver()
-                scene = Scene(user=user, room=room, _pool=pool).with_observers(effects)
-
                 # Execute look command
-                result = await look_cmd.execute(scene, instance)
+                effects = EffectsObserver()
+                result = await look_cmd.execute(user, room, effects, instance)
 
                 if not result.output:
                     errors.append(f"{instance.entity.id}: Empty output")
