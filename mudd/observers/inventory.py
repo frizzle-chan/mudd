@@ -21,6 +21,7 @@ from mudd.models.inventory_forum import UserInventoryForum
 from mudd.models.room import InventoryThread, Room
 from mudd.models.user import STARTING_BALANCE, User
 from mudd.observers.effects import EffectsObserver
+from mudd.views import ViewEntity
 
 logger = logging.getLogger(__name__)
 
@@ -30,6 +31,14 @@ INVENTORY_CATEGORY_NAME = "Inventory"
 def _get_inventory_forum_name(username: str) -> str:
     """Get the forum channel name for a user's inventory."""
     return f"{username}-inventory"
+
+
+def _format_transaction_message(event: BalanceChangedEvent) -> str:
+    """Format a transaction notification message for a wallet thread."""
+    sign = "+" if event.delta >= 0 else "-"
+    abs_amount = abs(event.delta)
+    balance = event.new_balance
+    return f"{sign}\u00a5{abs_amount:,} | {event.memo} | Balance: \u00a5{balance:,}"
 
 
 class InventoryReconciler:
@@ -52,6 +61,7 @@ class InventoryReconciler:
         self.bot = bot
         self.pool = pool
         self._inventory_sync_events: list[InventorySyncEvent] = []
+        self._balance_changed_events: list[BalanceChangedEvent] = []
         self._user_left_events: list[UserLeftEvent] = []
         self._entity_drop_events: list[EntityInstance] = []
         # Cache category ID per guild to avoid repeated lookups
@@ -80,6 +90,7 @@ class InventoryReconciler:
             case EntityDestroyedEvent(instance=instance):
                 self._entity_drop_events.append(instance)
             case BalanceChangedEvent() as evt:
+                self._balance_changed_events.append(evt)
                 self._inventory_sync_events.append(
                     InventorySyncEvent(guild_id=0, user_id=evt.user_id)
                 )
@@ -92,6 +103,8 @@ class InventoryReconciler:
         """Process queued inventory events."""
         inventory_sync_events = self._inventory_sync_events
         self._inventory_sync_events = []
+        balance_changed_events = self._balance_changed_events
+        self._balance_changed_events = []
         user_left_events = self._user_left_events
         self._user_left_events = []
         entity_drop_events = self._entity_drop_events
@@ -110,6 +123,11 @@ class InventoryReconciler:
                     continue
                 synced_users.add(evt.user_id)
                 await self._ensure_user_inventory(guild, evt.user_id)
+
+            # Post transaction notifications after inventory sync
+            # (which ensures wallet threads exist)
+            for evt in balance_changed_events:
+                await self._post_transaction_notification(guild, evt)
 
             # Process user left events
             for evt in user_left_events:
@@ -455,10 +473,11 @@ class InventoryReconciler:
                 return
 
         description = await self._render_on_look(wallet)
+        view = ViewEntity(wallet)
         try:
             thread, message = await forum.create_thread(
-                name=wallet.entity.name,
-                content=description or f"You have a {wallet.entity.name}.",
+                name=view.display_name,
+                content=description or f"You have a {view.name}.",
             )
 
             await EntityInstance.update_thread_ids(
@@ -469,6 +488,34 @@ class InventoryReconciler:
             logger.info(f"Created and pinned wallet thread for user {user_id}")
         except discord.HTTPException as e:
             logger.error(f"Failed to create wallet thread: {e}")
+
+    async def _post_transaction_notification(
+        self, guild: discord.Guild, event: BalanceChangedEvent
+    ) -> None:
+        """Post a transaction summary message to a user's wallet thread."""
+        user = await User.get(self.pool, event.user_id)
+        if user is None:
+            return
+
+        wallet = await user.get_wallet()
+        if wallet is None:
+            return
+
+        thread_id = await EntityInstance.get_thread_id(self.pool, wallet.instance_id)
+        if thread_id is None:
+            return
+
+        thread = guild.get_thread(thread_id)
+        if thread is None:
+            return
+
+        message = _format_transaction_message(event)
+        try:
+            await thread.send(message)
+        except discord.HTTPException as e:
+            logger.error(
+                f"Failed to post transaction notification for user {event.user_id}: {e}"
+            )
 
     async def _sync_inventory_threads(
         self, guild: discord.Guild, user_id: int, forum: discord.ForumChannel
@@ -519,11 +566,12 @@ class InventoryReconciler:
     ) -> None:
         """Create a thread for an inventory item."""
         description = await self._render_on_look(instance)
+        view = ViewEntity(instance)
 
         try:
             thread, message = await forum.create_thread(
-                name=instance.entity.name,
-                content=description or f"You have a {instance.entity.name}.",
+                name=view.display_name,
+                content=description or f"You have a {view.name}.",
             )
 
             await EntityInstance.update_thread_ids(
@@ -531,7 +579,7 @@ class InventoryReconciler:
             )
 
             logger.info(
-                f"Created thread '{instance.entity.name}' for instance "
+                f"Created thread '{view.display_name}' for instance "
                 f"{instance.instance_id}"
             )
         except discord.HTTPException as e:

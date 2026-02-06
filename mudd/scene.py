@@ -15,6 +15,7 @@ from mudd.models.interfaces import IReadableEntity, IRoom
 from mudd.models.room import EntityModal, InventoryThread, Room
 from mudd.models.user import User
 from mudd.observers import EffectsObserver
+from mudd.views import ViewEntity
 
 logger = logging.getLogger(__name__)
 
@@ -253,8 +254,11 @@ class Scene:
             await self.user.clear_focus()
 
         # Currency grants: credit from house account
+        view = ViewEntity(target)
         for amount in effects.currency_grants:
-            await self.user.credit_from_house(amount, memo="Currency pickup")
+            await self.user.credit_from_house(
+                amount, memo=f"Picked up from {view.name}"
+            )
 
         # Grant specific items → create in room, then _take_item runs on_take
         # (currency items destroy themselves + credit balance, normal items pick up)

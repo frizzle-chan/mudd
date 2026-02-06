@@ -98,6 +98,8 @@ The codebase uses an MVC + events architecture:
 
 **Entity resolution**: When querying entity fields that support prototype inheritance (like `on_close`, `contents_visible`, etc.), use the `resolve_entity()` SQL function instead of joining directly to the `entities` table. Direct joins return NULL for inherited values, while `resolve_entity()` follows the prototype chain and applies defaults.
 
+**Entity display names**: When formatting entity names in user-facing text (memos, Discord messages, notifications), wrap with `ViewEntity(entity)` from `mudd/views.py`. Use `.name` for bold+emoji (`**Treasure Chest 🔵**`) or `.display_name` for emoji only. Never use `entity.name` directly in player-visible strings.
+
 **Docker**: The `.dockerignore` uses an allowlist pattern (starts with `*`, then `!` to include specific paths). **When adding new top-level directories needed at runtime, you must add them to `.dockerignore`.**
 
 ## Dependencies

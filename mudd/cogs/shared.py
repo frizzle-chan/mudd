@@ -10,10 +10,10 @@ import asyncpg
 from discord import Interaction, app_commands
 from rapidfuzz import fuzz
 
-from mudd.commands import ViewEntity
 from mudd.models import EntityInstance, Room
 from mudd.models.room import RoomEntityInstance
 from mudd.scene import Scene
+from mudd.views import ViewEntity
 
 logger = logging.getLogger(__name__)
 
