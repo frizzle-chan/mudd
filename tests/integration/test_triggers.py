@@ -210,8 +210,6 @@ class TestVerbCaseInsensitivity:
         assert "TEST_ATTACK_RESPONSE" in response
 
 
-# TODO: Re-enable entire class after fixing e.contents template error in mansion.rec
-@pytest.mark.skip(reason="e.contents template error - refactoring needed")
 class TestBroadcastEffects:
     """Tests for effects.broadcast() template functionality."""
 

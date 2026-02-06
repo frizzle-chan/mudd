@@ -191,14 +191,14 @@ Id: item
 Name: item
 Prototype: object
 Rarity: common
-OnTake: {{ effects.pickup() }}You pick up the {{ e.name }}.
+OnTake: {{ effects.pickup() }}{{ effects.broadcast(user ~ " picks up " ~ e ~ ".") }}You pick up the {{ e.name }}.
 OnDrop: {% if container %}You put the {{ e.name }} into the *{{ container.name }}*.{% else %}You drop the {{ e.name }}.{% endif %}{{ effects.drop() }}{{ effects.broadcast(user ~ " drops " ~ e ~ ".") }}
 
 Id: beverage
 Name: beverage
 Prototype: item
 OnUse: You crack open the {{ e.name }} and take a refreshing sip. It restores health.
-OnTake: {{ effects.pickup() }}You grab a {{ e.name }}.
+OnTake: {{ effects.pickup() }}{{ effects.broadcast(user ~ " grabs " ~ e ~ ".") }}You grab a {{ e.name }}.
 
 Id: wallet
 Name: Wallet
@@ -283,7 +283,7 @@ DescriptionLong: A small plastic container of nightcrawlers. They're still wrigg
 OnTouch: You poke the worms. They squirm away from your finger.
 OnOpen: You pop open the container and watch the worms writhe around.
 OnClose: You snap the lid shut, trapping the worms inside.
-OnTake: {{ effects.pickup() }}You grab the {{ e.name }}.
+OnTake: {{ effects.pickup() }}{{ effects.broadcast(user ~ " grabs " ~ e ~ ".") }}You grab the {{ e.name }}.
 OnDrop: {% if container %}You toss the {{ e.name }} into the *{{ container.name }}*.{% else %}You set the {{ e.name }} down.{% endif %}{{ effects.drop() }}{{ effects.broadcast(user ~ " drops " ~ e ~ ".") }}
 
 Id: blade_of_dissonance
@@ -294,7 +294,7 @@ Rarity: mythic
 DescriptionShort: A big impractical sword
 DescriptionLong: A big impractical sword that was once used for good but fell into oopey goopey and now it's evil.
 OnTouch: The blade is actually quite dull. It's got oopey goopey all over it.
-OnTake: {{ effects.pickup() }}You heft the impractically large {{ e.name }} onto your shoulder. \
+OnTake: {{ effects.pickup() }}{{ effects.broadcast("**" ~ user ~ "** picks up " ~ e ~ ". That seems like a bad idea.") }}You heft the impractically large {{ e.name }} onto your shoulder. \
 You feel you made a grave mistake.
 OnDrop: You cannot drop the sword, it's evil. It compels you to keep it in your inventory, taking up a ton of space.
 
@@ -363,7 +363,7 @@ DescriptionLong: A crumpled piece of paper with scribbled instructions. It reads
 OnTouch: You run your fingers over the crumpled paper. The ink is slightly smudged, as if someone wrote it in a hurry. It feels like regular notebook paper. Try to __use__ it for something?
 OnAttack: {{ effects.destroy() }}{{ effects.broadcast("**" ~ user ~ "** tears up " ~ e ~ "!") }}You crumple the {{ e.name }} into a tiny ball and tear it to shreds. The paper confetti scatters across the table. Well, that's one way to interact with it! You could have also tried __opening__ it or __taking__ it, but destruction works too.
 OnUse: You flip the {{ e.name }} over, looking for more information. The back is blank except for a small doodle of a smiling face. Not particularly useful, but cute! Have you tried __opening__ it or __taking__ it yet?
-OnTake: {{ effects.pickup() }}You fold the {{ e.name }} and tuck it into your pocket. Now you have a handy reference! Most items in the mansion respond to common verbs like look, touch, attack, use, take, open, close, and drop. Try __dropping__ it later to put it back.
+OnTake: {{ effects.pickup() }}{{ effects.broadcast(user ~ " pockets " ~ e ~ ".") }}You fold the {{ e.name }} and tuck it into your pocket. Now you have a handy reference! Most items in the mansion respond to common verbs like look, touch, attack, use, take, open, close, and drop. Try __dropping__ it later to put it back.
 OnOpen: You unfold the {{ e.name }} and flatten it out on the table. The creases make it a bit easier to read now. It's the same instructions about /interact, but now you can see a small footnote: "P.S. - Try __closing__ things after you __open__ them. Some containers have surprises inside!"
 OnClose: You carefully fold the {{ e.name }} back into a neat square. It's more compact now, though still readable. You've discovered that most items have consistent interactions - this note responds to almost everything! Try __taking__ it with you, or maybe __attack__ it if you're feeling destructive?
 OnDrop: {% if container %}You place the {{ e.name }} back on the *{{ container.name }}*.{% else %}You set the {{ e.name }} down on the table.{% endif %}{{ effects.drop() }}{{ effects.broadcast(user ~ " places " ~ e ~ " back down.") }}And that's the /interact command in action! You've successfully experimented with multiple verbs. Keep exploring the mansion - there's a lot to discover!
@@ -469,7 +469,7 @@ DescriptionShort: a nearly empty {{ e.name }}
 DescriptionLong: A sad, thin toilet paper roll clinging to life. Single-ply, of course.
 OnTouch: You spin the roll. It makes a satisfying whirring sound.
 OnUse: You grab some toilet paper. It's scratchy and thin. At least there's some left.
-OnTake: {{ effects.pickup() }}You yank the {{ e.name }} off the holder.
+OnTake: {{ effects.pickup() }}{{ effects.broadcast(user ~ " yanks " ~ e ~ " off the holder.") }}You yank the {{ e.name }} off the holder.
 OnDrop: {% if container %}You stuff the {{ e.name }} into the *{{ container.name }}*.{% else %}You set the {{ e.name }} down on the floor. Gross.{% endif %}{{ effects.drop() }}{{ effects.broadcast(user ~ " drops " ~ e ~ ".") }}
 
 Id: restroom_hand_dryer

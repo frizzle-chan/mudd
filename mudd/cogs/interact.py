@@ -4,6 +4,7 @@ import logging
 from functools import partial
 
 import asyncpg
+import discord
 from discord import Interaction, app_commands
 from discord.ext import commands
 
@@ -74,5 +75,14 @@ class Interact(commands.Cog):
             result.output or "Nothing happens.", ephemeral=True
         )
 
-        # 6. Flush observers
+        # 6. Send broadcasts to channel
+        channel = interaction.channel
+        if isinstance(channel, discord.abc.Messageable):
+            for message in effects.broadcasts:
+                try:
+                    await channel.send(message)
+                except Exception:
+                    logger.exception("Failed to send broadcast")
+
+        # 7. Flush observers
         await scene.flush_observers()

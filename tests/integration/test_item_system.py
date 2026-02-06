@@ -479,7 +479,6 @@ class TestDispenseEffect:
 class TestSmashableEntities:
     """Tests for entities with effects.destroy()."""
 
-    @pytest.mark.skip(reason="Deferred: focus management + grants + broadcasts")
     async def test_smash_destroys_entity_and_grants_loot(self, test_client):
         """Smashing a destroyable entity removes it and grants random loot."""
         user = await test_client.create_user(user_id=500060, room="store-room")
