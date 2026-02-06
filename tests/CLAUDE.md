@@ -98,18 +98,35 @@ tests/
 ├── conftest.py            # Session-scoped DB fixture
 ├── harness.py             # TestClient for command-based testing
 ├── mocks/                 # Discord mock factories (only mock Discord API)
-├── unit/                  # Pure unit tests (no DB)
 ├── loaders/               # Data loading tests (.rec parsing)
 └── integration/           # Scenario-driven tests
     ├── test_scenarios.py  # Main workflow scenarios
     └── test_*.py          # Edge case tests
 ```
 
+## Colocated Unit Tests
+
+Pure unit tests (no DB) live alongside their source files using the `_unit_test.py` suffix:
+
+```
+mudd/
+├── utils/
+│   ├── text.py
+│   ├── text_unit_test.py            # tests for text.py
+│   ├── async_cached_property.py
+│   └── async_cached_property_unit_test.py
+├── observers/
+│   ├── effects.py
+│   └── effects_unit_test.py         # tests for effects.py
+```
+
+When adding a new unit test, create a `<module>_unit_test.py` file next to the source file it tests.
+
 ## Running Tests
 
 ```bash
-pytest tests/                    # Run all tests
+pytest                           # Run all tests (integration + colocated unit tests)
 pytest tests/integration/        # Run only integration tests
-pytest tests/unit/               # Run only unit tests
+pytest mudd/                     # Run only colocated unit tests
 pytest tests/integration/test_scenarios.py -v  # Run scenarios with verbose output
 ```
