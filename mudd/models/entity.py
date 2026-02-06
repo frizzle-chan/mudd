@@ -503,7 +503,8 @@ class EntityInstance:
         await self._pool.execute(
             """
             UPDATE entity_instances
-            SET room = NULL, owner_id = $2, container_entity_id = NULL
+            SET room = NULL, owner_id = $2, container_entity_id = NULL,
+                spawning_pool_id = NULL
             WHERE id = $1
             """,
             self.instance_id,
