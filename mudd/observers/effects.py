@@ -139,23 +139,3 @@ class EffectsObserver:
     def has_clear_focus(self) -> bool:
         """Whether clear_focus() was called during template rendering."""
         return self._clear_focus_signaled
-
-    def merge_from(self, other: "EffectsObserver") -> None:
-        """Merge effects from another observer into this one.
-
-        Used when processing dispense: the dispensed item's on_take effects
-        are merged into the main effects for unified processing.
-
-        Note: pickup/drop flags are NOT merged - they apply to the triggered
-        item and are handled separately by the caller.
-
-        Args:
-            other: EffectsObserver to merge from
-        """
-        self._broadcasts.extend(other._broadcasts)
-        self._grants.extend(other._grants)
-        self._grant_randoms.extend(other._grant_randoms)
-        self._currency_grants.extend(other._currency_grants)
-        # OR flags together for destroy only (pickup/drop not merged)
-        if other._destroy_signaled:
-            self._destroy_signaled = True

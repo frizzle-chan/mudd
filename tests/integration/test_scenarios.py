@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
+
 import pytest
 
 from mudd.commands import (
@@ -23,7 +25,15 @@ from mudd.events import (
     UserMovedEvent,
 )
 from mudd.models import RoomEntityInstance, User
-from tests.helpers import NullReconciler, act, autocomplete, create_test_user
+from mudd.models.spawning_pool import SpawningPool
+from mudd.models.user import TransferError
+from tests.helpers import (
+    NullReconciler,
+    _build_scene,
+    act,
+    autocomplete,
+    create_test_user,
+)
 
 # All tests share the session event loop with the session-scoped test_db pool
 pytestmark = pytest.mark.asyncio(loop_scope="session")
@@ -455,3 +465,242 @@ async def test_move_back_to_foyer_clears_focus(test_db, clean_user_state):
     refreshed = await User.get(test_db, user.id)
     assert refreshed is not None
     assert await refreshed.get_focus() is None
+
+
+async def test_room_entity_commands_rejected(test_db, clean_user_state):
+    """Commands on room entities are rejected with appropriate messages."""
+    user = await create_test_user(test_db, room_id="store-room")
+
+    # Take a room entity → rejected (can_pickup is False)
+    result = await act(test_db, user.id, TakeCommand(), "room://store-room")
+    assert result.output == "You can't take that."
+
+    # Drop a room entity → rejected (can_drop is False)
+    result = await act(test_db, user.id, DropCommand(), "room://store-room")
+    assert result.output == "You can't drop that."
+
+    # Open a room entity → rejected (is_focusable is False)
+    result = await act(test_db, user.id, OpenCommand(), "room://store-room")
+    assert result.output == "You can't open that."
+
+
+async def test_missing_handler_fallback(test_db, clean_user_state):
+    """Entity without a specific handler returns 'Nothing happens.'"""
+    user = await create_test_user(test_db, room_id="store-room")
+
+    # Open box to access contents
+    box = next(
+        o
+        for o in await autocomplete(test_db, user.id, "Cardboard Box")
+        if not isinstance(o, RoomEntityInstance)
+    )
+    await act(test_db, user.id, OpenCommand(), f"entity://{box.instance_id}")
+
+    # Test Orb inherits from `object` which has no OnOpen handler
+    orb = next(
+        o
+        for o in await autocomplete(test_db, user.id, "")
+        if not isinstance(o, RoomEntityInstance) and o.entity.name == "Test Orb"
+    )
+    result = await act(test_db, user.id, OpenCommand(), f"entity://{orb.instance_id}")
+    assert result.output == "Nothing happens."
+
+
+async def test_wallet_balance_display(test_db, clean_user_state):
+    """Looking at wallet displays formatted balance via money filter."""
+    user = await create_test_user(test_db, room_id="store-room")
+    await User.create_currency_account(test_db, user.id, 1000)
+
+    # Open box, find wallet
+    box = next(
+        o
+        for o in await autocomplete(test_db, user.id, "Cardboard Box")
+        if not isinstance(o, RoomEntityInstance)
+    )
+    await act(test_db, user.id, OpenCommand(), f"entity://{box.instance_id}")
+
+    wallet = next(
+        o
+        for o in await autocomplete(test_db, user.id, "")
+        if not isinstance(o, RoomEntityInstance) and o.entity.name == "Test Wallet"
+    )
+    result = await act(
+        test_db, user.id, LookCommand(), f"entity://{wallet.instance_id}"
+    )
+    assert "¥1,000" in result.output
+
+
+async def test_transfer_insufficient_funds(test_db, clean_user_state):
+    """Transfer fails with INSUFFICIENT_FUNDS when sender lacks balance."""
+    player_a = await create_test_user(test_db, user_id=3001, room_id="store-room")
+    player_b = await create_test_user(test_db, user_id=3002, room_id="store-room")
+
+    await User.create_currency_account(test_db, player_a.id, 100)
+    await User.create_currency_account(test_db, player_b.id, 0)
+
+    user_a = await User.get(test_db, player_a.id)
+    assert user_a is not None
+    user_b = await User.get(test_db, player_b.id)
+    assert user_b is not None
+
+    transfer = await user_a.transfer_currency_to(user_b, 200, "too much")
+    assert not transfer.success
+    assert transfer.error == TransferError.INSUFFICIENT_FUNDS
+    assert transfer.sender_balance == 100
+    assert transfer.recipient_balance == 0
+
+
+async def test_refresh_focus_extends_timeout(test_db, clean_user_state):
+    """Refreshing focus updates timestamp, preventing timeout."""
+    user = await create_test_user(test_db, room_id="store-room")
+
+    # Open box to set focus
+    box = next(
+        o
+        for o in await autocomplete(test_db, user.id, "Cardboard Box")
+        if not isinstance(o, RoomEntityInstance)
+    )
+    await act(test_db, user.id, OpenCommand(), f"entity://{box.instance_id}")
+
+    # Backdate focus to 4 minutes ago (just under 5-min timeout)
+    async with test_db.acquire() as conn:
+        await conn.execute(
+            "UPDATE user_focus SET updated_at = $1 WHERE user_id = $2",
+            datetime.now(UTC) - timedelta(minutes=4),
+            user.id,
+        )
+
+    # Refresh focus (updates timestamp to now)
+    fresh_user = await User.get(test_db, user.id)
+    assert fresh_user is not None
+    await fresh_user.refresh_focus()
+
+    # Focus should still be active
+    focus = await fresh_user.get_focus()
+    assert focus is not None
+    assert focus.current_container.entity.name == "Cardboard Box"
+
+
+async def test_spawning_pool_respawn(test_db, clean_user_state):
+    """Spawning pool detects vacancy and spawns replacement entity."""
+    user = await create_test_user(test_db, room_id="store-room")
+
+    # Open box, find and destroy test_smashable
+    box = next(
+        o
+        for o in await autocomplete(test_db, user.id, "Cardboard Box")
+        if not isinstance(o, RoomEntityInstance)
+    )
+    await act(test_db, user.id, OpenCommand(), f"entity://{box.instance_id}")
+
+    smashable = next(
+        o
+        for o in await autocomplete(test_db, user.id, "")
+        if not isinstance(o, RoomEntityInstance) and o.entity.name == "Test Smashable"
+    )
+    await act(test_db, user.id, AttackCommand(), f"entity://{smashable.instance_id}")
+
+    # Close box to exit focus
+    await act(test_db, user.id, CloseCommand(), f"entity://{box.instance_id}")
+
+    # Load spawning pools from DB
+    pools = await SpawningPool.get_all_with_counts(test_db)
+    smashable_pool = next(p for p in pools if p.id == "test_smashable_pool")
+
+    # Pool should detect the vacancy
+    assert smashable_pool.current_count == 0
+    now = datetime.now(UTC)
+    assert smashable_pool.can_spawn(now)
+
+    # Spawn a replacement
+    instance = await smashable_pool.try_spawn(now)
+    assert instance is not None
+    assert instance.entity.name == "Test Smashable"
+    assert instance.room_id == "store-room"
+
+
+async def test_focus_timeout_clears_stale_focus(test_db, clean_user_state):
+    """Stale focus (>5 min old) is automatically cleared on access."""
+    user = await create_test_user(test_db, room_id="store-room")
+
+    # Open box to set focus
+    box = next(
+        o
+        for o in await autocomplete(test_db, user.id, "Cardboard Box")
+        if not isinstance(o, RoomEntityInstance)
+    )
+    await act(test_db, user.id, OpenCommand(), f"entity://{box.instance_id}")
+
+    # Verify focus is set
+    fresh_user = await User.get(test_db, user.id)
+    assert fresh_user is not None
+    assert await fresh_user.get_focus() is not None
+
+    # Backdate focus to 10 minutes ago (well past 5-min timeout)
+    async with test_db.acquire() as conn:
+        await conn.execute(
+            "UPDATE user_focus SET updated_at = $1 WHERE user_id = $2",
+            datetime.now(UTC) - timedelta(minutes=10),
+            user.id,
+        )
+
+    # Focus should now return None (timeout detected, row deleted)
+    fresh_user = await User.get(test_db, user.id)
+    assert fresh_user is not None
+    assert await fresh_user.get_focus() is None
+
+    # Autocomplete should show room entities, not box contents
+    options = await autocomplete(test_db, user.id, "")
+    entity_names = {
+        o.entity.name for o in options if not isinstance(o, RoomEntityInstance)
+    }
+    assert "Cardboard Box" in entity_names
+
+
+async def test_other_players_in_room(test_db, clean_user_state):
+    """Scene.other_players() returns other users in the same room."""
+    user_a = await create_test_user(test_db, user_id=4001, room_id="store-room")
+    user_b = await create_test_user(test_db, user_id=4002, room_id="store-room")
+
+    scene = await _build_scene(test_db, user_a.id)
+    others = await scene.other_players()
+
+    other_ids = [u.id for u in others]
+    assert user_b.id in other_ids
+    assert user_a.id not in other_ids
+
+
+async def test_beverage_prototype_chain(test_db, clean_user_state):
+    """Beverage prototype chain (beverage -> item -> object) resolves correctly."""
+    user = await create_test_user(test_db, room_id="store-room")
+
+    # Open box, find beverage
+    box = next(
+        o
+        for o in await autocomplete(test_db, user.id, "Cardboard Box")
+        if not isinstance(o, RoomEntityInstance)
+    )
+    await act(test_db, user.id, OpenCommand(), f"entity://{box.instance_id}")
+
+    beverage = next(
+        o
+        for o in await autocomplete(test_db, user.id, "")
+        if not isinstance(o, RoomEntityInstance) and o.entity.name == "Test Beverage"
+    )
+
+    # Take: beverage has custom OnTake "grabs" (from beverage prototype)
+    result = await act(
+        test_db, user.id, TakeCommand(), f"entity://{beverage.instance_id}"
+    )
+    assert "grab" in result.output.lower()
+    assert any(isinstance(e, EntityPickedUpEvent) for e in result.reconciler.events)
+
+    # Verify in inventory
+    inv = await autocomplete(test_db, user.id, "i.")
+    assert any(e.entity.name == "Test Beverage" for e in inv)
+
+    # Use: beverage has custom OnUse "crack open" / "refreshing sip"
+    result = await act(
+        test_db, user.id, UseCommand(), f"entity://{beverage.instance_id}"
+    )
+    assert "refreshing sip" in result.output.lower()
