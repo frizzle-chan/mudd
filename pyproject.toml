@@ -26,9 +26,10 @@ dev = [
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
+python_files = ["test_*.py", "*_unit_test.py"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "session"
-addopts = "--cov=mudd --cov-report=term-missing"
+addopts = "--cov=mudd --cov-report=term-missing:skip-covered"
 
 [tool.coverage.run]
 source = ["mudd"]
@@ -45,6 +46,7 @@ exclude = [".claude/skills/skill-creator/", "vulture_whitelist.py"]
 paths = ["main.py", "mudd/", "scripts/", "tests/", "vulture_whitelist.py"]
 min_confidence = 90
 ignore_names = ["clean_user_state"]
+exclude = ["*_unit_test.py"]
 
 [tool.ruff.lint]
 select = [
