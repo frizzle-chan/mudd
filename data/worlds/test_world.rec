@@ -366,6 +366,7 @@ DescriptionLong: A test item for floor clutter testing.
 Id: test_smashable
 Name: Test Smashable
 Prototype: glass_object
+Room: store-room
 Container: storeroom_box
 Tags: test_smashable_spawn
 Rarity: common

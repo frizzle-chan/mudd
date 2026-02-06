@@ -34,6 +34,7 @@ addopts = "--cov=mudd --cov-report=term-missing:skip-covered"
 [tool.coverage.run]
 source = ["mudd"]
 branch = true
+omit = ["*_unit_test.py"]
 
 [tool.coverage.report]
 show_missing = true
