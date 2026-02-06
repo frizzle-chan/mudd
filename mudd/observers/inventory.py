@@ -464,12 +464,35 @@ class InventoryReconciler:
         if wallet_thread_id:
             thread = guild.get_thread(wallet_thread_id)
             if thread:
-                if not thread.flags.pinned:
+                expected_name = ViewEntity(wallet).display_name
+                needs_pin = not thread.flags.pinned
+                needs_rename = thread.name != expected_name
+
+                if needs_pin and needs_rename:
+                    try:
+                        await thread.edit(pinned=True, name=expected_name)
+                        logger.debug(f"Pinned wallet thread {thread.id}")
+                        logger.debug(
+                            f"Renamed wallet thread {thread.id}: "
+                            f"'{thread.name}' -> '{expected_name}'"
+                        )
+                    except discord.HTTPException as e:
+                        logger.error(f"Failed to edit wallet thread: {e}")
+                elif needs_pin:
                     try:
                         await thread.edit(pinned=True)
                         logger.debug(f"Pinned wallet thread {thread.id}")
                     except discord.HTTPException as e:
                         logger.error(f"Failed to pin wallet thread: {e}")
+                elif needs_rename:
+                    try:
+                        await thread.edit(name=expected_name)
+                        logger.debug(
+                            f"Renamed wallet thread {thread.id}: "
+                            f"'{thread.name}' -> '{expected_name}'"
+                        )
+                    except discord.HTTPException as e:
+                        logger.error(f"Failed to rename wallet thread: {e}")
                 return
 
         description = await self._render_on_look(wallet)
@@ -545,8 +568,19 @@ class InventoryReconciler:
     async def _update_thread_description(
         self, thread: discord.Thread, msg_id: int, instance: EntityInstance
     ) -> None:
-        """Update thread description if content has changed."""
+        """Update thread title and description if content has changed."""
         new_description = await self._render_on_look(instance)
+        new_name = ViewEntity(instance).display_name
+
+        if thread.name != new_name:
+            try:
+                await thread.edit(name=new_name)
+                logger.debug(
+                    f"Updated title for instance {instance.instance_id} "
+                    f"in thread {thread.id}: '{thread.name}' -> '{new_name}'"
+                )
+            except discord.HTTPException as e:
+                logger.error(f"Failed to update thread title {thread.id}: {e}")
 
         try:
             message = await thread.fetch_message(msg_id)
