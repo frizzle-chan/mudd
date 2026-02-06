@@ -17,7 +17,7 @@ from mudd.events import ZoneSyncedEvent
 logger = logging.getLogger(__name__)
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class SyncStats:
     """Statistics from a sync operation."""
 

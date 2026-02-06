@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Self
 
 import asyncpg
 
@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from mudd.events import Observer
     from mudd.loaders.zone_loader import RoomData
     from mudd.models.entity import EntityInstance
-    from mudd.models.interfaces import IEntityInstance, IRoom, IUser
+    from mudd.models.interfaces import IReadableEntity, IUser
     from mudd.models.zone import SyncStats
 
 logger = logging.getLogger(__name__)
@@ -171,7 +171,7 @@ class Room:
         """Return the room where dropped items should land."""
         return self
 
-    def allows_pickup(self, entity: IEntityInstance) -> bool:
+    def allows_pickup(self, entity: IReadableEntity) -> bool:
         """Check if picking up the given entity is allowed."""
         return True
 
@@ -403,21 +403,7 @@ class RoomEntityInstance:
         """Get visible entities in the room."""
         return await self._room.get_visible_entities()
 
-    async def move_to_inventory(self, user: IUser) -> EntityInstance:
-        """Rooms cannot be picked up - raises error."""
-        raise NotImplementedError("Rooms cannot be picked up")
-
-    async def drop_to_room(
-        self, room: IRoom, container: EntityInstance | None = None
-    ) -> EntityInstance:
-        """Rooms cannot be dropped - raises error."""
-        raise NotImplementedError("Rooms cannot be dropped")
-
-    async def destroy(self) -> None:
-        """Rooms cannot be destroyed - raises error."""
-        raise NotImplementedError("Rooms cannot be destroyed")
-
-    def with_observers(self, *observers: Observer) -> RoomEntityInstance:
+    def with_observers(self, *observers: Observer) -> Self:
         """No-op: rooms don't emit events, so observers are ignored."""
         return self
 
@@ -469,7 +455,7 @@ class EntityModal:
         focus_name = focus.current_container.name if focus else None
         return room.as_entity(focus_name=focus_name)
 
-    def allows_pickup(self, entity: IEntityInstance) -> bool:
+    def allows_pickup(self, entity: IReadableEntity) -> bool:
         """Check if picking up the given entity is allowed."""
         return True
 
@@ -509,6 +495,6 @@ class InventoryThread:
         """Inventory threads have no room entity for autocomplete."""
         return None
 
-    def allows_pickup(self, entity: IEntityInstance) -> bool:
+    def allows_pickup(self, entity: IReadableEntity) -> bool:
         """Disallow picking up the thread's own entity."""
         return entity.instance_id != self.entity_instance.instance_id

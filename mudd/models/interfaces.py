@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Protocol, Self
 from uuid import UUID
 
 from mudd.utils.text import Rarity
@@ -65,7 +65,7 @@ class IRoom(Protocol):
         """
         ...
 
-    def allows_pickup(self, entity: IEntityInstance) -> bool:
+    def allows_pickup(self, entity: IReadableEntity) -> bool:
         """Check if picking up the given entity is allowed in this room context.
 
         Most rooms allow all pickups. InventoryThread disallows picking up
@@ -100,8 +100,13 @@ class IRoom(Protocol):
         ...
 
 
-class IEntityInstance(Protocol):
-    """Protocol for EntityInstance model."""
+class IReadableEntity(Protocol):
+    """Read-only protocol for entity instances.
+
+    All consumers that only need to inspect entity properties (commands,
+    views, autocomplete) should use this protocol. Both EntityInstance
+    and RoomEntityInstance satisfy it.
+    """
 
     @property
     def instance_id(self) -> UUID | str:
@@ -158,25 +163,11 @@ class IEntityInstance(Protocol):
         """Item rarity tier."""
         ...
 
-    async def move_to_inventory(self, user: IUser) -> EntityInstance:
-        """Move this instance to a user's inventory."""
-        ...
-
-    async def drop_to_room(
-        self, room: IRoom, container: EntityInstance | None = None
-    ) -> EntityInstance:
-        """Drop this instance to a room, optionally into a container."""
-        ...
-
-    async def destroy(self) -> None:
-        """Delete this instance from the database."""
-        ...
-
     async def get_contents(self) -> list[EntityInstance]:
         """Get direct children of this container entity."""
         ...
 
-    def with_observers(self, *observers: Observer) -> IEntityInstance:
+    def with_observers(self, *observers: Observer) -> Self:
         """Return a new instance with additional observers attached."""
         ...
 
@@ -199,4 +190,26 @@ class IEntityInstance(Protocol):
     @property
     def can_destroy(self) -> bool:
         """Whether this entity can be destroyed."""
+        ...
+
+
+class IEntityInstance(IReadableEntity, Protocol):
+    """Mutable protocol for entity instances that support mutations.
+
+    Only EntityInstance (database-backed) satisfies this protocol.
+    RoomEntityInstance is read-only and satisfies only IReadableEntity.
+    """
+
+    async def move_to_inventory(self, user: IUser) -> EntityInstance:
+        """Move this instance to a user's inventory."""
+        ...
+
+    async def drop_to_room(
+        self, room: IRoom, container: EntityInstance | None = None
+    ) -> EntityInstance:
+        """Drop this instance to a room, optionally into a container."""
+        ...
+
+    async def destroy(self) -> None:
+        """Delete this instance from the database."""
         ...

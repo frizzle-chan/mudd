@@ -3,8 +3,6 @@ from __future__ import annotations
 import logging
 import random
 from dataclasses import dataclass, field, replace
-from typing import TypeVar, cast
-from uuid import UUID
 
 import asyncpg
 import discord
@@ -13,14 +11,12 @@ from discord import Interaction
 from mudd.commands import ActionCommand, ActionResult, TakeCommand
 from mudd.events import Observer
 from mudd.models.entity import EntityInstance, ResolvedEntity
-from mudd.models.interfaces import IEntityInstance, IRoom
+from mudd.models.interfaces import IReadableEntity, IRoom
 from mudd.models.room import EntityModal, InventoryThread, Room
 from mudd.models.user import User
 from mudd.observers import EffectsObserver
 
 logger = logging.getLogger(__name__)
-
-T = TypeVar("T")
 
 
 @dataclass(frozen=True)
@@ -82,7 +78,7 @@ class Scene:
                 raise ValueError("User is in an invalid room")
         return cls(_pool=pool, user=user, room=room)
 
-    async def contains(self, entity: IEntityInstance) -> bool:
+    async def contains(self, entity: IReadableEntity) -> bool:
         """Check if the scene contains the given entity instance."""
         visible = {e.instance_id for e in await self.room.get_visible_entities()}
         inventory = {e.instance_id for e in await self.user.get_inventory()}
@@ -110,7 +106,7 @@ class Scene:
         new_user = self.user.with_observers(*new_observers)
         return replace(self, _observers=new_observers, user=new_user)
 
-    def get_observer(self, cls: type[T]) -> T | None:
+    def get_observer[T](self, cls: type[T]) -> T | None:
         """Get an attached observer by type.
 
         Args:
@@ -133,7 +129,7 @@ class Scene:
         for observer in self._observers:
             await observer.flush()
 
-    async def _take_item(self, item: IEntityInstance) -> ActionResult:
+    async def _take_item(self, item: IReadableEntity) -> ActionResult:
         """Execute TakeCommand on an item using a sub-scene.
 
         Creates a sub-scene with a fresh EffectsObserver (keeping other
@@ -168,7 +164,7 @@ class Scene:
         return result
 
     async def execute(
-        self, command: ActionCommand, target: IEntityInstance
+        self, command: ActionCommand, target: IReadableEntity
     ) -> ActionResult:
         """Execute a command and process all effects.
 
@@ -180,8 +176,8 @@ class Scene:
         6. Return result
 
         Commands validate capabilities before signaling effects. If a command
-        signals an effect, the entity must support it. NotImplementedError
-        from entity methods is a safety net for bugs in command validation.
+        signals an effect, the entity must support it. Mutation effects
+        (pickup, drop, destroy, set_focus) only apply to EntityInstance targets.
 
         Args:
             command: The action command to execute
@@ -201,7 +197,6 @@ class Scene:
         result = await command.execute(self.user, self.room, effects, target)
 
         # Apply effects - commands already validated capabilities
-        # NotImplementedError is safety net if something sneaks through
 
         # Dispense: pick random item from container contents → _take_item
         if effects.has_dispense:
@@ -211,16 +206,18 @@ class Scene:
                 sub_result = await self._take_item(dispensed)
                 result = ActionResult(output=result.output + "\n" + sub_result.output)
 
-        if effects.has_pickup:
-            await target.move_to_inventory(self.user)
-        if effects.has_drop:
-            drop_room = await self.room.get_drop_target()
-            if drop_room:
-                await target.drop_to_room(drop_room)
-        if effects.has_destroy:
-            await target.destroy()
-        if effects.has_set_focus:
-            await self.user.set_focus(cast(UUID, target.instance_id))
+        # Mutation effects only apply to database-backed entities
+        if isinstance(target, EntityInstance):
+            if effects.has_pickup:
+                await target.move_to_inventory(self.user)
+            if effects.has_drop:
+                drop_room = await self.room.get_drop_target()
+                if drop_room:
+                    await target.drop_to_room(drop_room)
+            if effects.has_destroy:
+                await target.destroy()
+            if effects.has_set_focus:
+                await self.user.set_focus(target.instance_id)
         if effects.has_clear_focus:
             await self.user.clear_focus()
 

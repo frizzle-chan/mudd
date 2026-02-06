@@ -1,9 +1,9 @@
 """Core type definitions for MUDD."""
 
-from enum import Enum
+from enum import StrEnum
 
 
-class VerbAction(str, Enum):
+class VerbAction(StrEnum):
     """Action types for verb-to-handler mapping.
 
     Values match the PostgreSQL verb_action enum and entity handler column names.

@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
 from enum import Enum, auto
+from typing import Self
 from uuid import UUID
 
 import asyncpg
@@ -82,7 +83,7 @@ class User:
         """Discord mention string for this user."""
         return f"<@{self.id}>"
 
-    def with_observers(self, *observers: Observer) -> User:
+    def with_observers(self, *observers: Observer) -> Self:
         """Return a new instance with additional observers appended.
 
         Args:

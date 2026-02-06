@@ -128,6 +128,14 @@ The codebase uses an MVC + events architecture:
 
 **Return values**: Prefer dataclasses over tuples when returning more than 2 values. Tuples are acceptable for simple pairs (e.g., `(value, error)`) but become unwieldy with 3+ elements. Named fields improve readability and make refactoring safer.
 
+**Modern Python syntax** (requires Python >=3.13):
+- Use PEP 695 type parameters (`def f[T]()`) instead of `TypeVar`
+- Use `type` alias statements (`type Foo = Bar | Baz`) instead of bare assignments for type aliases
+- Use `StrEnum` instead of `(str, Enum)` for string-backed enums
+- Use `@dataclass(slots=True)` on frozen/simple dataclasses (not on model dataclasses with `_observers` or `async_cached_property`)
+- Use `Self` return type for methods that return their own class (e.g., `with_observers()`)
+- Use `@override` on methods that override a base class method
+
 ## PR Reviews
 
 PR reviews are written to `review.md` (gitignored). When working with reviews:

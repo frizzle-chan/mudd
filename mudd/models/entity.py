@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field, replace
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Self
 from uuid import UUID
 
 import asyncpg
@@ -229,7 +229,7 @@ class EntityInstance:
     def can_destroy(self) -> bool:
         return True
 
-    def with_observers(self, *observers: Observer) -> EntityInstance:
+    def with_observers(self, *observers: Observer) -> Self:
         """Return a new instance with additional observers appended.
 
         Args:

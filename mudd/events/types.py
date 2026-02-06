@@ -9,98 +9,98 @@ if TYPE_CHECKING:
     from mudd.models.entity import EntityInstance
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class BroadcastEvent:
     """A message to broadcast publicly to the channel."""
 
     message: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class GrantEvent:
     """Grant a specific entity to the user."""
 
     entity_id: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class GrantRandomEvent:
     """Grant a random entity from a tag."""
 
     tag: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class GrantCurrencyEvent:
     """Grant currency to the user."""
 
     amount: int
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class PickupSignal:
     """Signal that the current item should be picked up."""
 
     pass
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class DropSignal:
     """Signal that the current item should be dropped."""
 
     pass
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class DestroySignal:
     """Signal that the current entity should be destroyed."""
 
     pass
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class DispenseSignal:
     """Signal that an item should be dispensed from this container."""
 
     pass
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class SetFocusSignal:
     """Signal that focus should be set on the current entity."""
 
     pass
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class ClearFocusSignal:
     """Signal that user focus should be cleared."""
 
     pass
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class EntityPickedUpEvent:
     """Fact: entity was picked up by a user."""
 
     instance: EntityInstance
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class EntityDroppedEvent:
     """Fact: entity was dropped to a room."""
 
     instance: EntityInstance
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class EntityDestroyedEvent:
     """Fact: entity was destroyed."""
 
     instance: EntityInstance
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class ZoneSyncedEvent:
     """Zone was synced to database (created or updated)."""
 
@@ -108,7 +108,7 @@ class ZoneSyncedEvent:
     name: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class RoomSyncedEvent:
     """Room was synced to database (created or updated)."""
 
@@ -119,7 +119,7 @@ class RoomSyncedEvent:
     has_voice: bool
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class OrphanChannelDetectedEvent:
     """Orphan channel detected during sync."""
 
@@ -128,7 +128,7 @@ class OrphanChannelDetectedEvent:
     category_name: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class BalanceChangedEvent:
     """User's balance changed (for future use by economy cog)."""
 
@@ -138,7 +138,7 @@ class BalanceChangedEvent:
     memo: str
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class InventorySyncEvent:
     """Request full inventory sync for a user. Idempotent.
 
@@ -156,7 +156,7 @@ class InventorySyncEvent:
     user_id: int
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class UserMovedEvent:
     """User moved from one room to another.
 
@@ -171,7 +171,7 @@ class UserMovedEvent:
     guild_id: int
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class UserLocationSyncEvent:
     """Request permission sync for a user's current location.
 
@@ -186,7 +186,7 @@ class UserLocationSyncEvent:
     guild_id: int
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class UserSyncEvent:
     """Sync user data from Discord to database (idempotent).
 
@@ -201,10 +201,10 @@ class UserSyncEvent:
 
 
 # Alias for semantic distinction - currently does the same thing
-UserJoinedEvent = UserSyncEvent
+type UserJoinedEvent = UserSyncEvent
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class UserLeftEvent:
     """User left the guild."""
 
@@ -212,7 +212,7 @@ class UserLeftEvent:
     guild_id: int
 
 
-GameEvent = (
+type GameEvent = (
     BroadcastEvent
     | GrantEvent
     | GrantRandomEvent

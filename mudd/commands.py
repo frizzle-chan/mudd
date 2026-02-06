@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, override
 
 from mudd import template
 from mudd.events import EffectsCollector
-from mudd.models import IEntityInstance, IRoom, IUser
+from mudd.models import IReadableEntity, IRoom, IUser
 from mudd.observers import EffectsObserver
 from mudd.types import VerbAction
 from mudd.utils import async_cached_property
@@ -16,9 +16,9 @@ from mudd.utils.text import RARITY_EMOJI
 
 
 class ViewEntity:
-    """View-friendly wrapper for IEntityInstance that formats output for display."""
+    """View-friendly wrapper for IReadableEntity that formats output for display."""
 
-    def __init__(self, entity: IEntityInstance):
+    def __init__(self, entity: IReadableEntity):
         self._entity = entity
 
     def __str__(self) -> str:
@@ -77,7 +77,7 @@ class ViewUser:
         return await self._user.get_balance()
 
 
-@dataclass
+@dataclass(slots=True)
 class ActionResult:
     """Result of executing an action command.
 
@@ -124,7 +124,7 @@ class ActionCommand(ABC):
     """
 
     @abstractmethod
-    def get_handler_text(self, entity: IEntityInstance) -> str | None:
+    def get_handler_text(self, entity: IReadableEntity) -> str | None:
         """Get the entity's handler template for this action.
 
         Args:
@@ -140,7 +140,7 @@ class ActionCommand(ABC):
         user: IUser,
         room: IRoom,
         effects: EffectsObserver,
-        entity: IEntityInstance,
+        entity: IReadableEntity,
     ) -> ActionResult:
         """Execute this command.
 
@@ -175,7 +175,8 @@ class ActionCommand(ABC):
 class LookCommand(ActionCommand):
     """Command for the 'look' action."""
 
-    def get_handler_text(self, entity: IEntityInstance) -> str | None:
+    @override
+    def get_handler_text(self, entity: IReadableEntity) -> str | None:
         """Return the entity's on_look handler template."""
         return entity.entity.on_look
 
@@ -183,7 +184,8 @@ class LookCommand(ActionCommand):
 class TouchCommand(ActionCommand):
     """Command for the 'touch' action."""
 
-    def get_handler_text(self, entity: IEntityInstance) -> str | None:
+    @override
+    def get_handler_text(self, entity: IReadableEntity) -> str | None:
         """Return the entity's on_touch handler template."""
         return entity.entity.on_touch
 
@@ -191,7 +193,8 @@ class TouchCommand(ActionCommand):
 class AttackCommand(ActionCommand):
     """Command for the 'attack' action."""
 
-    def get_handler_text(self, entity: IEntityInstance) -> str | None:
+    @override
+    def get_handler_text(self, entity: IReadableEntity) -> str | None:
         """Return the entity's on_attack handler template."""
         return entity.entity.on_attack
 
@@ -199,7 +202,8 @@ class AttackCommand(ActionCommand):
 class UseCommand(ActionCommand):
     """Command for the 'use' action."""
 
-    def get_handler_text(self, entity: IEntityInstance) -> str | None:
+    @override
+    def get_handler_text(self, entity: IReadableEntity) -> str | None:
         """Return the entity's on_use handler template."""
         return entity.entity.on_use
 
@@ -207,16 +211,18 @@ class UseCommand(ActionCommand):
 class TakeCommand(ActionCommand):
     """Command for the 'take' action."""
 
-    def get_handler_text(self, entity: IEntityInstance) -> str | None:
+    @override
+    def get_handler_text(self, entity: IReadableEntity) -> str | None:
         """Return the entity's on_take handler template."""
         return entity.entity.on_take
 
+    @override
     async def execute(
         self,
         user: IUser,
         room: IRoom,
         effects: EffectsObserver,
-        entity: IEntityInstance,
+        entity: IReadableEntity,
     ) -> ActionResult:
         """Execute take command with pickup validation."""
         if not entity.can_pickup:
@@ -229,16 +235,18 @@ class TakeCommand(ActionCommand):
 class DropCommand(ActionCommand):
     """Command for the 'drop' action."""
 
-    def get_handler_text(self, entity: IEntityInstance) -> str | None:
+    @override
+    def get_handler_text(self, entity: IReadableEntity) -> str | None:
         """Return the entity's on_drop handler template."""
         return entity.entity.on_drop
 
+    @override
     async def execute(
         self,
         user: IUser,
         room: IRoom,
         effects: EffectsObserver,
-        entity: IEntityInstance,
+        entity: IReadableEntity,
     ) -> ActionResult:
         """Execute drop command with capability validation."""
         if not entity.can_drop:
@@ -249,16 +257,18 @@ class DropCommand(ActionCommand):
 class OpenCommand(ActionCommand):
     """Command for the 'open' action."""
 
-    def get_handler_text(self, entity: IEntityInstance) -> str | None:
+    @override
+    def get_handler_text(self, entity: IReadableEntity) -> str | None:
         """Return the entity's on_open handler template."""
         return entity.entity.on_open
 
+    @override
     async def execute(
         self,
         user: IUser,
         room: IRoom,
         effects: EffectsObserver,
-        entity: IEntityInstance,
+        entity: IReadableEntity,
     ) -> ActionResult:
         """Execute open command with capability validation."""
         if not entity.is_focusable:
@@ -269,7 +279,8 @@ class OpenCommand(ActionCommand):
 class CloseCommand(ActionCommand):
     """Command for the 'close' action."""
 
-    def get_handler_text(self, entity: IEntityInstance) -> str | None:
+    @override
+    def get_handler_text(self, entity: IReadableEntity) -> str | None:
         """Return the entity's on_close handler template."""
         return entity.entity.on_close
 
