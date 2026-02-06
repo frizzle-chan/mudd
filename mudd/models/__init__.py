@@ -9,7 +9,7 @@ methods for mutations. Mutations return new instances (immutable pattern).
 
 from mudd.models.entity import EntityInstance, ResolvedEntity
 from mudd.models.entity_definition import EntityDefinition
-from mudd.models.interfaces import IEntityInstance, IRoom, IUser
+from mudd.models.interfaces import IEntityInstance, IReadableEntity, IRoom, IUser
 from mudd.models.room import EntityModal, InventoryThread, Room, RoomEntityInstance
 from mudd.models.spawning_pool import SpawningPool
 from mudd.models.user import FocusContext, TransferError, TransferResult, User
@@ -38,5 +38,6 @@ __all__ = [
     # Protocols
     "IUser",
     "IRoom",
+    "IReadableEntity",
     "IEntityInstance",
 ]

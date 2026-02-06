@@ -55,8 +55,8 @@ class Zone:
         Returns:
             SyncStats with counts of synced and deleted zones
         """
-        stats = SyncStats()
         zone_ids = {z.id for z in zone_data}
+        deleted = 0
 
         async with pool.acquire() as conn, conn.transaction():
             # Delete zones not in data
@@ -65,11 +65,7 @@ class Zone:
                 list(zone_ids),
             )
             if result.startswith("DELETE "):
-                stats = SyncStats(
-                    synced=stats.synced,
-                    deleted=int(result.split()[1]),
-                    users_relocated=stats.users_relocated,
-                )
+                deleted = int(result.split()[1])
 
             # Upsert zones
             for zone in zone_data:
@@ -82,17 +78,11 @@ class Zone:
                     zone.description,
                 )
 
-            stats = SyncStats(
-                synced=len(zone_data),
-                deleted=stats.deleted,
-                users_relocated=stats.users_relocated,
-            )
-
         # Emit events after transaction commits
         for zone in zone_data:
             event = ZoneSyncedEvent(zone_id=zone.id, name=zone.name)
             for observer in observers:
                 observer.notify(event)
 
-        logger.info(f"Synced {stats.synced} zones, deleted {stats.deleted}")
-        return stats
+        logger.info(f"Synced {len(zone_data)} zones, deleted {deleted}")
+        return SyncStats(synced=len(zone_data), deleted=deleted)

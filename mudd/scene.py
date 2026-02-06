@@ -44,6 +44,37 @@ class Scene:
     # room is a virtual entity
 
     @classmethod
+    async def build(
+        cls,
+        pool: asyncpg.Pool,
+        interaction: Interaction,
+        bot: discord.Client | None = None,
+    ) -> Scene:
+        """Build a Scene with standard observers attached.
+
+        Creates a Scene from the interaction, attaches an EffectsObserver,
+        and optionally a DiscordReconciler if a bot is provided.
+
+        Args:
+            pool: Database connection pool
+            interaction: Discord interaction
+            bot: Discord bot client (enables DiscordReconciler when provided)
+
+        Returns:
+            Scene with observers attached
+        """
+        effects = EffectsObserver()
+        scene = await cls.from_interaction(pool, interaction)
+        if bot is not None:
+            from mudd.observers.discord import DiscordReconciler
+
+            reconciler = DiscordReconciler(bot, pool)
+            scene = scene.with_observers(effects, reconciler)
+        else:
+            scene = scene.with_observers(effects)
+        return scene
+
+    @classmethod
     async def from_interaction(
         cls, pool: asyncpg.Pool, interaction: Interaction
     ) -> Scene:

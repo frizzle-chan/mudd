@@ -11,7 +11,7 @@ from discord.ext import commands
 from mudd.cogs.shared import entity_instance_id_autocomplete, resolve_entity
 from mudd.commands import get_command
 from mudd.matching.verb_matcher import match_verb
-from mudd.observers import DiscordReconciler, EffectsObserver
+from mudd.observers import EffectsObserver
 from mudd.scene import Scene
 
 logger = logging.getLogger(__name__)
@@ -44,13 +44,7 @@ class Interact(commands.Cog):
             return
 
         # 2. Build scene with observers
-        effects = EffectsObserver()
-        scene = await Scene.from_interaction(self._pool, interaction)
-        if self.bot is not None:
-            reconciler = DiscordReconciler(self.bot, self._pool)
-            scene = scene.with_observers(effects, reconciler)
-        else:
-            scene = scene.with_observers(effects)
+        scene = await Scene.build(self._pool, interaction, self.bot)
 
         # 3. Resolve target entity
         entity = await resolve_entity(
@@ -76,8 +70,9 @@ class Interact(commands.Cog):
         )
 
         # 6. Send broadcasts to channel
+        effects = scene.get_observer(EffectsObserver)
         channel = interaction.channel
-        if isinstance(channel, discord.abc.Messageable):
+        if effects and isinstance(channel, discord.abc.Messageable):
             for message in effects.broadcasts:
                 try:
                     await channel.send(message)

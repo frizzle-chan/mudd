@@ -24,6 +24,12 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+_ENTITY_INSTANCE_SELECT = """\
+SELECT ei.id AS instance_id, ei.room, ei.owner_id,
+       ei.container_entity_id, r.*
+FROM entity_instances ei
+CROSS JOIN LATERAL resolve_entity(ei.entity_id) r"""
+
 # Rarity weights for spawning (sum to 1000 for standard rarities)
 RARITY_WEIGHTS: dict[Rarity, int] = {
     "none": 0,  # Static world items never spawn
@@ -272,13 +278,7 @@ class EntityInstance:
             EntityInstance with resolved entity, or None if not found
         """
         row = await pool.fetchrow(
-            """
-            SELECT ei.id AS instance_id, ei.room, ei.owner_id,
-                   ei.container_entity_id, r.*
-            FROM entity_instances ei
-            CROSS JOIN LATERAL resolve_entity(ei.entity_id) r
-            WHERE ei.id = $1
-            """,
+            f"{_ENTITY_INSTANCE_SELECT}\nWHERE ei.id = $1",
             instance_id,
         )
 
@@ -300,13 +300,7 @@ class EntityInstance:
             List of EntityInstance objects in the room
         """
         rows = await pool.fetch(
-            """
-            SELECT ei.id AS instance_id, ei.room, ei.owner_id,
-                   ei.container_entity_id, r.*
-            FROM entity_instances ei
-            CROSS JOIN LATERAL resolve_entity(ei.entity_id) r
-            WHERE ei.room = $1
-            """,
+            f"{_ENTITY_INSTANCE_SELECT}\nWHERE ei.room = $1",
             room.id,
         )
 
@@ -358,14 +352,33 @@ class EntityInstance:
             List of EntityInstance objects in the user's inventory
         """
         rows = await pool.fetch(
-            """
-            SELECT ei.id AS instance_id, ei.room, ei.owner_id,
-                   ei.container_entity_id, r.*
-            FROM entity_instances ei
-            CROSS JOIN LATERAL resolve_entity(ei.entity_id) r
-            WHERE ei.owner_id = $1
-            """,
+            f"{_ENTITY_INSTANCE_SELECT}\nWHERE ei.owner_id = $1",
             owner_id,
+        )
+
+        instances = []
+        for row in rows:
+            entity = ResolvedEntity._from_row(row)
+            instances.append(cls._from_row(row, entity, pool))
+        return instances
+
+    @classmethod
+    async def get_top_level_by_room(
+        cls, pool: asyncpg.Pool, room: IRoom
+    ) -> list[EntityInstance]:
+        """Get top-level entities in a room (no container).
+
+        Args:
+            pool: Database connection pool
+            room: Room model instance
+
+        Returns:
+            List of EntityInstance objects with no container in the room
+        """
+        rows = await pool.fetch(
+            f"{_ENTITY_INSTANCE_SELECT}\n"
+            "WHERE ei.room = $1 AND ei.container_entity_id IS NULL",
+            room.id,
         )
 
         instances = []
@@ -592,13 +605,8 @@ class EntityInstance:
             return []
 
         rows = await self._pool.fetch(
-            """
-            SELECT ei.id AS instance_id, ei.room, ei.owner_id,
-                   ei.container_entity_id, r.*
-            FROM entity_instances ei
-            CROSS JOIN LATERAL resolve_entity(ei.entity_id) r
-            WHERE ei.room = $1 AND ei.container_entity_id = $2
-            """,
+            f"{_ENTITY_INSTANCE_SELECT}\n"
+            "WHERE ei.room = $1 AND ei.container_entity_id = $2",
             self.room_id,
             self.entity.id,
         )

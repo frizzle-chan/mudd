@@ -9,7 +9,6 @@ from discord.ext import commands
 from rapidfuzz import fuzz
 
 from mudd.models.user import TransferError
-from mudd.observers import DiscordReconciler, EffectsObserver
 from mudd.scene import Scene
 
 logger = logging.getLogger(__name__)
@@ -143,20 +142,13 @@ class Economy(commands.Cog):
             return
 
         # Build scene with observers
-        effects = EffectsObserver()
         try:
-            scene = await Scene.from_interaction(self._pool, interaction)
+            scene = await Scene.build(self._pool, interaction, self.bot)
         except ValueError:
             await interaction.response.send_message(
                 "Could not determine your location.", ephemeral=True
             )
             return
-
-        if self.bot:
-            reconciler = DiscordReconciler(self.bot, self._pool)
-            scene = scene.with_observers(effects, reconciler)
-        else:
-            scene = scene.with_observers(effects)
 
         # Get recipient from other_players
         other_players = await scene.other_players()
