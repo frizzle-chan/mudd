@@ -1,0 +1,501 @@
+# Test World
+# Self-contained world file for the test suite
+
+# ============================================================================
+# Zone record type
+# ============================================================================
+%rec: Zone
+%key: Id
+%mandatory: Id Name
+%allowed: Id Name Description
+
+Id: floor-1
+Name: Floor 1
+Description: The ground floor of the mansion
+
+# ============================================================================
+# Room record type
+# ============================================================================
+%rec: Room
+%key: Id
+%type: Zone rec Zone
+%type: HasVoice bool
+%type: IsDefault bool
+%mandatory: Id Name Description Zone
+%allowed: Id Name Description Zone HasVoice IsDefault
+
+Id: foyer
+Name: Foyer
+Zone: floor-1
+IsDefault: yes
+Description: A test foyer
+
+Id: store-room
+Name: Store Room
+Zone: floor-1
+Description: A store room for test fixtures
+
+# ============================================================================
+# Entity record type
+# ============================================================================
+%rec: Entity
+%key: Id
+%type: Prototype rec Entity
+%type: Container rec Entity
+%type: Room rec Room
+%type: ContentsVisible bool
+%type: Rarity enum none common uncommon rare epic legendary mythic quest
+%mandatory: Id Name
+%allowed: Id Name Prototype Container Room ContentsVisible DescriptionShort DescriptionLong
+%allowed: OnLook OnTouch OnAttack OnUse OnTake OnOpen OnClose OnDrop
+%allowed: Tags Rarity
+
+# ----------------------------------------------------------------------------
+# Base prototypes (copied from mansion.rec for inheritance)
+# ----------------------------------------------------------------------------
+
+Id: object
+Name: object
+Rarity: none
+DescriptionShort: A {{ e.name }}.
+OnLook: {{ e.description_long or e.description_short or "You see nothing special." }}{{ e.contents }}
+OnTouch: You touch the {{ e.name }}. Nothing happens.
+OnAttack: You attack the {{ e.name }}, but it has no effect.
+OnUse: You can't use the {{ e.name }}.
+OnTake: You can't take the {{ e.name }}.
+
+Id: chest
+Name: chest
+Prototype: object
+DescriptionShort: A {{ e.name }} sits here.
+OnLook: {{ e.description_long or e.description_short or "You see nothing special." }}
+OnUse: {{ effects.set_focus() }}You open the {{ e.name }}.{% if e.contents %} Inside:{{ e.contents }}{% else %} It's empty.{% endif %}
+OnOpen: {{ effects.set_focus() }}You open the {{ e.name }}.{% if e.contents %} Inside:{{ e.contents }}{% else %} It's empty.{% endif %}
+OnClose: {{ effects.clear_focus() }}You close the {{ e.name }}.
+
+Id: glass_object
+Name: Glass Object
+Prototype: object
+OnAttack: You suppress the intrusive thought to smash the {{ e.name }}
+
+Id: record
+Name: record
+Prototype: object
+OnUse: You pull {{ e.name }} from its sleeve, place it on the turntable, and drop the needle. Music fills the room.
+OnTake: You can't take the {{ e.name }}, but you can __play__ it.
+
+Id: item
+Name: item
+Prototype: object
+Rarity: common
+OnTake: {{ effects.pickup() }}{{ effects.broadcast(user ~ " picks up " ~ e ~ ".") }}You pick up the {{ e.name }}.
+OnDrop: {% if container %}You put the {{ e.name }} into the *{{ container.name }}*.{% else %}You drop the {{ e.name }}.{% endif %}{{ effects.drop() }}{{ effects.broadcast(user ~ " drops " ~ e ~ ".") }}
+
+Id: furniture
+Name: furniture
+Prototype: object
+DescriptionShort: A {{ e.name }} sits here{% if e.contents %}. On it:{{ e.contents }}{% endif %}
+
+Id: beverage
+Name: beverage
+Prototype: item
+OnUse: You crack open the {{ e.name }} and take a refreshing sip. It restores health.
+OnTake: {{ effects.pickup() }}{{ effects.broadcast(user ~ " grabs " ~ e ~ ".") }}You grab a {{ e.name }}.
+
+Id: wallet
+Name: Wallet
+Prototype: item
+Rarity: none
+OnTake: You already have your wallet.
+OnDrop: You can't drop your wallet.
+OnLook: Your wallet contains **{{ user.balance|money }}**.
+OnUse: You whip out your wallet, it has **{{ user.balance|money }}**.
+OnOpen: You open up your wallet, inside it has **{{ user.balance|money }}**.
+
+Id: terminal_document
+Name: terminal document
+Prototype: object
+DescriptionShort: {{ e.name }}
+OnLook: {{ e.description_long or "ERROR: FILE NOT FOUND" }}
+OnUse: {{ e.description_long or "ERROR: FILE NOT FOUND" }}
+
+Id: painting
+Name: painting
+Prototype: item
+DescriptionShort: a {{ e.name }}
+OnTake: {{ effects.pickup() }}You carefully lift the {{ e.name }} from its hook.{{ effects.broadcast(user ~ " takes " ~ e ~ " from the wall.") }}
+OnDrop: {% if container %}You hang the {{ e.name }} on the *{{ container.name }}*.{% else %}You set the {{ e.name }} down, leaning it against the wall.{% endif %}{{ effects.drop() }}{{ effects.broadcast(user ~ " places " ~ e ~ ".") }}
+OnTouch: You run your fingers along the frame. The paint is dry and textured.
+OnAttack: {{ effects.destroy() }}{{ effects.broadcast("**" ~ user ~ "** slashes " ~ e ~ " with a knife!") }}You drag your blade across the canvas. The painting is ruined.
+
+# ----------------------------------------------------------------------------
+# Store Room entities (test fixtures)
+# ----------------------------------------------------------------------------
+
+Id: storeroom_box
+Name: Cardboard Box
+Prototype: chest
+Room: store-room
+ContentsVisible: no
+DescriptionShort: a beat-up {{ e.name }} sits in the corner
+DescriptionLong: A cardboard box with "TEST FIXTURES - DO NOT REMOVE" written on it in marker.
+OnOpen: {{ effects.set_focus() }}You open the {{ e.name }}.{% if e.contents %} Inside:{{ e.contents }}{% else %} It's empty.{% endif %}
+OnClose: {{ effects.clear_focus() }}You close the {{ e.name }}.
+
+Id: storeroom_crate
+Name: Wooden Crate
+Prototype: chest
+Room: store-room
+ContentsVisible: no
+DescriptionShort: a sturdy {{ e.name }}
+DescriptionLong: A wooden crate, slightly worn from use.
+OnOpen: You pry open the *{{ e.name }}*.{% if e.contents %} Inside:{{ e.contents }}{% else %} It's empty.{% endif %}
+OnClose: You close the *{{ e.name }}*.
+
+Id: test_orb
+Name: Test Orb
+Prototype: object
+Room: store-room
+Container: storeroom_box
+DescriptionShort: a glowing {{ e.name }}
+DescriptionLong: TEST_LOOK_RESPONSE - A mysterious orb used for testing.
+OnTouch: TEST_TOUCH_RESPONSE - The orb hums softly.
+OnAttack: TEST_ATTACK_RESPONSE - The orb absorbs the blow.
+
+Id: test_gadget
+Name: Test Gadget
+Prototype: object
+Room: store-room
+Container: storeroom_box
+DescriptionShort: a strange {{ e.name }}
+DescriptionLong: A device with many buttons.
+OnUse: TEST_USE_RESPONSE - The gadget whirs to life.
+OnTake: TEST_TAKE_RESPONSE - You pick up the gadget.
+
+Id: test_lockbox
+Name: Test Lockbox
+Prototype: chest
+Room: store-room
+Container: storeroom_box
+DescriptionShort: a small {{ e.name }}
+DescriptionLong: A metal lockbox.
+OnOpen: TEST_OPEN_RESPONSE - You open the lockbox.
+OnClose: TEST_CLOSE_RESPONSE - You close the lockbox.
+
+Id: test_record
+Name: Test Record
+Prototype: record
+Room: store-room
+Container: storeroom_box
+DescriptionShort: a {{ e.name }} for testing
+DescriptionLong: A test record.
+OnUse: TEST_EPHEMERAL_RESPONSE{{ effects.broadcast("TEST_BROADCAST_RESPONSE " ~ user) }}
+
+Id: test_takeable
+Name: Test Takeable
+Prototype: item
+Room: store-room
+Container: storeroom_box
+Rarity: common
+DescriptionShort: a {{ e.name }} you can pick up
+DescriptionLong: A test item that can be picked up.
+OnTake: {{ effects.pickup() }}TEST_TAKE_MOVE_RESPONSE - You pick up the {{ e.name }}.
+
+Id: test_quest_map
+Name: Test Quest Map
+Prototype: item
+Room: store-room
+Container: storeroom_box
+Rarity: quest
+Tags: test_quest_map_spawn
+DescriptionShort: a {{ e.name }} for your quest
+DescriptionLong: A test quest item that moves to inventory and respawns via spawning pool.
+OnTake: {{ effects.pickup() }}TEST_TAKE_MOVE_RESPONSE - You pick up the {{ e.name }}.
+
+Id: test_droppable
+Name: Test Droppable
+Prototype: item
+Room: store-room
+Container: storeroom_box
+Rarity: common
+DescriptionShort: a {{ e.name }} you can drop
+DescriptionLong: A test item that can be dropped.
+OnDrop: TEST_DROP_RESPONSE - You drop the {{ e.name }}.{{ effects.drop() }}{{ effects.broadcast(user ~ " drops " ~ e ~ ".") }}
+
+Id: test_sticky
+Name: Test Sticky
+Prototype: item
+Room: store-room
+Container: storeroom_box
+Rarity: common
+DescriptionShort: a {{ e.name }} that sticks to you
+DescriptionLong: A test item that cannot be dropped.
+OnDrop: The {{ e.name }} is stuck to your hand! You can't drop it.
+
+Id: test_granting_key
+Name: Test Granting Key
+Prototype: object
+Room: store-room
+Container: storeroom_box
+DescriptionShort: a {{ e.name }} that grants an item
+DescriptionLong: A test key that grants a specific item when used.
+OnUse: TEST_GRANT_RESPONSE - The key glows and grants you an item!{{ effects.grant("test_granted_item") }}
+
+Id: test_granted_item
+Name: Test Granted Item
+Prototype: item
+Rarity: quest
+DescriptionShort: a {{ e.name }} received from a key
+DescriptionLong: A test item that is granted by the test key.
+
+Id: test_random_grantor
+Name: Test Random Grantor
+Prototype: chest
+Room: store-room
+Container: storeroom_box
+DescriptionShort: a {{ e.name }} that grants random loot
+DescriptionLong: A test chest that grants random loot when opened.
+OnOpen: TEST_RANDOM_GRANT_RESPONSE - You open the chest and find something inside!{{ effects.grant_random("test_loot") }}
+
+Id: test_common_loot
+Name: Test Common Loot
+Prototype: item
+Rarity: common
+Tags: test_loot
+DescriptionShort: a {{ e.name }} of common quality
+DescriptionLong: A common test item from the loot pool.
+
+Id: test_rare_loot
+Name: Test Rare Loot
+Prototype: item
+Rarity: rare
+Tags: test_loot
+DescriptionShort: a {{ e.name }} of rare quality
+DescriptionLong: A rare test item from the loot pool.
+
+Id: test_droppable_2
+Name: Test Droppable 2
+Prototype: item
+Room: store-room
+Container: storeroom_box
+Rarity: common
+DescriptionShort: a {{ e.name }} you can drop
+DescriptionLong: A test item for floor clutter testing.
+
+Id: test_droppable_3
+Name: Test Droppable 3
+Prototype: item
+Room: store-room
+Container: storeroom_box
+Rarity: common
+DescriptionShort: a {{ e.name }} you can drop
+DescriptionLong: A test item for floor clutter testing.
+
+Id: test_droppable_4
+Name: Test Droppable 4
+Prototype: item
+Room: store-room
+Container: storeroom_box
+Rarity: common
+DescriptionShort: a {{ e.name }} you can drop
+DescriptionLong: A test item for floor clutter testing.
+
+Id: test_droppable_5
+Name: Test Droppable 5
+Prototype: item
+Room: store-room
+Container: storeroom_box
+Rarity: common
+DescriptionShort: a {{ e.name }} you can drop
+DescriptionLong: A test item for floor clutter testing.
+
+Id: test_droppable_6
+Name: Test Droppable 6
+Prototype: item
+Room: store-room
+Container: storeroom_box
+Rarity: common
+DescriptionShort: a {{ e.name }} you can drop
+DescriptionLong: A test item for floor clutter testing.
+
+Id: test_droppable_7
+Name: Test Droppable 7
+Prototype: item
+Room: store-room
+Container: storeroom_box
+Rarity: common
+DescriptionShort: a {{ e.name }} you can drop
+DescriptionLong: A test item for floor clutter testing.
+
+Id: test_droppable_8
+Name: Test Droppable 8
+Prototype: item
+Room: store-room
+Container: storeroom_box
+Rarity: common
+DescriptionShort: a {{ e.name }} you can drop
+DescriptionLong: A test item for floor clutter testing.
+
+Id: test_droppable_9
+Name: Test Droppable 9
+Prototype: item
+Room: store-room
+Container: storeroom_box
+Rarity: common
+DescriptionShort: a {{ e.name }} you can drop
+DescriptionLong: A test item for floor clutter testing.
+
+Id: test_droppable_10
+Name: Test Droppable 10
+Prototype: item
+Room: store-room
+Container: storeroom_box
+Rarity: common
+DescriptionShort: a {{ e.name }} you can drop
+DescriptionLong: A test item for floor clutter testing.
+
+Id: test_droppable_11
+Name: Test Droppable 11
+Prototype: item
+Room: store-room
+Container: storeroom_box
+Rarity: common
+DescriptionShort: a {{ e.name }} you can drop
+DescriptionLong: A test item for floor clutter testing.
+
+Id: test_smashable
+Name: Test Smashable
+Prototype: glass_object
+Container: storeroom_box
+Tags: test_smashable_spawn
+Rarity: common
+DescriptionShort: a fragile {{ e.name }}
+DescriptionLong: A glass object used for testing destruction effects.
+OnAttack: {{ effects.destroy() }}{{ effects.broadcast("**" ~ user ~ "** smashes the " ~ e.name ~ "!") }}TEST_SMASH_RESPONSE - You smash it! Shards scatter everywhere.{{ effects.grant_random("test_loot") }}
+
+# ----------------------------------------------------------------------------
+# Novel mechanic test fixtures
+# ----------------------------------------------------------------------------
+
+Id: test_furniture
+Name: Test Table
+Prototype: furniture
+Room: store-room
+ContentsVisible: yes
+DescriptionShort: A {{ e.name }} sits here{% if e.contents %}. On it:{{ e.contents }}{% endif %}
+DescriptionLong: A test table with visible contents.
+
+Id: test_currency_pickup
+Name: Test Coins
+Prototype: object
+Room: store-room
+Container: storeroom_box
+Rarity: common
+Tags: test_currency_spawn
+DescriptionShort: a pile of {{ e.name }}
+DescriptionLong: Test coins for currency grant testing.
+OnTake: {{ effects.grant_currency(100) }}{{ effects.destroy() }}{{ effects.broadcast("**" ~ user ~ "** pockets " ~ e ~ " (+¥100)") }}TEST_CURRENCY_RESPONSE - You pick up the coins. (+¥100)
+
+Id: test_dispenser
+Name: Test Dispenser
+Prototype: furniture
+Room: store-room
+ContentsVisible: no
+DescriptionShort: A {{ e.name }} stands against the wall.
+DescriptionLong: A test dispenser for effects.dispense() testing.
+OnUse: {% if e.contents %}{{ effects.dispense() }}{{ effects.broadcast("**" ~ user ~ "** uses the dispenser...") }}TEST_DISPENSE_RESPONSE - The dispenser whirs and drops something.{% else %}The dispenser is empty.{% endif %}
+
+Id: test_dispenser_prize
+Name: Test Dispenser Prize
+Prototype: item
+Room: store-room
+Container: test_dispenser
+Rarity: common
+Tags: test_dispenser_loot
+DescriptionShort: a {{ e.name }}
+DescriptionLong: A test prize from the dispenser.
+
+Id: test_wallet
+Name: Test Wallet
+Prototype: wallet
+Room: store-room
+Container: storeroom_box
+DescriptionShort: a {{ e.name }}
+DescriptionLong: A test wallet for balance display testing.
+
+Id: test_beverage
+Name: Test Beverage
+Prototype: beverage
+Room: store-room
+Container: storeroom_box
+Rarity: common
+Tags: test_beverage_spawn
+DescriptionShort: a chilled {{ e.name }}
+DescriptionLong: A test beverage for prototype chain testing.
+
+Id: test_terminal
+Name: Test Terminal
+Prototype: object
+Room: store-room
+ContentsVisible: no
+DescriptionShort: A {{ e.name }} hums on the desk.
+DescriptionLong: A test terminal for container focus testing.
+OnOpen: {{ effects.set_focus() }}Welcome to the test terminal.{% if e.contents %} Files:{{ e.contents }}{% else %} (none){% endif %}
+OnClose: {{ effects.clear_focus() }}Logging out.
+
+Id: test_terminal_doc
+Name: Test Document
+Prototype: terminal_document
+Room: store-room
+Container: test_terminal
+DescriptionLong: A test document for terminal_document prototype testing.
++ This is a multi-line description using
++ the continuation syntax.
+
+Id: test_painting
+Name: Test Painting
+Prototype: painting
+Room: store-room
+Container: test_furniture
+Tags: test_painting_spawn
+Rarity: uncommon
+DescriptionShort: {{ e.name }} by an unknown artist
+DescriptionLong: A test painting for destroyable item testing.
+
+Id: test_multi_tag_item
+Name: Test Multi Tag
+Prototype: item
+Rarity: uncommon
+Tags: test_loot test_currency_spawn test_painting_spawn
+DescriptionShort: a {{ e.name }}
+DescriptionLong: A test item with multiple tags for multi-tag query testing.
+
+# ============================================================================
+# Spawning Pool record type
+# ============================================================================
+%rec: SpawningPool
+%key: Id
+%mandatory: Id Room TagQuery
+%allowed: Id Room Container TagQuery MaxCount RespawnIntervalMinutes NoDuplicates
+
+Id: test_quest_map_pool
+Room: store-room
+Container: storeroom_box
+TagQuery: test_quest_map_spawn
+MaxCount: 1
+RespawnIntervalMinutes: 1
+
+Id: test_smashable_pool
+Room: store-room
+Container: storeroom_box
+TagQuery: test_smashable_spawn
+MaxCount: 1
+RespawnIntervalMinutes: 1
+
+Id: test_no_dup_pool
+Room: store-room
+Container: test_furniture
+TagQuery: test_painting_spawn
+MaxCount: 2
+RespawnIntervalMinutes: 1
+NoDuplicates: yes
