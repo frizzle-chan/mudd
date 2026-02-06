@@ -1616,8 +1616,8 @@ Room: store-room
 ContentsVisible: no
 DescriptionShort: a beat-up {{ e.name }} sits in the corner
 DescriptionLong: A cardboard box with "TEST FIXTURES - DO NOT REMOVE" written on it in marker.
-OnOpen: You open the {{ e.name }}.{% if e.contents %} Inside:{{ e.contents }}{% else %} It's empty.{% endif %}
-OnClose: You close the {{ e.name }}.
+OnOpen: {{ effects.set_focus() }}You open the {{ e.name }}.{% if e.contents %} Inside:{{ e.contents }}{% else %} It's empty.{% endif %}
+OnClose: {{ effects.clear_focus() }}You close the {{ e.name }}.
 
 Id: storeroom_crate
 Name: Wooden Crate

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field, replace
 from typing import TYPE_CHECKING, TypeVar, cast
 from uuid import UUID
@@ -8,12 +9,14 @@ import asyncpg
 import discord
 from discord import Interaction
 
-from mudd.events import Observer
-from mudd.models.entity import EntityInstance
+from mudd.events import EntityPickedUpEvent, Observer
+from mudd.models.entity import EntityInstance, ResolvedEntity
 from mudd.models.interfaces import IEntityInstance, IRoom
 from mudd.models.room import EntityModal, InventoryThread, Room
 from mudd.models.user import User
 from mudd.observers import EffectsObserver
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from mudd.commands import ActionCommand, ActionResult
@@ -178,5 +181,33 @@ class Scene:
             await self.user.set_focus(cast(UUID, target.instance_id))
         if effects.has_clear_focus:
             await self.user.clear_focus()
+
+        # Grant specific items to user's inventory
+        for entity_id in effects.grants:
+            granted = await EntityInstance.create(
+                self._pool, entity_id, owner_id=self.user.id
+            )
+            if granted is None:
+                logger.warning("Grant failed: entity_id %r not found", entity_id)
+                continue
+            granted = granted.with_observers(*self._observers)
+            for observer in self._observers:
+                observer.notify(EntityPickedUpEvent(instance=granted))
+
+        # Grant random items by tag to user's inventory
+        for tag in effects.grant_randoms:
+            resolved = await ResolvedEntity.get_weighted_random_by_tag(self._pool, tag)
+            if resolved is None:
+                logger.warning("Grant random failed: no entities for tag %r", tag)
+                continue
+            granted = await EntityInstance.create(
+                self._pool, resolved.id, owner_id=self.user.id
+            )
+            if granted is None:
+                logger.warning("Grant random failed: could not create %r", resolved.id)
+                continue
+            granted = granted.with_observers(*self._observers)
+            for observer in self._observers:
+                observer.notify(EntityPickedUpEvent(instance=granted))
 
         return result

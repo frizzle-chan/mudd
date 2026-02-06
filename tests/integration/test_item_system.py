@@ -247,7 +247,6 @@ class TestQuestItemDrop:
 class TestItemGranting:
     """Tests for effects.grant() and effects.grant_random()."""
 
-    @pytest.mark.skip(reason="Deferred: focus management + grants")
     async def test_effects_grant_gives_specific_item(self, test_client):
         """Using an entity with effects.grant() gives a specific item."""
         user = await test_client.create_user(user_id=500020, room="store-room")
