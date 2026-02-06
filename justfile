@@ -28,8 +28,8 @@ entities:
     set -euo pipefail
     for file in data/worlds/*.rec; do
         recfix --check "$file"
+        uv run scripts/validate_world.py "$file"
     done
-    uv run scripts/validate_world.py
 
 verbs:
     uv run scripts/validate_verbs.py
