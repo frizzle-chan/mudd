@@ -26,18 +26,6 @@ from mudd.models.room import InventoryThread, Room
 from mudd.models.user import STARTING_BALANCE, User
 from mudd.observers.effects import EffectsObserver
 
-# Type alias for pending events
-type PendingEvent = (
-    tuple[EntityInstance, str]
-    | tuple[ZoneSyncedEvent, str]
-    | tuple[RoomSyncedEvent, str]
-    | tuple[OrphanChannelDetectedEvent, str]
-    | tuple[InventorySyncEvent, str]
-    | tuple[UserLocationSyncEvent, str]
-    | tuple[UserSyncEvent, str]
-    | tuple[UserLeftEvent, str]
-)
-
 logger = logging.getLogger(__name__)
 
 INVENTORY_CATEGORY_NAME = "Inventory"
@@ -211,7 +199,14 @@ class DiscordReconciler:
         self.pool = pool
         self.room_cache = room_cache
         self._console_channel = console_channel
-        self._pending: list[PendingEvent] = []
+        self._zone_events: list[ZoneSyncedEvent] = []
+        self._room_events: list[RoomSyncedEvent] = []
+        self._orphan_events: list[OrphanChannelDetectedEvent] = []
+        self._inventory_sync_events: list[InventorySyncEvent] = []
+        self._location_sync_events: list[UserLocationSyncEvent] = []
+        self._user_sync_events: list[UserSyncEvent] = []
+        self._user_left_events: list[UserLeftEvent] = []
+        self._entity_drop_events: list[EntityInstance] = []
         # Cache category ID per guild to avoid repeated lookups
         self._category_cache: dict[int, int] = {}
         # Track zone categories per guild: guild_id -> {zone_id -> category}
@@ -242,38 +237,32 @@ class DiscordReconciler:
             case EntityPickedUpEvent(instance=instance):
                 # Route pickup to inventory sync (creates thread for new item)
                 if instance.owner_id:
-                    self._pending.append(
-                        (
-                            InventorySyncEvent(guild_id=0, user_id=instance.owner_id),
-                            "inventory_sync",
-                        )
+                    self._inventory_sync_events.append(
+                        InventorySyncEvent(guild_id=0, user_id=instance.owner_id)
                     )
             case EntityDroppedEvent(instance=instance):
-                self._pending.append((instance, "dropped"))
+                self._entity_drop_events.append(instance)
             case EntityDestroyedEvent(instance=instance):
-                self._pending.append((instance, "destroyed"))
+                self._entity_drop_events.append(instance)
             case ZoneSyncedEvent() as evt:
-                self._pending.append((evt, "zone_synced"))
+                self._zone_events.append(evt)
             case RoomSyncedEvent() as evt:
-                self._pending.append((evt, "room_synced"))
+                self._room_events.append(evt)
             case OrphanChannelDetectedEvent() as evt:
-                self._pending.append((evt, "orphan_detected"))
+                self._orphan_events.append(evt)
             case InventorySyncEvent() as evt:
-                self._pending.append((evt, "inventory_sync"))
+                self._inventory_sync_events.append(evt)
             case BalanceChangedEvent() as evt:
                 # Route balance changes to inventory sync (updates wallet description)
-                self._pending.append(
-                    (
-                        InventorySyncEvent(guild_id=0, user_id=evt.user_id),
-                        "inventory_sync",
-                    )
+                self._inventory_sync_events.append(
+                    InventorySyncEvent(guild_id=0, user_id=evt.user_id)
                 )
             case UserLocationSyncEvent() as evt:
-                self._pending.append((evt, "user_location_sync"))
+                self._location_sync_events.append(evt)
             case UserSyncEvent() as evt:
-                self._pending.append((evt, "user_sync"))
+                self._user_sync_events.append(evt)
             case UserLeftEvent() as evt:
-                self._pending.append((evt, "user_left"))
+                self._user_left_events.append(evt)
             # Ignore template signals and UserMovedEvent - handled by other observers
 
     async def flush(self) -> None:
@@ -288,41 +277,27 @@ class DiscordReconciler:
         3. Orphan events (report to console)
         4. Entity events (create/delete threads)
         """
-        pending = self._pending
-        self._pending = []
+        # Swap-and-reset each typed list to local vars
+        zone_events = self._zone_events
+        self._zone_events = []
+        room_events = self._room_events
+        self._room_events = []
+        orphan_events = self._orphan_events
+        self._orphan_events = []
+        inventory_sync_events = self._inventory_sync_events
+        self._inventory_sync_events = []
+        location_sync_events = self._location_sync_events
+        self._location_sync_events = []
+        user_sync_events = self._user_sync_events
+        self._user_sync_events = []
+        user_left_events = self._user_left_events
+        self._user_left_events = []
+        entity_drop_events = self._entity_drop_events
+        self._entity_drop_events = []
 
         if not self.bot.guilds:
             logger.warning("No guilds available, skipping Discord reconciliation")
             return
-
-        # Sort events by type for proper ordering
-        zone_events: list[ZoneSyncedEvent] = []
-        room_events: list[RoomSyncedEvent] = []
-        orphan_events: list[OrphanChannelDetectedEvent] = []
-        inventory_sync_events: list[InventorySyncEvent] = []
-        location_sync_events: list[UserLocationSyncEvent] = []
-        user_sync_events: list[UserSyncEvent] = []
-        user_left_events: list[UserLeftEvent] = []
-        entity_events: list[tuple[EntityInstance, str]] = []
-
-        for item, event_type in pending:
-            match event_type:
-                case "zone_synced":
-                    zone_events.append(item)  # type: ignore[arg-type]
-                case "room_synced":
-                    room_events.append(item)  # type: ignore[arg-type]
-                case "orphan_detected":
-                    orphan_events.append(item)  # type: ignore[arg-type]
-                case "inventory_sync":
-                    inventory_sync_events.append(item)  # type: ignore[arg-type]
-                case "user_location_sync":
-                    location_sync_events.append(item)  # type: ignore[arg-type]
-                case "user_sync":
-                    user_sync_events.append(item)  # type: ignore[arg-type]
-                case "user_left":
-                    user_left_events.append(item)  # type: ignore[arg-type]
-                case _:
-                    entity_events.append((item, event_type))  # type: ignore[arg-type]
 
         # Process for each guild
         for guild in self.bot.guilds:
@@ -370,28 +345,10 @@ class DiscordReconciler:
                     continue
                 await self._handle_user_left(guild, evt)
 
-        # 8. Process entity events (drop/destroy - pickup handled by inventory sync)
-        for instance, event_type in entity_events:
-            await self._handle_entity_event(instance, event_type)
-
-    async def _handle_entity_event(self, instance: EntityInstance, event: str) -> None:
-        """Handle a single entity event (drop/destroy only).
-
-        Pickup is now handled by InventorySyncEvent through _ensure_user_inventory().
-
-        Args:
-            instance: The entity instance that changed
-            event: The event name
-        """
-        if not self.bot.guilds:
-            logger.warning("No guilds available, skipping Discord reconciliation")
-            return
-
-        guild = self.bot.guilds[0]  # Single-guild bot
-
-        match event:
-            case "dropped" | "destroyed":
-                await self._delete_inventory_thread(guild, instance)
+        # 8. Process entity drop/destroy events (pickup handled by inventory sync)
+        for instance in entity_drop_events:
+            guild = self.bot.guilds[0]  # Single-guild bot
+            await self._delete_inventory_thread(guild, instance)
 
     async def _set_voice_permissions(
         self,
