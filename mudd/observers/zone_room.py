@@ -31,6 +31,7 @@ class ZoneRoomReconciler:
         bot: discord.Client,
         pool: asyncpg.Pool,
         console_channel: str = "console",
+        seen_orphans: set[tuple[int, str, str]] | None = None,
     ) -> None:
         self.bot = bot
         self.pool = pool
@@ -41,7 +42,9 @@ class ZoneRoomReconciler:
         # Track zone categories per guild: guild_id -> {zone_id -> category}
         self._zone_categories: dict[int, dict[str, discord.CategoryChannel]] = {}
         # Track seen orphans: (guild_id, channel_name, category_name)
-        self._seen_orphans: set[tuple[int, str, str]] = set()
+        self._seen_orphans: set[tuple[int, str, str]] = (
+            seen_orphans if seen_orphans is not None else set()
+        )
 
     def notify(self, event: GameEvent) -> None:
         """Queue zone/room/orphan events for async processing."""

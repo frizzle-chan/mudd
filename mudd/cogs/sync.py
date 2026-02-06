@@ -16,7 +16,7 @@ import asyncpg
 from discord.ext import commands, tasks
 
 if TYPE_CHECKING:
-    from main import MuddBot
+    from mudd.bot import MuddBot
 
 from mudd.events import (
     InventorySyncEvent,
@@ -119,10 +119,12 @@ class Sync(commands.Cog):
         # Create reconciler for Discord operations (without room_cache initially
         # since it needs to be rebuilt after channels are created)
         reconciler = DiscordReconciler(
-            self.bot, pool, room_cache=None, console_channel=self._console_channel
+            self.bot,
+            pool,
+            room_cache=None,
+            console_channel=self._console_channel,
+            seen_orphans=self._seen_orphans,
         )
-        # Transfer seen orphans to reconciler
-        reconciler._seen_orphans = self._seen_orphans
 
         # Sync zones to DB via model (emits ZoneSyncedEvent)
         try:
@@ -174,9 +176,6 @@ class Sync(commands.Cog):
             await reconciler.flush()
         except Exception:
             logger.exception("Failed to report orphans")
-
-        # Update seen orphans from reconciler
-        self._seen_orphans = reconciler._seen_orphans
 
         for guild in self.bot.guilds:
             logger.info(f"Starting remaining sync for {guild.name}")

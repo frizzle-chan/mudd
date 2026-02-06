@@ -157,19 +157,11 @@ class DiscordReconciler:
         pool: asyncpg.Pool,
         room_cache: RoomChannelCache | None = None,
         console_channel: str = "console",
+        seen_orphans: set[tuple[int, str, str]] | None = None,
     ) -> None:
-        self._zone_room = ZoneRoomReconciler(bot, pool, console_channel)
+        self._zone_room = ZoneRoomReconciler(bot, pool, console_channel, seen_orphans)
         self._permissions = PermissionReconciler(bot, pool, room_cache)
         self._inventory = InventoryReconciler(bot, pool)
-
-    @property
-    def _seen_orphans(self) -> set[tuple[int, str, str]]:
-        """Delegate orphan tracking to ZoneRoomReconciler."""
-        return self._zone_room._seen_orphans
-
-    @_seen_orphans.setter
-    def _seen_orphans(self, value: set[tuple[int, str, str]]) -> None:
-        self._zone_room._seen_orphans = value
 
     def notify(self, event: GameEvent) -> None:
         """Receive notification (sync). Delegate to sub-reconcilers."""

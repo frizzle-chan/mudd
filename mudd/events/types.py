@@ -212,6 +212,9 @@ class UserLeftEvent:
     guild_id: int
 
 
+# "Signal" = intent/request from a template (e.g., PickupSignal).
+# "Event" = fact that something happened (e.g., EntityPickedUpEvent).
+# Signals are processed by EffectsObserver, which may emit Events.
 type GameEvent = (
     BroadcastEvent
     | GrantEvent
