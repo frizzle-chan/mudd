@@ -2,8 +2,8 @@
 
 A Discord-native Multi User Dungeon. It's a text-based multiplayer RPG inside a Discord server!
 
-- Rooms in the world are mapped to Discord channels. You can only see and post in the channel that corresponds with the in-world room you are in.
-- Players explore and interact with slash commands with context-aware autocomplete.
+- Rooms in the world are mapped to Discord channels. You can only see and post in the channel that corresponds with your in-world location.
+- Players explore and interact using slash commands with context-aware autocomplete.
 - The world is filled with inspectable, lootable, and sometimes destructible items and characters. Your interactions impact the shared world with other players.
 - Player inventories are managed as private [forum channels](https://support.discord.com/hc/en-us/articles/6208479917079-Forum-Channels-FAQ). Each item gets its own item management thread.
 
