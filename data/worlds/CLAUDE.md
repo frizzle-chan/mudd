@@ -110,7 +110,7 @@ ContentsVisible: yes
 
 **All text fields** (`DescriptionShort`, `DescriptionLong`, `On*`) are **Jinja2 templates** with access to:
 - `e`: The resolved entity with all properties (use `e.name`, `e.contents`, `e.description_short`, etc.)
-- `user`: User context with `name` and `mention`
+- `user`: User context with `mention` (@mention string) and `balance` (currency balance)
 - `effects`: Side effects object for scripting (see Pickup/Drop Behavior)
 - `container`: The target container entity (only set for drop actions into a container)
 
