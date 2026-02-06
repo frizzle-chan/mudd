@@ -22,13 +22,13 @@ class ViewEntity:
         self._entity = entity
 
     def __str__(self) -> str:
-        """String representation: name with rarity emoji and markdown italics."""
+        """String representation: name with rarity emoji and markdown bold."""
         return self.name
 
     @property
     def name(self) -> str:
-        """Entity name formatted with rarity emoji and markdown italics."""
-        return f"*{self.display_name}*"
+        """Entity name formatted with rarity emoji and markdown bold."""
+        return f"**{self.display_name}**"
 
     @property
     def display_name(self) -> str:
