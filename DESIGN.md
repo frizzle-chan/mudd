@@ -338,28 +338,19 @@ setup_hook()
 on_ready()
     └─ tree.sync()     ─────→ Register slash commands
 
-periodic_sync() [FIRST ITERATION]
-    ├─ sync_zones_and_rooms() ─→ Load .rec files
-    │    ├─ Sync to database
-    │    ├─ Create Discord categories/channels
-    │    ├─ Fix channel topics
-    │    └─ Return orphans + default_room
+periodic_sync() [FIRST ITERATION + EVERY 15 MINUTES]
+    ├─ sync_verbs()          ─→ Load verb word lists
+    ├─ Zone.sync_all()       ─→ Sync zones to DB, emit ZoneSyncedEvent
+    ├─ Room.sync_all()       ─→ Sync rooms to DB, emit RoomSyncedEvent
+    ├─ sync_entities()       ─→ Sync entity definitions + instances
+    ├─ reconciler.flush()    ─→ Create Discord categories/channels, fix topics
+    ├─ Detect orphan channels ─→ Report NEW orphans only
     │
-    ├─ visibility_service.sync_guild()
-    │    ├─ Build room cache (uses default_room)
-    │    └─ Sync user permissions
-    │
-    └─ mark_startup_complete() ─→ UNBLOCK COMMANDS
-
-periodic_sync() [EVERY 15 MINUTES]
-    ├─ sync_zones_and_rooms()
-    │    ├─ Recreate deleted channels
-    │    ├─ Fix drifted channel topics
-    │    └─ Report NEW orphans only
-    │
-    └─ visibility_service.sync_guild()
-         ├─ Rebuild room cache
-         └─ Sync user permissions
+    └─ Per guild:
+         ├─ room_cache.rebuild()          ─→ Rebuild room↔channel cache
+         ├─ _sync_user_visibility()       ─→ Emit UserSyncEvent per user
+         ├─ Emit InventorySyncEvent       ─→ Per non-bot member
+         └─ perm_reconciler.flush()       ─→ Sync permissions + inventory forums
 ```
 
 ### Key Behaviors
@@ -370,7 +361,7 @@ periodic_sync() [EVERY 15 MINUTES]
 
 **Orphan tracking**: Orphan channels (in zone categories but not in `.rec` files) are tracked across syncs. Only NEW orphans trigger a warning to `#console`, preventing spam on restart.
 
-**Command blocking**: Commands call `wait_for_startup()` and block until the first sync completes. This ensures the VisibilityService is initialized before any permission operations.
+**Command blocking**: The `respawn_task` skips iterations until the first sync completes (`_first_sync_done`). If the initial sync fails, the bot shuts down. The `periodic_sync` loop waits for `bot.wait_until_ready()` before starting.
 
 ## Zone System
 
@@ -417,13 +408,14 @@ Migrations are raw SQL files in the `/migrations` directory:
 
 ## Visibility Sync
 
-The `VisibilityService.sync_guild()` method ensures Discord channel permissions match database state:
+The `DiscordReconciler` handles visibility sync via `UserSyncEvent` and `UserLocationSyncEvent`:
 
-1. Rebuilds the room name ↔ channel ID cache from database + Discord
-2. For each non-bot member:
-   - If no location in DB → assign to default room
-   - If location invalid (channel deleted) → assign to default room
-   - Sync permissions: grant `view_channel` for current room, remove for all others
+1. `room_cache.rebuild(guild)` rebuilds the room name ↔ channel ID cache from database + Discord
+2. For each non-bot member, a `UserSyncEvent` is emitted which:
+   - Upserts the user with their current display_name
+   - If no location in DB → assigns to default room
+   - Grants `view_channel` for current room, removes for all others
+3. `InventorySyncEvent` per member syncs inventory forums, wallets, threads, and descriptions
 
 This runs as part of the unified sync flow described above.
 
@@ -566,25 +558,24 @@ Entity action handlers (`on_look`, `on_touch`, `on_attack`, `on_use`, `on_take`,
 ### Template Context
 
 Templates have access to:
-- `e`: The resolved entity (ResolvedEntity) with all inherited properties
-- `name`: Entity name pre-formatted with Discord italics (`*Name*`)
-- `contents`: Pre-formatted bullet list of container contents (for entities with `contents_visible`)
-- `user`: User context with `name` (display name) and `mention` (@mention string)
+- `e`: The resolved entity (`ViewEntity`) with all inherited properties. Key properties: `e.name` (formatted with rarity emoji and Discord italics), `e.display_name` (rarity emoji, no italics), `e.contents` (pre-formatted bullet list of container contents), `e.description_short`, `e.description_long`
+- `user`: User context (`ViewUser`) with `user.mention` (@mention string) and `user.balance` (currency balance)
 - `effects`: Side effects object for triggering actions beyond the ephemeral response
+- `container`: The target container entity (`ViewEntity`, only set for drop actions into a container)
 
 ### Rendering Flow
 
 ```
 /look at:<entity>
     └─ render_entity_on_look(instance)
-        ├─ Build context: {"e": entity, "name": "*Wooden Table*"}
+        ├─ Build context: {"e": entity, "user": user, "effects": effects, "container": None}
         ├─ Render on_look template
         │   └─ If error: fallback to description_long or description_short
         │       └─ Append "-# (error rendering template)" warning
         └─ Append container contents (if contents_visible)
 
 /interact with:<entity> action:<verb>
-    ├─ Match target using word-prefix matching (entity_matcher.py)
+    ├─ Match target using fuzzy matching (mudd/cogs/shared.py)
     │   ├─ No match → "You don't see '{target}' here."
     │   └─ Multiple matches → "Which one? *Entity1*, *Entity2*"
     ├─ Look up verb in verbs table (verb_matcher.py)
@@ -592,7 +583,7 @@ Templates have access to:
     ├─ Get handler text (on_attack, on_touch, etc.) from entity
     │   └─ No handler → "Nothing happens."
     └─ Render handler template
-        ├─ Build context: {"e": entity, "name": "*Fancy Vase*"}
+        ├─ Build context: {"e": entity, "user": user, "effects": effects, "container": None}
         └─ If error: log warning, return fallback message
 ```
 
