@@ -142,10 +142,12 @@ See `tests/CLAUDE.md` for detailed testing guidelines.
 
 **Quick reference**:
 ```bash
-pytest tests/                    # Run all tests
+pytest                           # Run all tests (integration + colocated unit tests)
 pytest tests/integration/        # Run only integration tests
-pytest tests/unit/               # Run only unit tests
+pytest mudd/                     # Run only colocated unit tests
 ```
+
+**Unit test convention**: Pure unit tests live alongside source files with the `_unit_test.py` suffix (e.g., `mudd/utils/text_unit_test.py` tests `mudd/utils/text.py`).
 
 ## Devcontainer Setup
 
