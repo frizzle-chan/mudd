@@ -17,6 +17,7 @@ dev = [
     "lefthook>=2.0.13",
     "pytest>=8.0",
     "pytest-asyncio>=0.24",
+    "pytest-cov>=6.0",
     "ruff>=0.14.10",
     "squawk-cli>=2.36.0",
     "ty>=0.0.8",
@@ -27,6 +28,15 @@ dev = [
 pythonpath = ["."]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "session"
+addopts = "--cov=mudd --cov-report=term-missing"
+
+[tool.coverage.run]
+source = ["mudd"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+skip_empty = true
 
 [tool.ty.src]
 exclude = [".claude/skills/skill-creator/", "vulture_whitelist.py"]

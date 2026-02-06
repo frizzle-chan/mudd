@@ -6,6 +6,10 @@ test:
 testq:
     uv run pytest -qx --tb=line
 
+# Run tests and generate HTML coverage report in htmlcov/
+coverage:
+    uv run pytest --cov-report=html
+
 lint:
     uv run ruff check .
 
