@@ -49,8 +49,7 @@ class ViewEntity:
         if not contents:
             return ""
         wrapped = [ViewEntity(item) for item in contents]
-        items_list = "\n".join(f"- {item.name}" for item in wrapped)
-        return f"\n\nYou see:\n{items_list}"
+        return "\n".join(f"- {item.name}" for item in wrapped)
 
 
 class ViewUser:
