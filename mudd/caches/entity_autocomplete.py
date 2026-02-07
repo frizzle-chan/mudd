@@ -1,12 +1,16 @@
-"""In-memory cache for autocomplete choices.
+"""In-memory cache for entity autocomplete choices.
 
 Precomputes default (no-input) autocomplete choices per room and per focus
 context. Rebuilt during periodic sync to avoid repeated DB queries on every
 autocomplete interaction.
 
-Invalidated instantly on entity mutations (pickup, drop, destroy) via an
-EntityMutationObserver created by ``create_invalidator()``, then rebuilt
+Invalidated instantly on entity mutations (pickup, drop, destroy) via a
+CacheInvalidationObserver created by ``create_invalidator()``, then rebuilt
 in the background during flush().
+
+The ``entities_to_choices()`` function is the single source of truth for
+converting entities to Discord autocomplete choices — used by both the
+cache rebuild and the live autocomplete slow path.
 """
 
 from __future__ import annotations
@@ -26,9 +30,12 @@ from mudd.views import ViewEntity
 
 logger = logging.getLogger(__name__)
 
+# Discord limits autocomplete to 25 options
+_MAX_CHOICES = 25
+
 
 def _make_choice(e: EntityInstance | RoomEntityInstance) -> app_commands.Choice[str]:
-    """Format an entity as a Discord autocomplete choice."""
+    """Format a single entity as a Discord autocomplete choice."""
     return app_commands.Choice(
         name=ViewEntity(e).display_name,
         value=(
@@ -39,8 +46,19 @@ def _make_choice(e: EntityInstance | RoomEntityInstance) -> app_commands.Choice[
     )
 
 
-class AutocompleteCache:
-    """In-memory cache for default autocomplete choices.
+def entities_to_choices(
+    entities: list[EntityInstance | RoomEntityInstance],
+) -> list[app_commands.Choice[str]]:
+    """Convert entities to Discord autocomplete choices.
+
+    This is the single source of truth for entity → Choice formatting.
+    Used by both the cache rebuild and the live autocomplete slow path.
+    """
+    return [_make_choice(e) for e in entities][:_MAX_CHOICES]
+
+
+class EntityAutocompleteCache:
+    """In-memory cache for default entity autocomplete choices.
 
     Stores precomputed autocomplete choice lists indexed by room (no focus)
     and by (room, focused-entity-instance) pairs.
@@ -98,7 +116,7 @@ class AutocompleteCache:
         self._focus_choices = focus_choices
 
         logger.info(
-            "Rebuilt autocomplete cache: %d rooms, %d focus contexts",
+            "Rebuilt entity autocomplete cache: %d rooms, %d focus contexts",
             len(room_choices),
             len(focus_choices),
         )
@@ -161,9 +179,7 @@ async def _compute_room_entries(
     visible = await room.get_visible_entities()
     room_entity = room.as_entity(focus_name=None)
 
-    room_choices: list[app_commands.Choice[str]] = [_make_choice(room_entity)]
-    for e in visible:
-        room_choices.append(_make_choice(e))
+    room_choices = entities_to_choices([room_entity, *visible])
 
     # Focus choices for each top-level entity
     focus_choices: dict[tuple[str, str], list[app_commands.Choice[str]]] = {}
@@ -171,13 +187,8 @@ async def _compute_room_entries(
     for entity in top_level:
         focus_room_entity = room.as_entity(focus_name=entity.name)
         contents = await entity.get_contents()
+        focus_choices[(room.id, str(entity.instance_id))] = entities_to_choices(
+            [focus_room_entity, entity, *contents]
+        )
 
-        fc: list[app_commands.Choice[str]] = [
-            _make_choice(focus_room_entity),
-            _make_choice(entity),
-        ]
-        for c in contents:
-            fc.append(_make_choice(c))
-        focus_choices[(room.id, str(entity.instance_id))] = fc[:25]
-
-    return room_choices[:25], focus_choices
+    return room_choices, focus_choices

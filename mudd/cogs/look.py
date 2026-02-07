@@ -16,7 +16,7 @@ from mudd.observers import EffectsObserver
 from mudd.scene import Scene
 
 if TYPE_CHECKING:
-    from mudd.caches.autocomplete import AutocompleteCache
+    from mudd.caches.entity_autocomplete import EntityAutocompleteCache
     from mudd.caches.user import UserCache
 
 logger = logging.getLogger(__name__)
@@ -27,7 +27,7 @@ class Look(commands.Cog):
         self,
         bot: commands.Bot | None,
         pool: asyncpg.Pool,
-        autocomplete_cache: AutocompleteCache | None = None,
+        autocomplete_cache: EntityAutocompleteCache | None = None,
         user_cache: UserCache | None = None,
     ) -> None:
         self.bot = bot

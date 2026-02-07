@@ -17,7 +17,7 @@ from discord.ext import commands, tasks
 
 if TYPE_CHECKING:
     from mudd.bot import MuddBot
-    from mudd.caches.autocomplete import AutocompleteCache
+    from mudd.caches.entity_autocomplete import EntityAutocompleteCache
     from mudd.caches.user import UserCache
 
 from mudd.events import (
@@ -56,7 +56,7 @@ class Sync(commands.Cog):
         bot: MuddBot,
         pool: asyncpg.Pool,
         room_cache: RoomChannelCache,
-        autocomplete_cache: AutocompleteCache | None = None,
+        autocomplete_cache: EntityAutocompleteCache | None = None,
         user_cache: UserCache | None = None,
     ) -> None:
         self.bot = bot

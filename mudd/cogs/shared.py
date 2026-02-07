@@ -13,6 +13,7 @@ import discord
 from discord import Interaction, app_commands
 from rapidfuzz import fuzz
 
+from mudd.caches.entity_autocomplete import entities_to_choices
 from mudd.models import EntityInstance, Room
 from mudd.models.room import RoomEntityInstance
 from mudd.models.user import User
@@ -20,7 +21,7 @@ from mudd.scene import Scene
 from mudd.views import ViewEntity
 
 if TYPE_CHECKING:
-    from mudd.caches.autocomplete import AutocompleteCache
+    from mudd.caches.entity_autocomplete import EntityAutocompleteCache
     from mudd.caches.user import UserCache
 
 logger = logging.getLogger(__name__)
@@ -111,10 +112,10 @@ async def entity_instance_id_autocomplete(
     pool: asyncpg.Pool,
     interaction: Interaction,
     current: str,
-    autocomplete_cache: AutocompleteCache | None = None,
+    entity_cache: EntityAutocompleteCache | None = None,
     user_cache: UserCache | None = None,
 ) -> list[app_commands.Choice[str]]:
-    """Autocomplete callback for at parameter.
+    """Autocomplete callback for entity instance selection.
 
     Suggests entity names from the current room, excluding entities
     inside containers with contents_visible=False. When a user has an
@@ -133,7 +134,7 @@ async def entity_instance_id_autocomplete(
     # Fast path: no input, not in a thread, caches available
     if (
         current == ""
-        and autocomplete_cache is not None
+        and entity_cache is not None
         and not isinstance(interaction.channel, discord.Thread)
     ):
         # Try fully cached path (zero queries) via user cache
@@ -141,13 +142,13 @@ async def entity_instance_id_autocomplete(
             state = user_cache.get(interaction.user.id)
             if state is not None:
                 if state.focus_id is not None:
-                    choices = autocomplete_cache.get_focus_choices(
+                    choices = entity_cache.get_focus_choices(
                         state.current_room, state.focus_id
                     )
                     if choices is not None:
                         return choices
                 else:
-                    choices = autocomplete_cache.get_room_choices(state.current_room)
+                    choices = entity_cache.get_room_choices(state.current_room)
                     if choices is not None:
                         return choices
 
@@ -158,11 +159,11 @@ async def entity_instance_id_autocomplete(
                 pool, interaction.user.id, room_id
             )
             if focus_id is not None:
-                choices = autocomplete_cache.get_focus_choices(room_id, focus_id)
+                choices = entity_cache.get_focus_choices(room_id, focus_id)
                 if choices is not None:
                     return choices
             else:
-                choices = autocomplete_cache.get_room_choices(room_id)
+                choices = entity_cache.get_room_choices(room_id)
                 if choices is not None:
                     return choices
 
@@ -170,14 +171,4 @@ async def entity_instance_id_autocomplete(
     entities = await autocomplete_entities(
         await Scene.from_interaction(pool, interaction), current
     )
-    return [
-        app_commands.Choice(
-            name=ViewEntity(e).display_name,
-            value=(
-                e.instance_id
-                if isinstance(e, RoomEntityInstance)
-                else f"entity://{e.instance_id}"
-            ),
-        )
-        for e in entities
-    ][:25]  # Discord limits to 25 options
+    return entities_to_choices(entities)

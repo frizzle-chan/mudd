@@ -1,13 +1,14 @@
-"""Unit tests for AutocompleteCache."""
+"""Unit tests for EntityAutocompleteCache."""
 
 from dataclasses import replace
 from uuid import UUID, uuid4
 
 from discord import app_commands
 
-from mudd.caches.autocomplete import (
-    AutocompleteCache,
+from mudd.caches.entity_autocomplete import (
+    EntityAutocompleteCache,
     _make_choice,
+    entities_to_choices,
 )
 from mudd.events import EntityPickedUpEvent
 from mudd.models.entity import EntityInstance, ResolvedEntity
@@ -94,31 +95,52 @@ class TestMakeChoice:
         assert choice.name == "Room Thing"
 
 
-class TestAutocompleteCacheGetters:
+class TestEntitiesToChoices:
+    """Tests for entities_to_choices()."""
+
+    def test_converts_list_of_entities(self):
+        """Converts a list of entities to choices."""
+        entities = [_make_instance("Sword"), _make_instance("Shield")]
+        choices = entities_to_choices(entities)
+        assert len(choices) == 2
+        assert all(isinstance(c, app_commands.Choice) for c in choices)
+
+    def test_truncates_at_max_choices(self):
+        """Truncates to 25 choices (Discord limit)."""
+        entities = [_make_instance(f"Item {i}") for i in range(30)]
+        choices = entities_to_choices(entities)
+        assert len(choices) == 25
+
+    def test_empty_list(self):
+        """Returns empty list for empty input."""
+        assert entities_to_choices([]) == []
+
+
+class TestEntityAutocompleteCacheGetters:
     """Tests for cache lookup methods."""
 
     def test_empty_cache_returns_none(self):
         """Empty cache returns None for any lookup."""
-        cache = AutocompleteCache()
+        cache = EntityAutocompleteCache()
         assert cache.get_room_choices("any-room") is None
         assert cache.get_focus_choices("any-room", uuid4()) is None
 
     def test_room_choices_hit(self):
         """Room choices are returned when present."""
-        cache = AutocompleteCache()
+        cache = EntityAutocompleteCache()
         choices = [app_commands.Choice(name="Test", value="test")]
         cache._room_choices["lobby"] = choices
         assert cache.get_room_choices("lobby") is choices
 
     def test_room_choices_miss(self):
         """Room choices return None for unknown room."""
-        cache = AutocompleteCache()
+        cache = EntityAutocompleteCache()
         cache._room_choices["lobby"] = []
         assert cache.get_room_choices("other-room") is None
 
     def test_focus_choices_hit(self):
         """Focus choices are returned for matching (room, instance) pair."""
-        cache = AutocompleteCache()
+        cache = EntityAutocompleteCache()
         uid = uuid4()
         choices = [app_commands.Choice(name="Item", value="entity://abc")]
         cache._focus_choices[("lobby", str(uid))] = choices
@@ -126,31 +148,31 @@ class TestAutocompleteCacheGetters:
 
     def test_focus_choices_miss_wrong_room(self):
         """Focus choices return None when room doesn't match."""
-        cache = AutocompleteCache()
+        cache = EntityAutocompleteCache()
         uid = uuid4()
         cache._focus_choices[("lobby", str(uid))] = []
         assert cache.get_focus_choices("other-room", uid) is None
 
     def test_focus_choices_miss_wrong_instance(self):
         """Focus choices return None when instance doesn't match."""
-        cache = AutocompleteCache()
+        cache = EntityAutocompleteCache()
         cache._focus_choices[("lobby", str(uuid4()))] = []
         assert cache.get_focus_choices("lobby", uuid4()) is None
 
 
 class TestInvalidateRoom:
-    """Tests for AutocompleteCache.invalidate_room()."""
+    """Tests for EntityAutocompleteCache.invalidate_room()."""
 
     def test_invalidate_removes_room_choices(self):
         """Room choices are removed after invalidation."""
-        cache = AutocompleteCache()
+        cache = EntityAutocompleteCache()
         cache._room_choices["lobby"] = [app_commands.Choice(name="X", value="x")]
         cache.invalidate_room("lobby")
         assert cache.get_room_choices("lobby") is None
 
     def test_invalidate_removes_focus_choices_for_room(self):
         """All focus choices for the room are removed."""
-        cache = AutocompleteCache()
+        cache = EntityAutocompleteCache()
         uid1, uid2 = uuid4(), uuid4()
         cache._focus_choices[("lobby", str(uid1))] = []
         cache._focus_choices[("lobby", str(uid2))] = []
@@ -165,22 +187,22 @@ class TestInvalidateRoom:
 
     def test_invalidate_nonexistent_room_is_noop(self):
         """Invalidating a room not in cache doesn't raise."""
-        cache = AutocompleteCache()
+        cache = EntityAutocompleteCache()
         cache.invalidate_room("nonexistent")  # Should not raise
 
 
 class TestCreateInvalidatorFactory:
-    """Tests for AutocompleteCache.create_invalidator()."""
+    """Tests for EntityAutocompleteCache.create_invalidator()."""
 
     def test_returns_cache_invalidation_observer(self):
         """create_invalidator returns a CacheInvalidationObserver."""
-        cache = AutocompleteCache()
+        cache = EntityAutocompleteCache()
         result = cache.create_invalidator(None, "room")  # type: ignore[arg-type]
         assert isinstance(result, CacheInvalidationObserver)
 
     def test_invalidator_invalidates_cache_on_notify(self):
         """The returned observer invalidates cache entries on notify()."""
-        cache = AutocompleteCache()
+        cache = EntityAutocompleteCache()
         cache._room_choices["lobby"] = [app_commands.Choice(name="X", value="x")]
         cache._room_choices["garden"] = [app_commands.Choice(name="Y", value="y")]
 
