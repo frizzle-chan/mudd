@@ -12,7 +12,7 @@ from mudd.cogs.autocomplete_cache import (
 from mudd.events import EntityPickedUpEvent
 from mudd.models.entity import EntityInstance, ResolvedEntity
 from mudd.models.room import Room
-from mudd.observers.entity_mutation import EntityMutationObserver
+from mudd.observers.cache import CacheInvalidationObserver
 from mudd.utils.text import Rarity
 
 
@@ -172,11 +172,11 @@ class TestInvalidateRoom:
 class TestCreateInvalidatorFactory:
     """Tests for AutocompleteCache.create_invalidator()."""
 
-    def test_returns_entity_mutation_observer(self):
-        """create_invalidator returns an EntityMutationObserver."""
+    def test_returns_cache_invalidation_observer(self):
+        """create_invalidator returns a CacheInvalidationObserver."""
         cache = AutocompleteCache()
         result = cache.create_invalidator(None, "room")  # type: ignore[arg-type]
-        assert isinstance(result, EntityMutationObserver)
+        assert isinstance(result, CacheInvalidationObserver)
 
     def test_invalidator_invalidates_cache_on_notify(self):
         """The returned observer invalidates cache entries on notify()."""

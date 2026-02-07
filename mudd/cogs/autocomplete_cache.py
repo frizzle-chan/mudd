@@ -18,9 +18,10 @@ from uuid import UUID
 import asyncpg
 from discord import app_commands
 
+from mudd.events import EntityDestroyedEvent, EntityDroppedEvent, EntityPickedUpEvent
 from mudd.models.entity import EntityInstance
 from mudd.models.room import Room, RoomEntityInstance
-from mudd.observers.entity_mutation import EntityMutationObserver
+from mudd.observers.cache import CacheInvalidationObserver
 from mudd.views import ViewEntity
 
 logger = logging.getLogger(__name__)
@@ -123,15 +124,24 @@ class AutocompleteCache:
 
     def create_invalidator(
         self, pool: asyncpg.Pool, room_id: str
-    ) -> EntityMutationObserver:
+    ) -> CacheInvalidationObserver[str]:
         """Create an observer that invalidates this cache on entity mutations.
 
         The returned observer immediately removes affected room entries on
         notify() and rebuilds them during flush().
+
+        Args:
+            pool: Database pool for rebuilding cache entries.
+            room_id: Current scene room — used as fallback when the entity's
+                room_id has already been cleared (e.g., after pickup).
         """
-        return EntityMutationObserver(
-            room_id=room_id,
-            on_room_changed=self.invalidate_room,
+        return CacheInvalidationObserver(
+            extractors={
+                EntityPickedUpEvent: lambda _: room_id,
+                EntityDroppedEvent: lambda e: e.instance.room_id,
+                EntityDestroyedEvent: lambda e: e.instance.room_id or room_id,
+            },
+            on_invalidate=self.invalidate_room,
             on_rebuild=partial(self.rebuild_room, pool),
         )
 
