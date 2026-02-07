@@ -113,8 +113,48 @@ In the context of **providing an at-a-glance measure of overall progression**, f
 **Total Level Properties:**
 - Sum of all individual skill levels
 - Minimum total level equals the number of skills (since all start at level 1)
-- Displayed prominently in the skills channel overview
-- Could be incorporated into player display name or status in the future
+- Displayed prominently in the skills channel overview, in the player's Discord nickname, and through milestone roles
+
+### Nickname Level Display
+
+In the context of **making total level visible at a glance**, facing **the need for progression to be socially visible without requiring players to inspect each other**, we decided to **append the total level to each player's Discord nickname**, to achieve **constant passive visibility of progression in every message and member list**, accepting **that the bot must manage nicknames and auto-heal manual changes**.
+
+**Nickname Format:**
+- `displayname (LVx)` where x is the player's total level (e.g., `frizzle (LV5)`)
+- If the base display name is too long for Discord's nickname limit, it is truncated to make room for the suffix
+- The suffix is always present — there is no way to opt out
+
+**Sync Behavior:**
+- Nickname is set during the periodic sync alongside permission and inventory sync
+- If a player manually changes their nickname, the sync repairs it on the next cycle
+- When a player's total level changes (XP gain triggers a level-up), the nickname is updated immediately during observer flush, in addition to periodic sync as a safety net
+
+### Milestone Roles
+
+In the context of **rewarding progression milestones**, facing **the desire for cosmetic recognition that scales with the geometric XP curve**, we decided to **grant Discord roles at total level thresholds**, to achieve **visible rank progression in the member list and a sense of achievement at key milestones**, accepting **that role thresholds will need adjustment as new skills are added**.
+
+**Role Progression:**
+
+Roles are cumulative — players keep all roles they've earned. The highest role determines their color in the member list.
+
+| Role | Total Level | Milestone Meaning |
+|------|------------|-------------------|
+| Newbie | 5 | Starting out (all skills at level 1, with 5 skills) |
+| Apprentice | 15 | First real progress across a few skills |
+| Adventurer | 50 | Broad exploration of multiple skills |
+| Journeyman | 100 | Committed player with depth in several skills |
+| Expert | 200 | Serious investment across the board |
+| Veteran | 300 | Deep dedication to most skills |
+| Hero | 400 | Near mastery |
+| Legend | 495 | All skills maxed (5 skills x 99) |
+
+Thresholds are calibrated for the initial 5 skills (max total level 495). As new skills are added, the "Legend" threshold increases and intermediate thresholds may be adjusted to keep the progression feeling right.
+
+**Role Management:**
+- Roles are created by the sync cog if they don't exist
+- Roles are granted automatically when a player crosses a threshold
+- Roles are never removed (cumulative, not replaced)
+- Role color ordering ensures the highest milestone is most prominent in Discord's member list
 
 ### No Retroactive XP
 
@@ -141,6 +181,8 @@ In the context of **an evolving game with new content**, facing **the certainty 
 - Per-user skills channel follows the proven inventory forum pattern
 - Geometric XP curve provides both short-term and long-term goals
 - Total level gives a single comparable metric across players
+- Nickname suffix makes progression passively visible in every message and member list
+- Milestone roles provide tangible rewards at key thresholds and visual distinction in the member list
 - New skills can be added incrementally as game systems are developed
 
 ### Negative
@@ -148,19 +190,21 @@ In the context of **an evolving game with new content**, facing **the certainty 
 - One additional Discord channel per player increases resource usage
 - Continuous message editing for skills overview may hit Discord rate limits under heavy play
 - XP tuning requires balancing event frequency against desired leveling speed
-- Adding new skills retroactively changes total level for all players
+- Adding new skills retroactively changes total level for all players and may shift milestone thresholds
 - Skills observer adds processing overhead to every game event
+- Bot must manage nicknames, which requires the Manage Nicknames permission and conflicts with manual nickname changes
+- Nickname truncation for long display names may produce awkward results
 
 ### Future Considerations
 
 - Leaderboards and hiscores (total level rankings, per-skill rankings)
 - Skill-gated content (doors that require a minimum Agility level, etc.)
-- Skill capes or cosmetic rewards at milestone levels
 - XP multiplier events or items
 - Prestige/rebirth system for players who reach max level
 - **Players as virtual entities**: Players in a room will eventually be represented as inspectable entities, allowing `/look player` to display their skill levels. This is out of scope for this ADR.
 - Combat system integration (Attack and Vitality affecting PvE outcomes)
 - Skill-based economy (crafting skills that produce tradeable items)
+- Additional milestone rewards beyond roles (cosmetic titles, skill capes, etc.)
 
 ## Open Questions
 
