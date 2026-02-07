@@ -145,7 +145,7 @@ Description: A dimly lit lounge.
 %type: Rarity enum none common uncommon rare epic legendary mythic quest
 %mandatory: Id Name
 %allowed: Id Name Prototype Container Room ContentsVisible DescriptionShort DescriptionLong
-%allowed: OnLook OnTouch OnAttack OnUse OnTake OnOpen OnClose OnDrop
+%allowed: OnLook OnTouch OnAttack OnUse OnTake OnOpen OnClose OnDrop OnFish
 %allowed: Tags Rarity
 
 # ----------------------------------------------------------------------------
@@ -161,6 +161,7 @@ OnTouch: You touch the {{ e.name }}. Nothing happens.
 OnAttack: You attack the {{ e.name }}, but it has no effect.
 OnUse: You can't use the {{ e.name }}.
 OnTake: You can't take the {{ e.name }}.
+OnFish: You can't fish here.
 
 Id: furniture
 Name: furniture
@@ -299,6 +300,111 @@ You feel you made a grave mistake.
 OnDrop: You cannot drop the sword, it's evil. It compels you to keep it in your inventory, taking up a ton of space.
 
 # ----------------------------------------------------------------------------
+# Fish (dispensed by toilet/urinal fishing)
+# The "nothing" fish destroys itself on take, simulating the fish getting away.
+# ----------------------------------------------------------------------------
+
+Id: fish
+Name: fish
+Prototype: item
+Rarity: common
+OnTouch: The {{ e.name }} flops against your hand. It's slimy.
+OnTake: {{ effects.pickup() }}{{ effects.broadcast("**" ~ user ~ "** catches " ~ e ~ "!") }}You pull the {{ e.name }} out. Got it!
+OnDrop: {% if container %}You toss the {{ e.name }} into the *{{ container.name }}*.{% else %}You set the {{ e.name }} down. It flops around.{% endif %}{{ effects.drop() }}{{ effects.broadcast(user ~ " drops " ~ e ~ ".") }}
+
+Id: fish_nothing
+Name: a tug on the line
+Prototype: object
+Tags: toilet_fish urinal_fish
+Rarity: common
+DescriptionShort: a ripple in the water
+OnTake: {{ effects.destroy() }}You feel a tug, but it slips away! The fish got away.
+
+Id: fish_goldfish
+Name: Goldfish
+Prototype: fish
+Tags: toilet_fish urinal_fish
+Rarity: common
+DescriptionShort: a soggy {{ e.name }} flopping around
+DescriptionLong: A small orange goldfish. It looks confused about how it ended up here.
+
+Id: fish_guppy
+Name: Guppy
+Prototype: fish
+Tags: toilet_fish urinal_fish
+Rarity: common
+DescriptionShort: a tiny {{ e.name }}
+DescriptionLong: A tiny, colorful guppy. It has no business being in plumbing.
+OnTouch: The {{ e.name }} nibbles your finger.
+
+Id: fish_crawdad
+Name: Crawdad
+Prototype: fish
+Tags: toilet_fish urinal_fish
+Rarity: uncommon
+DescriptionShort: a feisty {{ e.name }} snapping its claws
+DescriptionLong: A small freshwater crayfish with an attitude problem. Its claws are raised and ready to fight.
+OnTouch: The {{ e.name }} pinches you! Ow!
+OnAttack: You flick the {{ e.name }}. It pinches you back harder.
+OnTake: {{ effects.pickup() }}{{ effects.broadcast("**" ~ user ~ "** wrestles " ~ e ~ " out of the drain!") }}You grab the {{ e.name }}, narrowly avoiding its claws.
+
+Id: fish_bass
+Name: Largemouth Bass
+Prototype: fish
+Tags: toilet_fish
+Rarity: uncommon
+DescriptionShort: a {{ e.name }} somehow crammed in here
+DescriptionLong: A full-sized largemouth bass. How it fit through the plumbing is a mystery for the ages.
+OnTouch: The {{ e.name }} gives you a judgmental look.
+OnTake: {{ effects.pickup() }}{{ effects.broadcast("**" ~ user ~ "** hauls " ~ e ~ " out of the toilet!") }}You wrangle the {{ e.name }} out. It's bigger than you expected.
+
+Id: fish_koi
+Name: Koi Fish
+Prototype: fish
+Tags: toilet_fish urinal_fish
+Rarity: rare
+DescriptionShort: a beautiful {{ e.name }} glimmering in the light
+DescriptionLong: A magnificent koi fish with orange and white scales. It looks far too elegant for its current surroundings.
+OnTouch: The {{ e.name }} nuzzles your hand gracefully.
+OnTake: {{ effects.pickup() }}{{ effects.broadcast("**" ~ user ~ "** pulls a beautiful " ~ e ~ " from the depths!") }}You carefully lift the {{ e.name }}. It shimmers in the fluorescent light.
+OnDrop: {% if container %}You gently place the {{ e.name }} into the *{{ container.name }}*.{% else %}You set the {{ e.name }} down carefully.{% endif %}{{ effects.drop() }}{{ effects.broadcast(user ~ " releases " ~ e ~ ".") }}
+
+Id: fish_electric_eel
+Name: Electric Eel
+Prototype: fish
+Tags: toilet_fish urinal_fish
+Rarity: epic
+DescriptionShort: a crackling {{ e.name }} arcing with electricity
+DescriptionLong: A long, sinuous electric eel. Small sparks dance across its skin. The fluorescent lights flicker when it moves.
+OnTouch: ZAP! The {{ e.name }} shocks you. Your hair stands on end.
+OnAttack: You punch the {{ e.name }}. It shocks you so hard your Discord avatar briefly changes.
+OnTake: {{ effects.pickup() }}{{ effects.broadcast("**" ~ user ~ "** yanks " ~ e ~ " out! The lights flicker!") }}You grab the {{ e.name }} and immediately regret it. ZAP! But you hold on.
+OnDrop: {% if container %}You stuff the {{ e.name }} into the *{{ container.name }}*. Sparks fly.{% else %}You drop the {{ e.name }}. It writhes on the floor.{% endif %}{{ effects.drop() }}{{ effects.broadcast(user ~ " drops " ~ e ~ ". The lights flicker.") }}
+
+Id: fish_sewer_shark
+Name: Sewer Shark
+Prototype: fish
+Tags: toilet_fish
+Rarity: legendary
+DescriptionShort: a {{ e.name }} circling ominously
+DescriptionLong: A small but unmistakable shark. It has adapted to the sewer system and developed a taste for whatever goes down the drain. Its eyes glow faintly in the dark.
+OnTouch: The {{ e.name }} bumps your hand with its snout. You feel its sandpaper skin.
+OnAttack: The {{ e.name }} bites back! It's more aggressive than you expected.
+OnTake: {{ effects.pickup() }}{{ effects.broadcast("**" ~ user ~ "** pulls " ~ e ~ " out of the toilet! Holy shit!") }}You wrestle the {{ e.name }} out of the bowl. It thrashes wildly. This is the greatest catch of your life.
+OnDrop: {% if container %}You stuff the {{ e.name }} into the *{{ container.name }}*. It does not seem happy.{% else %}You set the {{ e.name }} down. It flops around aggressively.{% endif %}{{ effects.drop() }}{{ effects.broadcast("**" ~ user ~ "** releases " ~ e ~ ". Everyone backs away.") }}
+
+Id: fish_golden_toilet_carp
+Name: Golden Toilet Carp
+Prototype: fish
+Tags: toilet_fish urinal_fish
+Rarity: mythic
+DescriptionShort: a radiant {{ e.name }} glowing with divine light
+DescriptionLong: A mythical golden carp that legends say grants a wish to whoever catches it in a public restroom. Its scales shimmer with an otherworldly light and it smells faintly of lavender instead of sewage.
+OnTouch: The {{ e.name }} speaks to you telepathically: "I have seen things you would not believe."
+OnTake: {{ effects.pickup() }}{{ effects.broadcast("✨ **" ~ user ~ "** has caught the legendary " ~ e ~ "! ✨") }}You lift the {{ e.name }} from the water. A choir of angels sings briefly. The fluorescent lights turn golden for a moment. You have achieved peak restroom fishing.
+OnDrop: {% if container %}You place the {{ e.name }} reverently into the *{{ container.name }}*.{% else %}You set the {{ e.name }} down. It floats slightly above the ground.{% endif %}{{ effects.drop() }}{{ effects.broadcast("**" ~ user ~ "** parts ways with " ~ e ~ ". A single tear rolls down its golden cheek.") }}
+
+# ----------------------------------------------------------------------------
 # Foyer entities
 # ----------------------------------------------------------------------------
 
@@ -433,10 +539,12 @@ Id: restroom_urinals
 Name: Urinals
 Prototype: furniture
 Room: restroom
+ContentsVisible: no
 DescriptionShort: Three {{ e.name }} line the wall, separated by privacy dividers.
 DescriptionLong: A row of white porcelain urinals with automatic flush sensors. Blue deodorizer pucks sit in the drains. Privacy dividers offer a modicum of dignity.
 OnTouch: You touch the porcelain. It's cold. Why did you do that?
 OnUse: {{ effects.broadcast("**" ~ user ~ "** uses the urinal.") }}You step up to the urinal and do your business. The automatic sensor flushes when you step away. You feel relieved.
+OnFish: {% if e.contents %}{{ effects.dispense() }}{{ effects.broadcast("**" ~ user ~ "** is fishing in the urinal...") }}You dip your hands into the urinal water and feel around...{% else %}You swirl the water around but nothing is biting.{% endif %}
 
 Id: restroom_stalls
 Name: Toilet Stalls
@@ -453,12 +561,14 @@ Name: Toilet
 Prototype: furniture
 Room: restroom
 Container: restroom_stalls
+ContentsVisible: no
 DescriptionShort: a standard white {{ e.name }}
 DescriptionLong: A white porcelain toilet with a black plastic seat. There's a chrome flush handle on the side. Surprisingly clean for a public restroom.
 OnTouch: You touch the toilet seat. It's cold. The handle is cold too. Everything in here is cold.
 OnUse: {{ effects.broadcast("**" ~ user ~ "** occupies a toilet stall.") }}You enter the stall and lock the flimsy door behind you. After taking care of business, you flush and exit. You feel much better now.
 OnOpen: You lift the toilet lid. It's a toilet. What did you expect?
 OnClose: You close the toilet lid with a satisfying clunk.
+OnFish: {% if e.contents %}{{ effects.dispense() }}{{ effects.broadcast("**" ~ user ~ "** is fishing in the toilet...") }}You plunge your hand into the toilet bowl and feel around...{% else %}You swirl the water around but nothing is biting.{% endif %}
 
 Id: restroom_toilet_paper
 Name: Toilet Paper Roll
@@ -1684,3 +1794,17 @@ Container: restroom_trash_can
 TagQuery: restroom_trash_loot
 MaxCount: 1
 RespawnIntervalMinutes: 30
+
+Id: restroom_toilet_fish_pool
+Room: restroom
+Container: restroom_toilet
+TagQuery: toilet_fish
+MaxCount: 1
+RespawnIntervalMinutes: 10
+
+Id: restroom_urinal_fish_pool
+Room: restroom
+Container: restroom_urinals
+TagQuery: urinal_fish
+MaxCount: 1
+RespawnIntervalMinutes: 10

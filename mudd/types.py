@@ -17,3 +17,4 @@ class VerbAction(StrEnum):
     ON_OPEN = "on_open"
     ON_CLOSE = "on_close"
     ON_DROP = "on_drop"
+    ON_FISH = "on_fish"

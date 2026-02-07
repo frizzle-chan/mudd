@@ -199,6 +199,15 @@ class CloseCommand(ActionCommand):
         return entity.entity.on_close
 
 
+class FishCommand(ActionCommand):
+    """Command for the 'fish' action."""
+
+    @override
+    def get_handler_text(self, entity: IReadableEntity) -> str | None:
+        """Return the entity's on_fish handler template."""
+        return entity.entity.on_fish
+
+
 def get_command(action: VerbAction) -> ActionCommand:
     """Get command instance for a verb action."""
     return {
@@ -210,4 +219,5 @@ def get_command(action: VerbAction) -> ActionCommand:
         VerbAction.ON_DROP: DropCommand(),
         VerbAction.ON_OPEN: OpenCommand(),
         VerbAction.ON_CLOSE: CloseCommand(),
+        VerbAction.ON_FISH: FishCommand(),
     }[action]

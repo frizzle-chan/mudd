@@ -62,6 +62,7 @@ class EntityData:
     on_open: str | None = None
     on_close: str | None = None
     on_drop: str | None = None
+    on_fish: str | None = None
 
 
 @dataclass
@@ -190,6 +191,7 @@ def _parse_entity_row(row: dict[str, str]) -> EntityData:
         on_open=row.get("OnOpen") or None,
         on_close=row.get("OnClose") or None,
         on_drop=row.get("OnDrop") or None,
+        on_fish=row.get("OnFish") or None,
     )
 
 
