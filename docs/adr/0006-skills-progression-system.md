@@ -131,24 +131,26 @@ In the context of **making total level visible at a glance**, facing **the need 
 
 ### Milestone Roles
 
-In the context of **rewarding progression milestones**, facing **the desire for cosmetic recognition that scales with the geometric XP curve**, we decided to **grant Discord roles at total level thresholds**, to achieve **visible rank progression in the member list and a sense of achievement at key milestones**, accepting **that role thresholds will need adjustment as new skills are added**.
+In the context of **rewarding progression milestones**, facing **the desire for cosmetic recognition that scales with the geometric XP curve**, we decided to **grant Discord roles at total level thresholds computed from the number of skills**, to achieve **visible rank progression that automatically scales as new skills are added**, accepting **that adding a new skill may temporarily demote players who haven't trained it**.
 
 **Role Progression:**
 
 Each player has exactly one milestone role at a time — when they reach a new threshold, the previous role is removed and replaced.
 
-| Role | Total Level | Milestone Meaning |
-|------|------------|-------------------|
-| Newbie | 5 | Starting out (all skills at level 1, with 5 skills) |
-| Apprentice | 15 | First real progress across a few skills |
-| Adventurer | 50 | Broad exploration of multiple skills |
-| Journeyman | 100 | Committed player with depth in several skills |
-| Expert | 200 | Serious investment across the board |
-| Veteran | 300 | Deep dedication to most skills |
-| Hero | 400 | Near mastery |
-| Legend | 495 | All skills maxed (5 skills x 99) |
+Thresholds are defined as `num_skills × average_level`, so they scale automatically with the skill count. Each role corresponds to a target average level across all skills:
 
-Thresholds are calibrated for the initial 5 skills (max total level 495). As new skills are added, the "Legend" threshold increases and intermediate thresholds may be adjusted to keep the progression feeling right.
+| Role | Average Level | 5 Skills | 6 Skills | 10 Skills |
+|------|--------------|----------|----------|-----------|
+| Newbie | 1 | 5 | 6 | 10 |
+| Apprentice | 3 | 15 | 18 | 30 |
+| Adventurer | 10 | 50 | 60 | 100 |
+| Journeyman | 20 | 100 | 120 | 200 |
+| Expert | 40 | 200 | 240 | 400 |
+| Veteran | 60 | 300 | 360 | 600 |
+| Hero | 80 | 400 | 480 | 800 |
+| Legend | 99 | 495 | 594 | 990 |
+
+When a new skill is added, all thresholds increase. A player near a boundary may drop back to the previous role until they train the new skill — this is intentional and creates motivation to engage with new content.
 
 **Role Management:**
 - Roles are created by the sync cog if they don't exist
@@ -189,7 +191,7 @@ In the context of **an evolving game with new content**, facing **the certainty 
 - One additional Discord channel per player increases resource usage
 - Continuous message editing for skills overview may hit Discord rate limits under heavy play
 - XP tuning requires balancing event frequency against desired leveling speed
-- Adding new skills retroactively changes total level for all players and may shift milestone thresholds
+- Adding a new skill temporarily demotes players near role boundaries until they train it
 - Skills observer adds processing overhead to every game event
 - Bot must manage nicknames, which requires the Manage Nicknames permission and conflicts with manual nickname changes
 - Nickname truncation for long display names may produce awkward results
