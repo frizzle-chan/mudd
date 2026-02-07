@@ -658,7 +658,7 @@ class User:
             observer.notify(
                 BalanceChangedEvent(recipient.id, recipient_new, amount, recipient_memo)
             )
-        
+
         # Broadcast the payment to the channel
         amount_str = f"\u00a5{amount:,}"
         broadcast_msg = f"{self.mention} paid {amount_str} to {recipient.mention}"

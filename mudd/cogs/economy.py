@@ -162,8 +162,9 @@ class Economy(commands.Cog):
             return
 
         # Execute transfer (scene.user already has observers from with_observers)
-        # Note: memo is for the transaction record; wallet thread uses
-        # per-user memos with mentions
+        # The memo parameter is for the transaction record in the database.
+        # Wallet thread memos (via BalanceChangedEvent) use mentions and are
+        # generated inside transfer_currency_to().
         memo = f"Payment to {recipient_member.display_name}"
         result = await scene.user.transfer_currency_to(recipient_user, amount, memo)
 
