@@ -39,21 +39,41 @@ The cumulative XP required to reach level L is:
 
 ### Skills as Event-Driven Passive Training
 
-In the context of **determining how players gain experience**, facing **the choice between explicit training actions and implicit progression**, we decided to **award XP passively through an observer that listens to existing game events**, to achieve **progression that feels organic and rewards normal gameplay without adding new commands or interrupting flow**, accepting **that XP rates are coupled to game event frequency and will need tuning**.
+In the context of **determining how players gain experience**, facing **the choice between explicit training actions and implicit progression**, we decided to **award XP passively through a skills observer and a template effect**, to achieve **progression that feels organic and rewards normal gameplay without adding new commands or interrupting flow**, accepting **that XP rates are coupled to game event frequency and will need tuning**.
 
-**Skill-to-Event Mapping:**
+**XP Source Mechanisms:**
 
-| Skill | Trained By | XP per Event | First Level-Up After |
-|-------|-----------|-------------|---------------------|
-| Vitality | Eating food | 100 | 1 action |
-| Attack | Destroying objects | 100 | 1 action |
-| Agility | Moving between rooms | 28 | 3 moves |
-| Speech | Sending messages in rooms | 17 | 5 messages |
-| Fishing | Catching fish | TBD | TBD |
+Skills gain XP through two distinct mechanisms:
+
+1. **Implicit (event-driven)**: The skills observer listens to existing game events and awards XP automatically. No content authoring required — the mapping is hardcoded in the observer.
+
+2. **Explicit (template effect)**: Content authors call a `grant_xp` effect from entity handlers to award XP for a named skill. This allows items to grant arbitrary XP as part of their behavior (e.g., a food item grants Vitality XP when used, then destroys itself).
+
+**Skill-to-Source Mapping:**
+
+| Skill | Source | Mechanism | XP per Event | First Level-Up After |
+|-------|--------|-----------|-------------|---------------------|
+| Agility | Room transitions | Implicit: skills observer listens to movement events | 28 | 3 moves |
+| Attack | Attacking entities | Implicit: skills observer listens to entity destroyed events triggered by the attack verb | 100 | 1 action |
+| Speech | Sending messages | Implicit: Discord event handler on messages in room channels | 17 | 5 messages |
+| Vitality | Eating/drinking | Explicit: food/drink handlers call `grant_xp` effect, then destroy the item | 100 | 1 action |
+| Fishing | Catching fish | TBD: future fishing minigame | TBD | TBD |
 
 XP amounts are calibrated against the level 2 threshold of 83 XP. Combat-oriented skills (Attack, Vitality) are generous — a single action earns a level-up — to give immediate feedback. Passive skills (Agility, Speech) require a handful of actions, keeping early progression fast but not instant.
 
-The skills observer sits alongside the existing effects and reconciler observers. It receives the same game events and updates skill XP in the background.
+**Implicit vs. Explicit Trade-offs:**
+
+Implicit XP is simpler for content authors (it just happens) but can't distinguish context — every entity destruction via attack grants the same Attack XP. Explicit XP requires content authors to add the effect call to handlers, but allows fine-grained control: different food items could grant different amounts of Vitality XP, or a special item could grant XP to an unexpected skill.
+
+The `grant_xp` template effect follows the same pattern as existing effects (`grant_currency`, `broadcast`, etc.) — it emits an event that the skills observer processes during flush.
+
+**Attack vs. Consume Distinction:**
+
+Destroying an entity via the attack verb grants Attack XP. Consuming an entity (food/drink via use) grants Vitality XP through the explicit `grant_xp` effect, and the item is destroyed via the existing `destroy` effect. These are separate paths — attack-destroy and consume-destroy don't overlap.
+
+**Speech as Discord Event:**
+
+Unlike other skills, Speech XP is not driven by game events from the observer pattern. Instead, a Discord event handler listens for messages sent in room channels and awards Speech XP directly. This sits outside the normal command flow since chatting is not a slash command.
 
 ### Level-Up Announcements
 
