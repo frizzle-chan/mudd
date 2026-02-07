@@ -1,5 +1,7 @@
 # MUDD: Multi User Dungeon (Discord)
 
+[![codecov](https://codecov.io/github/frizzle-chan/mudd/graph/badge.svg?token=JM8BYHR8I4)](https://codecov.io/github/frizzle-chan/mudd)
+
 ## Commands
 
 - `/ping` - Check bot latency
