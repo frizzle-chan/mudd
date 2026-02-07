@@ -40,6 +40,10 @@ class IUser(Protocol):
         """Get all entities in the user's inventory."""
         ...
 
+    async def has_entity_by_tag(self, tag: str) -> bool:
+        """Check if the user has an entity with the given tag in inventory."""
+        ...
+
     async def get_focus(self) -> FocusContext | None:
         """Get the user's current focus context, if any."""
         ...
