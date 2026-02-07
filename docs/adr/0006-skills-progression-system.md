@@ -43,15 +43,17 @@ In the context of **determining how players gain experience**, facing **the choi
 
 **Skill-to-Event Mapping:**
 
-| Skill | Trained By | Triggering Events |
-|-------|-----------|-------------------|
-| Vitality | Eating food | Consuming food items |
-| Attack | Destroying objects | Entity destruction |
-| Agility | Moving between rooms | Room transitions |
-| Speech | Sending messages in rooms | Chat messages |
-| Fishing | Catching fish | Fishing minigame catches |
+| Skill | Trained By | XP per Event | First Level-Up After |
+|-------|-----------|-------------|---------------------|
+| Vitality | Eating food | 100 | 1 action |
+| Attack | Destroying objects | 100 | 1 action |
+| Agility | Moving between rooms | 28 | 3 moves |
+| Speech | Sending messages in rooms | 17 | 5 messages |
+| Fishing | Catching fish | TBD | TBD |
 
-The skills observer sits alongside the existing effects and reconciler observers. It receives the same game events and updates skill XP in the background. XP awards are fixed amounts per event (e.g., one room transition = one XP grant to Agility), with the amount configurable per skill and event type.
+XP amounts are calibrated against the level 2 threshold of 83 XP. Combat-oriented skills (Attack, Vitality) are generous — a single action earns a level-up — to give immediate feedback. Passive skills (Agility, Speech) require a handful of actions, keeping early progression fast but not instant.
+
+The skills observer sits alongside the existing effects and reconciler observers. It receives the same game events and updates skill XP in the background.
 
 ### Level-Up Announcements
 
@@ -142,5 +144,5 @@ In the context of **an evolving game with new content**, facing **the certainty 
 
 ## Open Questions
 
-- **XP per event**: What are the right XP amounts for each event type? This will require playtesting — start with OSRS-comparable grants and tune from there.
 - **XP for chat**: Speech XP from chatting could be exploitable (spam messages for XP). Should there be rate limiting or minimum message length?
+- **Fishing XP**: The fishing minigame doesn't exist yet; XP amount will be decided when the minigame is designed.
