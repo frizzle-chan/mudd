@@ -28,7 +28,6 @@ The cumulative XP required to reach level L is:
 > XP(L) = floor( sum( floor(i + 300 * 2^(i/7)) for i in 1..L-1 ) / 4 )
 
 **Progression Properties:**
-- XP required between levels increases geometrically (~10% more per level)
 - Total XP approximately doubles every 7 levels
 - Level 2 requires 83 XP; level 50 requires ~100K XP; level 99 requires ~13M XP
 - Level 92 is the halfway point to 99 in terms of total XP
