@@ -222,6 +222,27 @@ class User:
 
         return await EntityInstance.get_by_owner(self._pool, self.id)
 
+    async def has_entity_by_tag(self, tag: str) -> bool:
+        """Check if the user has an entity with the given tag in their inventory.
+
+        Args:
+            tag: Entity tag to search for
+
+        Returns:
+            True if the user owns at least one entity instance with this tag
+        """
+        row = await self._pool.fetchrow(
+            """
+            SELECT 1 FROM entity_instances ei
+            JOIN entity_tags et ON et.entity_id = ei.entity_id
+            WHERE ei.owner_id = $1 AND et.tag = $2
+            LIMIT 1
+            """,
+            self.id,
+            tag,
+        )
+        return row is not None
+
     async def get_focus(self) -> FocusContext | None:
         """Get the user's current focus context, if any.
 
