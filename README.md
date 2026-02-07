@@ -6,6 +6,7 @@ A Discord-native Multi User Dungeon. It's a text-based multiplayer RPG inside a 
 - Players explore and interact using slash commands with context-aware autocomplete.
 - The world is filled with inspectable, lootable, and sometimes destructible items and characters. Your interactions impact the shared world with other players.
 - Player inventories are managed as private [forum channels](https://support.discord.com/hc/en-us/articles/6208479917079-Forum-Channels-FAQ). Each item gets its own item management thread.
+- Worlds are authored in user-friendly [recfiles](https://www.gnu.org/software/recutils/) in [data/worlds](./data/worlds/), are synced to a Postgres datbase, and the bot continually reconciles Discord state with the database state.
 
 ## How to play
 
@@ -30,3 +31,7 @@ Tip: By default, slash commands will autocomplete items present in the room you 
 The wallet in your inventory shows your current bank balance.
 
 - **/pay** other players in the same room as you to transfer funds.
+
+## Codebase tour
+
+
