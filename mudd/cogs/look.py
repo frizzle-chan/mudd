@@ -7,6 +7,7 @@ from functools import partial
 from typing import TYPE_CHECKING
 
 import asyncpg
+import discord
 from discord import Interaction, app_commands
 from discord.ext import commands
 
@@ -39,12 +40,18 @@ class Look(commands.Cog):
         self, interaction: Interaction, current: str
     ) -> list[app_commands.Choice[str]]:
         """Autocomplete for entity instance IDs the user can see."""
+        thread_id = (
+            interaction.channel.id
+            if isinstance(interaction.channel, discord.Thread)
+            else None
+        )
         return await entity_instance_id_autocomplete(
             self._pool,
-            interaction,
+            interaction.user.id,
             current,
-            self._autocomplete_cache,
-            self._user_cache,
+            thread_id=thread_id,
+            entity_cache=self._autocomplete_cache,
+            user_cache=self._user_cache,
         )
 
     @app_commands.command(name="look", description="View surroundings or examine item")

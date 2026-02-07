@@ -6,6 +6,10 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
+from mudd.caches import EntityAutocompleteCache
+from mudd.cogs.shared import (
+    entity_instance_id_autocomplete as raw_autocomplete,
+)
 from mudd.commands import (
     AttackCommand,
     CloseCommand,
@@ -28,9 +32,9 @@ from mudd.events import (
 from mudd.models import RoomEntityInstance, User
 from mudd.models.spawning_pool import SpawningPool
 from mudd.models.user import TransferError
+from mudd.scene import Scene
 from tests.helpers import (
     NullReconciler,
-    _build_scene,
     act,
     autocomplete,
     create_test_user,
@@ -699,7 +703,7 @@ async def test_other_players_in_room(test_db, clean_user_state):
     user_a = await create_test_user(test_db, user_id=4001, room_id="store-room")
     user_b = await create_test_user(test_db, user_id=4002, room_id="store-room")
 
-    scene = await _build_scene(test_db, user_a.id)
+    scene = await Scene.from_user(test_db, user_a.id)
     others = await scene.other_players()
 
     other_ids = [u.id for u in others]
@@ -741,3 +745,54 @@ async def test_beverage_prototype_chain(test_db, clean_user_state):
         test_db, user.id, UseCommand(), f"entity://{beverage.instance_id}"
     )
     assert "refreshing sip" in result.output.lower()
+
+
+async def test_autocomplete_db_fallback_no_user_cache(
+    test_db, entity_cache, clean_user_state
+):
+    """Autocomplete falls back to DB when user_cache is not provided."""
+    user = await create_test_user(test_db, room_id="store-room")
+
+    choices = await raw_autocomplete(
+        test_db, user.id, "", entity_cache=entity_cache, user_cache=None
+    )
+
+    assert len(choices) > 0
+    assert any(c.value.startswith("room://") for c in choices)
+
+
+async def test_autocomplete_db_fallback_user_not_in_cache(
+    test_db, entity_cache, user_cache, clean_user_state
+):
+    """Autocomplete falls back to DB when user is absent from user_cache."""
+    # Create user directly (bypasses user_cache.rebuild_user in create_test_user)
+    user_id = 888_888
+    await User.create_if_not_exists(test_db, user_id, "store-room")
+
+    choices = await raw_autocomplete(
+        test_db, user_id, "", entity_cache=entity_cache, user_cache=user_cache
+    )
+
+    assert len(choices) > 0
+    assert any(c.value.startswith("room://") for c in choices)
+
+
+async def test_autocomplete_slow_path_entity_cache_miss(
+    test_db, user_cache, clean_user_state
+):
+    """Autocomplete uses slow path when entity_cache has no data for the room."""
+    user = await create_test_user(test_db, room_id="store-room")
+
+    # Empty entity cache — get_room_choices returns None for every room
+    empty_entity_cache = EntityAutocompleteCache()
+
+    choices = await raw_autocomplete(
+        test_db,
+        user.id,
+        "",
+        entity_cache=empty_entity_cache,
+        user_cache=user_cache,
+    )
+
+    assert len(choices) > 0
+    assert any(c.value.startswith("room://") for c in choices)

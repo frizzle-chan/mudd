@@ -9,8 +9,7 @@ from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 import asyncpg
-import discord
-from discord import Interaction, app_commands
+from discord import app_commands
 from rapidfuzz import fuzz
 
 from mudd.caches.entity_autocomplete import entities_to_choices
@@ -108,10 +107,23 @@ async def resolve_entity(
     return options[0] if len(options) == 1 else None
 
 
+def _lookup_entity_choices(
+    cache: EntityAutocompleteCache,
+    room_id: str,
+    focus_id: UUID | None,
+) -> list[app_commands.Choice[str]] | None:
+    """Try the entity cache for a room+focus pair."""
+    if focus_id is not None:
+        return cache.get_focus_choices(room_id, focus_id)
+    return cache.get_room_choices(room_id)
+
+
 async def entity_instance_id_autocomplete(
     pool: asyncpg.Pool,
-    interaction: Interaction,
+    user_id: int,
     current: str,
+    *,
+    thread_id: int | None = None,
     entity_cache: EntityAutocompleteCache | None = None,
     user_cache: UserCache | None = None,
 ) -> list[app_commands.Choice[str]]:
@@ -131,66 +143,34 @@ async def entity_instance_id_autocomplete(
     When both caches are provided and the user has typed nothing yet,
     returns precomputed choices with zero database queries.
     """
-    user_id = interaction.user.id
-
     # Fast path: no input, not in a thread, caches available
-    if (
-        current == ""
-        and entity_cache is not None
-        and not isinstance(interaction.channel, discord.Thread)
-    ):
+    if current == "" and entity_cache is not None and thread_id is None:
+        room_id: str | None = None
+        focus_id: UUID | None = None
+
         # Try fully cached path (zero queries) via user cache
         if user_cache is not None:
             state = user_cache.get(user_id)
             if state is not None:
-                if state.focus_id is not None:
-                    choices = entity_cache.get_focus_choices(
-                        state.current_room, state.focus_id
-                    )
-                    if choices is not None:
-                        logger.debug(
-                            "Autocomplete cache hit (full, focus) user=%s room=%s",
-                            user_id,
-                            state.current_room,
-                        )
-                        return choices
-                else:
-                    choices = entity_cache.get_room_choices(state.current_room)
-                    if choices is not None:
-                        logger.debug(
-                            "Autocomplete cache hit (full, room) user=%s room=%s",
-                            user_id,
-                            state.current_room,
-                        )
-                        return choices
+                room_id = state.current_room
+                focus_id = state.focus_id
 
-        # Fallback: user cache miss, try with DB queries (2 queries)
-        logger.debug("Autocomplete user cache miss user=%s", user_id)
-        room_id = await User.get_current_room(pool, user_id)
+        # Fallback: resolve from DB
+        if room_id is None:
+            logger.debug("Autocomplete user cache miss user=%s", user_id)
+            room_id = await User.get_current_room(pool, user_id)
+            if room_id is not None:
+                focus_id = await User.get_active_focus_id(pool, user_id, room_id)
+
         if room_id is not None:
-            focus_id = await User.get_active_focus_id(pool, user_id, room_id)
-            if focus_id is not None:
-                choices = entity_cache.get_focus_choices(room_id, focus_id)
-                if choices is not None:
-                    logger.debug(
-                        "Autocomplete cache hit (partial, focus) user=%s room=%s",
-                        user_id,
-                        room_id,
-                    )
-                    return choices
-            else:
-                choices = entity_cache.get_room_choices(room_id)
-                if choices is not None:
-                    logger.debug(
-                        "Autocomplete cache hit (partial, room) user=%s room=%s",
-                        user_id,
-                        room_id,
-                    )
-                    return choices
+            choices = _lookup_entity_choices(entity_cache, room_id, focus_id)
+            if choices is not None:
+                logger.debug("Autocomplete cache hit user=%s room=%s", user_id, room_id)
+                return choices
 
     # Slow path: build scene and query entities
     logger.debug("Autocomplete cache miss (slow path) user=%s", user_id)
     entities = await autocomplete_entities(
-        await Scene.from_interaction(pool, interaction), current
+        await Scene.from_user(pool, user_id, thread_id=thread_id), current
     )
     return entities_to_choices(entities)

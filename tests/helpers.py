@@ -10,11 +10,16 @@ import asyncpg
 
 from mudd.caches.entity_autocomplete import EntityAutocompleteCache
 from mudd.caches.user import UserCache
-from mudd.cogs.shared import autocomplete_entities, resolve_entity
+from mudd.cogs.shared import (
+    entity_instance_id_autocomplete as _entity_instance_id_autocomplete,
+)
+from mudd.cogs.shared import (
+    resolve_entity,
+)
 from mudd.commands import ActionCommand
 from mudd.events import Observer
 from mudd.events.types import GameEvent
-from mudd.models import EntityInstance, EntityModal, Room, RoomEntityInstance, User
+from mudd.models import EntityInstance, Room, RoomEntityInstance, User
 from mudd.observers import EffectsObserver
 from mudd.scene import Scene
 
@@ -46,33 +51,6 @@ class ActResult:
     reconciler: NullReconciler
 
 
-async def _build_scene(pool: asyncpg.Pool, user_id: int) -> Scene:
-    """Build a Scene from database state (no Discord dependency).
-
-    Mirrors Scene.from_interaction() but skips InventoryThread
-    (which requires a Discord thread context).
-    """
-    user = await User.get(pool, user_id)
-    if user is None:
-        raise ValueError(f"User {user_id} not found")
-
-    focus = await user.get_focus()
-    if focus:
-        room: Room | EntityModal = EntityModal(
-            _pool=pool,
-            id=f"Focus:{focus.current_container.instance_id}",
-            zone_id="Focus",
-            entity_instance=focus.current_container,
-            is_container=True,
-        )
-    else:
-        room = await Room.get(pool, user.current_room)
-        if room is None:
-            raise ValueError(f"Room {user.current_room} not found")
-
-    return Scene(user=user, room=room, _pool=pool)
-
-
 async def act(
     pool: asyncpg.Pool,
     user_id: int,
@@ -80,7 +58,7 @@ async def act(
     entity_query: str,
 ) -> ActResult:
     """Execute one game interaction. Fresh scene per call."""
-    scene = await _build_scene(pool, user_id)
+    scene = await Scene.from_user(pool, user_id)
 
     effects = EffectsObserver()
     reconciler = NullReconciler()
@@ -108,23 +86,17 @@ async def autocomplete(
 ) -> list[EntityInstance | RoomEntityInstance]:
     """Execute one autocomplete request. Fresh scene per call.
 
-    For empty queries, uses the entity/user caches (same path as
-    production cogs) before falling back to the slow DB path.
+    Delegates to the real entity_instance_id_autocomplete function,
+    then resolves the returned Choice objects back to entity instances.
     """
-    if query == "" and entity_cache is not None and user_cache is not None:
-        state = user_cache.get(user_id)
-        if state is not None:
-            choices = (
-                entity_cache.get_focus_choices(state.current_room, state.focus_id)
-                if state.focus_id is not None
-                else entity_cache.get_room_choices(state.current_room)
-            )
-            if choices is not None:
-                return await _resolve_choices(pool, choices)
-
-    # Slow path: filtered queries, inventory, or cache miss
-    scene = await _build_scene(pool, user_id)
-    return await autocomplete_entities(scene, query)
+    choices = await _entity_instance_id_autocomplete(
+        pool,
+        user_id,
+        query,
+        entity_cache=entity_cache,
+        user_cache=user_cache,
+    )
+    return await _resolve_choices(pool, choices)
 
 
 async def _resolve_choices(
