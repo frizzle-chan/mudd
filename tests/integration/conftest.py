@@ -12,13 +12,16 @@ WORLD_FILE = Path("data/worlds/test_world.rec")
 
 
 @pytest.fixture
-async def clean_user_state(test_db):
+async def clean_user_state(test_db, entity_cache, user_cache):
     """Reset user-mutable state after each test.
 
     Cleans up: users, focus, currency, player-owned entity instances.
     Then re-syncs world instances to restore destroyed/moved items.
     """
     yield
+
+    # Rebuild user cache while users still exist (exercises bulk query path)
+    await user_cache.rebuild(test_db)
 
     async with test_db.acquire() as conn:
         await conn.execute("DELETE FROM user_focus")
@@ -31,3 +34,7 @@ async def clean_user_state(test_db):
 
     # Re-sync world instances to restore items destroyed during tests
     await sync_entities(test_db, WORLD_FILE)
+
+    # Rebuild caches after cleanup
+    await entity_cache.rebuild(test_db)
+    user_cache._entries.clear()  # all users deleted above

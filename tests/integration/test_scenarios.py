@@ -34,6 +34,7 @@ from tests.helpers import (
     act,
     autocomplete,
     create_test_user,
+    move,
 )
 
 # All tests share the session event loop with the session-scoped test_db pool
@@ -63,11 +64,7 @@ async def test_new_player_explores_the_world(test_db, clean_user_state):
 
     # === MOVE TO STORE ROOM ===
 
-    reconciler = NullReconciler()
-    fresh_user = await User.get(test_db, user.id)
-    assert fresh_user is not None
-    user_with_obs = fresh_user.with_observers(reconciler)
-    await user_with_obs.move_to("store-room", guild_id=GUILD_ID)
+    reconciler = await move(test_db, user.id, "store-room", guild_id=GUILD_ID)
 
     assert any(isinstance(e, UserMovedEvent) for e in reconciler.events)
     assert any(isinstance(e, UserLocationSyncEvent) for e in reconciler.events)
@@ -286,9 +283,7 @@ async def test_currency_system(test_db, clean_user_state):
     player_b = await create_test_user(test_db, user_id=2002, room_id="store-room")
 
     # Move player A to store room
-    user_a = await User.get(test_db, player_a.id)
-    assert user_a is not None
-    await user_a.move_to("store-room", guild_id=GUILD_ID)
+    await move(test_db, player_a.id, "store-room", guild_id=GUILD_ID)
 
     # Create currency accounts
     await User.create_currency_account(test_db, player_a.id, 500)
@@ -348,9 +343,7 @@ async def test_payment_broadcast_and_mentions(test_db, clean_user_state):
     player_b = await create_test_user(test_db, user_id=3002, room_id="store-room")
 
     # Move player A to store room
-    user_a = await User.get(test_db, player_a.id)
-    assert user_a is not None
-    await user_a.move_to("store-room", guild_id=1234567890)
+    await move(test_db, player_a.id, "store-room", guild_id=1234567890)
 
     # Create currency accounts
     await User.create_currency_account(test_db, player_a.id, 500)
@@ -358,6 +351,8 @@ async def test_payment_broadcast_and_mentions(test_db, clean_user_state):
 
     # Transfer with observer to capture events
     reconciler = NullReconciler()
+    user_a = await User.get(test_db, player_a.id)
+    assert user_a is not None
     user_a = user_a.with_observers(reconciler)
     user_b = await User.get(test_db, player_b.id)
     assert user_b is not None
@@ -502,9 +497,7 @@ async def test_move_back_to_foyer_clears_focus(test_db, clean_user_state):
     await act(test_db, user.id, OpenCommand(), f"entity://{box.instance_id}")
 
     # Move -- focus should clear
-    u = await User.get(test_db, user.id)
-    assert u is not None
-    await u.move_to("foyer", guild_id=GUILD_ID)
+    await move(test_db, user.id, "foyer", guild_id=GUILD_ID)
 
     refreshed = await User.get(test_db, user.id)
     assert refreshed is not None

@@ -9,6 +9,7 @@ from uuid import uuid4
 import asyncpg
 import pytest
 
+from mudd.caches import EntityAutocompleteCache, UserCache
 from mudd.database import run_migrations
 from mudd.loaders.entity_loader import sync_entities
 from mudd.loaders.verb_loader import sync_verbs
@@ -57,3 +58,28 @@ async def test_db():
     admin_conn = await asyncpg.connect(admin_dsn)
     await admin_conn.execute(f"DROP DATABASE {db_name}")
     await admin_conn.close()
+
+
+@pytest.fixture(scope="session")
+async def entity_cache(test_db) -> EntityAutocompleteCache:
+    cache = EntityAutocompleteCache()
+    await cache.rebuild(test_db)
+    return cache
+
+
+@pytest.fixture(scope="session")
+async def user_cache(test_db) -> UserCache:
+    cache = UserCache()
+    await cache.rebuild(test_db)
+    return cache
+
+
+@pytest.fixture(autouse=True, scope="session")
+async def _wire_caches_to_helpers(entity_cache, user_cache):
+    import tests.helpers as helpers
+
+    helpers.entity_cache = entity_cache
+    helpers.user_cache = user_cache
+    yield
+    helpers.entity_cache = None
+    helpers.user_cache = None
