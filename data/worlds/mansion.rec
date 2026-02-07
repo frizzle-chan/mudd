@@ -354,7 +354,7 @@ OnDrop: {% if container %}You toss the {{ e.name }} into the *{{ container.name 
 Id: fish_nothing
 Name: a tug on the line
 Prototype: object
-Tags: toilet_fish urinal_fish
+Tags: toilet_fish urinal_fish sink_fish
 Rarity: common
 DescriptionShort: a ripple in the water
 OnTake: {{ effects.destroy() }}You feel a tug, but it slips away! The fish got away.
@@ -362,7 +362,7 @@ OnTake: {{ effects.destroy() }}You feel a tug, but it slips away! The fish got a
 Id: fish_crucian_carp
 Name: Crucian Carp
 Prototype: fish
-Tags: toilet_fish urinal_fish size_tiny location_river time_all_day
+Tags: toilet_fish urinal_fish sink_fish size_tiny location_river time_all_day
 Rarity: common
 DescriptionShort: a small {{ e.name }}
 DescriptionLong: A tiny crucian carp.
@@ -370,7 +370,7 @@ DescriptionLong: A tiny crucian carp.
 Id: fish_bluegill
 Name: Bluegill
 Prototype: fish
-Tags: toilet_fish urinal_fish size_tiny location_river time_day
+Tags: toilet_fish urinal_fish sink_fish size_tiny location_river time_day
 Rarity: common
 DescriptionShort: a little {{ e.name }}
 DescriptionLong: A tiny bluegill with iridescent scales.
@@ -394,7 +394,7 @@ DescriptionLong: A medium-sized dace with silvery scales.
 Id: fish_catfish
 Name: Catfish
 Prototype: fish
-Tags: toilet_fish urinal_fish size_large location_lake time_all_day
+Tags: toilet_fish size_large location_lake time_all_day
 Rarity: common
 DescriptionShort: a whiskered {{ e.name }}
 DescriptionLong: A large catfish with long whiskers.
@@ -402,7 +402,7 @@ DescriptionLong: A large catfish with long whiskers.
 Id: fish_pale_chub
 Name: Pale Chub
 Prototype: fish
-Tags: toilet_fish urinal_fish size_tiny location_river time_day
+Tags: toilet_fish urinal_fish sink_fish size_tiny location_river time_day
 Rarity: common
 DescriptionShort: a pale {{ e.name }}
 DescriptionLong: A tiny, almost translucent chub.
@@ -426,7 +426,7 @@ DescriptionLong: A medium-sized herabuna, a type of crucian carp.
 Id: fish_carp
 Name: Carp
 Prototype: fish
-Tags: toilet_fish urinal_fish size_large location_river time_all_day
+Tags: toilet_fish size_large location_river time_all_day
 Rarity: common
 DescriptionShort: a big {{ e.name }}
 DescriptionLong: A large, hardy carp.
@@ -434,7 +434,7 @@ DescriptionLong: A large, hardy carp.
 Id: fish_loach
 Name: Loach
 Prototype: fish
-Tags: toilet_fish urinal_fish size_small location_river time_all_day
+Tags: toilet_fish urinal_fish sink_fish size_small location_river time_all_day
 Rarity: common
 DescriptionShort: a wriggly {{ e.name }}
 DescriptionLong: A small, eel-like loach. Slippery.
@@ -442,7 +442,7 @@ DescriptionLong: A small, eel-like loach. Slippery.
 Id: fish_bass
 Name: Bass
 Prototype: fish
-Tags: toilet_fish urinal_fish size_large location_river time_all_day
+Tags: toilet_fish size_large location_river time_all_day
 Rarity: common
 DescriptionShort: a {{ e.name }}
 DescriptionLong: A large bass. Fights hard on the line.
@@ -450,7 +450,7 @@ DescriptionLong: A large bass. Fights hard on the line.
 Id: fish_freshwater_goby
 Name: Freshwater Goby
 Prototype: fish
-Tags: toilet_fish urinal_fish size_small location_river time_all_day
+Tags: urinal_fish sink_fish size_small location_river time_all_day
 Rarity: common
 DescriptionShort: a tiny {{ e.name }}
 DescriptionLong: A small freshwater goby.
@@ -458,7 +458,7 @@ DescriptionLong: A small freshwater goby.
 Id: fish_pond_smelt
 Name: Pond Smelt
 Prototype: fish
-Tags: toilet_fish urinal_fish size_small location_river time_all_day
+Tags: urinal_fish sink_fish size_small location_river time_all_day
 Rarity: common
 DescriptionShort: a delicate {{ e.name }}
 DescriptionLong: A small pond smelt. Smells faintly of cucumber.
@@ -466,7 +466,7 @@ DescriptionLong: A small pond smelt. Smells faintly of cucumber.
 Id: fish_rainbow_trout
 Name: Rainbow Trout
 Prototype: fish
-Tags: toilet_fish urinal_fish size_large location_river time_all_day
+Tags: toilet_fish size_large location_river time_all_day
 Rarity: uncommon
 DescriptionShort: a colorful {{ e.name }}
 DescriptionLong: A large rainbow trout with iridescent scales.
@@ -474,7 +474,7 @@ DescriptionLong: A large rainbow trout with iridescent scales.
 Id: fish_salmon
 Name: Salmon
 Prototype: fish
-Tags: toilet_fish urinal_fish size_large location_river_mouth time_all_day
+Tags: toilet_fish size_large location_river_mouth time_all_day
 Rarity: uncommon
 DescriptionShort: a powerful {{ e.name }}
 DescriptionLong: A large salmon. Must have swum a long way to get here.
@@ -482,7 +482,7 @@ DescriptionLong: A large salmon. Must have swum a long way to get here.
 Id: fish_bitterling
 Name: Bitterling
 Prototype: fish
-Tags: toilet_fish urinal_fish size_tiny location_river time_all_day
+Tags: toilet_fish urinal_fish sink_fish size_tiny location_river time_all_day
 Rarity: uncommon
 DescriptionShort: a shimmering {{ e.name }}
 DescriptionLong: A tiny bitterling with vibrant colors.
@@ -498,7 +498,7 @@ DescriptionLong: A medium-sized sweetfish, also known as ayu. Smells faintly of 
 Id: fish_cherry_salmon
 Name: Cherry Salmon
 Prototype: fish
-Tags: toilet_fish urinal_fish size_medium location_river time_all_day
+Tags: urinal_fish size_medium location_river time_all_day
 Rarity: uncommon
 DescriptionShort: a spotted {{ e.name }}
 DescriptionLong: A medium-sized cherry salmon with pinkish spotted markings.
@@ -506,7 +506,7 @@ DescriptionLong: A medium-sized cherry salmon with pinkish spotted markings.
 Id: fish_goldfish
 Name: Goldfish
 Prototype: fish
-Tags: toilet_fish urinal_fish size_tiny location_river time_day
+Tags: urinal_fish sink_fish size_tiny location_river time_day
 Rarity: uncommon
 DescriptionShort: a bright {{ e.name }}
 DescriptionLong: A tiny, bright orange goldfish.
@@ -514,7 +514,7 @@ DescriptionLong: A tiny, bright orange goldfish.
 Id: fish_popeyed_goldfish
 Name: Popeyed Goldfish
 Prototype: fish
-Tags: toilet_fish urinal_fish size_tiny location_river time_day
+Tags: sink_fish size_tiny location_river time_day
 Rarity: uncommon
 DescriptionShort: a bug-eyed {{ e.name }}
 DescriptionLong: A tiny goldfish with enormous, protruding eyes.
@@ -522,7 +522,7 @@ DescriptionLong: A tiny goldfish with enormous, protruding eyes.
 Id: fish_guppy
 Name: Guppy
 Prototype: fish
-Tags: toilet_fish urinal_fish size_tiny location_river time_day
+Tags: urinal_fish sink_fish size_tiny location_river time_day
 Rarity: uncommon
 DescriptionShort: a colorful {{ e.name }}
 DescriptionLong: A tiny, vibrantly colored guppy with a fan-shaped tail.
@@ -538,7 +538,7 @@ DescriptionLong: A medium-sized koi with orange and white scales.
 Id: fish_eel
 Name: Eel
 Prototype: fish
-Tags: toilet_fish urinal_fish size_large location_river time_night
+Tags: toilet_fish size_large location_river time_night
 Rarity: rare
 DescriptionShort: a slithery {{ e.name }}
 DescriptionLong: A long, sinuous eel.
@@ -562,7 +562,7 @@ DescriptionLong: A very large bass.
 Id: fish_angelfish
 Name: Angelfish
 Prototype: fish
-Tags: toilet_fish urinal_fish size_small location_river time_night
+Tags: urinal_fish sink_fish size_small location_river time_night
 Rarity: rare
 DescriptionShort: a graceful {{ e.name }}
 DescriptionLong: A small angelfish with flowing fins.
@@ -588,7 +588,7 @@ OnTouch: The {{ e.name }} bites your finger.
 Id: fish_large_char
 Name: Large Char
 Prototype: fish
-Tags: toilet_fish urinal_fish size_large location_waterfall time_all_day
+Tags: toilet_fish size_large location_waterfall time_all_day
 Rarity: legendary
 DescriptionShort: a spotted {{ e.name }}
 DescriptionLong: A large char with spotted markings. Usually found in mountain streams.
@@ -596,7 +596,7 @@ DescriptionLong: A large char with spotted markings. Usually found in mountain s
 Id: fish_arowana
 Name: Arowana
 Prototype: fish
-Tags: toilet_fish urinal_fish size_large location_river time_night
+Tags: toilet_fish size_large location_river time_night
 Rarity: legendary
 DescriptionShort: a {{ e.name }} gleaming like polished metal
 DescriptionLong: A large arowana with metallic scales. Known as the "dragon fish."
@@ -612,7 +612,7 @@ DescriptionLong: A very large stringfish. One of the rarest freshwater fish in e
 Id: fish_coelacanth
 Name: Coelacanth
 Prototype: fish
-Tags: toilet_fish urinal_fish size_very_large location_sea time_night
+Tags: toilet_fish size_very_large location_sea time_night
 Rarity: mythic
 DescriptionShort: an ancient {{ e.name }}
 DescriptionLong: A very large coelacanth. A living fossil, thought extinct for 65 million years.
@@ -714,6 +714,7 @@ DescriptionShort: A {{ e.name }} lines the wall beneath a long mirror, with soap
 DescriptionLong: Four white porcelain sinks with chrome fixtures. Above them stretches a long mirror, and mounted on the wall are soap dispensers and paper towel dispensers.
 OnTouch: You run your hand under the faucet. The water is lukewarm.
 OnUse: You turn on the faucet and wash your hands. The soap smells vaguely of industrial lavender.
+OnFish: {% if e.contents %}{{ effects.dispense() }}{{ effects.broadcast("**" ~ user ~ "** is fishing in the sink...") }}You plug the drain and wait...{% else %}You swirl the water around but nothing is biting.{% endif %}
 OnOpen: {{ effects.set_focus() }}You step up to the sinks and survey your options.{% if e.contents %} Above:{{ e.contents }}{% endif %}
 OnClose: {{ effects.clear_focus() }}You step back from the sinks.
 
@@ -2034,6 +2035,13 @@ Id: restroom_urinal_fish_pool
 Room: restroom
 Container: restroom_urinals
 TagQuery: urinal_fish
+MaxCount: 1
+RespawnIntervalMinutes: 10
+
+Id: restroom_sink_fish_pool
+Room: restroom
+Container: restroom_sinks
+TagQuery: sink_fish
 MaxCount: 1
 RespawnIntervalMinutes: 10
 
