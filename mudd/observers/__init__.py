@@ -6,9 +6,11 @@ and reconcile external state (e.g., Discord threads, game effects).
 
 from mudd.observers.discord import DiscordReconciler, RoomChannelCache
 from mudd.observers.effects import EffectsObserver
+from mudd.observers.entity_mutation import EntityMutationObserver
 
 __all__ = [
     "DiscordReconciler",
     "EffectsObserver",
+    "EntityMutationObserver",
     "RoomChannelCache",
 ]

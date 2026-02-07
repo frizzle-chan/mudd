@@ -4,27 +4,23 @@ Precomputes default (no-input) autocomplete choices per room and per focus
 context. Rebuilt during periodic sync to avoid repeated DB queries on every
 autocomplete interaction.
 
-Invalidated instantly on entity mutations (pickup, drop, destroy) via the
-AutocompleteCacheInvalidator observer, then rebuilt in the background during
-flush().
+Invalidated instantly on entity mutations (pickup, drop, destroy) via an
+EntityMutationObserver created by ``create_invalidator()``, then rebuilt
+in the background during flush().
 """
 
 from __future__ import annotations
 
 import logging
+from functools import partial
 from uuid import UUID
 
 import asyncpg
 from discord import app_commands
 
-from mudd.events import (
-    EntityDestroyedEvent,
-    EntityDroppedEvent,
-    EntityPickedUpEvent,
-    GameEvent,
-)
 from mudd.models.entity import EntityInstance
 from mudd.models.room import Room, RoomEntityInstance
+from mudd.observers.entity_mutation import EntityMutationObserver
 from mudd.views import ViewEntity
 
 logger = logging.getLogger(__name__)
@@ -125,6 +121,20 @@ class AutocompleteCache:
         self._room_choices[room_id] = rc
         self._focus_choices.update(fc)
 
+    def create_invalidator(
+        self, pool: asyncpg.Pool, room_id: str
+    ) -> EntityMutationObserver:
+        """Create an observer that invalidates this cache on entity mutations.
+
+        The returned observer immediately removes affected room entries on
+        notify() and rebuilds them during flush().
+        """
+        return EntityMutationObserver(
+            room_id=room_id,
+            on_room_changed=self.invalidate_room,
+            on_rebuild=partial(self.rebuild_room, pool),
+        )
+
 
 async def _compute_room_entries(
     pool: asyncpg.Pool, room: Room
@@ -161,56 +171,3 @@ async def _compute_room_entries(
         focus_choices[(room.id, str(entity.instance_id))] = fc[:25]
 
     return room_choices[:25], focus_choices
-
-
-class AutocompleteCacheInvalidator:
-    """Observer that invalidates autocomplete cache on entity mutations.
-
-    Created per-scene with the user's current room, so pickup events
-    (where entity.room_id has already been cleared) still know which
-    room to invalidate.
-
-    On notify(): immediately invalidates affected room entries (cache miss).
-    On flush(): rebuilds those rooms so the cache is warm again.
-    """
-
-    def __init__(
-        self, cache: AutocompleteCache, pool: asyncpg.Pool, room_id: str
-    ) -> None:
-        self._cache = cache
-        self._pool = pool
-        self._room_id = room_id
-        self._rooms_to_rebuild: set[str] = set()
-
-    @classmethod
-    def from_cache(
-        cls, cache: AutocompleteCache | None, pool: asyncpg.Pool, room_id: str
-    ) -> AutocompleteCacheInvalidator | None:
-        """Create an invalidator if a cache is available, else None."""
-        if cache is None:
-            return None
-        return cls(cache, pool, room_id)
-
-    def notify(self, event: GameEvent) -> None:
-        """Immediately invalidate cache on entity mutations."""
-        match event:
-            case EntityPickedUpEvent():
-                # Entity left this room
-                self._cache.invalidate_room(self._room_id)
-                self._rooms_to_rebuild.add(self._room_id)
-            case EntityDroppedEvent(instance=inst) if inst.room_id:
-                # Entity entered a room
-                self._cache.invalidate_room(inst.room_id)
-                self._rooms_to_rebuild.add(inst.room_id)
-            case EntityDestroyedEvent(instance=inst):
-                # Entity removed — use instance room or fall back to scene room
-                room_id = inst.room_id or self._room_id
-                self._cache.invalidate_room(room_id)
-                self._rooms_to_rebuild.add(room_id)
-
-    async def flush(self) -> None:
-        """Rebuild invalidated rooms so the cache is warm again."""
-        rooms = self._rooms_to_rebuild.copy()
-        self._rooms_to_rebuild.clear()
-        for room_id in rooms:
-            await self._cache.rebuild_room(self._pool, room_id)

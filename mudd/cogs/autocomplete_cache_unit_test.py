@@ -1,20 +1,18 @@
 """Unit tests for AutocompleteCache."""
 
-import contextlib
 from dataclasses import replace
 from uuid import UUID, uuid4
 
-import pytest
 from discord import app_commands
 
 from mudd.cogs.autocomplete_cache import (
     AutocompleteCache,
-    AutocompleteCacheInvalidator,
     _make_choice,
 )
-from mudd.events import EntityDestroyedEvent, EntityDroppedEvent, EntityPickedUpEvent
+from mudd.events import EntityPickedUpEvent
 from mudd.models.entity import EntityInstance, ResolvedEntity
 from mudd.models.room import Room
+from mudd.observers.entity_mutation import EntityMutationObserver
 from mudd.utils.text import Rarity
 
 
@@ -171,112 +169,25 @@ class TestInvalidateRoom:
         cache.invalidate_room("nonexistent")  # Should not raise
 
 
-class TestAutocompleteCacheInvalidatorFactory:
-    """Tests for AutocompleteCacheInvalidator.from_cache()."""
+class TestCreateInvalidatorFactory:
+    """Tests for AutocompleteCache.create_invalidator()."""
 
-    def test_from_cache_returns_none_when_no_cache(self):
-        """from_cache returns None when cache is None."""
-        result = AutocompleteCacheInvalidator.from_cache(None, None, "room")  # type: ignore[arg-type]
-        assert result is None
-
-    def test_from_cache_returns_invalidator_when_cache_present(self):
-        """from_cache returns an invalidator when cache is provided."""
+    def test_returns_entity_mutation_observer(self):
+        """create_invalidator returns an EntityMutationObserver."""
         cache = AutocompleteCache()
-        result = AutocompleteCacheInvalidator.from_cache(cache, None, "room")  # type: ignore[arg-type]
-        assert isinstance(result, AutocompleteCacheInvalidator)
+        result = cache.create_invalidator(None, "room")  # type: ignore[arg-type]
+        assert isinstance(result, EntityMutationObserver)
 
-
-class TestAutocompleteCacheInvalidatorNotify:
-    """Tests for AutocompleteCacheInvalidator.notify() instant invalidation."""
-
-    def _make_populated_cache(self) -> AutocompleteCache:
-        """Create a cache with entries for 'lobby' and 'garden'."""
+    def test_invalidator_invalidates_cache_on_notify(self):
+        """The returned observer invalidates cache entries on notify()."""
         cache = AutocompleteCache()
         cache._room_choices["lobby"] = [app_commands.Choice(name="X", value="x")]
         cache._room_choices["garden"] = [app_commands.Choice(name="Y", value="y")]
-        uid = uuid4()
-        cache._focus_choices[("lobby", str(uid))] = []
-        return cache
 
-    def test_pickup_invalidates_scene_room(self):
-        """EntityPickedUpEvent invalidates the scene's room (not the entity's)."""
-        cache = self._make_populated_cache()
-        # Entity after pickup has room_id=None
+        invalidator = cache.create_invalidator(None, "lobby")  # type: ignore[arg-type]
         entity = _make_instance("Sword")
         picked_up = replace(entity, room_id=None, owner_id=12345)
-
-        invalidator = AutocompleteCacheInvalidator(cache, None, "lobby")  # type: ignore[arg-type]
         invalidator.notify(EntityPickedUpEvent(instance=picked_up))
 
         assert cache.get_room_choices("lobby") is None
         assert cache.get_room_choices("garden") is not None
-
-    def test_drop_invalidates_target_room(self):
-        """EntityDroppedEvent invalidates the room the entity was dropped into."""
-        cache = self._make_populated_cache()
-        entity = _make_instance("Sword")
-        dropped = replace(entity, room_id="garden", owner_id=None)
-
-        invalidator = AutocompleteCacheInvalidator(cache, None, "lobby")  # type: ignore[arg-type]
-        invalidator.notify(EntityDroppedEvent(instance=dropped))
-
-        # lobby (scene room) not invalidated — only the drop target
-        assert cache.get_room_choices("lobby") is not None
-        assert cache.get_room_choices("garden") is None
-
-    def test_destroy_invalidates_entity_room(self):
-        """EntityDestroyedEvent invalidates the entity's room."""
-        cache = self._make_populated_cache()
-        entity = _make_instance("Sword")
-        destroyed = replace(entity, room_id="garden")
-
-        invalidator = AutocompleteCacheInvalidator(cache, None, "lobby")  # type: ignore[arg-type]
-        invalidator.notify(EntityDestroyedEvent(instance=destroyed))
-
-        assert cache.get_room_choices("garden") is None
-        assert cache.get_room_choices("lobby") is not None
-
-    def test_destroy_falls_back_to_scene_room(self):
-        """EntityDestroyedEvent uses scene room when entity has no room."""
-        cache = self._make_populated_cache()
-        entity = _make_instance("Sword")
-        destroyed = replace(entity, room_id=None)
-
-        invalidator = AutocompleteCacheInvalidator(cache, None, "lobby")  # type: ignore[arg-type]
-        invalidator.notify(EntityDestroyedEvent(instance=destroyed))
-
-        assert cache.get_room_choices("lobby") is None
-
-    def test_notify_queues_rooms_for_rebuild(self):
-        """notify() queues affected rooms for flush() to rebuild."""
-        cache = self._make_populated_cache()
-        entity = _make_instance("Sword")
-        picked_up = replace(entity, room_id=None, owner_id=12345)
-
-        invalidator = AutocompleteCacheInvalidator(cache, None, "lobby")  # type: ignore[arg-type]
-        invalidator.notify(EntityPickedUpEvent(instance=picked_up))
-
-        assert "lobby" in invalidator._rooms_to_rebuild
-
-
-class TestAutocompleteCacheInvalidatorFlush:
-    """Tests for AutocompleteCacheInvalidator.flush()."""
-
-    @pytest.mark.asyncio
-    async def test_flush_clears_rebuild_queue(self):
-        """flush() clears the rooms_to_rebuild set."""
-        cache = AutocompleteCache()
-        cache._room_choices["lobby"] = []
-        entity = _make_instance("Sword")
-        picked_up = replace(entity, room_id=None, owner_id=12345)
-
-        # flush will try rebuild_room which needs a real pool.
-        # We just test that the queue is cleared.
-        invalidator = AutocompleteCacheInvalidator(cache, None, "lobby")  # type: ignore[arg-type]
-        invalidator.notify(EntityPickedUpEvent(instance=picked_up))
-        assert len(invalidator._rooms_to_rebuild) > 0
-
-        # flush with None pool will fail on rebuild but queue should clear
-        with contextlib.suppress(Exception):
-            await invalidator.flush()
-        assert len(invalidator._rooms_to_rebuild) == 0

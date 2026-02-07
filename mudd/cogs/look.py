@@ -10,7 +10,6 @@ import asyncpg
 from discord import Interaction, app_commands
 from discord.ext import commands
 
-from mudd.cogs.autocomplete_cache import AutocompleteCacheInvalidator
 from mudd.cogs.shared import entity_instance_id_autocomplete, resolve_entity
 from mudd.commands import LookCommand
 from mudd.observers import EffectsObserver
@@ -53,10 +52,10 @@ class Look(commands.Cog):
         # Build scene with effects observer + cache invalidator
         effects = EffectsObserver()
         scene = await Scene.from_interaction(self._pool, interaction)
-        invalidator = AutocompleteCacheInvalidator.from_cache(
-            self._autocomplete_cache, self._pool, scene.user.current_room
-        )
-        if invalidator:
+        if self._autocomplete_cache is not None:
+            invalidator = self._autocomplete_cache.create_invalidator(
+                self._pool, scene.user.current_room
+            )
             scene = scene.with_observers(effects, invalidator)
         else:
             scene = scene.with_observers(effects)
