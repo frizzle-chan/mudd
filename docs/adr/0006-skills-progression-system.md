@@ -19,14 +19,23 @@ Key requirements:
 
 ### RuneScape-Style Geometric XP Curve
 
-In the context of **designing a leveling formula**, facing **the need for a curve that feels rewarding early but provides long-term depth**, we decided to **use a RuneScape-inspired geometric experience curve where XP between levels grows by a constant factor**, to achieve **fast early levels that hook players with frequent level-ups, tapering into a long tail that rewards dedication**, accepting **that high levels require exponentially more effort and some players may never reach the cap**.
+In the context of **designing a leveling formula**, facing **the need for a curve that feels rewarding early but provides long-term depth**, we decided to **use the exact OSRS experience formula**, to achieve **a proven curve with decades of balancing behind it**, accepting **that high levels require exponentially more effort and some players may never reach the cap**.
+
+**The Formula:**
+
+The cumulative XP required to reach level L is:
+
+> XP(L) = floor( sum( floor(i + 300 * 2^(i/7)) for i in 1..L-1 ) / 4 )
 
 **Progression Properties:**
-- XP required between levels increases geometrically (each level requires roughly 10% more XP than the previous one)
+- XP required between levels increases geometrically (~10% more per level)
 - Total XP approximately doubles every 7 levels
-- Early levels are achievable in a single session; later levels represent weeks or months of play
+- Level 2 requires 83 XP; level 50 requires ~100K XP; level 99 requires ~13M XP
+- Level 92 is the halfway point to 99 in terms of total XP
+- **Level cap is 99** per skill, matching OSRS
+- **XP cap is 200,000,000** per skill (XP continues to accumulate after 99 but grants no further levels)
 - All skills share the same XP curve
-- All skills start at level 1
+- All skills start at level 1 with 0 XP
 
 ### Skills as Event-Driven Passive Training
 
@@ -56,11 +65,11 @@ In the context of **communicating progression milestones**, facing **the need to
 
 ### Per-User Skills Channel
 
-In the context of **providing persistent skill visibility**, facing **the same design tension as inventory display (fog-of-war vs. accessibility)**, we decided to **give each player a read-only channel in a dedicated Skills category, following the same pattern as inventory forums**, to achieve **an always-accessible skills overview that updates in real time**, accepting **one additional channel per player and a message that must be continuously edited**.
+In the context of **providing persistent skill visibility**, facing **the same design tension as inventory display (fog-of-war vs. accessibility)**, we decided to **give each player a read-only text channel in a dedicated Skills category, following the same pattern as inventory channels**, to achieve **an always-accessible skills overview that updates in real time**, accepting **one additional channel per player and a message that must be continuously edited**.
 
 **Channel Structure:**
 - A dedicated "Skills" category, hidden from @everyone by default
-- Each player gets a text channel in this category (not a forum — a single channel with a single overview message)
+- Each player gets a text channel in this category
 - The bot posts a single message containing a formatted skills overview
 - This message is edited whenever the player gains XP or levels up
 - The player can view their channel but cannot post in it
@@ -85,9 +94,15 @@ In the context of **providing an at-a-glance measure of overall progression**, f
 - Displayed prominently in the skills channel overview
 - Could be incorporated into player display name or status in the future
 
+### No Retroactive XP
+
+In the context of **adding new skills over time**, facing **the question of whether past actions should count toward newly introduced skills**, we decided to **not grant retroactive XP**, to achieve **simplicity and a fresh start for each new skill**, accepting **that veterans who already performed relevant actions won't get credit for them**.
+
+When a new skill is added, all players start at level 1 with 0 XP regardless of their history. This avoids the complexity of replaying event logs and keeps the experience of discovering a new skill consistent for everyone.
+
 ### Extensible Skill Registry
 
-In the context of **an evolving game with new content**, facing **the certainty that new skills will be added over time as new game systems are built**, we decided to **treat skills as a registry that can grow without requiring schema changes**, to achieve **easy addition of new skills by defining the skill name and its triggering events**, accepting **that adding a skill changes every player's total level and may require backfill logic**.
+In the context of **an evolving game with new content**, facing **the certainty that new skills will be added over time as new game systems are built**, we decided to **treat skills as a registry that can grow without requiring schema changes**, to achieve **easy addition of new skills by defining the skill name and its triggering events**, accepting **that adding a skill changes every player's total level**.
 
 **Adding a New Skill:**
 - Define the skill identifier and display name
@@ -121,15 +136,11 @@ In the context of **an evolving game with new content**, facing **the certainty 
 - Skill capes or cosmetic rewards at milestone levels
 - XP multiplier events or items
 - Prestige/rebirth system for players who reach max level
-- Skill display in player profile or as part of the `/look` command when examining another player
+- **Players as virtual entities**: Players in a room will eventually be represented as inspectable entities, allowing `/look player` to display their skill levels. This is out of scope for this ADR.
 - Combat system integration (Attack and Vitality affecting PvE outcomes)
 - Skill-based economy (crafting skills that produce tradeable items)
 
 ## Open Questions
 
-- **XP per event**: What are the right XP amounts for each event type? This likely requires playtesting.
-- **Level cap**: Should there be a maximum level, and if so, what should it be?
-- **Skills channel vs. forum thread**: Should skills use a dedicated text channel per user, or could it be a pinned thread in the inventory forum to reduce channel count?
+- **XP per event**: What are the right XP amounts for each event type? This will require playtesting — start with OSRS-comparable grants and tune from there.
 - **XP for chat**: Speech XP from chatting could be exploitable (spam messages for XP). Should there be rate limiting or minimum message length?
-- **Retroactive XP**: When a new skill is added, should past actions (e.g., rooms already visited) count retroactively, or does the skill start fresh?
-- **Public visibility**: Should other players be able to inspect someone's skill levels (e.g., via `/look player`), or are skills private?
