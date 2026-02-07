@@ -356,89 +356,280 @@ Rarity: common
 DescriptionShort: a ripple in the water
 OnTake: {{ effects.destroy() }}You feel a tug, but it slips away! The fish got away.
 
+Id: fish_crucian_carp
+Name: Crucian Carp
+Prototype: fish
+Tags: toilet_fish urinal_fish size_tiny location_river time_all_day
+Rarity: common
+DescriptionShort: a small {{ e.name }} wriggling around
+DescriptionLong: A tiny crucian carp. Common but honest.
+
+Id: fish_bluegill
+Name: Bluegill
+Prototype: fish
+Tags: toilet_fish urinal_fish size_tiny location_river time_day
+Rarity: common
+DescriptionShort: a little {{ e.name }} darting about
+DescriptionLong: A tiny bluegill with iridescent scales. It darts around nervously.
+
+Id: fish_barbel_steed
+Name: Barbel Steed
+Prototype: fish
+Tags: toilet_fish urinal_fish size_medium location_river time_all_day
+Rarity: common
+DescriptionShort: a {{ e.name }} swimming in circles
+DescriptionLong: A medium-sized barbel steed. Its whisker-like barbels twitch as it swims.
+
+Id: fish_dace
+Name: Dace
+Prototype: fish
+Tags: toilet_fish urinal_fish size_medium location_river time_all_day
+Rarity: common
+DescriptionShort: a silvery {{ e.name }}
+DescriptionLong: A medium-sized dace with silvery scales. It looks unimpressed by its surroundings.
+
+Id: fish_catfish
+Name: Catfish
+Prototype: fish
+Tags: toilet_fish urinal_fish size_large location_lake time_all_day
+Rarity: common
+DescriptionShort: a whiskered {{ e.name }} lurking about
+DescriptionLong: A large catfish with long whiskers. It seems right at home in the plumbing.
+
+Id: fish_pale_chub
+Name: Pale Chub
+Prototype: fish
+Tags: toilet_fish urinal_fish size_tiny location_river time_day
+Rarity: common
+DescriptionShort: a pale {{ e.name }}
+DescriptionLong: A tiny, pale chub. Almost translucent. You can barely see it.
+
+Id: fish_small_bass
+Name: Small Bass
+Prototype: fish
+Tags: toilet_fish urinal_fish size_medium location_river time_all_day
+Rarity: common
+DescriptionShort: a {{ e.name }} flopping around
+DescriptionLong: A medium-sized bass. Not the biggest catch, but a catch nonetheless.
+
+Id: fish_herabuna
+Name: Herabuna
+Prototype: fish
+Tags: toilet_fish urinal_fish size_medium location_lake time_all_day
+Rarity: common
+DescriptionShort: a {{ e.name }} gliding through the water
+DescriptionLong: A medium-sized herabuna, a type of crucian carp prized by anglers. It put up a modest fight.
+
+Id: fish_carp
+Name: Carp
+Prototype: fish
+Tags: toilet_fish urinal_fish size_large location_river time_all_day
+Rarity: common
+DescriptionShort: a big {{ e.name }}
+DescriptionLong: A large, hardy carp. It stares at you with ancient, knowing eyes.
+
+Id: fish_loach
+Name: Loach
+Prototype: fish
+Tags: toilet_fish urinal_fish size_small location_river time_all_day
+Rarity: common
+DescriptionShort: a wriggly {{ e.name }}
+DescriptionLong: A small, eel-like loach. It's surprisingly slippery.
+
+Id: fish_bass
+Name: Bass
+Prototype: fish
+Tags: toilet_fish urinal_fish size_large location_river time_all_day
+Rarity: common
+DescriptionShort: a {{ e.name }} thrashing around
+DescriptionLong: A large bass. A classic catch. It fights hard on the line.
+
+Id: fish_freshwater_goby
+Name: Freshwater Goby
+Prototype: fish
+Tags: toilet_fish urinal_fish size_small location_river time_all_day
+Rarity: common
+DescriptionShort: a tiny {{ e.name }} clinging to the porcelain
+DescriptionLong: A small freshwater goby. It keeps trying to suction itself to the nearest surface.
+
+Id: fish_pond_smelt
+Name: Pond Smelt
+Prototype: fish
+Tags: toilet_fish urinal_fish size_small location_river time_all_day
+Rarity: common
+DescriptionShort: a delicate {{ e.name }}
+DescriptionLong: A small pond smelt. It smells faintly of cucumber, which is an improvement over the usual restroom aroma.
+
+Id: fish_rainbow_trout
+Name: Rainbow Trout
+Prototype: fish
+Tags: toilet_fish urinal_fish size_large location_river time_all_day
+Rarity: uncommon
+DescriptionShort: a colorful {{ e.name }}
+DescriptionLong: A large rainbow trout with iridescent scales that shimmer in the fluorescent light. A fine catch.
+
+Id: fish_salmon
+Name: Salmon
+Prototype: fish
+Tags: toilet_fish urinal_fish size_large location_river_mouth time_all_day
+Rarity: uncommon
+DescriptionShort: a powerful {{ e.name }}
+DescriptionLong: A large salmon. It must have swum upstream through the entire sewer system to get here. Respect.
+
+Id: fish_bitterling
+Name: Bitterling
+Prototype: fish
+Tags: toilet_fish urinal_fish size_tiny location_river time_all_day
+Rarity: uncommon
+DescriptionShort: a shimmering {{ e.name }}
+DescriptionLong: A tiny bitterling with surprisingly vibrant colors. Don't let its size fool you — it's worth more than it looks.
+
+Id: fish_sweetfish
+Name: Sweetfish
+Prototype: fish
+Tags: toilet_fish urinal_fish size_medium location_river time_all_day
+Rarity: uncommon
+DescriptionShort: a {{ e.name }} that smells surprisingly fresh
+DescriptionLong: A medium-sized sweetfish, also known as ayu. Prized for its clean, watermelon-like scent. A welcome change of pace.
+
+Id: fish_cherry_salmon
+Name: Cherry Salmon
+Prototype: fish
+Tags: toilet_fish urinal_fish size_medium location_river time_all_day
+Rarity: uncommon
+DescriptionShort: a spotted {{ e.name }}
+DescriptionLong: A medium-sized cherry salmon with beautiful spotted markings. It has a pinkish hue that catches the light.
+
 Id: fish_goldfish
 Name: Goldfish
 Prototype: fish
-Tags: toilet_fish urinal_fish
-Rarity: common
-DescriptionShort: a soggy {{ e.name }} flopping around
-DescriptionLong: A small orange goldfish. It looks confused about how it ended up here.
+Tags: toilet_fish urinal_fish size_tiny location_river time_day
+Rarity: uncommon
+DescriptionShort: a bright {{ e.name }} glinting in the light
+DescriptionLong: A tiny, bright orange goldfish. It looks confused about how it ended up here.
+
+Id: fish_popeyed_goldfish
+Name: Popeyed Goldfish
+Prototype: fish
+Tags: toilet_fish urinal_fish size_tiny location_river time_day
+Rarity: uncommon
+DescriptionShort: a bug-eyed {{ e.name }} staring at you
+DescriptionLong: A tiny goldfish with enormous, protruding eyes. It stares at you with an unsettling intensity.
 
 Id: fish_guppy
 Name: Guppy
 Prototype: fish
-Tags: toilet_fish urinal_fish
-Rarity: common
-DescriptionShort: a tiny {{ e.name }}
-DescriptionLong: A tiny, colorful guppy. It has no business being in plumbing.
-OnTouch: The {{ e.name }} nibbles your finger.
-
-Id: fish_crawdad
-Name: Crawdad
-Prototype: fish
-Tags: toilet_fish urinal_fish
+Tags: toilet_fish urinal_fish size_tiny location_river time_day
 Rarity: uncommon
-DescriptionShort: a feisty {{ e.name }} snapping its claws
-DescriptionLong: A small freshwater crayfish with an attitude problem. Its claws are raised and ready to fight.
-OnTouch: The {{ e.name }} pinches you! Ow!
-OnAttack: You flick the {{ e.name }}. It pinches you back harder.
-OnTake: {{ effects.pickup() }}{{ effects.broadcast("**" ~ user ~ "** wrestles " ~ e ~ " out of the drain!") }}You grab the {{ e.name }}, narrowly avoiding its claws.
-
-Id: fish_bass
-Name: Largemouth Bass
-Prototype: fish
-Tags: toilet_fish
-Rarity: uncommon
-DescriptionShort: a {{ e.name }} somehow crammed in here
-DescriptionLong: A full-sized largemouth bass. How it fit through the plumbing is a mystery for the ages.
-OnTouch: The {{ e.name }} gives you a judgmental look.
-OnTake: {{ effects.pickup() }}{{ effects.broadcast("**" ~ user ~ "** hauls " ~ e ~ " out of the toilet!") }}You wrangle the {{ e.name }} out. It's bigger than you expected.
+DescriptionShort: a colorful {{ e.name }}
+DescriptionLong: A tiny, vibrantly colored guppy. Its fan-shaped tail is almost too pretty for these surroundings.
 
 Id: fish_koi
-Name: Koi Fish
+Name: Koi
 Prototype: fish
-Tags: toilet_fish urinal_fish
+Tags: toilet_fish urinal_fish size_medium location_river time_night
 Rarity: rare
 DescriptionShort: a beautiful {{ e.name }} glimmering in the light
-DescriptionLong: A magnificent koi fish with orange and white scales. It looks far too elegant for its current surroundings.
+DescriptionLong: A medium-sized koi with orange and white scales. It looks far too elegant for its current surroundings.
 OnTouch: The {{ e.name }} nuzzles your hand gracefully.
-OnTake: {{ effects.pickup() }}{{ effects.broadcast("**" ~ user ~ "** pulls a beautiful " ~ e ~ " from the depths!") }}You carefully lift the {{ e.name }}. It shimmers in the fluorescent light.
-OnDrop: {% if container %}You gently place the {{ e.name }} into the *{{ container.name }}*.{% else %}You set the {{ e.name }} down carefully.{% endif %}{{ effects.drop() }}{{ effects.broadcast(user ~ " releases " ~ e ~ ".") }}
 
-Id: fish_electric_eel
-Name: Electric Eel
+Id: fish_eel
+Name: Eel
 Prototype: fish
-Tags: toilet_fish urinal_fish
+Tags: toilet_fish urinal_fish size_large location_river time_night
+Rarity: rare
+DescriptionShort: a slithery {{ e.name }} coiling in the water
+DescriptionLong: A long, sinuous eel. It winds through the pipes like it owns the place.
+OnTouch: The {{ e.name }} wraps around your arm briefly. Unsettling.
+
+Id: fish_giant_catfish
+Name: Giant Catfish
+Prototype: fish
+Tags: toilet_fish size_very_large location_lake time_all_day
+Rarity: rare
+DescriptionShort: an enormous {{ e.name }} barely fitting in here
+DescriptionLong: A very large catfish with whiskers as thick as fingers. How it fit through the plumbing is a mystery for the ages.
+OnTake: {{ effects.pickup() }}{{ effects.broadcast("**" ~ user ~ "** hauls " ~ e ~ " out of the toilet!") }}You wrangle the {{ e.name }} out. It's bigger than you expected.
+
+Id: fish_large_bass
+Name: Large Bass
+Prototype: fish
+Tags: toilet_fish size_very_large location_river time_all_day
+Rarity: rare
+DescriptionShort: a massive {{ e.name }} crammed in here
+DescriptionLong: A very large bass. The undisputed king of toilet fishing. It gives you a judgmental look.
+OnTake: {{ effects.pickup() }}{{ effects.broadcast("**" ~ user ~ "** hauls a massive " ~ e ~ " out!") }}You wrestle the {{ e.name }} out. A truly impressive specimen.
+
+Id: fish_angelfish
+Name: Angelfish
+Prototype: fish
+Tags: toilet_fish urinal_fish size_small location_river time_night
+Rarity: rare
+DescriptionShort: a graceful {{ e.name }} drifting slowly
+DescriptionLong: A small, elegant angelfish with flowing fins. It moves with a serene calm despite its predicament.
+OnTouch: The {{ e.name }} brushes against your hand with its delicate fins.
+
+Id: fish_giant_snakehead
+Name: Giant Snakehead
+Prototype: fish
+Tags: toilet_fish size_very_large location_lake time_day
 Rarity: epic
-DescriptionShort: a crackling {{ e.name }} arcing with electricity
-DescriptionLong: A long, sinuous electric eel. Small sparks dance across its skin. The fluorescent lights flicker when it moves.
-OnTouch: ZAP! The {{ e.name }} shocks you. Your hair stands on end.
-OnAttack: You punch the {{ e.name }}. It shocks you so hard your Discord avatar briefly changes.
-OnTake: {{ effects.pickup() }}{{ effects.broadcast("**" ~ user ~ "** yanks " ~ e ~ " out! The lights flicker!") }}You grab the {{ e.name }} and immediately regret it. ZAP! But you hold on.
-OnDrop: {% if container %}You stuff the {{ e.name }} into the *{{ container.name }}*. Sparks fly.{% else %}You drop the {{ e.name }}. It writhes on the floor.{% endif %}{{ effects.drop() }}{{ effects.broadcast(user ~ " drops " ~ e ~ ". The lights flicker.") }}
-
-Id: fish_sewer_shark
-Name: Sewer Shark
-Prototype: fish
-Tags: toilet_fish
-Rarity: legendary
-DescriptionShort: a {{ e.name }} circling ominously
-DescriptionLong: A small but unmistakable shark. It has adapted to the sewer system and developed a taste for whatever goes down the drain. Its eyes glow faintly in the dark.
-OnTouch: The {{ e.name }} bumps your hand with its snout. You feel its sandpaper skin.
+DescriptionShort: a fearsome {{ e.name }} glaring at you
+DescriptionLong: A very large giant snakehead. It has a mouthful of teeth and an attitude to match. It can breathe air and has been known to walk on land.
+OnTouch: The {{ e.name }} snaps at your hand! Those teeth are no joke.
 OnAttack: The {{ e.name }} bites back! It's more aggressive than you expected.
-OnTake: {{ effects.pickup() }}{{ effects.broadcast("**" ~ user ~ "** pulls " ~ e ~ " out of the toilet! Holy shit!") }}You wrestle the {{ e.name }} out of the bowl. It thrashes wildly. This is the greatest catch of your life.
-OnDrop: {% if container %}You stuff the {{ e.name }} into the *{{ container.name }}*. It does not seem happy.{% else %}You set the {{ e.name }} down. It flops around aggressively.{% endif %}{{ effects.drop() }}{{ effects.broadcast("**" ~ user ~ "** releases " ~ e ~ ". Everyone backs away.") }}
+OnTake: {{ effects.pickup() }}{{ effects.broadcast("**" ~ user ~ "** wrestles " ~ e ~ " out! Watch out for those teeth!") }}You grab the {{ e.name }} and it thrashes violently. You barely hold on.
 
-Id: fish_golden_toilet_carp
-Name: Golden Toilet Carp
+Id: fish_piranha
+Name: Piranha
 Prototype: fish
-Tags: toilet_fish urinal_fish
+Tags: toilet_fish urinal_fish size_small location_river time_day
+Rarity: epic
+DescriptionShort: a razor-toothed {{ e.name }}
+DescriptionLong: A small but dangerous piranha. Its teeth glint in the fluorescent light. How did a tropical fish end up in the plumbing?
+OnTouch: The {{ e.name }} bites your finger! Blood in the water!
+OnAttack: You punch the {{ e.name }}. It bites harder. This was a mistake.
+OnTake: {{ effects.pickup() }}{{ effects.broadcast("**" ~ user ~ "** yanks " ~ e ~ " out! Watch your fingers!") }}You grab the {{ e.name }}, narrowly avoiding its razor-sharp teeth.
+
+Id: fish_large_char
+Name: Large Char
+Prototype: fish
+Tags: toilet_fish urinal_fish size_large location_waterfall time_all_day
+Rarity: legendary
+DescriptionShort: a magnificent {{ e.name }} with spotted markings
+DescriptionLong: A large char with beautiful spotted markings across its body. These fish are usually found in pristine mountain streams, not restroom fixtures.
+OnTake: {{ effects.pickup() }}{{ effects.broadcast("**" ~ user ~ "** pulls a magnificent " ~ e ~ " from the depths!") }}You carefully lift the {{ e.name }}. It shimmers in the fluorescent light. An incredible find.
+
+Id: fish_arowana
+Name: Arowana
+Prototype: fish
+Tags: toilet_fish urinal_fish size_large location_river time_night
+Rarity: legendary
+DescriptionShort: a {{ e.name }} gleaming like polished metal
+DescriptionLong: A large arowana with enormous, metallic scales. Known as the "dragon fish," it commands respect even while swimming in a toilet.
+OnTouch: The {{ e.name }} regards you with ancient, regal eyes.
+OnTake: {{ effects.pickup() }}{{ effects.broadcast("**" ~ user ~ "** catches " ~ e ~ "! The dragon fish!") }}You lift the {{ e.name }} from the water. Its scales glitter like coins. This is worth a fortune.
+
+Id: fish_stringfish
+Name: Stringfish
+Prototype: fish
+Tags: toilet_fish size_very_large location_river time_night
 Rarity: mythic
-DescriptionShort: a radiant {{ e.name }} glowing with divine light
-DescriptionLong: A mythical golden carp that legends say grants a wish to whoever catches it in a public restroom. Its scales shimmer with an otherworldly light and it smells faintly of lavender instead of sewage.
-OnTouch: The {{ e.name }} speaks to you telepathically: "I have seen things you would not believe."
-OnTake: {{ effects.pickup() }}{{ effects.broadcast("✨ **" ~ user ~ "** has caught the legendary " ~ e ~ "! ✨") }}You lift the {{ e.name }} from the water. A choir of angels sings briefly. The fluorescent lights turn golden for a moment. You have achieved peak restroom fishing.
-OnDrop: {% if container %}You place the {{ e.name }} reverently into the *{{ container.name }}*.{% else %}You set the {{ e.name }} down. It floats slightly above the ground.{% endif %}{{ effects.drop() }}{{ effects.broadcast("**" ~ user ~ "** parts ways with " ~ e ~ ". A single tear rolls down its golden cheek.") }}
+DescriptionShort: a legendary {{ e.name }} radiating an ethereal glow
+DescriptionLong: A very large stringfish — one of the rarest freshwater fish in existence. Its elongated body and ancient appearance suggest it has been swimming through these pipes since before the mansion was built.
+OnTouch: The {{ e.name }} hums faintly. You feel a strange connection.
+OnTake: {{ effects.pickup() }}{{ effects.broadcast("✨ **" ~ user ~ "** has caught " ~ e ~ "! The legendary stringfish! ✨") }}You lift the {{ e.name }} from the water. Time seems to slow for a moment. You have achieved something truly remarkable.
+
+Id: fish_coelacanth
+Name: Coelacanth
+Prototype: fish
+Tags: toilet_fish urinal_fish size_very_large location_sea time_night
+Rarity: mythic
+DescriptionShort: an ancient {{ e.name }} pulsing with primordial energy
+DescriptionLong: A very large coelacanth — a living fossil thought to have been extinct for 65 million years. Its lobed fins move with an otherworldly rhythm. It smells faintly of the deep ocean instead of sewage.
+OnTouch: The {{ e.name }} regards you with eyes that have seen the rise and fall of species.
+OnTake: {{ effects.pickup() }}{{ effects.broadcast("✨ **" ~ user ~ "** has caught " ~ e ~ "! A living fossil! ✨") }}You lift the {{ e.name }} from the water. A choir of prehistoric birds sings briefly. You are holding 65 million years of evolution in your hands.
+OnDrop: {% if container %}You place the {{ e.name }} reverently into the *{{ container.name }}*.{% else %}You set the {{ e.name }} down. It floats slightly above the ground.{% endif %}{{ effects.drop() }}{{ effects.broadcast("**" ~ user ~ "** parts ways with " ~ e ~ ". It sinks back into the depths of time.") }}
 
 # ----------------------------------------------------------------------------
 # Foyer entities
