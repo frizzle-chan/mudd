@@ -29,7 +29,7 @@ pythonpath = ["."]
 python_files = ["test_*.py", "*_unit_test.py"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "session"
-addopts = "--cov=mudd --cov-report=term-missing:skip-covered"
+addopts = "--cov=mudd --cov-report=term-missing:skip-covered --cov-report=xml"
 
 [tool.coverage.run]
 source = ["mudd"]
