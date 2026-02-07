@@ -1,3 +1,4 @@
+approach
 behold
 browse
 check
@@ -5,6 +6,7 @@ contemplate
 detect
 discern
 elucidate
+enter
 examine
 explore
 eye
@@ -12,6 +14,7 @@ gaze
 glance
 glimpse
 glint
+go
 identify
 inspect
 investigate
@@ -35,5 +38,6 @@ stare
 study
 survey
 view
+visit
 watch
 witness

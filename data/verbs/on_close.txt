@@ -1,9 +1,14 @@
+back
 close
 disconnect
+exit
+go back
 lock
 log off
 log out
 logoff
 logout
+return
 seal
 shut
+step back

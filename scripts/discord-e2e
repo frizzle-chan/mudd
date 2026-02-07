@@ -1,0 +1,304 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.12"
+# dependencies = ["discord.py>=2.3.0", "python-dotenv>=1.0.0"]
+# ///
+"""Discord E2E CLI - REST API operations for testing and debugging.
+
+Uses discord.py's HTTPClient directly (no gateway connection) for REST-only operations.
+All commands output JSON for programmatic use. Loads DISCORD_TOKEN from .env if present.
+"""
+
+import argparse
+import asyncio
+import json
+import os
+import sys
+from typing import Any
+
+import discord.http
+from discord.http import MultipartParameters
+from dotenv import load_dotenv
+
+# Load .env file if present (won't override existing env vars)
+load_dotenv()
+
+# Channel type constants
+TEXT = 0
+CATEGORY = 4
+FORUM = 15
+
+
+def get_token() -> str:
+    """Get Discord token from environment."""
+    token = os.environ.get("DISCORD_TOKEN", "")
+    if not token:
+        print("Error: DISCORD_TOKEN environment variable not set", file=sys.stderr)
+        sys.exit(1)
+    return token
+
+
+def output_json(data: Any) -> None:
+    """Output data as JSON."""
+    print(json.dumps(data, indent=2))
+
+
+async def get_http_client() -> discord.http.HTTPClient:
+    """Create and authenticate an HTTP client."""
+    loop = asyncio.get_running_loop()
+    http = discord.http.HTTPClient(loop)
+    await http.static_login(get_token())
+    return http
+
+
+async def cmd_get_guild(args: argparse.Namespace) -> None:
+    """Get the bot's guild ID."""
+    http = await get_http_client()
+    try:
+        guilds = await http.get_guilds(limit=1)
+        if not guilds:
+            print("Error: Bot is not in any guilds", file=sys.stderr)
+            sys.exit(1)
+        output_json(guilds[0])
+    finally:
+        await http.close()
+
+
+async def get_guild_id(http: discord.http.HTTPClient, guild_id: str | None) -> int:
+    """Get guild ID from argument or auto-detect."""
+    if guild_id:
+        return int(guild_id)
+    guilds = await http.get_guilds(limit=1)
+    if not guilds:
+        print("Error: Bot is not in any guilds", file=sys.stderr)
+        sys.exit(1)
+    return int(guilds[0]["id"])
+
+
+async def cmd_list_channels(args: argparse.Namespace) -> None:
+    """List all channels in the guild."""
+    http = await get_http_client()
+    try:
+        gid = await get_guild_id(http, args.guild_id)
+        channels = await http.get_all_guild_channels(gid)
+        output_json(channels)
+    finally:
+        await http.close()
+
+
+async def cmd_list_categories(args: argparse.Namespace) -> None:
+    """List category channels (type 4)."""
+    http = await get_http_client()
+    try:
+        gid = await get_guild_id(http, args.guild_id)
+        channels = await http.get_all_guild_channels(gid)
+        categories = [c for c in channels if c["type"] == CATEGORY]
+        output_json(categories)
+    finally:
+        await http.close()
+
+
+async def cmd_list_rooms(args: argparse.Namespace) -> None:
+    """List text channels (type 0)."""
+    http = await get_http_client()
+    try:
+        gid = await get_guild_id(http, args.guild_id)
+        channels = await http.get_all_guild_channels(gid)
+        rooms = [c for c in channels if c["type"] == TEXT]
+        output_json(rooms)
+    finally:
+        await http.close()
+
+
+async def cmd_list_forums(args: argparse.Namespace) -> None:
+    """List forum channels (type 15)."""
+    http = await get_http_client()
+    try:
+        gid = await get_guild_id(http, args.guild_id)
+        channels = await http.get_all_guild_channels(gid)
+        forums = [c for c in channels if c["type"] == FORUM]
+        output_json(forums)
+    finally:
+        await http.close()
+
+
+async def cmd_delete_channel(args: argparse.Namespace) -> None:
+    """Delete a channel."""
+    http = await get_http_client()
+    try:
+        result = await http.delete_channel(int(args.channel_id))
+        output_json(result)
+    finally:
+        await http.close()
+
+
+async def cmd_edit_topic(args: argparse.Namespace) -> None:
+    """Edit a channel's topic."""
+    http = await get_http_client()
+    try:
+        result = await http.edit_channel(int(args.channel_id), topic=args.topic)
+        output_json(result)
+    finally:
+        await http.close()
+
+
+async def cmd_create_channel(args: argparse.Namespace) -> None:
+    """Create a text channel."""
+    http = await get_http_client()
+    try:
+        kwargs: dict[str, Any] = {"name": args.name}
+        if args.parent:
+            kwargs["parent_id"] = int(args.parent)
+        result = await http.create_channel(
+            int(args.guild_id), channel_type=TEXT, **kwargs
+        )
+        output_json(result)
+    finally:
+        await http.close()
+
+
+async def cmd_rename_channel(args: argparse.Namespace) -> None:
+    """Rename a channel."""
+    http = await get_http_client()
+    try:
+        result = await http.edit_channel(int(args.channel_id), name=args.name)
+        output_json(result)
+    finally:
+        await http.close()
+
+
+async def cmd_unpin(args: argparse.Namespace) -> None:
+    """Unpin a message."""
+    http = await get_http_client()
+    try:
+        await http.unpin_message(int(args.channel_id), int(args.message_id))
+        output_json({"success": True})
+    finally:
+        await http.close()
+
+
+async def cmd_create_thread(args: argparse.Namespace) -> None:
+    """Create a forum thread."""
+    http = await get_http_client()
+    try:
+        params = MultipartParameters(
+            payload={"name": args.name, "message": {"content": args.content}},
+            multipart=None,
+            files=None,
+        )
+        result = await http.start_thread_in_forum(int(args.forum_id), params=params)
+        output_json(result)
+    finally:
+        await http.close()
+
+
+async def cmd_get_message(args: argparse.Namespace) -> None:
+    """Get a specific message from a channel/thread."""
+    http = await get_http_client()
+    try:
+        result = await http.get_message(int(args.channel_id), int(args.message_id))
+        output_json(result)
+    finally:
+        await http.close()
+
+
+async def cmd_get_messages(args: argparse.Namespace) -> None:
+    """Get recent messages from a channel/thread."""
+    http = await get_http_client()
+    try:
+        limit = int(args.limit) if args.limit else 10
+        result = await http.logs_from(int(args.channel_id), limit=limit)
+        output_json(result)
+    finally:
+        await http.close()
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(
+        description="Discord E2E CLI - REST API operations for testing and debugging"
+    )
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    # get-guild
+    subparsers.add_parser("get-guild", help="Get bot's guild ID")
+
+    # list-channels
+    p = subparsers.add_parser("list-channels", help="List all channels")
+    p.add_argument("guild_id", nargs="?", help="Guild ID (auto-detected if omitted)")
+
+    # list-categories
+    p = subparsers.add_parser("list-categories", help="List category channels (type 4)")
+    p.add_argument("guild_id", nargs="?", help="Guild ID (auto-detected if omitted)")
+
+    # list-rooms
+    p = subparsers.add_parser("list-rooms", help="List text channels (type 0)")
+    p.add_argument("guild_id", nargs="?", help="Guild ID (auto-detected if omitted)")
+
+    # list-forums
+    p = subparsers.add_parser("list-forums", help="List forum channels (type 15)")
+    p.add_argument("guild_id", nargs="?", help="Guild ID (auto-detected if omitted)")
+
+    # delete-channel
+    p = subparsers.add_parser("delete-channel", help="Delete a channel")
+    p.add_argument("channel_id", help="Channel ID to delete")
+
+    # edit-topic
+    p = subparsers.add_parser("edit-topic", help="Edit channel topic")
+    p.add_argument("channel_id", help="Channel ID")
+    p.add_argument("topic", help="New topic text")
+
+    # create-channel
+    p = subparsers.add_parser("create-channel", help="Create text channel")
+    p.add_argument("guild_id", help="Guild ID")
+    p.add_argument("name", help="Channel name")
+    p.add_argument("--parent", help="Parent category ID")
+
+    # rename-channel
+    p = subparsers.add_parser("rename-channel", help="Rename a channel")
+    p.add_argument("channel_id", help="Channel ID")
+    p.add_argument("name", help="New channel name")
+
+    # unpin
+    p = subparsers.add_parser("unpin", help="Unpin a message")
+    p.add_argument("channel_id", help="Channel ID")
+    p.add_argument("message_id", help="Message ID to unpin")
+
+    # create-thread
+    p = subparsers.add_parser("create-thread", help="Create forum thread")
+    p.add_argument("forum_id", help="Forum channel ID")
+    p.add_argument("name", help="Thread name")
+    p.add_argument("content", help="Initial message content")
+
+    # get-message
+    p = subparsers.add_parser("get-message", help="Get a specific message")
+    p.add_argument("channel_id", help="Channel/thread ID")
+    p.add_argument("message_id", help="Message ID")
+
+    # get-messages
+    p = subparsers.add_parser("get-messages", help="Get recent messages from channel/thread")
+    p.add_argument("channel_id", help="Channel/thread ID")
+    p.add_argument("--limit", help="Number of messages (default 10)")
+
+    args = parser.parse_args()
+
+    commands = {
+        "get-guild": cmd_get_guild,
+        "list-channels": cmd_list_channels,
+        "list-categories": cmd_list_categories,
+        "list-rooms": cmd_list_rooms,
+        "list-forums": cmd_list_forums,
+        "delete-channel": cmd_delete_channel,
+        "edit-topic": cmd_edit_topic,
+        "create-channel": cmd_create_channel,
+        "rename-channel": cmd_rename_channel,
+        "unpin": cmd_unpin,
+        "create-thread": cmd_create_thread,
+        "get-message": cmd_get_message,
+        "get-messages": cmd_get_messages,
+    }
+
+    asyncio.run(commands[args.command](args))
+
+
+if __name__ == "__main__":
+    main()

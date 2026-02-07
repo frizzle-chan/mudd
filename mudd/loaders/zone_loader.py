@@ -7,12 +7,11 @@ import subprocess
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal, cast, get_args, overload
+from typing import cast, get_args
 
 import asyncpg
-import discord
 
-from mudd.services.entity import FocusMode, Rarity
+from mudd.utils.text import Rarity
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +20,7 @@ VALID_RARITIES: set[str] = set(get_args(Rarity))
 
 
 @dataclass
-class Zone:
+class ZoneData:
     """Zone data from rec file."""
 
     id: str
@@ -30,7 +29,7 @@ class Zone:
 
 
 @dataclass
-class Room:
+class RoomData:
     """Room data from rec file."""
 
     id: str
@@ -42,7 +41,7 @@ class Room:
 
 
 @dataclass
-class Entity:
+class EntityData:
     """Entity data from rec file."""
 
     id: str
@@ -51,7 +50,6 @@ class Entity:
     container_id: str | None = None
     room: str | None = None
     contents_visible: bool | None = None
-    focus_mode: FocusMode | None = None  # None = inherit from prototype
     rarity: Rarity = "none"
     tags: list[str] | None = None  # Space-separated in rec files
     description_short: str | None = None
@@ -67,7 +65,7 @@ class Entity:
 
 
 @dataclass
-class SpawningPool:
+class SpawningPoolData:
     """Spawning pool data from rec file."""
 
     id: str
@@ -115,22 +113,22 @@ def _load_records_from_rec[T](
     return records
 
 
-def _parse_zone_row(row: dict[str, str]) -> Zone:
-    """Parse a CSV row into a Zone object."""
-    return Zone(
+def _parse_zone_row(row: dict[str, str]) -> ZoneData:
+    """Parse a CSV row into a ZoneData object."""
+    return ZoneData(
         id=row["Id"],
         name=row["Name"],
         description=row.get("Description") or None,
     )
 
 
-def _parse_room_row(row: dict[str, str]) -> Room:
-    """Parse a CSV row into a Room object."""
+def _parse_room_row(row: dict[str, str]) -> RoomData:
+    """Parse a CSV row into a RoomData object."""
     has_voice_str = row.get("HasVoice", "").lower()
     has_voice = has_voice_str in ("yes", "true", "1")
     is_default_str = row.get("IsDefault", "").lower()
     is_default = is_default_str in ("yes", "true", "1")
-    return Room(
+    return RoomData(
         id=row["Id"],
         name=row["Name"],
         description=row["Description"],
@@ -140,18 +138,18 @@ def _parse_room_row(row: dict[str, str]) -> Room:
     )
 
 
-def load_zones_from_rec(world_file: Path) -> list[Zone]:
+def load_zones_from_rec(world_file: Path) -> list[ZoneData]:
     """Load Zone records from a world rec file using rec2csv."""
     return _load_records_from_rec(world_file, "Zone", _parse_zone_row)
 
 
-def load_rooms_from_rec(world_file: Path) -> list[Room]:
+def load_rooms_from_rec(world_file: Path) -> list[RoomData]:
     """Load Room records from a world rec file using rec2csv."""
     return _load_records_from_rec(world_file, "Room", _parse_room_row)
 
 
-def _parse_entity_row(row: dict[str, str]) -> Entity:
-    """Parse a CSV row into an Entity object."""
+def _parse_entity_row(row: dict[str, str]) -> EntityData:
+    """Parse a CSV row into an EntityData object."""
     # Parse boolean with None support
     contents_visible_str = row.get("ContentsVisible", "").lower()
     contents_visible: bool | None = None
@@ -159,17 +157,6 @@ def _parse_entity_row(row: dict[str, str]) -> Entity:
         contents_visible = True
     elif contents_visible_str in ("no", "false", "0"):
         contents_visible = False
-
-    # Parse focus_mode - None means inherit from prototype
-    focus_mode: FocusMode | None = None
-    focus_mode_raw = row.get("FocusMode", "").lower()
-    if focus_mode_raw:
-        if focus_mode_raw not in ("none", "container"):
-            raise ValueError(
-                f"Entity '{row['Id']}' has invalid FocusMode '{focus_mode_raw}'. "
-                f"Valid values: none, container"
-            )
-        focus_mode = cast(FocusMode, focus_mode_raw)
 
     # Parse rarity with default and validation
     rarity_raw = row.get("Rarity", "").lower() or "none"
@@ -184,14 +171,13 @@ def _parse_entity_row(row: dict[str, str]) -> Entity:
     tags_str = row.get("Tags", "").strip()
     tags = tags_str.split() if tags_str else None
 
-    return Entity(
+    return EntityData(
         id=row["Id"],
         name=row["Name"],
         prototype_id=row.get("Prototype") or None,
         container_id=row.get("Container") or None,
         room=row.get("Room") or None,
         contents_visible=contents_visible,
-        focus_mode=focus_mode,
         rarity=rarity,
         tags=tags,
         description_short=row.get("DescriptionShort") or None,
@@ -207,13 +193,13 @@ def _parse_entity_row(row: dict[str, str]) -> Entity:
     )
 
 
-def load_entities_from_rec(world_file: Path) -> list[Entity]:
+def load_entities_from_rec(world_file: Path) -> list[EntityData]:
     """Load Entity records from a world rec file using rec2csv."""
     return _load_records_from_rec(world_file, "Entity", _parse_entity_row)
 
 
-def _parse_spawning_pool_row(row: dict[str, str]) -> SpawningPool:
-    """Parse a CSV row into a SpawningPool object."""
+def _parse_spawning_pool_row(row: dict[str, str]) -> SpawningPoolData:
+    """Parse a CSV row into a SpawningPoolData object."""
     # Parse max_count with default
     max_count_str = row.get("MaxCount", "1")
     try:
@@ -238,7 +224,7 @@ def _parse_spawning_pool_row(row: dict[str, str]) -> SpawningPool:
     no_duplicates_str = row.get("NoDuplicates", "").lower()
     no_duplicates = no_duplicates_str in ("yes", "true", "1")
 
-    return SpawningPool(
+    return SpawningPoolData(
         id=row["Id"],
         room=row["Room"],
         tag_query=row["TagQuery"],
@@ -249,7 +235,7 @@ def _parse_spawning_pool_row(row: dict[str, str]) -> SpawningPool:
     )
 
 
-def load_spawning_pools_from_rec(world_file: Path) -> list[SpawningPool]:
+def load_spawning_pools_from_rec(world_file: Path) -> list[SpawningPoolData]:
     """Load SpawningPool records from a world rec file using rec2csv.
 
     Returns empty list if no SpawningPool records exist (graceful handling).
@@ -263,7 +249,7 @@ def load_spawning_pools_from_rec(world_file: Path) -> list[SpawningPool]:
         return []
 
 
-def get_default_room(rooms: list[Room]) -> str:
+def get_default_room(rooms: list[RoomData]) -> str:
     """Get the default room ID from loaded rooms.
 
     Raises ValueError if no default or multiple defaults found.
@@ -279,8 +265,8 @@ def get_default_room(rooms: list[Room]) -> str:
 
 async def sync_zones_and_rooms_to_db(
     pool: asyncpg.Pool,
-    zones: list[Zone],
-    rooms: list[Room],
+    zones: list[ZoneData],
+    rooms: list[RoomData],
     default_room: str,
 ) -> dict[str, int]:
     """
@@ -376,313 +362,3 @@ async def sync_zones_and_rooms_to_db(
 
     logger.info(f"Synced {stats['zones']} zones and {stats['rooms']} rooms to database")
     return stats
-
-
-@overload
-def _find_channels_by_name(
-    guild: discord.Guild,
-    channel_name: str,
-    channel_type: Literal["text"],
-) -> list[discord.TextChannel]: ...
-
-
-@overload
-def _find_channels_by_name(
-    guild: discord.Guild,
-    channel_name: str,
-    channel_type: Literal["voice"],
-) -> list[discord.VoiceChannel]: ...
-
-
-def _find_channels_by_name(
-    guild: discord.Guild,
-    channel_name: str,
-    channel_type: Literal["text", "voice"],
-) -> list[discord.TextChannel] | list[discord.VoiceChannel]:
-    """
-    Search entire guild for channels with the given name.
-
-    Args:
-        guild: Discord guild to search
-        channel_name: Name of channel to find
-        channel_type: Type of channel to search for ("text" or "voice")
-
-    Returns:
-        List of matching channels sorted by ID (oldest first).
-    """
-    channels = guild.text_channels if channel_type == "text" else guild.voice_channels
-
-    matches = [ch for ch in channels if ch.name == channel_name]
-    # Sort by ID (ascending) - smaller ID = older channel
-    matches.sort(key=lambda ch: ch.id)
-    return cast(list[discord.TextChannel] | list[discord.VoiceChannel], matches)
-
-
-async def _sync_channel(
-    guild: discord.Guild,
-    room: Room,
-    category: discord.CategoryChannel,
-    stats: dict[str, int],
-    channel_type: Literal["text", "voice"],
-) -> None:
-    """
-    Sync a single channel (text or voice) for a room.
-
-    Handles finding existing channels anywhere in the guild, deleting
-    duplicates, moving channels to the correct category, and creating
-    new channels when needed.
-
-    Args:
-        guild: Discord guild to sync
-        room: Room data from rec file
-        category: Target category for the channel
-        stats: Stats dictionary to update with operation counts
-        channel_type: Type of channel to sync ("text" or "voice")
-    """
-    matches = _find_channels_by_name(guild, room.id, channel_type)
-    type_label = "text" if channel_type == "text" else "voice"
-    stats_prefix = "" if channel_type == "text" else "voice_"
-
-    if len(matches) == 0:
-        # No channel exists anywhere - create it
-        try:
-            if channel_type == "text":
-                await category.create_text_channel(room.id, topic=room.description)
-            else:
-                await category.create_voice_channel(room.id)
-            stats[f"{stats_prefix}channels_created"] += 1
-            logger.info(f"Created {type_label} channel: {room.id} in {category.name}")
-        except discord.HTTPException as e:
-            stats[f"{stats_prefix}channels_failed"] += 1
-            logger.error(f"Failed to create {type_label} channel {room.id}: {e}")
-        return
-
-    # Keep oldest channel (first in list, sorted by ID)
-    channel = matches[0]
-
-    # Delete any duplicates (keep oldest, delete newer)
-    for duplicate in matches[1:]:
-        old_category = duplicate.category
-        old_category_name = old_category.name if old_category else "None"
-
-        # For voice channels, move connected users to the kept channel first
-        if (
-            channel_type == "voice"
-            and isinstance(duplicate, discord.VoiceChannel)
-            and isinstance(channel, discord.VoiceChannel)
-        ):
-            for member in duplicate.members:
-                try:
-                    await member.move_to(channel)
-                    logger.info(
-                        f"Moved {member.name} from duplicate voice channel "
-                        f"to kept channel {room.id}"
-                    )
-                except discord.HTTPException as e:
-                    logger.error(f"Failed to move {member.name}: {e}")
-
-        try:
-            await duplicate.delete(
-                reason=f"Duplicate {type_label} channel cleanup during sync"
-            )
-            stats["channels_deleted"] += 1
-            logger.info(
-                f"Deleted duplicate {type_label} channel: {room.id} "
-                f"(ID: {duplicate.id}) from {old_category_name}"
-            )
-        except discord.HTTPException as e:
-            logger.error(
-                f"Failed to delete duplicate {type_label} channel {room.id} "
-                f"(ID: {duplicate.id}): {e}"
-            )
-
-    # Move if in wrong category
-    if channel.category_id != category.id:
-        old_category = channel.category
-        old_category_name = old_category.name if old_category else "None"
-        try:
-            await channel.edit(category=category)
-            stats[f"{stats_prefix}channels_moved"] += 1
-            logger.info(
-                f"Moved {type_label} channel: {room.id} from {old_category_name} "
-                f"to {category.name}"
-            )
-        except discord.HTTPException as e:
-            logger.error(
-                f"Failed to move {type_label} channel {room.id} to {category.name}: {e}"
-            )
-
-    # Sync topic for text channels only
-    if (
-        channel_type == "text"
-        and isinstance(channel, discord.TextChannel)
-        and channel.topic != room.description
-    ):
-        try:
-            await channel.edit(topic=room.description)
-            stats["topics_updated"] += 1
-            logger.debug(f"Updated topic for #{room.id}")
-        except discord.HTTPException as e:
-            logger.error(f"Failed to update topic for {room.id}: {e}")
-
-
-async def sync_zones_and_rooms_to_discord(
-    guild: discord.Guild,
-    zones: list[Zone],
-    rooms: list[Room],
-    console_channel_name: str = "console",
-    seen_orphans: set[tuple[int, str, str]] | None = None,
-) -> tuple[dict[str, int], list[tuple[int, str, str]]]:
-    """
-    Sync zones and rooms to Discord (categories and channels).
-
-    Creates missing Discord categories and channels, syncs channel topics.
-    Moves channels that exist in wrong categories to the correct category.
-    Detects orphan channels (in zone categories but not in rec files).
-
-    Note: Database sync must be done separately via sync_zones_and_rooms_to_db()
-    before calling this function.
-
-    Args:
-        guild: Discord guild to sync
-        zones: List of Zone objects (pre-loaded from rec file)
-        rooms: List of Room objects (pre-loaded from rec file)
-        console_channel_name: Channel name for orphan notifications
-        seen_orphans: Set of previously seen orphans. If provided, only NEW
-            orphans are reported to console. Set is mutated to include new orphans.
-
-    Returns:
-        Tuple of (stats dict, orphans list).
-        Orphans are [(guild_id, channel_name, category_name), ...].
-    """
-    stats: dict[str, int] = {
-        "categories_created": 0,
-        "channels_created": 0,
-        "channels_failed": 0,
-        "channels_moved": 0,
-        "channels_deleted": 0,
-        "voice_channels_created": 0,
-        "voice_channels_failed": 0,
-        "voice_channels_moved": 0,
-        "topics_updated": 0,
-        "orphans_found": 0,
-    }
-
-    if not zones:
-        logger.warning("No zones found - skipping Discord sync")
-        return stats, []
-
-    room_ids = {r.id for r in rooms}
-
-    # Build lookup from normalized zone name to zone id
-    zone_name_to_id: dict[str, str] = {}
-    for zone in zones:
-        normalized = zone.name.lower().replace(" ", "-")
-        zone_name_to_id[normalized] = zone.id
-
-    # Discord sync: create categories and channels
-    # Build zone -> category mapping by matching normalized names
-    zone_to_category: dict[str, discord.CategoryChannel] = {}
-    for category in guild.categories:
-        category_normalized = category.name.lower().replace(" ", "-")
-        if category_normalized in zone_name_to_id:
-            zone_id = zone_name_to_id[category_normalized]
-            zone_to_category[zone_id] = category
-
-    # Create missing categories
-    for zone in zones:
-        if zone.id not in zone_to_category:
-            # Create category with @everyone denied view_channel (fog of war)
-            overwrites = {
-                guild.default_role: discord.PermissionOverwrite(view_channel=False)
-            }
-            category = await guild.create_category(zone.name, overwrites=overwrites)
-            zone_to_category[zone.id] = category
-            stats["categories_created"] += 1
-            logger.info(f"Created category: {zone.name}")
-
-    # Create/move channels and sync topics
-    for room in rooms:
-        category = zone_to_category.get(room.zone_id)
-        if not category:
-            logger.warning(
-                f"No category found for room {room.id} in zone {room.zone_id}"
-            )
-            continue
-
-        # Sync text channel
-        await _sync_channel(
-            guild=guild,
-            room=room,
-            category=category,
-            stats=stats,
-            channel_type="text",
-        )
-
-        # Sync voice channel if room has voice
-        if room.has_voice:
-            await _sync_channel(
-                guild=guild,
-                room=room,
-                category=category,
-                stats=stats,
-                channel_type="voice",
-            )
-
-    # Find orphan channels (in zone categories but not in rec files)
-    orphans: list[tuple[int, str, str]] = []  # (guild_id, channel_name, category_name)
-    for zone in zones:
-        category = zone_to_category.get(zone.id)
-        if not category:
-            continue
-
-        for channel in category.channels:
-            # Skip channels that match a known room (text or voice)
-            if channel.name in room_ids:
-                continue
-            orphans.append((guild.id, channel.name, category.name))
-
-    stats["orphans_found"] = len(orphans)
-
-    # Filter to new orphans only (if tracking)
-    if seen_orphans is None:
-        seen_orphans = set()
-    new_orphans = [o for o in orphans if o not in seen_orphans]
-
-    # Report NEW orphans to console channel
-    if new_orphans:
-        console_channel = discord.utils.get(
-            guild.text_channels, name=console_channel_name
-        )
-        if console_channel:
-            orphan_list = "\n".join(
-                f"- #{name} in {cat}" for _, name, cat in new_orphans
-            )
-            msg = (
-                f"**Orphan channels detected** (not in .rec files):\n{orphan_list}\n\n"
-                "Consider deleting these channels or adding them to the world file."
-            )
-            await console_channel.send(msg)
-            logger.info(
-                f"Reported {len(new_orphans)} new orphan channels "
-                f"to #{console_channel_name}"
-            )
-        else:
-            logger.warning(
-                f"Console channel #{console_channel_name} not found - "
-                f"cannot report {len(new_orphans)} orphan channels"
-            )
-        # Update seen orphans set
-        seen_orphans.update(new_orphans)
-
-    logger.info(
-        f"Discord sync complete: {stats['categories_created']} categories, "
-        f"{stats['channels_created']} channels created, "
-        f"{stats['channels_moved']} channels moved, "
-        f"{stats['channels_deleted']} channels deleted, "
-        f"{stats['voice_channels_created']} voice channels created, "
-        f"{stats['voice_channels_moved']} voice channels moved, "
-        f"{stats['topics_updated']} topics updated, {stats['orphans_found']} orphans"
-    )
-
-    return stats, orphans
