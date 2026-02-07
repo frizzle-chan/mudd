@@ -20,8 +20,8 @@ from mudd.scene import Scene
 from mudd.views import ViewEntity
 
 if TYPE_CHECKING:
+    from mudd.caches.autocomplete import AutocompleteCache
     from mudd.caches.user import UserCache
-    from mudd.cogs.autocomplete_cache import AutocompleteCache
 
 logger = logging.getLogger(__name__)
 

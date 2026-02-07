@@ -17,8 +17,8 @@ from discord.ext import commands, tasks
 
 if TYPE_CHECKING:
     from mudd.bot import MuddBot
+    from mudd.caches.autocomplete import AutocompleteCache
     from mudd.caches.user import UserCache
-    from mudd.cogs.autocomplete_cache import AutocompleteCache
 
 from mudd.events import (
     InventorySyncEvent,

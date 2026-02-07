@@ -5,7 +5,7 @@ from uuid import UUID, uuid4
 
 from discord import app_commands
 
-from mudd.cogs.autocomplete_cache import (
+from mudd.caches.autocomplete import (
     AutocompleteCache,
     _make_choice,
 )

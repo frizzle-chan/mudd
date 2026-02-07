@@ -16,8 +16,8 @@ from mudd.observers import EffectsObserver
 from mudd.scene import Scene
 
 if TYPE_CHECKING:
+    from mudd.caches.autocomplete import AutocompleteCache
     from mudd.caches.user import UserCache
-    from mudd.cogs.autocomplete_cache import AutocompleteCache
 
 logger = logging.getLogger(__name__)
 

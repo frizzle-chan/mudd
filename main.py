@@ -7,8 +7,8 @@ import discord
 from dotenv import load_dotenv
 
 from mudd.bot import MuddBot
+from mudd.caches.autocomplete import AutocompleteCache
 from mudd.caches.user import UserCache
-from mudd.cogs.autocomplete_cache import AutocompleteCache
 from mudd.cogs.economy import Economy
 from mudd.cogs.interact import Interact
 from mudd.cogs.look import Look
