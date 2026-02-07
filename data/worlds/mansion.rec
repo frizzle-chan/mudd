@@ -772,7 +772,7 @@ Prototype: painting
 Tags: gallery_painting
 Rarity: uncommon
 DescriptionShort: {{ e.name }} (artsylyds)
-DescriptionLong: [Art by artsylyds.](https://img.frizzle.dev/mudd/frizzle_artsylyds_the_scream.png)
+DescriptionLong: Art by artsylyds. [The Scream Painting](https://img.frizzle.dev/mudd/frizzle_artsylyds_the_scream.png)
 
 Id: frizzle_tattie_3up_png
 Name: It's Frizzle Painting
@@ -780,7 +780,7 @@ Prototype: painting
 Tags: gallery_painting
 Rarity: common
 DescriptionShort: {{ e.name }} (tattie)
-DescriptionLong: [Art by tattie.](https://img.frizzle.dev/mudd/frizzle_tattie_3up.png)
+DescriptionLong: Art by tattie. [It's Frizzle Painting](https://img.frizzle.dev/mudd/frizzle_tattie_3up.png)
 
 Id: frizzle_nebula_nyafriz_png
 Name: Frizzle on the Phone Painting
@@ -788,7 +788,7 @@ Prototype: painting
 Tags: gallery_painting
 Rarity: uncommon
 DescriptionShort: {{ e.name }} (nebula)
-DescriptionLong: [Art by nebula.](https://img.frizzle.dev/mudd/frizzle_nebula_nyafriz.png) Frizzle on da phone fo today
+DescriptionLong: Art by nebula. [Frizzle on the Phone Painting](https://img.frizzle.dev/mudd/frizzle_nebula_nyafriz.png) Frizzle on da phone fo today
 
 Id: frizzle_applekouhai_chair_jpg
 Name: Frizzle Chair Painting
@@ -796,7 +796,7 @@ Prototype: painting
 Tags: gallery_painting
 Rarity: uncommon
 DescriptionShort: {{ e.name }} (applekouhai)
-DescriptionLong: [Art by applekouhai.](https://img.frizzle.dev/mudd/frizzle_applekouhai_chair.jpg)
+DescriptionLong: Art by applekouhai. [Frizzle Chair Painting](https://img.frizzle.dev/mudd/frizzle_applekouhai_chair.jpg)
 
 Id: frizzle_nebula_maid_png
 Name: Maid Portrait
@@ -804,7 +804,7 @@ Prototype: painting
 Tags: gallery_painting
 Rarity: common
 DescriptionShort: {{ e.name }} (nebula)
-DescriptionLong: [Art by nebula.](https://img.frizzle.dev/mudd/frizzle_nebula_maid.png)
+DescriptionLong: Art by nebula. [Maid Portrait](https://img.frizzle.dev/mudd/frizzle_nebula_maid.png)
 
 Id: frizzle_nebula_maid_shiny_gif
 Name: Maid Portrait (Holographic)
@@ -812,7 +812,7 @@ Prototype: painting
 Tags: gallery_painting
 Rarity: rare
 DescriptionShort: {{ e.name }} (nebula)
-DescriptionLong: [Art by nebula.](https://img.frizzle.dev/mudd/frizzle_nebula_maid_shiny.gif) It's shiny!
+DescriptionLong: Art by nebula. [Maid Portrait (Holographic)](https://img.frizzle.dev/mudd/frizzle_nebula_maid_shiny.gif) It's shiny!
 OnTouch: The surface shimmers under your fingertips, the glitter catching the light.
 
 Id: frizzle_nebula_maid_all4s_png
@@ -821,7 +821,7 @@ Prototype: painting
 Tags: gallery_painting
 Rarity: rare
 DescriptionShort: {{ e.name }} (nebula)
-DescriptionLong: [Art by nebula.](https://img.frizzle.dev/mudd/frizzle_nebula_maid_all4s.png)
+DescriptionLong: Art by nebula. [Maid on All Fours Painting](https://img.frizzle.dev/mudd/frizzle_nebula_maid_all4s.png)
 
 Id: frizzle_nebula_maid_all4s_shiny_gif
 Name: Maid on All Fours Painting (Holographic)
@@ -829,7 +829,7 @@ Prototype: painting
 Tags: gallery_painting
 Rarity: epic
 DescriptionShort: {{ e.name }} (nebula)
-DescriptionLong: [Art by nebula.](https://img.frizzle.dev/mudd/frizzle_nebula_maid_all4s_shiny.gif) 
+DescriptionLong: Art by nebula. [Maid on All Fours Painting (Holographic)](https://img.frizzle.dev/mudd/frizzle_nebula_maid_all4s_shiny.gif)
 OnTouch: The glitter seems to swirl under your touch. You've never seen anything so sparkly.
 OnLook: {{ e.description_long }} It's mesmerizing.
 
@@ -839,7 +839,7 @@ Prototype: painting
 Tags: gallery_painting
 Rarity: uncommon
 DescriptionShort: {{ e.name }} (applekouhai)
-DescriptionLong: [Art by applekouhai.](https://img.frizzle.dev/mudd/frizzle_applekouhai_kon.png)
+DescriptionLong: Art by applekouhai. [Kyoani Frizzle Painting](https://img.frizzle.dev/mudd/frizzle_applekouhai_kon.png)
 
 Id: frizzle_neomory_painting_png
 Name: Sunset with Ruby Painting
@@ -847,7 +847,7 @@ Prototype: painting
 Tags: gallery_painting
 Rarity: uncommon
 DescriptionShort: {{ e.name }} (neomory)
-DescriptionLong: [Art by neomory.](https://img.frizzle.dev/mudd/frizzle_neomory_painting.png)
+DescriptionLong: Art by neomory. [Sunset with Ruby Painting](https://img.frizzle.dev/mudd/frizzle_neomory_painting.png)
 
 Id: frizzle_been_drool_jpg
 Name: Seltzer Pour Painting
@@ -855,7 +855,7 @@ Prototype: painting
 Tags: gallery_painting
 Rarity: rare
 DescriptionShort: {{ e.name }} (been)
-DescriptionLong: [Art by been.](https://img.frizzle.dev/mudd/frizzle_been_drool.jpg)
+DescriptionLong: Art by been. [Seltzer Pour Painting](https://img.frizzle.dev/mudd/frizzle_been_drool.jpg)
 
 Id: frizzle_sanamaru1827_png
 Name: Frizzle Jump Painting
@@ -863,7 +863,7 @@ Prototype: painting
 Tags: gallery_painting
 Rarity: epic
 DescriptionShort: {{ e.name }} (sanamaru1827)
-DescriptionLong: [Art by sanamaru1827.](https://img.frizzle.dev/mudd/frizzle_sanamaru1827.png)
+DescriptionLong: Art by sanamaru1827. [Frizzle Jump Painting](https://img.frizzle.dev/mudd/frizzle_sanamaru1827.png)
 
 Id: frizzle_applekouhai_garfield_jpg
 Name: Garfield Frizzle Painting
@@ -871,7 +871,7 @@ Prototype: painting
 Tags: gallery_painting
 Rarity: legendary
 DescriptionShort: {{ e.name }} (applekouhai)
-DescriptionLong: [Art by applekouhai.](https://img.frizzle.dev/mudd/frizzle_applekouhai_garfield.jpg)
+DescriptionLong: Art by applekouhai. [Garfield Frizzle Painting](https://img.frizzle.dev/mudd/frizzle_applekouhai_garfield.jpg)
 OnUse: You begin to hate mondays.
 OnLook: {{ e.description_long }} The longer you stare, the more it stares back.
 OnTouch: The paint feels warm. Too warm.
