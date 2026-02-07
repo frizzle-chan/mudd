@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from functools import partial
+from typing import TYPE_CHECKING
 
 import asyncpg
 from discord import Interaction, app_commands
@@ -14,6 +15,9 @@ from mudd.commands import LookCommand
 from mudd.observers import EffectsObserver
 from mudd.scene import Scene
 
+if TYPE_CHECKING:
+    from mudd.cogs.autocomplete_cache import AutocompleteCache
+
 logger = logging.getLogger(__name__)
 
 
@@ -22,15 +26,19 @@ class Look(commands.Cog):
         self,
         bot: commands.Bot | None,
         pool: asyncpg.Pool,
+        autocomplete_cache: AutocompleteCache | None = None,
     ) -> None:
         self.bot = bot
         self._pool = pool
+        self._autocomplete_cache = autocomplete_cache
 
     async def entity_instance_id_autocomplete(
         self, interaction: Interaction, current: str
     ) -> list[app_commands.Choice[str]]:
         """Autocomplete for entity instance IDs the user can see."""
-        return await entity_instance_id_autocomplete(self._pool, interaction, current)
+        return await entity_instance_id_autocomplete(
+            self._pool, interaction, current, self._autocomplete_cache
+        )
 
     @app_commands.command(name="look", description="View surroundings or examine item")
     @app_commands.describe(entity_instance_query="Thing to examine")

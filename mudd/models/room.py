@@ -166,6 +166,28 @@ class Room:
         return True
 
     @classmethod
+    async def get_all(cls, pool: asyncpg.Pool) -> list[Room]:
+        """Get all rooms.
+
+        Args:
+            pool: Database connection pool
+
+        Returns:
+            List of all Room instances
+        """
+        rows = await pool.fetch("SELECT id, name, description, zone_id FROM rooms")
+        return [
+            cls(
+                id=row["id"],
+                name=row["name"],
+                description=row["description"],
+                zone_id=row["zone_id"],
+                _pool=pool,
+            )
+            for row in rows
+        ]
+
+    @classmethod
     async def get_all_zone_mappings(cls, pool: asyncpg.Pool) -> dict[str, str]:
         """Get a mapping of room IDs to their zone IDs.
 

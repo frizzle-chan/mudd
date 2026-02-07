@@ -1,19 +1,26 @@
 """Shared utilities for cogs."""
 
+from __future__ import annotations
+
 import asyncio
 import logging
 from collections.abc import Awaitable, Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 import asyncpg
+import discord
 from discord import Interaction, app_commands
 from rapidfuzz import fuzz
 
 from mudd.models import EntityInstance, Room
 from mudd.models.room import RoomEntityInstance
+from mudd.models.user import User
 from mudd.scene import Scene
 from mudd.views import ViewEntity
+
+if TYPE_CHECKING:
+    from mudd.cogs.autocomplete_cache import AutocompleteCache
 
 logger = logging.getLogger(__name__)
 
@@ -100,7 +107,10 @@ async def resolve_entity(
 
 
 async def entity_instance_id_autocomplete(
-    pool: asyncpg.Pool, interaction: Interaction, current: str
+    pool: asyncpg.Pool,
+    interaction: Interaction,
+    current: str,
+    autocomplete_cache: AutocompleteCache | None = None,
 ) -> list[app_commands.Choice[str]]:
     """Autocomplete callback for at parameter.
 
@@ -114,7 +124,31 @@ async def entity_instance_id_autocomplete(
     Values use scheme-based format:
     - entity://{uuid} for database entities
     - room://{room_id} for virtual room entities
+
+    When autocomplete_cache is provided and the user has typed nothing yet,
+    returns precomputed choices (2 lightweight queries instead of 5-8+).
     """
+    # Fast path: no input, not in a thread, cache available
+    if (
+        current == ""
+        and autocomplete_cache is not None
+        and not isinstance(interaction.channel, discord.Thread)
+    ):
+        room_id = await User.get_current_room(pool, interaction.user.id)
+        if room_id is not None:
+            focus_id = await User.get_active_focus_id(
+                pool, interaction.user.id, room_id
+            )
+            if focus_id is not None:
+                choices = autocomplete_cache.get_focus_choices(room_id, focus_id)
+                if choices is not None:
+                    return choices
+            else:
+                choices = autocomplete_cache.get_room_choices(room_id)
+                if choices is not None:
+                    return choices
+
+    # Slow path: build scene and query entities
     entities = await autocomplete_entities(
         await Scene.from_interaction(pool, interaction), current
     )

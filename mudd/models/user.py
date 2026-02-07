@@ -292,6 +292,47 @@ class User:
             updated_at=updated_at,
         )
 
+    @classmethod
+    async def get_active_focus_id(
+        cls, pool: asyncpg.Pool, user_id: int, room_id: str
+    ) -> UUID | None:
+        """Get the focused entity instance ID without loading the full entity.
+
+        Returns None if user has no focus, focus is in a different room,
+        or focus has expired.
+
+        Args:
+            pool: Database connection pool
+            user_id: Discord user ID
+            room_id: Expected room ID (must match entity's room)
+
+        Returns:
+            UUID of focused entity instance, or None
+        """
+        row = await pool.fetchrow(
+            """
+            SELECT uf.entity_instance_id, uf.updated_at
+            FROM user_focus uf
+            JOIN entity_instances ei ON ei.id = uf.entity_instance_id
+            WHERE uf.user_id = $1 AND ei.room = $2
+            """,
+            user_id,
+            room_id,
+        )
+
+        if not row:
+            return None
+
+        cutoff = datetime.now(UTC) - timedelta(minutes=FOCUS_TIMEOUT_MINUTES)
+        updated_at = row["updated_at"]
+        if updated_at.tzinfo is None:
+            updated_at = updated_at.replace(tzinfo=UTC)
+
+        if updated_at < cutoff:
+            return None
+
+        return row["entity_instance_id"]
+
     async def set_focus(self, entity_instance_id: UUID) -> None:
         """Establish focus on an entity instance.
 

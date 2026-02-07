@@ -1,7 +1,10 @@
 """Interact command for entity interactions."""
 
+from __future__ import annotations
+
 import logging
 from functools import partial
+from typing import TYPE_CHECKING
 
 import asyncpg
 import discord
@@ -14,18 +17,29 @@ from mudd.matching.verb_matcher import match_verb
 from mudd.observers import EffectsObserver
 from mudd.scene import Scene
 
+if TYPE_CHECKING:
+    from mudd.cogs.autocomplete_cache import AutocompleteCache
+
 logger = logging.getLogger(__name__)
 
 
 class Interact(commands.Cog):
-    def __init__(self, bot: commands.Bot | None, pool: asyncpg.Pool) -> None:
+    def __init__(
+        self,
+        bot: commands.Bot | None,
+        pool: asyncpg.Pool,
+        autocomplete_cache: AutocompleteCache | None = None,
+    ) -> None:
         self.bot = bot
         self._pool = pool
+        self._autocomplete_cache = autocomplete_cache
 
     async def target_autocomplete(
         self, interaction: Interaction, current: str
     ) -> list[app_commands.Choice[str]]:
-        return await entity_instance_id_autocomplete(self._pool, interaction, current)
+        return await entity_instance_id_autocomplete(
+            self._pool, interaction, current, self._autocomplete_cache
+        )
 
     @app_commands.command(name="interact", description="Interact with things")
     @app_commands.describe(
