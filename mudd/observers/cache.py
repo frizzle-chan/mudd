@@ -56,4 +56,8 @@ class CacheInvalidationObserver[K: Hashable]:
         keys = self._dirty.copy()
         self._dirty.clear()
         for key in keys:
-            await self._on_rebuild(key)
+            try:
+                await self._on_rebuild(key)
+            except Exception:
+                self._dirty.add(key)
+                raise

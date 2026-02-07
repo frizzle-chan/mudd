@@ -175,18 +175,19 @@ async def _compute_room_entries(
     Returns:
         Tuple of (room_choices, focus_choices_dict)
     """
-    # No-focus choices: room entity + visible entities
+    # Room choices: delegates contents_visible filtering to model
     visible = await room.get_visible_entities()
     room_entity = room.as_entity(focus_name=None)
-
     room_choices = entities_to_choices([room_entity, *visible])
 
-    # Focus choices for each top-level entity
+    # Focus choices: all contents regardless of contents_visible
+    top_level = [e for e in visible if e.container_entity_id is None]
+    contents_by_container = await room.get_entities_by_container()
+
     focus_choices: dict[tuple[str, str], list[app_commands.Choice[str]]] = {}
-    top_level = await EntityInstance.get_top_level_by_room(pool, room)
     for entity in top_level:
         focus_room_entity = room.as_entity(focus_name=entity.name)
-        contents = await entity.get_contents()
+        contents = contents_by_container.get(entity.entity.id, [])
         focus_choices[(room.id, str(entity.instance_id))] = entities_to_choices(
             [focus_room_entity, entity, *contents]
         )

@@ -72,7 +72,7 @@ class UserCache:
             """
             SELECT u.id,
                    u.current_room,
-                   uf.entity_instance_id AS focus_id,
+                   ei.id AS focus_id,
                    uf.updated_at         AS focus_updated_at
             FROM users u
             LEFT JOIN user_focus uf
