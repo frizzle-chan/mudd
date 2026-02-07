@@ -296,7 +296,7 @@ DescriptionShort: a rickety {{ e.name }}
 DescriptionLong: A simple bamboo fishing pole held together with twine. It's seen better days, but it'll do.
 OnTouch: The bamboo flexes slightly under your grip. It smells like river mud.
 OnUse: You give the {{ e.name }} a practice cast. Swoosh.
-OnFish: You can't fish with the pole itself! Try `/interact fish` near some water.
+OnFish: Try `/interact fish` near some water.
 OnTake: {{ effects.pickup() }}{{ effects.broadcast(user ~ " grabs " ~ e ~ ".") }}You grab the {{ e.name }}.
 OnDrop: {% if container %}You lean the {{ e.name }} against the *{{ container.name }}*.{% else %}You set the {{ e.name }} down.{% endif %}{{ effects.drop() }}{{ effects.broadcast(user ~ " puts down " ~ e ~ ".") }}
 
@@ -309,7 +309,7 @@ DescriptionShort: a sleek {{ e.name }}
 DescriptionLong: A professional-grade carbon fiber fishing rod with a smooth reel mechanism. Lightweight and responsive. Someone paid good money for this.
 OnTouch: The carbon fiber is smooth and impossibly light.
 OnUse: You give the {{ e.name }} a test flick. It whips through the air with a satisfying *thwip*.
-OnFish: You can't fish with the pole itself! Try `/interact fish` near some water.
+OnFish: Try `/interact fish` near some water.
 OnTake: {{ effects.pickup() }}{{ effects.broadcast("**" ~ user ~ "** picks up " ~ e ~ ". Nice rod!") }}You pick up the {{ e.name }}.
 OnDrop: {% if container %}You carefully place the {{ e.name }} in the *{{ container.name }}*.{% else %}You set the {{ e.name }} down carefully.{% endif %}{{ effects.drop() }}{{ effects.broadcast(user ~ " puts down " ~ e ~ ".") }}
 
@@ -322,7 +322,7 @@ DescriptionShort: a dazzling {{ e.name }} that radiates wealth
 DescriptionLong: An ornate fishing rod plated in 24k gold with a jewel-encrusted reel. It's completely impractical but absolutely magnificent. The kind of thing a billionaire would use to fish from their yacht.
 OnTouch: The gold is warm to the touch. You can see your reflection in the polished surface.
 OnUse: You give the {{ e.name }} a regal flourish. You feel like royalty.
-OnFish: You can't fish with the pole itself! Try `/interact fish` near some water.
+OnFish: Try `/interact fish` near some water.
 OnTake: {{ effects.pickup() }}{{ effects.broadcast("**" ~ user ~ "** picks up " ~ e ~ "! It gleams brilliantly!") }}You claim the {{ e.name }}. It's heavier than you expected.
 OnDrop: {% if container %}You place the {{ e.name }} reverently into the *{{ container.name }}*.{% else %}You set the {{ e.name }} down. It glimmers on the ground.{% endif %}{{ effects.drop() }}{{ effects.broadcast("**" ~ user ~ "** parts with " ~ e ~ ".") }}
 
