@@ -13,6 +13,7 @@ import asyncpg
 from mudd.events import (
     BalanceChangedEvent,
     BroadcastEvent,
+    FocusChangedEvent,
     Observer,
     UserLocationSyncEvent,
     UserMovedEvent,
@@ -351,10 +352,14 @@ class User:
             self.id,
             entity_instance_id,
         )
+        for observer in self._observers:
+            observer.notify(FocusChangedEvent(user_id=self.id))
 
     async def clear_focus(self) -> None:
         """Clear user's focus."""
         await self._pool.execute("DELETE FROM user_focus WHERE user_id = $1", self.id)
+        for observer in self._observers:
+            observer.notify(FocusChangedEvent(user_id=self.id))
 
     async def refresh_focus(self) -> None:
         """Update the timestamp on user's focus to prevent timeout."""

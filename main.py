@@ -7,6 +7,7 @@ import discord
 from dotenv import load_dotenv
 
 from mudd.bot import MuddBot
+from mudd.caches.user import UserCache
 from mudd.cogs.autocomplete_cache import AutocompleteCache
 from mudd.cogs.economy import Economy
 from mudd.cogs.interact import Interact
@@ -63,13 +64,14 @@ async def setup_hook():
     # Create shared caches (rebuilt by Sync cog on startup)
     room_cache = RoomChannelCache(pool)
     autocomplete_cache = AutocompleteCache()
+    user_cache = UserCache()
 
     # Create cogs with explicit dependencies
-    await bot.add_cog(Look(bot, pool, autocomplete_cache))
-    await bot.add_cog(Interact(bot, pool, autocomplete_cache))
+    await bot.add_cog(Look(bot, pool, autocomplete_cache, user_cache))
+    await bot.add_cog(Interact(bot, pool, autocomplete_cache, user_cache))
     await bot.add_cog(Ping(bot))
-    await bot.add_cog(Movement(bot, pool, room_cache))
-    await bot.add_cog(Sync(bot, pool, room_cache, autocomplete_cache))
+    await bot.add_cog(Movement(bot, pool, room_cache, user_cache))
+    await bot.add_cog(Sync(bot, pool, room_cache, autocomplete_cache, user_cache))
     await bot.add_cog(Economy(bot, pool))
 
 

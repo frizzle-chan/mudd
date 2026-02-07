@@ -20,6 +20,7 @@ from mudd.scene import Scene
 from mudd.views import ViewEntity
 
 if TYPE_CHECKING:
+    from mudd.caches.user import UserCache
     from mudd.cogs.autocomplete_cache import AutocompleteCache
 
 logger = logging.getLogger(__name__)
@@ -111,6 +112,7 @@ async def entity_instance_id_autocomplete(
     interaction: Interaction,
     current: str,
     autocomplete_cache: AutocompleteCache | None = None,
+    user_cache: UserCache | None = None,
 ) -> list[app_commands.Choice[str]]:
     """Autocomplete callback for at parameter.
 
@@ -125,15 +127,31 @@ async def entity_instance_id_autocomplete(
     - entity://{uuid} for database entities
     - room://{room_id} for virtual room entities
 
-    When autocomplete_cache is provided and the user has typed nothing yet,
-    returns precomputed choices (2 lightweight queries instead of 5-8+).
+    When both caches are provided and the user has typed nothing yet,
+    returns precomputed choices with zero database queries.
     """
-    # Fast path: no input, not in a thread, cache available
+    # Fast path: no input, not in a thread, caches available
     if (
         current == ""
         and autocomplete_cache is not None
         and not isinstance(interaction.channel, discord.Thread)
     ):
+        # Try fully cached path (zero queries) via user cache
+        if user_cache is not None:
+            state = user_cache.get(interaction.user.id)
+            if state is not None:
+                if state.focus_id is not None:
+                    choices = autocomplete_cache.get_focus_choices(
+                        state.current_room, state.focus_id
+                    )
+                    if choices is not None:
+                        return choices
+                else:
+                    choices = autocomplete_cache.get_room_choices(state.current_room)
+                    if choices is not None:
+                        return choices
+
+        # Fallback: user cache miss, try with DB queries (2 queries)
         room_id = await User.get_current_room(pool, interaction.user.id)
         if room_id is not None:
             focus_id = await User.get_active_focus_id(

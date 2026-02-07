@@ -101,6 +101,17 @@ class EntityDestroyedEvent:
 
 
 @dataclass(frozen=True, slots=True)
+class FocusChangedEvent:
+    """Fact: user's focus was set or cleared.
+
+    Emitted by User.set_focus() and User.clear_focus() so observers
+    (e.g., cache invalidation) can react to focus state changes.
+    """
+
+    user_id: int
+
+
+@dataclass(frozen=True, slots=True)
 class ZoneSyncedEvent:
     """Zone was synced to database (created or updated)."""
 
@@ -229,6 +240,7 @@ type GameEvent = (
     | EntityPickedUpEvent
     | EntityDroppedEvent
     | EntityDestroyedEvent
+    | FocusChangedEvent
     | ZoneSyncedEvent
     | RoomSyncedEvent
     | OrphanChannelDetectedEvent

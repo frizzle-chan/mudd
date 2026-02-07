@@ -17,6 +17,7 @@ from discord.ext import commands, tasks
 
 if TYPE_CHECKING:
     from mudd.bot import MuddBot
+    from mudd.caches.user import UserCache
     from mudd.cogs.autocomplete_cache import AutocompleteCache
 
 from mudd.events import (
@@ -56,11 +57,13 @@ class Sync(commands.Cog):
         pool: asyncpg.Pool,
         room_cache: RoomChannelCache,
         autocomplete_cache: AutocompleteCache | None = None,
+        user_cache: UserCache | None = None,
     ) -> None:
         self.bot = bot
         self._pool = pool
         self.room_cache = room_cache
         self._autocomplete_cache = autocomplete_cache
+        self._user_cache = user_cache
         self._seen_orphans: set[tuple[int, str, str]] = set()
         self._console_channel = os.environ.get("MUDD_CONSOLE_CHANNEL", "console")
         self._first_sync_done = False
@@ -162,12 +165,20 @@ class Sync(commands.Cog):
             if fail_fast:
                 raise
 
-        # Rebuild autocomplete cache after entities are synced
+        # Rebuild caches after entities are synced
         if self._autocomplete_cache is not None:
             try:
                 await self._autocomplete_cache.rebuild(pool)
             except Exception:
                 logger.exception("Failed to rebuild autocomplete cache")
+                if fail_fast:
+                    raise
+
+        if self._user_cache is not None:
+            try:
+                await self._user_cache.rebuild(pool)
+            except Exception:
+                logger.exception("Failed to rebuild user cache")
                 if fail_fast:
                     raise
 
