@@ -287,6 +287,42 @@ OnClose: You snap the lid shut, trapping the worms inside.
 OnTake: {{ effects.pickup() }}{{ effects.broadcast(user ~ " grabs " ~ e ~ ".") }}You grab the {{ e.name }}.
 OnDrop: {% if container %}You toss the {{ e.name }} into the *{{ container.name }}*.{% else %}You set the {{ e.name }} down.{% endif %}{{ effects.drop() }}{{ effects.broadcast(user ~ " drops " ~ e ~ ".") }}
 
+Id: fishing_pole_basic
+Name: Bamboo Fishing Pole
+Prototype: item
+Tags: fishing_pole kitchen_rack_loot
+Rarity: common
+DescriptionShort: a rickety {{ e.name }}
+DescriptionLong: A simple bamboo fishing pole held together with twine. It's seen better days, but it'll do.
+OnTouch: The bamboo flexes slightly under your grip. It smells like river mud.
+OnUse: You give the {{ e.name }} a practice cast. Swoosh.
+OnTake: {{ effects.pickup() }}{{ effects.broadcast(user ~ " grabs " ~ e ~ ".") }}You grab the {{ e.name }}.
+OnDrop: {% if container %}You lean the {{ e.name }} against the *{{ container.name }}*.{% else %}You set the {{ e.name }} down.{% endif %}{{ effects.drop() }}{{ effects.broadcast(user ~ " puts down " ~ e ~ ".") }}
+
+Id: fishing_pole_carbon
+Name: Carbon Fiber Rod
+Prototype: item
+Tags: fishing_pole slot_prize
+Rarity: rare
+DescriptionShort: a sleek {{ e.name }}
+DescriptionLong: A professional-grade carbon fiber fishing rod with a smooth reel mechanism. Lightweight and responsive. Someone paid good money for this.
+OnTouch: The carbon fiber is smooth and impossibly light.
+OnUse: You give the {{ e.name }} a test flick. It whips through the air with a satisfying *thwip*.
+OnTake: {{ effects.pickup() }}{{ effects.broadcast("**" ~ user ~ "** picks up " ~ e ~ ". Nice rod!") }}You pick up the {{ e.name }}.
+OnDrop: {% if container %}You carefully place the {{ e.name }} in the *{{ container.name }}*.{% else %}You set the {{ e.name }} down carefully.{% endif %}{{ effects.drop() }}{{ effects.broadcast(user ~ " puts down " ~ e ~ ".") }}
+
+Id: fishing_pole_golden
+Name: Golden Rod
+Prototype: item
+Tags: fishing_pole desk_drawer_loot
+Rarity: legendary
+DescriptionShort: a dazzling {{ e.name }} that radiates wealth
+DescriptionLong: An ornate fishing rod plated in 24k gold with a jewel-encrusted reel. It's completely impractical but absolutely magnificent. The kind of thing a billionaire would use to fish from their yacht.
+OnTouch: The gold is warm to the touch. You can see your reflection in the polished surface.
+OnUse: You give the {{ e.name }} a regal flourish. You feel like royalty.
+OnTake: {{ effects.pickup() }}{{ effects.broadcast("**" ~ user ~ "** picks up " ~ e ~ "! It gleams brilliantly!") }}You claim the {{ e.name }}. It's heavier than you expected.
+OnDrop: {% if container %}You place the {{ e.name }} reverently into the *{{ container.name }}*.{% else %}You set the {{ e.name }} down. It glimmers on the ground.{% endif %}{{ effects.drop() }}{{ effects.broadcast("**" ~ user ~ "** parts with " ~ e ~ ".") }}
+
 Id: blade_of_dissonance
 Name: Blade of Dissonance
 Prototype: item
@@ -1181,6 +1217,21 @@ DescriptionLong: A bottle of Nikka Yoichi Limited Edition Final Version 20-Year-
 OnUse: You pour yourself a reverent measure of {{ e.name }}. Smoke, sea salt, dried fruit, and a finish that lasts forever. You feel blessed. It restores health.
 
 # ----------------------------------------------------------------------------
+# Kitchen entities
+# ----------------------------------------------------------------------------
+
+Id: kitchen_rack
+Name: Utensil Rack
+Prototype: chest
+Room: kitchen
+ContentsVisible: no
+DescriptionShort: A wall-mounted {{ e.name }} holds various cooking implements and tools.
+DescriptionLong: A stainless steel rack bolted to the wall above the counter. Various utensils and tools dangle from hooks. You could __search__ it.
+OnOpen: {{ effects.set_focus() }}You rummage through the rack.{% if e.contents %} Among the utensils you spot:{{ e.contents }}{% else %} Nothing but spatulas and ladles.{% endif %}
+OnClose: {{ effects.clear_focus() }}You stop searching the rack.
+OnTouch: The utensils clank together as you brush past them.
+
+# ----------------------------------------------------------------------------
 # Library entities
 # ----------------------------------------------------------------------------
 
@@ -1808,3 +1859,10 @@ Container: restroom_urinals
 TagQuery: urinal_fish
 MaxCount: 1
 RespawnIntervalMinutes: 10
+
+Id: kitchen_rack_pool
+Room: kitchen
+Container: kitchen_rack
+TagQuery: kitchen_rack_loot
+MaxCount: 1
+RespawnIntervalMinutes: 15
