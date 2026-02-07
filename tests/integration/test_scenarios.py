@@ -18,6 +18,7 @@ from mudd.commands import (
 )
 from mudd.events import (
     BalanceChangedEvent,
+    BroadcastEvent,
     EntityDestroyedEvent,
     EntityDroppedEvent,
     EntityPickedUpEvent,
@@ -339,6 +340,49 @@ async def test_currency_system(test_db, clean_user_state):
         e for e in reconciler.events if isinstance(e, BalanceChangedEvent)
     ]
     assert len(balance_events) == 2
+
+
+async def test_payment_broadcast_and_mentions(test_db, clean_user_state):
+    """Payment events broadcast to channel and use mentions in memos."""
+    player_a = await create_test_user(test_db, user_id=3001)
+    player_b = await create_test_user(test_db, user_id=3002, room_id="store-room")
+
+    # Move player A to store room
+    user_a = await User.get(test_db, player_a.id)
+    assert user_a is not None
+    await user_a.move_to("store-room", guild_id=1234567890)
+
+    # Create currency accounts
+    await User.create_currency_account(test_db, player_a.id, 500)
+    await User.create_currency_account(test_db, player_b.id, 100)
+
+    # Transfer with observer to capture events
+    reconciler = NullReconciler()
+    user_a = user_a.with_observers(reconciler)
+    user_b = await User.get(test_db, player_b.id)
+    assert user_b is not None
+
+    transfer_result = await user_a.transfer_currency_to(user_b, 50, "test payment")
+    assert transfer_result.success
+
+    # Check that BroadcastEvent was emitted
+    broadcast_events = [e for e in reconciler.events if isinstance(e, BroadcastEvent)]
+    assert len(broadcast_events) == 1
+    assert broadcast_events[0].message == "<@3001> paid ¥50 to <@3002>"
+
+    # Check that BalanceChangedEvents use mentions in memos
+    balance_events = [
+        e for e in reconciler.events if isinstance(e, BalanceChangedEvent)
+    ]
+    assert len(balance_events) == 2
+
+    # Find sender and recipient events
+    sender_event = next(e for e in balance_events if e.user_id == 3001)
+    recipient_event = next(e for e in balance_events if e.user_id == 3002)
+
+    # Check memos use mentions
+    assert sender_event.memo == "Payment to <@3002>"
+    assert recipient_event.memo == "Payment from <@3001>"
 
 
 async def test_grant_and_grant_random(test_db, clean_user_state):
