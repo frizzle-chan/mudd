@@ -341,11 +341,13 @@ class Sync(commands.Cog):
         pools = await SpawningPool.get_all_with_counts(self._pool)
 
         spawned = 0
+        affected_rooms: set[str] = set()
         for sp in pools:
             instance = await sp.try_spawn(now)
 
             if instance is not None:
                 spawned += 1
+                affected_rooms.add(sp.room)
                 logger.debug(
                     "Spawned '%s' in room '%s' from pool '%s'",
                     instance.entity.name,
@@ -355,6 +357,13 @@ class Sync(commands.Cog):
 
         if spawned > 0:
             logger.info(f"Spawned {spawned} items from spawning pools")
+
+        # Invalidate + rebuild autocomplete cache for rooms where items spawned
+        if affected_rooms and self._autocomplete_cache is not None:
+            for room_id in affected_rooms:
+                self._autocomplete_cache.invalidate_room(room_id)
+            for room_id in affected_rooms:
+                await self._autocomplete_cache.rebuild_room(self._pool, room_id)
 
     def _detect_orphan_channels(
         self,

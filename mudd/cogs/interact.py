@@ -11,6 +11,7 @@ import discord
 from discord import Interaction, app_commands
 from discord.ext import commands
 
+from mudd.cogs.autocomplete_cache import AutocompleteCacheInvalidator
 from mudd.cogs.shared import entity_instance_id_autocomplete, resolve_entity
 from mudd.commands import get_command
 from mudd.matching.verb_matcher import match_verb
@@ -57,8 +58,13 @@ class Interact(commands.Cog):
             )
             return
 
-        # 2. Build scene with observers
+        # 2. Build scene with observers (including cache invalidator)
         scene = await Scene.build(self._pool, interaction, self.bot)
+        invalidator = AutocompleteCacheInvalidator.from_cache(
+            self._autocomplete_cache, self._pool, scene.user.current_room
+        )
+        if invalidator:
+            scene = scene.with_observers(invalidator)
 
         # 3. Resolve target entity
         entity = await resolve_entity(

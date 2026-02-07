@@ -10,6 +10,7 @@ import asyncpg
 from discord import Interaction, app_commands
 from discord.ext import commands
 
+from mudd.cogs.autocomplete_cache import AutocompleteCacheInvalidator
 from mudd.cogs.shared import entity_instance_id_autocomplete, resolve_entity
 from mudd.commands import LookCommand
 from mudd.observers import EffectsObserver
@@ -49,10 +50,16 @@ class Look(commands.Cog):
         # Build a scene from the interaction that includes the user, entities, etc.
         # If it's a UUID, query directly. Otherwise, use autocomplete to resolve.
 
-        # Build scene with effects observer
+        # Build scene with effects observer + cache invalidator
         effects = EffectsObserver()
         scene = await Scene.from_interaction(self._pool, interaction)
-        scene = scene.with_observers(effects)
+        invalidator = AutocompleteCacheInvalidator.from_cache(
+            self._autocomplete_cache, self._pool, scene.user.current_room
+        )
+        if invalidator:
+            scene = scene.with_observers(effects, invalidator)
+        else:
+            scene = scene.with_observers(effects)
 
         entity_instance = await resolve_entity(
             self._pool,
