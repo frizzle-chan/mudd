@@ -12,6 +12,7 @@ import asyncpg
 
 from mudd.events import (
     BalanceChangedEvent,
+    BroadcastEvent,
     Observer,
     UserLocationSyncEvent,
     UserMovedEvent,
@@ -647,9 +648,9 @@ class User:
                 recipient.id,
             )
 
-        # Emit events (outside transaction) with per-user memos
-        sender_memo = f"Payment to {recipient.display_name}"
-        recipient_memo = f"Payment from {self.display_name}"
+        # Emit events (outside transaction) with per-user memos using mentions
+        sender_memo = f"Payment to {recipient.mention}"
+        recipient_memo = f"Payment from {self.mention}"
         for observer in self._observers:
             observer.notify(
                 BalanceChangedEvent(self.id, sender_new, -amount, sender_memo)
@@ -657,6 +658,12 @@ class User:
             observer.notify(
                 BalanceChangedEvent(recipient.id, recipient_new, amount, recipient_memo)
             )
+        
+        # Broadcast the payment to the channel
+        amount_str = f"\u00a5{amount:,}"
+        broadcast_msg = f"{self.mention} paid {amount_str} to {recipient.mention}"
+        for observer in self._observers:
+            observer.notify(BroadcastEvent(message=broadcast_msg))
 
         return TransferResult(
             success=True,
