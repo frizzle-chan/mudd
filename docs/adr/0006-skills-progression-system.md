@@ -135,7 +135,7 @@ In the context of **rewarding progression milestones**, facing **the desire for 
 
 **Role Progression:**
 
-Roles are cumulative — players keep all roles they've earned. The highest role determines their color in the member list.
+Each player has exactly one milestone role at a time — when they reach a new threshold, the previous role is removed and replaced.
 
 | Role | Total Level | Milestone Meaning |
 |------|------------|-------------------|
@@ -152,9 +152,8 @@ Thresholds are calibrated for the initial 5 skills (max total level 495). As new
 
 **Role Management:**
 - Roles are created by the sync cog if they don't exist
-- Roles are granted automatically when a player crosses a threshold
-- Roles are never removed (cumulative, not replaced)
-- Role color ordering ensures the highest milestone is most prominent in Discord's member list
+- When a player crosses a threshold, the old role is removed and the new one is granted
+- Each player holds exactly one milestone role at any time
 
 ### No Retroactive XP
 
