@@ -71,6 +71,7 @@ class EntityAutocompleteCache:
     def __init__(self) -> None:
         self._room_choices: dict[str, list[app_commands.Choice[str]]] = {}
         self._focus_choices: dict[tuple[str, str], list[app_commands.Choice[str]]] = {}
+        self._thread_choices: dict[int, list[app_commands.Choice[str]]] = {}
 
     def get_room_choices(self, room_id: str) -> list[app_commands.Choice[str]] | None:
         """Get cached default choices for a room (no focus)."""
@@ -81,6 +82,20 @@ class EntityAutocompleteCache:
     ) -> list[app_commands.Choice[str]] | None:
         """Get cached default choices for a focus context."""
         return self._focus_choices.get((room_id, str(entity_instance_id)))
+
+    def get_thread_choices(
+        self, thread_id: int
+    ) -> list[app_commands.Choice[str]] | None:
+        """Get cached default choices for an inventory thread."""
+        return self._thread_choices.get(thread_id)
+
+    def invalidate_thread(self, thread_id: int) -> None:
+        """Remove cached choices for a thread.
+
+        After invalidation, autocomplete requests for this thread fall through
+        to the slow path until the cache is rebuilt.
+        """
+        self._thread_choices.pop(thread_id, None)
 
     def invalidate_room(self, room_id: str) -> None:
         """Immediately remove cached choices for a room.
@@ -100,9 +115,11 @@ class EntityAutocompleteCache:
         - Default choices for each room (room entity + visible entities)
         - Focus choices for each top-level entity in each room
           (room entity with close prefix + container + contents)
+        - Thread choices for each entity with a discord_thread_id
         """
         room_choices: dict[str, list[app_commands.Choice[str]]] = {}
         focus_choices: dict[tuple[str, str], list[app_commands.Choice[str]]] = {}
+        thread_choices: dict[int, list[app_commands.Choice[str]]] = {}
 
         rooms = await Room.get_all(pool)
 
@@ -111,14 +128,22 @@ class EntityAutocompleteCache:
             room_choices[room.id] = rc
             focus_choices.update(fc)
 
+        # Build thread choices for all entities with a discord thread
+        thread_instances = await EntityInstance.get_all_with_threads(pool)
+        for instance in thread_instances:
+            thread_choices[instance.thread_id] = entities_to_choices([instance.entity])
+
         # Atomic swap
         self._room_choices = room_choices
         self._focus_choices = focus_choices
+        self._thread_choices = thread_choices
 
         logger.info(
-            "Rebuilt entity autocomplete cache: %d rooms, %d focus contexts",
+            "Rebuilt entity autocomplete cache:"
+            " %d rooms, %d focus contexts, %d threads",
             len(room_choices),
             len(focus_choices),
+            len(thread_choices),
         )
 
     async def rebuild_room(self, pool: asyncpg.Pool, room_id: str) -> None:
@@ -139,6 +164,18 @@ class EntityAutocompleteCache:
 
         self._room_choices[room_id] = rc
         self._focus_choices.update(fc)
+
+    async def rebuild_thread(self, pool: asyncpg.Pool, thread_id: int) -> None:
+        """Rebuild cache entry for a single inventory thread.
+
+        Called after invalidation to re-warm the cache without a full rebuild.
+        """
+        instance = await EntityInstance.get_by_inventory_thread_id(pool, thread_id)
+        if instance is None:
+            self._thread_choices.pop(thread_id, None)
+            return
+
+        self._thread_choices[thread_id] = entities_to_choices([instance])
 
     def create_invalidator(
         self, pool: asyncpg.Pool, room_id: str

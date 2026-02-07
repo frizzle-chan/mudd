@@ -124,6 +124,7 @@ class TestEntityAutocompleteCacheGetters:
         cache = EntityAutocompleteCache()
         assert cache.get_room_choices("any-room") is None
         assert cache.get_focus_choices("any-room", uuid4()) is None
+        assert cache.get_thread_choices(12345) is None
 
     def test_room_choices_hit(self):
         """Room choices are returned when present."""
@@ -213,3 +214,45 @@ class TestCreateInvalidatorFactory:
 
         assert cache.get_room_choices("lobby") is None
         assert cache.get_room_choices("garden") is not None
+
+
+class TestThreadChoices:
+    """Tests for thread cache tier."""
+
+    def test_thread_choices_hit(self):
+        """Thread choices are returned when present."""
+        cache = EntityAutocompleteCache()
+        choices = [app_commands.Choice(name="Sword ⚪", value="entity://abc")]
+        cache._thread_choices[99999] = choices
+        assert cache.get_thread_choices(99999) is choices
+
+    def test_thread_choices_miss(self):
+        """Thread choices return None for unknown thread."""
+        cache = EntityAutocompleteCache()
+        cache._thread_choices[99999] = []
+        assert cache.get_thread_choices(11111) is None
+
+    def test_invalidate_thread_removes_entry(self):
+        """invalidate_thread removes the cached entry."""
+        cache = EntityAutocompleteCache()
+        cache._thread_choices[99999] = [app_commands.Choice(name="X", value="x")]
+        cache.invalidate_thread(99999)
+        assert cache.get_thread_choices(99999) is None
+
+    def test_invalidate_thread_unknown_is_noop(self):
+        """Invalidating an unknown thread doesn't raise."""
+        cache = EntityAutocompleteCache()
+        cache.invalidate_thread(99999)  # Should not raise
+
+    def test_invalidate_thread_does_not_affect_other_threads(self):
+        """Invalidating one thread leaves other threads intact."""
+        cache = EntityAutocompleteCache()
+        choices_a = [app_commands.Choice(name="A", value="a")]
+        choices_b = [app_commands.Choice(name="B", value="b")]
+        cache._thread_choices[111] = choices_a
+        cache._thread_choices[222] = choices_b
+
+        cache.invalidate_thread(111)
+
+        assert cache.get_thread_choices(111) is None
+        assert cache.get_thread_choices(222) is choices_b

@@ -29,7 +29,7 @@ from mudd.events import (
     UserLocationSyncEvent,
     UserMovedEvent,
 )
-from mudd.models import RoomEntityInstance, User
+from mudd.models import EntityInstance, RoomEntityInstance, User
 from mudd.models.spawning_pool import SpawningPool
 from mudd.models.user import TransferError
 from mudd.scene import Scene
@@ -796,3 +796,44 @@ async def test_autocomplete_slow_path_entity_cache_miss(
 
     assert len(choices) > 0
     assert any(c.value.startswith("room://") for c in choices)
+
+
+async def test_autocomplete_thread_cache_hit(test_db, entity_cache, clean_user_state):
+    """Autocomplete returns cached thread choices for inventory threads."""
+    user = await create_test_user(test_db, room_id="store-room")
+
+    # Take an item so we have an owned entity instance
+    box = next(
+        o
+        for o in await autocomplete(test_db, user.id, "Cardboard Box")
+        if not isinstance(o, RoomEntityInstance)
+    )
+    await act(test_db, user.id, OpenCommand(), f"entity://{box.instance_id}")
+    takeable = next(
+        o
+        for o in await autocomplete(test_db, user.id, "")
+        if not isinstance(o, RoomEntityInstance) and o.entity.name == "Test Takeable"
+    )
+    await act(test_db, user.id, TakeCommand(), f"entity://{takeable.instance_id}")
+
+    # Simulate Discord thread creation by setting thread IDs
+    thread_id = 777_777_777
+    await EntityInstance.update_thread_ids(
+        test_db, takeable.instance_id, thread_id, msg_id=888_888_888
+    )
+
+    # Rebuild entity cache so thread choices are populated
+    await entity_cache.rebuild(test_db)
+
+    # Autocomplete with thread_id should hit the thread cache
+    choices = await raw_autocomplete(
+        test_db,
+        user.id,
+        "",
+        thread_id=thread_id,
+        entity_cache=entity_cache,
+    )
+
+    assert len(choices) == 1
+    assert choices[0].value == f"entity://{takeable.instance_id}"
+    assert "Test Takeable" in choices[0].name

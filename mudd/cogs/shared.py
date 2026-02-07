@@ -143,6 +143,13 @@ async def entity_instance_id_autocomplete(
     When both caches are provided and the user has typed nothing yet,
     returns precomputed choices with zero database queries.
     """
+    # Fast path: thread context (inventory threads show exactly one entity)
+    if current == "" and entity_cache is not None and thread_id is not None:
+        choices = entity_cache.get_thread_choices(thread_id)
+        if choices is not None:
+            logger.debug("Autocomplete thread cache hit thread=%s", thread_id)
+            return choices
+
     # Fast path: no input, not in a thread, caches available
     if current == "" and entity_cache is not None and thread_id is None:
         room_id: str | None = None
