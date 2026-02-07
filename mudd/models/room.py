@@ -100,7 +100,7 @@ class Room:
         on_look = (
             """{{ effects.clear_focus() }}"""
             """{{ e.description_long or "You see nothing special." }}"""
-            """{{ e.contents }}"""
+            """{% if e.contents %}\n\nYou see:\n{{ e.contents }}{% endif %}"""
         )
         return ResolvedEntity(
             f"room::{self.id}",
