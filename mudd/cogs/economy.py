@@ -9,6 +9,7 @@ from discord.ext import commands
 from rapidfuzz import fuzz
 
 from mudd.models.user import TransferError
+from mudd.observers import EffectsObserver
 from mudd.scene import Scene
 
 logger = logging.getLogger(__name__)
@@ -161,6 +162,9 @@ class Economy(commands.Cog):
             return
 
         # Execute transfer (scene.user already has observers from with_observers)
+        # The memo parameter is for the transaction record in the database.
+        # Wallet thread memos (via BalanceChangedEvent) use mentions and are
+        # generated inside transfer_currency_to().
         memo = f"Payment to {recipient_member.display_name}"
         result = await scene.user.transfer_currency_to(recipient_user, amount, memo)
 
@@ -190,6 +194,16 @@ class Economy(commands.Cog):
             f"Your balance: {sender_balance_str}",
             ephemeral=True,
         )
+
+        # Send broadcasts to channel
+        effects = scene.get_observer(EffectsObserver)
+        channel = interaction.channel
+        if effects and isinstance(channel, discord.abc.Messageable):
+            for message in effects.broadcasts:
+                try:
+                    await channel.send(message)
+                except Exception:
+                    logger.exception("Failed to send broadcast")
 
         # Flush observers after response (wallet thread updates happen here)
         await scene.flush_observers()
