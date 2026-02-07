@@ -1,121 +1,131 @@
 """Shared utilities for cogs."""
 
+import asyncio
 import logging
-from typing import TYPE_CHECKING
+from collections.abc import Awaitable, Callable
+from typing import Any
+from uuid import UUID
 
-import discord
-from discord import Interaction
+import asyncpg
+from discord import Interaction, app_commands
+from rapidfuzz import fuzz
 
-from mudd.services.entity_resolution import ViewMode
-from mudd.services.rendering import RenderingService, TemplateRenderError
-
-if TYPE_CHECKING:
-    from mudd.services.entity import EntityService
-    from mudd.services.entity_resolution import (
-        EntityResolutionService,
-        InteractionContext,
-    )
-    from mudd.services.inventory import InventoryService
-    from mudd.services.visibility import VisibilityServiceProtocol
+from mudd.models import EntityInstance, Room
+from mudd.models.room import RoomEntityInstance
+from mudd.scene import Scene
+from mudd.views import ViewEntity
 
 logger = logging.getLogger(__name__)
 
 
-async def handle_escape(
-    interaction: Interaction,
-    ctx: "InteractionContext",
-    *,
-    entity_resolution: "EntityResolutionService",
-    entity_service: "EntityService",
-    visibility_service: "VisibilityServiceProtocol",
-    inventory: "InventoryService",
-    rendering: RenderingService,
-) -> None:
-    """Handle escape action (close focus, show room or thread item).
+async def autocomplete_entities(
+    scene: Scene, current: str
+) -> list[EntityInstance | RoomEntityInstance]:
+    """Autocomplete entities the user can see.
 
-    This is shared between /look and /interact commands.
-
-    Args:
-        interaction: Discord interaction
-        ctx: Interaction context from entity resolution
-        entity_resolution: Service for focus management
-        entity_service: Service for entity lookups
-        visibility_service: Service for room name lookups
-        inventory: Service for inventory thread lookups
-        rendering: Service for template rendering
+    Returns entity instances plus a virtual room entity (unless in inventory context).
+    The room entity appears first and shows "[Close X] Room" when user has focus.
     """
-    user_id = interaction.user.id
-    room = ctx.room
+    is_inventory_lookup = current.startswith("i.")
+    candidates: list[EntityInstance | RoomEntityInstance]
 
-    if ctx.view_mode == ViewMode.INVENTORY_THREAD and ctx.thread_instance_id:
-        # In inventory thread container - close focus and show the container
-        await entity_resolution.clear_focus(user_id, reason="close")
+    if is_inventory_lookup:
+        # Inventory item lookup - no room entity
+        candidates = list(await scene.user.get_inventory())
+        current = current[2:]
+    else:
+        # Room entity lookup
+        candidates = list(await scene.room.get_visible_entities())
 
-        # Get thread item and show it
-        channel = interaction.channel
-        if isinstance(channel, (discord.abc.GuildChannel, discord.Thread)):
-            thread_item = await inventory.get_thread_item(channel)
-            if thread_item:
-                detail_text = await rendering.render_entity_on_look(
-                    thread_item,
-                    entity_service,
-                    None,
-                    include_heading=False,  # Thread title shows the item name
-                )
-                await interaction.response.send_message(detail_text, ephemeral=True)
-                return
+        room_entity = await scene.room.get_room_entity(scene.user)
+        if room_entity:
+            candidates.insert(0, room_entity)
 
-        await interaction.response.send_message(
-            "You see nothing special.", ephemeral=True
-        )
-        return
+    if current == "":
+        return candidates
 
-    # Room escape - clear focus and show room
-    close_msg = None
+    current = current.lower()
 
-    # Get focus to capture entity before clearing (for template rendering)
-    focus = await entity_resolution.get_focus(user_id, room)
-    focused_entity = None
-    if focus:
-        focused_entity = await entity_service.get_entity(focus.entity_id)
+    # Return exact matches
+    for e in candidates:
+        if e.name.lower() == current:
+            return [e]
 
-    # Clear focus with "close" reason to get on_close template
-    close_template = await entity_resolution.clear_focus(user_id, reason="close")
+    return [e for e in candidates if fuzz.partial_ratio(current, e.name.lower()) >= 75]
 
-    # Render close message if we have template and entity
-    if close_template and focused_entity:
+
+async def resolve_entity(
+    pool: asyncpg.Pool,
+    scene: Scene,
+    entity_instance_query: str,
+    ambiguous_handler: Callable[[str], Awaitable[Any]] = lambda _: asyncio.sleep(0),
+) -> EntityInstance | RoomEntityInstance | None:
+    """Resolve an entity from a query string.
+
+    Supports scheme-based resolution:
+    - room://{room_id} - Virtual room entity
+    - entity://{uuid} - Database entity instance
+    - {text} - Fuzzy text matching against visible entities
+    """
+    # Parse room:// scheme
+    if entity_instance_query.startswith("room://"):
+        room_id = entity_instance_query[7:]  # Strip "room://"
+        room = await Room.get(pool, room_id)
+        if not room:
+            return None
+        focus = await scene.user.get_focus()
+        focus_name = focus.current_container.name if focus else None
+        return room.as_entity(focus_name=focus_name)
+
+    # Parse entity:// scheme
+    if entity_instance_query.startswith("entity://"):
+        uuid_str = entity_instance_query[9:]  # Strip "entity://"
         try:
-            close_msg = rendering.render(close_template, focused_entity, "")
-        except TemplateRenderError:
-            logger.warning(
-                "Template error rendering on_close for entity '%s'",
-                focused_entity.id,
-                exc_info=True,
-            )
-            entity_name = focused_entity.name
-            close_msg = f"You step away from the *{entity_name}*."
+            entity_instance_id = UUID(uuid_str)
+            return await EntityInstance.get(pool, entity_instance_id)
+        except ValueError:
+            return None
 
-    # Show room description + top-level entities
-    room_name = await visibility_service.get_room_name(room) if room else None
-    topic = getattr(interaction.channel, "topic", None)
-    room_description = topic or "You see nothing special."
+    # Fall back to fuzzy text matching
+    options = await autocomplete_entities(scene, entity_instance_query)
 
-    entity_text = ""
-    if room:
-        entities = await entity_service.get_top_level_room_entities(room)
-        entity_text = await rendering.format_room_entities(
-            entities, entity_service, room
+    if len(options) > 1:
+        candidates = ", ".join(ViewEntity(e).name for e in options[:3])
+        await ambiguous_handler(
+            f"Multiple things match that description: {candidates}. "
+            "Please be more specific."
         )
 
-    # Build message, prepending close message if present
-    parts = []
-    if close_msg:
-        parts.append(close_msg)
-    if room_name:
-        parts.append(f"### {room_name}")
-    parts.append(room_description)
-    if entity_text:
-        parts.append(entity_text)
+    return options[0] if len(options) == 1 else None
 
-    message = "\n\n".join(parts)
-    await interaction.response.send_message(message, ephemeral=True)
+
+async def entity_instance_id_autocomplete(
+    pool: asyncpg.Pool, interaction: Interaction, current: str
+) -> list[app_commands.Choice[str]]:
+    """Autocomplete callback for at parameter.
+
+    Suggests entity names from the current room, excluding entities
+    inside containers with contents_visible=False. When a user has an
+    active focus (open container), shows only the focused contents with
+    a "[Close {container}] Room" escape option at the top.
+
+    In inventory threads, only shows the thread's item (no Room option).
+
+    Values use scheme-based format:
+    - entity://{uuid} for database entities
+    - room://{room_id} for virtual room entities
+    """
+    entities = await autocomplete_entities(
+        await Scene.from_interaction(pool, interaction), current
+    )
+    return [
+        app_commands.Choice(
+            name=ViewEntity(e).display_name,
+            value=(
+                e.instance_id
+                if isinstance(e, RoomEntityInstance)
+                else f"entity://{e.instance_id}"
+            ),
+        )
+        for e in entities
+    ][:25]  # Discord limits to 25 options

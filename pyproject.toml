@@ -9,6 +9,7 @@ dependencies = [
     "discord-py>=2.6.4",
     "jinja2>=3.1.6",
     "python-dotenv>=1.2.1",
+    "rapidfuzz>=3.14.3",
 ]
 
 [dependency-groups]
@@ -16,18 +17,37 @@ dev = [
     "lefthook>=2.0.13",
     "pytest>=8.0",
     "pytest-asyncio>=0.24",
+    "pytest-cov>=6.0",
     "ruff>=0.14.10",
     "squawk-cli>=2.36.0",
     "ty>=0.0.8",
+    "vulture>=2.14",
 ]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
+python_files = ["test_*.py", "*_unit_test.py"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "session"
+addopts = "--cov=mudd --cov-report=term-missing:skip-covered --cov-report=xml"
+
+[tool.coverage.run]
+source = ["mudd"]
+branch = true
+omit = ["*_unit_test.py"]
+
+[tool.coverage.report]
+show_missing = true
+skip_empty = true
 
 [tool.ty.src]
-exclude = [".claude/skills/skill-creator/"]
+exclude = [".claude/skills/skill-creator/", "vulture_whitelist.py"]
+
+[tool.vulture]
+paths = ["main.py", "mudd/", "scripts/", "tests/", "vulture_whitelist.py"]
+min_confidence = 90
+ignore_names = ["clean_user_state"]
+exclude = ["*_unit_test.py"]
 
 [tool.ruff.lint]
 select = [
@@ -35,6 +55,7 @@ select = [
     "E",
     # Pyflakes
     "F",
+    "FA",
     # pyupgrade
     "UP",
     # flake8-bugbear

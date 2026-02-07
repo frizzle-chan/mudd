@@ -194,3 +194,9 @@ review.md
 # Image optimization directories
 img-src/
 img-dist/
+
+*.local.md
+
+# Dev server PID file
+mudd.pid
+mudd.log

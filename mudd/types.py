@@ -1,22 +1,9 @@
 """Core type definitions for MUDD."""
 
-from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 
 
-@dataclass(frozen=True)
-class UserContext:
-    """User information available in templates.
-
-    Provides user-specific context for template rendering, allowing
-    templates to reference the interacting user's name and mention.
-    """
-
-    name: str  # display_name
-    mention: str  # @mention string
-
-
-class VerbAction(str, Enum):
+class VerbAction(StrEnum):
     """Action types for verb-to-handler mapping.
 
     Values match the PostgreSQL verb_action enum and entity handler column names.

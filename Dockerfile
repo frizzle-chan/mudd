@@ -80,6 +80,7 @@ RUN apt-get update \
        postgresql-client \
        procps \
        ripgrep \
+       tmux \
        vim \
        zsh \
  && apt-get clean \

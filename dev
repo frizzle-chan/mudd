@@ -1,0 +1,8 @@
+#!/bin/bash
+
+set -e
+
+test -f mudd.pid && kill "$(cat mudd.pid)" 2>/dev/null || true
+source .venv/bin/activate
+exec > >(tee mudd.log) 2>&1
+exec python main.py

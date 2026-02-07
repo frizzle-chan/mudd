@@ -1,5 +1,7 @@
 # MUDD: Multi User Dungeon (Discord)
 
+[![codecov](https://codecov.io/github/frizzle-chan/mudd/graph/badge.svg?token=JM8BYHR8I4)](https://codecov.io/github/frizzle-chan/mudd)
+
 A Discord-native Multi User Dungeon. It's a text-based multiplayer RPG inside a Discord server!
 
 - Rooms in the world are mapped to Discord channels. You can only see and post in the channel that corresponds with your in-world location.
@@ -33,5 +35,3 @@ The wallet in your inventory shows your current bank balance.
 - **/pay** other players in the same room as you to transfer funds.
 
 ## Codebase tour
-
-

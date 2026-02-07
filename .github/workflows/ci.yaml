@@ -49,12 +49,15 @@ jobs:
       - name: Run type check
         run: uv run ty check
 
+      - name: Run dead code check
+        run: uv run vulture
+
       - name: Validate entity definitions
         run: |
           for file in data/worlds/*.rec; do
             recfix --check "$file"
+            uv run scripts/validate_world.py "$file"
           done
-          uv run scripts/validate_world.py
 
       - name: Validate verb word lists
         run: uv run scripts/validate_verbs.py
@@ -63,6 +66,11 @@ jobs:
         env:
           DB_HOST: localhost
         run: uv run pytest
+
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@671740ac38dd9b0130fbe1cec585b89eea48d3de # v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Run squawk check
         run: uv run squawk migrations/*.sql

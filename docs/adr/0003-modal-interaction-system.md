@@ -4,6 +4,14 @@
 
 Accepted
 
+## Addendum (2026-02)
+
+The `focus_mode` field described in this ADR has been replaced with explicit template effects:
+- `effects.set_focus()` - Called in `on_open` or `on_use` handlers to establish focus
+- `effects.clear_focus()` - Called in `on_close` handlers to clear focus
+
+This change makes focus behavior explicit in templates rather than implicit via a database field, enabling new use cases like setting focus when looking at a painting or using a terminal. The focus infrastructure (user_focus table, FocusContext, EntityModal) remains unchanged.
+
 ## Context
 
 ADR 0001 established a stateless entity interaction model where "containers have no 'opened' state" and "players can interact with hidden items if they guess correctly." While simple, this creates poor UX for containers with many items:

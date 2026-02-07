@@ -1,7 +1,14 @@
-default: lint format types entities verbs squawk
+default: lint format types entities verbs squawk vulture
 
 test:
     uv run pytest
+
+testq:
+    uv run pytest -qx --tb=line
+
+# Run tests and generate HTML coverage report in htmlcov/
+coverage:
+    uv run pytest --cov-report=html
 
 lint:
     uv run ruff check .
@@ -12,19 +19,26 @@ format:
 types:
     uv run ty check
 
+ralph prompt_file="prompt.local.md":
+    if [ ! -f {{prompt_file}} ]; then echo "{{prompt_file}} not found"; exit 1; fi
+    claude --permission-mode acceptEdits '/ralph-loop:ralph-loop "execute @{{prompt_file}} and output <promise>FIN</promise> when done." --max-iterations 5 --completion-promise FIN'
+
 entities:
     #!/usr/bin/env bash
     set -euo pipefail
     for file in data/worlds/*.rec; do
         recfix --check "$file"
+        uv run scripts/validate_world.py "$file"
     done
-    uv run scripts/validate_world.py
 
 verbs:
     uv run scripts/validate_verbs.py
 
 squawk:
     uv run squawk migrations/*.sql
+
+vulture:
+    uv run vulture
 
 # Generate room map from mansion.rec
 map:

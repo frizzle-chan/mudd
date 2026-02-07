@@ -10,5 +10,5 @@ These are **not services** - they are pure functions that implement matching alg
 - Match result dataclasses
 
 ## What does NOT belong here
-- Database access logic (use services/)
-- State management (use services/)
+- Database access logic (use models/)
+- State management (use models/ or scene.py)

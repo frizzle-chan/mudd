@@ -142,10 +142,9 @@ Description: A dimly lit lounge.
 %type: Container rec Entity
 %type: Room rec Room
 %type: ContentsVisible bool
-%type: FocusMode enum none container
 %type: Rarity enum none common uncommon rare epic legendary mythic quest
 %mandatory: Id Name
-%allowed: Id Name Prototype Container Room ContentsVisible FocusMode DescriptionShort DescriptionLong
+%allowed: Id Name Prototype Container Room ContentsVisible DescriptionShort DescriptionLong
 %allowed: OnLook OnTouch OnAttack OnUse OnTake OnOpen OnClose OnDrop
 %allowed: Tags Rarity
 
@@ -156,51 +155,50 @@ Description: A dimly lit lounge.
 Id: object
 Name: object
 Rarity: none
-DescriptionShort: A {{ name }}.
-OnLook: {{ e.description_long or e.description_short or "You see nothing special." }}{{ contents }}
-OnTouch: You touch the {{ name }}. Nothing happens.
-OnAttack: You attack the {{ name }}, but it has no effect.
-OnUse: You can't use the {{ name }}.
-OnTake: You can't take the {{ name }}.
+DescriptionShort: A {{ e.name }}.
+OnLook: {{ e.description_long or e.description_short or "You see nothing special." }}{{ e.contents }}
+OnTouch: You touch the {{ e.name }}. Nothing happens.
+OnAttack: You attack the {{ e.name }}, but it has no effect.
+OnUse: You can't use the {{ e.name }}.
+OnTake: You can't take the {{ e.name }}.
 
 Id: furniture
 Name: furniture
 Prototype: object
-DescriptionShort: A {{ name }} sits here{% if contents %}. On it:{{ contents }}{% endif %}
+DescriptionShort: A {{ e.name }} sits here{% if e.contents %}. On it:{{ e.contents }}{% endif %}
 
 Id: chest
 Name: chest
 Prototype: object
-DescriptionShort: A {{ name }} sits here.
-FocusMode: container
+DescriptionShort: A {{ e.name }} sits here.
 OnLook: {{ e.description_long or e.description_short or "You see nothing special." }}
-OnUse: You open the {{ name }}.{% if contents %} Inside:{{ contents }}{% else %} It's empty.{% endif %}
-OnOpen: You open the {{ name }}.{% if contents %} Inside:{{ contents }}{% else %} It's empty.{% endif %}
-OnClose: You close the {{ name }}.
+OnUse: {{ effects.set_focus() }}You open the {{ e.name }}.{% if e.contents %} Inside:{{ e.contents }}{% else %} It's empty.{% endif %}
+OnOpen: {{ effects.set_focus() }}You open the {{ e.name }}.{% if e.contents %} Inside:{{ e.contents }}{% else %} It's empty.{% endif %}
+OnClose: {{ effects.clear_focus() }}You close the {{ e.name }}.
 
 Id: glass_object
 Name: Glass Object
 Prototype: object
-OnAttack: You suppress the intrusive thought to smash the {{ name }}
+OnAttack: You suppress the intrusive thought to smash the {{ e.name }}
 
 Id: record
 Name: record
 Prototype: object
-OnUse: You pull {{ name }} from its sleeve, place it on the turntable, and drop the needle. Music fills the room.
-OnTake: You can't take the {{ name }}, but you can __play__ it.
+OnUse: You pull {{ e.name }} from its sleeve, place it on the turntable, and drop the needle. Music fills the room.
+OnTake: You can't take the {{ e.name }}, but you can __play__ it.
 
 Id: item
 Name: item
 Prototype: object
 Rarity: common
-OnTake: {{ effects.pickup() }}You pick up the {{ name }}.
-OnDrop: {% if container %}You put the {{ name }} into the *{{ container.name }}*.{% else %}You drop the {{ name }}.{% endif %}{{ effects.drop() }}{{ effects.broadcast(user.name ~ " drops " ~ e.display_name ~ ".") }}
+OnTake: {{ effects.pickup() }}{{ effects.broadcast(user ~ " picks up " ~ e ~ ".") }}You pick up the {{ e.name }}.
+OnDrop: {% if container %}You put the {{ e.name }} into the *{{ container.name }}*.{% else %}You drop the {{ e.name }}.{% endif %}{{ effects.drop() }}{{ effects.broadcast(user ~ " drops " ~ e ~ ".") }}
 
 Id: beverage
 Name: beverage
 Prototype: item
-OnUse: You crack open the {{ name }} and take a refreshing sip. It restores health.
-OnTake: {{ effects.pickup() }}You grab a {{ name }}.
+OnUse: You crack open the {{ e.name }} and take a refreshing sip. It restores health.
+OnTake: {{ effects.pickup() }}{{ effects.broadcast(user ~ " grabs " ~ e ~ ".") }}You grab a {{ e.name }}.
 
 Id: wallet
 Name: Wallet
@@ -208,9 +206,9 @@ Prototype: item
 Rarity: none
 OnTake: You already have your wallet.
 OnDrop: You can't drop your wallet.
-OnLook: Your wallet contains **{{ balance }}**.
-OnUse: You whip out your wallet, it has **{{ balance }}**.
-OnOpen: You open up your wallet, inside it has **{{ balance }}**.
+OnLook: Your wallet contains **{{ user.balance|money }}**.
+OnUse: You whip out your wallet, it has **{{ user.balance|money }}**.
+OnOpen: You open up your wallet, inside it has **{{ user.balance|money }}**.
 
 # ----------------------------------------------------------------------------
 # Currency pickups (grant yen on take, don't go to inventory)
@@ -224,7 +222,7 @@ Rarity: common
 Tags: currency slot_prize desk_drawer_loot foyer_vase_loot sitting_room_cushion_loot
 DescriptionShort: a few loose coins
 OnLook: A small handful of yen coins. Worth about ¥100.
-OnTake: {{ effects.grant_currency(100) }}{{ effects.destroy() }}{{ effects.broadcast("**" ~ user.name ~ "** pockets " ~ e.display_name ~ " (+¥100)") }}You pick up the {{ name }}. (+¥100)
+OnTake: {{ effects.grant_currency(100) }}{{ effects.destroy() }}{{ effects.broadcast("**" ~ user ~ "** pockets " ~ e ~ " (+¥100)") }}You pick up the {{ e.name }}. (+¥100)
 
 Id: bundle_of_bills
 Name: bundle of bills
@@ -233,7 +231,7 @@ Rarity: uncommon
 Tags: currency slot_prize desk_drawer_loot foyer_vase_loot
 DescriptionShort: a bundle of yen notes
 OnLook: A bundle of yen notes held together with a paper band. Worth about ¥1,000.
-OnTake: {{ effects.grant_currency(1000) }}{{ effects.destroy() }}{{ effects.broadcast("**" ~ user.name ~ "** pockets " ~ e.display_name ~ " (+¥1,000)") }}You pick up the {{ name }}. (+¥1,000)
+OnTake: {{ effects.grant_currency(1000) }}{{ effects.destroy() }}{{ effects.broadcast("**" ~ user ~ "** pockets " ~ e ~ " (+¥1,000)") }}You pick up the {{ e.name }}. (+¥1,000)
 
 Id: money_clip
 Name: money clip
@@ -242,7 +240,7 @@ Rarity: rare
 Tags: currency slot_prize foyer_vase_loot
 DescriptionShort: a silver money clip stuffed with cash
 OnLook: An elegant silver money clip stuffed with neatly folded bills. Worth about ¥5,000.
-OnTake: {{ effects.grant_currency(5000) }}{{ effects.destroy() }}{{ effects.broadcast("**" ~ user.name ~ "** pockets " ~ e.display_name ~ " (+¥5,000)") }}You pick up the {{ name }}. (+¥5,000)
+OnTake: {{ effects.grant_currency(5000) }}{{ effects.destroy() }}{{ effects.broadcast("**" ~ user ~ "** pockets " ~ e ~ " (+¥5,000)") }}You pick up the {{ e.name }}. (+¥5,000)
 
 Id: cash_envelope
 Name: cash envelope
@@ -251,7 +249,7 @@ Rarity: epic
 Tags: currency slot_prize
 DescriptionShort: a thick cash envelope
 OnLook: A heavy envelope filled with a substantial stack of bills. Worth about ¥25,000.
-OnTake: {{ effects.grant_currency(25000) }}{{ effects.destroy() }}{{ effects.broadcast("**" ~ user.name ~ "** pockets " ~ e.display_name ~ " (+¥25,000)") }}You pick up the {{ name }}. (+¥25,000)
+OnTake: {{ effects.grant_currency(25000) }}{{ effects.destroy() }}{{ effects.broadcast("**" ~ user ~ "** pockets " ~ e ~ " (+¥25,000)") }}You pick up the {{ e.name }}. (+¥25,000)
 
 Id: briefcase_of_cash
 Name: briefcase of cash
@@ -260,7 +258,7 @@ Rarity: legendary
 Tags: currency slot_prize
 DescriptionShort: a briefcase filled with cash
 OnLook: A sleek black briefcase packed with neat stacks of bills. Worth about ¥100,000.
-OnTake: {{ effects.grant_currency(100000) }}{{ effects.destroy() }}{{ effects.broadcast("**" ~ user.name ~ "** pockets " ~ e.display_name ~ " (+¥100,000)") }}You pick up the {{ name }}. (+¥100,000)
+OnTake: {{ effects.grant_currency(100000) }}{{ effects.destroy() }}{{ effects.broadcast("**" ~ user ~ "** pockets " ~ e ~ " (+¥100,000)") }}You pick up the {{ e.name }}. (+¥100,000)
 
 Id: gold_brick
 Name: gold brick
@@ -269,7 +267,7 @@ Rarity: mythic
 Tags: currency slot_prize
 DescriptionShort: a gleaming gold brick
 OnLook: A solid gold brick stamped with official mint markings. Worth about ¥500,000.
-OnTake: {{ effects.grant_currency(500000) }}{{ effects.destroy() }}{{ effects.broadcast("**" ~ user.name ~ "** pockets " ~ e.display_name ~ " (+¥500,000)") }}You pick up the {{ name }}. (+¥500,000)
+OnTake: {{ effects.grant_currency(500000) }}{{ effects.destroy() }}{{ effects.broadcast("**" ~ user ~ "** pockets " ~ e ~ " (+¥500,000)") }}You pick up the {{ e.name }}. (+¥500,000)
 
 # ----------------------------------------------------------------------------
 # Generic items (used by spawning pools across multiple locations)
@@ -280,13 +278,13 @@ Name: Fishing Bait
 Prototype: item
 Tags: fishing_bait restroom_trash_loot
 Rarity: common
-DescriptionShort: a container of {{ name }}
+DescriptionShort: a container of {{ e.name }}
 DescriptionLong: A small plastic container of nightcrawlers. They're still wriggling.
 OnTouch: You poke the worms. They squirm away from your finger.
 OnOpen: You pop open the container and watch the worms writhe around.
 OnClose: You snap the lid shut, trapping the worms inside.
-OnTake: {{ effects.pickup() }}You grab the {{ name }}.
-OnDrop: {% if container %}You toss the {{ name }} into the *{{ container.name }}*.{% else %}You set the {{ name }} down.{% endif %}{{ effects.drop() }}{{ effects.broadcast(user.name ~ " drops " ~ e.display_name ~ ".") }}
+OnTake: {{ effects.pickup() }}{{ effects.broadcast(user ~ " grabs " ~ e ~ ".") }}You grab the {{ e.name }}.
+OnDrop: {% if container %}You toss the {{ e.name }} into the *{{ container.name }}*.{% else %}You set the {{ e.name }} down.{% endif %}{{ effects.drop() }}{{ effects.broadcast(user ~ " drops " ~ e ~ ".") }}
 
 Id: blade_of_dissonance
 Name: Blade of Dissonance
@@ -296,7 +294,7 @@ Rarity: mythic
 DescriptionShort: A big impractical sword
 DescriptionLong: A big impractical sword that was once used for good but fell into oopey goopey and now it's evil.
 OnTouch: The blade is actually quite dull. It's got oopey goopey all over it.
-OnTake: {{ effects.pickup() }}You heft the impractically large {{ name }} onto your shoulder. \
+OnTake: {{ effects.pickup() }}{{ effects.broadcast("**" ~ user ~ "** picks up " ~ e ~ ". That seems like a bad idea.") }}You heft the impractically large {{ e.name }} onto your shoulder. \
 You feel you made a grave mistake.
 OnDrop: You cannot drop the sword, it's evil. It compels you to keep it in your inventory, taking up a ton of space.
 
@@ -308,7 +306,7 @@ Id: foyer_table
 Name: Wooden Table
 Prototype: furniture
 Room: foyer
-DescriptionShort: A {{ name }} sits in the middle of the room{% if contents %}. On it:{{ contents }}{% endif %}
+DescriptionShort: A {{ e.name }} sits in the middle of the room{% if e.contents %}. On it:{{ e.contents }}{% endif %}
 DescriptionLong: A sturdy oak table with worn edges.
 ContentsVisible: yes
 
@@ -318,19 +316,19 @@ Prototype: item
 Container: foyer_table
 Tags: foyer_vase
 Rarity: common
-DescriptionShort: A teal {{ name }} with yellow roses in it
+DescriptionShort: A teal {{ e.name }} with yellow roses in it
 DescriptionLong: a teal ceramic vase with gold trim around the lip. A couple yellow roses sit inside.
-OnAttack: {{ effects.destroy() }}{{ effects.broadcast("**" ~ user.name ~ "** smashes the " ~ name ~ "!") }}You momentarily give in to your impulses and strike the {{ name }} as hard as you can with your fist. Shards of teal ceramic scatter across the floor. Among the debris, you notice something...{{ effects.grant_random("foyer_vase_loot") }}
+OnAttack: {{ effects.destroy() }}{{ effects.broadcast("**" ~ user ~ "** smashes the " ~ e.name ~ "!") }}You momentarily give in to your impulses and strike the {{ e.name }} as hard as you can with your fist. Shards of teal ceramic scatter across the floor. Among the debris, you notice something...{{ effects.grant_random("foyer_vase_loot") }}
 
 Id: foyer_yellow_rose
 Name: Yellow Rose
 Prototype: item
 Tags: foyer_vase_loot
 Rarity: common
-DescriptionShort: a {{ name }}
+DescriptionShort: a {{ e.name }}
 DescriptionLong: A single yellow rose, slightly crushed but still vibrant.
 OnTouch: You gently touch the petals, they are soft. You touch the stem, it's thorny. You can't figure out if you are an optimist or a pessimist.
-OnAttack: {{ effects.destroy() }}{{ effects.broadcast("**" ~ user.name ~ "** drops a " ~ name ~ " on the floor and crushes it underfoot") }}You feel animosity towards the rose for some reason.
+OnAttack: {{ effects.destroy() }}{{ effects.broadcast("**" ~ user ~ "** drops a " ~ e.name ~ " on the floor and crushes it underfoot") }}You feel animosity towards the rose for some reason.
 OnUse: You smell the rose. It smells lovely! You feel a bit better now.
 
 Id: foyer_yellow_rose_exquisite
@@ -338,10 +336,10 @@ Name: Exquisite Yellow Rose
 Prototype: item
 Tags: foyer_vase_loot
 Rarity: rare
-DescriptionShort: an {{ name }}
+DescriptionShort: an {{ e.name }}
 DescriptionLong: A single yellow rose of uncanny beauty. It looks like something you'd see in a magazine.
 OnTouch: You gently stroke the petals, careful not to upset the beautiful symmetry of them. They are soft and slightly cold to the touch. You touch the stem, it's covered in extremely sharp thorns. The thorns are there to protect the beautiful flower from being picked, but I guess they failed.
-OnAttack: {{ effects.destroy() }}{{ effects.broadcast("**" ~ user.name ~ "** drops an " ~ name ~ " on the floor and crushes it underfoot") }}You feel like you have to destroy something beautiful.
+OnAttack: {{ effects.destroy() }}{{ effects.broadcast("**" ~ user ~ "** drops an " ~ e.name ~ " on the floor and crushes it underfoot") }}You feel like you have to destroy something beautiful.
 OnUse: You smell the rose. It reminds you of an expensive perfume but way more pleasant. You feel better now.
 
 Id: foyer_plaque
@@ -349,7 +347,7 @@ Name: Inscribed Plaque
 Prototype: object
 Room: foyer
 Container: foyer_table
-DescriptionShort: An {{ name }}
+DescriptionShort: An {{ e.name }}
 DescriptionLong: A wooden plaque with a shiny brass plate. The inscription reads: "Welcome to my mansion! You can usually find us in the office down the hall. -Frizzle"
 
 Id: foyer_note
@@ -358,17 +356,17 @@ Prototype: item
 Tags: foyer_note
 Container: foyer_table
 Rarity: quest
-DescriptionShort: A {{ name }} rests on the table
+DescriptionShort: A {{ e.name }} rests on the table
 DescriptionLong: A crumpled piece of paper with scribbled instructions. It reads:
 +> "Hey! New here? The **/interact** command is your friend! Use it like **/interact** with:**item** action:**verb**. For example: **/interact Treasure take** or **/interact Crate open**.\
  Try experimenting with different verbs to get surprising results. Most items respond to the same basic actions, you'll figure it out!"
 OnTouch: You run your fingers over the crumpled paper. The ink is slightly smudged, as if someone wrote it in a hurry. It feels like regular notebook paper. Try to __use__ it for something?
-OnAttack: {{ effects.destroy() }}{{ effects.broadcast("**" ~ user.name ~ "** tears up " ~ e.display_name ~ "!") }}You crumple the {{ name }} into a tiny ball and tear it to shreds. The paper confetti scatters across the table. Well, that's one way to interact with it! You could have also tried __opening__ it or __taking__ it, but destruction works too.
-OnUse: You flip the {{ name }} over, looking for more information. The back is blank except for a small doodle of a smiling face. Not particularly useful, but cute! Have you tried __opening__ it or __taking__ it yet?
-OnTake: {{ effects.pickup() }}You fold the {{ name }} and tuck it into your pocket. Now you have a handy reference! Most items in the mansion respond to common verbs like look, touch, attack, use, take, open, close, and drop. Try __dropping__ it later to put it back.
-OnOpen: You unfold the {{ name }} and flatten it out on the table. The creases make it a bit easier to read now. It's the same instructions about /interact, but now you can see a small footnote: "P.S. - Try __closing__ things after you __open__ them. Some containers have surprises inside!"
-OnClose: You carefully fold the {{ name }} back into a neat square. It's more compact now, though still readable. You've discovered that most items have consistent interactions - this note responds to almost everything! Try __taking__ it with you, or maybe __attack__ it if you're feeling destructive?
-OnDrop: {% if container %}You place the {{ name }} back on the *{{ container.name }}*.{% else %}You set the {{ name }} down on the table.{% endif %}{{ effects.drop() }}{{ effects.broadcast(user.name ~ " places " ~ e.display_name ~ " back down.") }}And that's the /interact command in action! You've successfully experimented with multiple verbs. Keep exploring the mansion - there's a lot to discover!
+OnAttack: {{ effects.destroy() }}{{ effects.broadcast("**" ~ user ~ "** tears up " ~ e ~ "!") }}You crumple the {{ e.name }} into a tiny ball and tear it to shreds. The paper confetti scatters across the table. Well, that's one way to interact with it! You could have also tried __opening__ it or __taking__ it, but destruction works too.
+OnUse: You flip the {{ e.name }} over, looking for more information. The back is blank except for a small doodle of a smiling face. Not particularly useful, but cute! Have you tried __opening__ it or __taking__ it yet?
+OnTake: {{ effects.pickup() }}{{ effects.broadcast(user ~ " pockets " ~ e ~ ".") }}You fold the {{ e.name }} and tuck it into your pocket. Now you have a handy reference! Most items in the mansion respond to common verbs like look, touch, attack, use, take, open, close, and drop. Try __dropping__ it later to put it back.
+OnOpen: You unfold the {{ e.name }} and flatten it out on the table. The creases make it a bit easier to read now. It's the same instructions about /interact, but now you can see a small footnote: "P.S. - Try __closing__ things after you __open__ them. Some containers have surprises inside!"
+OnClose: You carefully fold the {{ e.name }} back into a neat square. It's more compact now, though still readable. You've discovered that most items have consistent interactions - this note responds to almost everything! Try __taking__ it with you, or maybe __attack__ it if you're feeling destructive?
+OnDrop: {% if container %}You place the {{ e.name }} back on the *{{ container.name }}*.{% else %}You set the {{ e.name }} down on the table.{% endif %}{{ effects.drop() }}{{ effects.broadcast(user ~ " places " ~ e ~ " back down.") }}And that's the /interact command in action! You've successfully experimented with multiple verbs. Keep exploring the mansion - there's a lot to discover!
 
 # ----------------------------------------------------------------------------
 # Hallway
@@ -378,7 +376,7 @@ Id: hallway_map
 Name: Mansion Map
 Prototype: object
 Room: hallway
-DescriptionShort: A rough {{ name }} hangs on the wall.
+DescriptionShort: A rough {{ e.name }} hangs on the wall.
 DescriptionLong: A hand-drawn map of the mansion in a simple wooden frame. The sketchy lines show the layout of the ground floor with annotations:
 + • Office: down the hall
 + • Library: west from here through the foyer, past the gallery
@@ -392,22 +390,22 @@ Id: restroom_sinks
 Name: Row of Sinks
 Prototype: furniture
 Room: restroom
-FocusMode: container
 ContentsVisible: no
-DescriptionShort: A {{ name }} lines the wall beneath a long mirror, with soap and paper towel dispensers mounted above.
+DescriptionShort: A {{ e.name }} lines the wall beneath a long mirror, with soap and paper towel dispensers mounted above.
 DescriptionLong: Four white porcelain sinks with chrome fixtures. Above them stretches a long mirror, and mounted on the wall are soap dispensers and paper towel dispensers.
 OnTouch: You run your hand under the faucet. The water is lukewarm.
 OnUse: You turn on the faucet and wash your hands. The soap smells vaguely of industrial lavender.
-OnOpen: You step up to the sinks and survey your options.{% if contents %} Above:{{ contents }}{% endif %}
+OnOpen: {{ effects.set_focus() }}You step up to the sinks and survey your options.{% if e.contents %} Above:{{ e.contents }}{% endif %}
+OnClose: {{ effects.clear_focus() }}You step back from the sinks.
 
 Id: restroom_mirror
 Name: Long Mirror
 Prototype: object
 Room: restroom
 Container: restroom_sinks
-DescriptionShort: a {{ name }} stretching above the sinks
+DescriptionShort: a {{ e.name }} stretching above the sinks
 DescriptionLong: A clean mirror spanning the length of the sink counter. The fluorescent lighting is unforgiving.
-OnLook: You look at your reflection in the {{ name }}. You look tired but determined.
+OnLook: You look at your reflection in the {{ e.name }}. You look tired but determined.
 OnTouch: You touch the cool glass. Your reflection mimics you perfectly.
 OnAttack: You resist the urge to punch your own reflection. Seven years bad luck isn't worth it.
 
@@ -416,7 +414,7 @@ Name: Soap Dispenser
 Prototype: object
 Room: restroom
 Container: restroom_sinks
-DescriptionShort: a wall-mounted {{ name }}
+DescriptionShort: a wall-mounted {{ e.name }}
 DescriptionLong: A chrome soap dispenser with a translucent reservoir. The pink liquid inside is running low.
 OnUse: You pump the dispenser. A small amount of pink soap oozes into your palm.
 OnTouch: The chrome is cold and slightly sticky from soap residue.
@@ -426,7 +424,7 @@ Name: Paper Towel Dispenser
 Prototype: object
 Room: restroom
 Container: restroom_sinks
-DescriptionShort: a {{ name }} mounted on the wall
+DescriptionShort: a {{ e.name }} mounted on the wall
 DescriptionLong: A metal paper towel dispenser. You can see brown paper towels through the slot.
 OnUse: You yank a paper towel from the dispenser. It tears unevenly.
 OnTouch: The metal housing rattles slightly when you touch it.
@@ -435,31 +433,30 @@ Id: restroom_urinals
 Name: Urinals
 Prototype: furniture
 Room: restroom
-DescriptionShort: Three {{ name }} line the wall, separated by privacy dividers.
+DescriptionShort: Three {{ e.name }} line the wall, separated by privacy dividers.
 DescriptionLong: A row of white porcelain urinals with automatic flush sensors. Blue deodorizer pucks sit in the drains. Privacy dividers offer a modicum of dignity.
 OnTouch: You touch the porcelain. It's cold. Why did you do that?
-OnUse: {{ effects.broadcast("**" ~ user.name ~ "** uses the urinal.") }}You step up to the urinal and do your business. The automatic sensor flushes when you step away. You feel relieved.
+OnUse: {{ effects.broadcast("**" ~ user ~ "** uses the urinal.") }}You step up to the urinal and do your business. The automatic sensor flushes when you step away. You feel relieved.
 
 Id: restroom_stalls
 Name: Toilet Stalls
 Prototype: furniture
 Room: restroom
-FocusMode: container
 ContentsVisible: yes
-DescriptionShort: Three {{ name }} with wooden doors line the back wall{% if contents %}. Inside:{{ contents }}{% endif %}
+DescriptionShort: Three {{ e.name }} with wooden doors line the back wall{% if e.contents %}. Inside:{{ e.contents }}{% endif %}
 DescriptionLong: Three toilet stalls with honey-colored wooden doors. The gaps around the doors are uncomfortably wide, as is tradition.
-OnOpen: You push open a stall door.{% if contents %} Inside you see:{{ contents }}{% else %} Just an empty stall.{% endif %}
-OnClose: You let the stall door swing shut. It bounces a few times before settling.
+OnOpen: {{ effects.set_focus() }}You push open a stall door.{% if e.contents %} Inside you see:{{ e.contents }}{% else %} Just an empty stall.{% endif %}
+OnClose: {{ effects.clear_focus() }}You let the stall door swing shut. It bounces a few times before settling.
 
 Id: restroom_toilet
 Name: Toilet
 Prototype: furniture
 Room: restroom
 Container: restroom_stalls
-DescriptionShort: a standard white {{ name }}
+DescriptionShort: a standard white {{ e.name }}
 DescriptionLong: A white porcelain toilet with a black plastic seat. There's a chrome flush handle on the side. Surprisingly clean for a public restroom.
 OnTouch: You touch the toilet seat. It's cold. The handle is cold too. Everything in here is cold.
-OnUse: {{ effects.broadcast("**" ~ user.name ~ "** occupies a toilet stall.") }}You enter the stall and lock the flimsy door behind you. After taking care of business, you flush and exit. You feel much better now.
+OnUse: {{ effects.broadcast("**" ~ user ~ "** occupies a toilet stall.") }}You enter the stall and lock the flimsy door behind you. After taking care of business, you flush and exit. You feel much better now.
 OnOpen: You lift the toilet lid. It's a toilet. What did you expect?
 OnClose: You close the toilet lid with a satisfying clunk.
 
@@ -468,20 +465,20 @@ Name: Toilet Paper Roll
 Prototype: item
 Tags: restroom_toilet_paper_spawn
 Rarity: common
-DescriptionShort: a nearly empty {{ name }}
+DescriptionShort: a nearly empty {{ e.name }}
 DescriptionLong: A sad, thin toilet paper roll clinging to life. Single-ply, of course.
 OnTouch: You spin the roll. It makes a satisfying whirring sound.
 OnUse: You grab some toilet paper. It's scratchy and thin. At least there's some left.
-OnTake: {{ effects.pickup() }}You yank the {{ name }} off the holder.
-OnDrop: {% if container %}You stuff the {{ name }} into the *{{ container.name }}*.{% else %}You set the {{ name }} down on the floor. Gross.{% endif %}{{ effects.drop() }}{{ effects.broadcast(user.name ~ " drops " ~ e.display_name ~ ".") }}
+OnTake: {{ effects.pickup() }}{{ effects.broadcast(user ~ " yanks " ~ e ~ " off the holder.") }}You yank the {{ e.name }} off the holder.
+OnDrop: {% if container %}You stuff the {{ e.name }} into the *{{ container.name }}*.{% else %}You set the {{ e.name }} down on the floor. Gross.{% endif %}{{ effects.drop() }}{{ effects.broadcast(user ~ " drops " ~ e ~ ".") }}
 
 Id: restroom_hand_dryer
 Name: Hand Dryer
 Prototype: object
 Room: restroom
-DescriptionShort: A wall-mounted {{ name }} hangs near the exit.
+DescriptionShort: A wall-mounted {{ e.name }} hangs near the exit.
 DescriptionLong: A Dyson Airblade hand dryer. The chrome surface is covered in water spots and fingerprints.
-OnUse: {{ effects.broadcast("**VROOOOOOM** - " ~ user.name ~ " uses the hand dryer.") }}You insert your hands into the Airblade. The jet of air is surprisingly violent and incredibly loud. Your hands are now dry but your ears are ringing.
+OnUse: {{ effects.broadcast("**VROOOOOOM** - " ~ user ~ " uses the hand dryer.") }}You insert your hands into the Airblade. The jet of air is surprisingly violent and incredibly loud. Your hands are now dry but your ears are ringing.
 OnTouch: The surface is slightly warm from the heating element.
 
 Id: restroom_trash_can
@@ -489,9 +486,9 @@ Name: Trash Can
 Prototype: chest
 Room: restroom
 ContentsVisible: no
-DescriptionShort: A metal {{ name }} sits in the corner.
+DescriptionShort: A metal {{ e.name }} sits in the corner.
 DescriptionLong: A stainless steel trash can with a swinging lid. It's overflowing with crumpled paper towels.
-OnOpen: You peer into the {{ name }}, pushing aside damp paper towels.{% if contents %} You spot:{{ contents }}{% else %} Nothing but garbage.{% endif %}
+OnOpen: You peer into the {{ e.name }}, pushing aside damp paper towels.{% if e.contents %} You spot:{{ e.contents }}{% else %} Nothing but garbage.{% endif %}
 OnClose: You let the lid swing shut.
 OnTouch: The metal is cold and slightly damp.
 
@@ -503,7 +500,7 @@ OnTouch: The metal is cold and slightly damp.
 Id: terminal_document
 Name: terminal document
 Prototype: object
-DescriptionShort: {{ name }}
+DescriptionShort: {{ e.name }}
 OnLook: {{ e.description_long or "ERROR: FILE NOT FOUND" }}
 OnUse: {{ e.description_long or "ERROR: FILE NOT FOUND" }}
 
@@ -511,19 +508,18 @@ Id: office_terminal
 Name: MUDD-OS Terminal
 Prototype: object
 Room: office
-FocusMode: container
 ContentsVisible: no
-DescriptionShort: An old {{ name }} hums on the desk.
+DescriptionShort: An old {{ e.name }} hums on the desk.
 DescriptionLong: A bulky CRT monitor displaying green text on black. The case is beige plastic, yellowed with age. A small sticker reads "MUDD-OS v0.2.1".
 OnUse: The CRT hums as you press the power button. Green text flickers to life. You can now __login__.
-OnOpen: ```
+OnOpen: {{ effects.set_focus() }}```
 + ┏┳┓╻ ╻╺┳┓╺┳┓   ┏━┓┏━┓
 + ┃┃┃┃ ┃ ┃┃ ┃┃╺━╸┃ ┃┗━┓
 + ╹ ╹┗━┛╺┻┛╺┻┛   ┗━┛┗━┛
 + ```
 + *MUDD-OS v0.2.1 — Multi-User Dungeon (Discord)*
-+ Welcome, GUEST. You have access to the following files:{% if contents %}{{ contents }}{% else %} (none){% endif %}
-OnClose: ```
++ Welcome, GUEST. You have access to the following files:{% if e.contents %}{{ e.contents }}{% else %} (none){% endif %}
+OnClose: {{ effects.clear_focus() }}```
 + LOGGING OUT...
 +
 + GOODBYE, GUEST.
@@ -753,71 +749,70 @@ Id: gallery_wall
 Name: Gallery Wall
 Prototype: furniture
 Room: gallery
-FocusMode: container
-DescriptionShort: A section of {{ name }} displays rotating artwork{% if contents %}:{{ contents }}{% endif %}
+DescriptionShort: A section of {{ e.name }} displays rotating artwork{% if e.contents %}:{{ e.contents }}{% endif %}
 DescriptionLong: A dedicated wall space where the curator rotates pieces from the collection. A small placard reads "Featured Works - Selection changes periodically. All artwork drawn by real human beings."
 ContentsVisible: yes
-OnOpen: You step closer to examine the {{ name }}.{% if contents %} Currently on display:{{ contents }}{% else %} The wall is bare.{% endif %}
-OnClose: You step back from the {{ name }}.
+OnOpen: {{ effects.set_focus() }}You step closer to examine the {{ e.name }}.{% if e.contents %} Currently on display:{{ e.contents }}{% else %} The wall is bare.{% endif %}
+OnClose: {{ effects.clear_focus() }}You step back from the {{ e.name }}.
 
 # Gallery wall paintings (spawned by gallery_wall_pool)
 
 Id: painting
 Name: painting
 Prototype: item
-DescriptionShort: a {{ name }}
-OnTake: {{ effects.pickup() }}You carefully lift the {{ name }} from its hook.{{ effects.broadcast(user.name ~ " takes " ~ e.display_name ~ " from the wall.") }}
-OnDrop: {% if container %}You hang the {{ name }} on the *{{ container.name }}*.{% else %}You set the {{ name }} down, leaning it against the wall.{% endif %}{{ effects.drop() }}{{ effects.broadcast(user.name ~ " places " ~ e.display_name ~ ".") }}
+DescriptionShort: a {{ e.name }}
+OnTake: {{ effects.pickup() }}You carefully lift the {{ e.name }} from its hook.{{ effects.broadcast(user ~ " takes " ~ e ~ " from the wall.") }}
+OnDrop: {% if container %}You hang the {{ e.name }} on the *{{ container.name }}*.{% else %}You set the {{ e.name }} down, leaning it against the wall.{% endif %}{{ effects.drop() }}{{ effects.broadcast(user ~ " places " ~ e ~ ".") }}
 OnTouch: You run your fingers along the frame. The paint is dry and textured.
-OnAttack: {{ effects.destroy() }}{{ effects.broadcast("**" ~ user.name ~ "** slashes " ~ e.display_name ~ " with a knife!") }}You drag your blade across the canvas. The painting is ruined.
+OnAttack: {{ effects.destroy() }}{{ effects.broadcast("**" ~ user ~ "** slashes " ~ e ~ " with a knife!") }}You drag your blade across the canvas. The painting is ruined.
 
 Id: frizzle_artsylyds_the_scream_png
 Name: The Scream Painting
 Prototype: painting
 Tags: gallery_painting
 Rarity: uncommon
-DescriptionShort: {{ name }} (artsylyds)
-DescriptionLong: [Art by artsylyds.](https://img.frizzle.dev/mudd/frizzle_artsylyds_the_scream.png)
+DescriptionShort: {{ e.name }} (artsylyds)
+DescriptionLong: Art by artsylyds. [The Scream Painting](https://img.frizzle.dev/mudd/frizzle_artsylyds_the_scream.png)
 
 Id: frizzle_tattie_3up_png
 Name: It's Frizzle Painting
 Prototype: painting
 Tags: gallery_painting
 Rarity: common
-DescriptionShort: {{ name }} (tattie)
-DescriptionLong: [Art by tattie.](https://img.frizzle.dev/mudd/frizzle_tattie_3up.png)
+DescriptionShort: {{ e.name }} (tattie)
+DescriptionLong: Art by tattie. [It's Frizzle Painting](https://img.frizzle.dev/mudd/frizzle_tattie_3up.png)
 
 Id: frizzle_nebula_nyafriz_png
 Name: Frizzle on the Phone Painting
 Prototype: painting
 Tags: gallery_painting
 Rarity: uncommon
-DescriptionShort: {{ name }} (nebula)
-DescriptionLong: [Art by nebula.](https://img.frizzle.dev/mudd/frizzle_nebula_nyafriz.png) Frizzle on da phone fo today
+DescriptionShort: {{ e.name }} (nebula)
+DescriptionLong: Art by nebula. [Frizzle on the Phone Painting](https://img.frizzle.dev/mudd/frizzle_nebula_nyafriz.png) Frizzle on da phone fo today
 
 Id: frizzle_applekouhai_chair_jpg
 Name: Frizzle Chair Painting
 Prototype: painting
 Tags: gallery_painting
 Rarity: uncommon
-DescriptionShort: {{ name }} (applekouhai)
-DescriptionLong: [Art by applekouhai.](https://img.frizzle.dev/mudd/frizzle_applekouhai_chair.jpg)
+DescriptionShort: {{ e.name }} (applekouhai)
+DescriptionLong: Art by applekouhai. [Frizzle Chair Painting](https://img.frizzle.dev/mudd/frizzle_applekouhai_chair.jpg)
 
 Id: frizzle_nebula_maid_png
 Name: Maid Portrait
 Prototype: painting
 Tags: gallery_painting
 Rarity: common
-DescriptionShort: {{ name }} (nebula)
-DescriptionLong: [Art by nebula.](https://img.frizzle.dev/mudd/frizzle_nebula_maid.png)
+DescriptionShort: {{ e.name }} (nebula)
+DescriptionLong: Art by nebula. [Maid Portrait](https://img.frizzle.dev/mudd/frizzle_nebula_maid.png)
 
 Id: frizzle_nebula_maid_shiny_gif
 Name: Maid Portrait (Holographic)
 Prototype: painting
 Tags: gallery_painting
 Rarity: rare
-DescriptionShort: {{ name }} (nebula)
-DescriptionLong: [Art by nebula.](https://img.frizzle.dev/mudd/frizzle_nebula_maid_shiny.gif) It's shiny!
+DescriptionShort: {{ e.name }} (nebula)
+DescriptionLong: Art by nebula. [Maid Portrait (Holographic)](https://img.frizzle.dev/mudd/frizzle_nebula_maid_shiny.gif) It's shiny!
 OnTouch: The surface shimmers under your fingertips, the glitter catching the light.
 
 Id: frizzle_nebula_maid_all4s_png
@@ -825,16 +820,16 @@ Name: Maid on All Fours Painting
 Prototype: painting
 Tags: gallery_painting
 Rarity: rare
-DescriptionShort: {{ name }} (nebula)
-DescriptionLong: [Art by nebula.](https://img.frizzle.dev/mudd/frizzle_nebula_maid_all4s.png)
+DescriptionShort: {{ e.name }} (nebula)
+DescriptionLong: Art by nebula. [Maid on All Fours Painting](https://img.frizzle.dev/mudd/frizzle_nebula_maid_all4s.png)
 
 Id: frizzle_nebula_maid_all4s_shiny_gif
 Name: Maid on All Fours Painting (Holographic)
 Prototype: painting
 Tags: gallery_painting
 Rarity: epic
-DescriptionShort: {{ name }} (nebula)
-DescriptionLong: [Art by nebula.](https://img.frizzle.dev/mudd/frizzle_nebula_maid_all4s_shiny.gif) 
+DescriptionShort: {{ e.name }} (nebula)
+DescriptionLong: Art by nebula. [Maid on All Fours Painting (Holographic)](https://img.frizzle.dev/mudd/frizzle_nebula_maid_all4s_shiny.gif)
 OnTouch: The glitter seems to swirl under your touch. You've never seen anything so sparkly.
 OnLook: {{ e.description_long }} It's mesmerizing.
 
@@ -843,40 +838,40 @@ Name: Kyoani Frizzle Painting
 Prototype: painting
 Tags: gallery_painting
 Rarity: uncommon
-DescriptionShort: {{ name }} (applekouhai)
-DescriptionLong: [Art by applekouhai.](https://img.frizzle.dev/mudd/frizzle_applekouhai_kon.png)
+DescriptionShort: {{ e.name }} (applekouhai)
+DescriptionLong: Art by applekouhai. [Kyoani Frizzle Painting](https://img.frizzle.dev/mudd/frizzle_applekouhai_kon.png)
 
 Id: frizzle_neomory_painting_png
 Name: Sunset with Ruby Painting
 Prototype: painting
 Tags: gallery_painting
 Rarity: uncommon
-DescriptionShort: {{ name }} (neomory)
-DescriptionLong: [Art by neomory.](https://img.frizzle.dev/mudd/frizzle_neomory_painting.png)
+DescriptionShort: {{ e.name }} (neomory)
+DescriptionLong: Art by neomory. [Sunset with Ruby Painting](https://img.frizzle.dev/mudd/frizzle_neomory_painting.png)
 
 Id: frizzle_been_drool_jpg
 Name: Seltzer Pour Painting
 Prototype: painting
 Tags: gallery_painting
 Rarity: rare
-DescriptionShort: {{ name }} (been)
-DescriptionLong: [Art by been.](https://img.frizzle.dev/mudd/frizzle_been_drool.jpg)
+DescriptionShort: {{ e.name }} (been)
+DescriptionLong: Art by been. [Seltzer Pour Painting](https://img.frizzle.dev/mudd/frizzle_been_drool.jpg)
 
 Id: frizzle_sanamaru1827_png
 Name: Frizzle Jump Painting
 Prototype: painting
 Tags: gallery_painting
 Rarity: epic
-DescriptionShort: {{ name }} (sanamaru1827)
-DescriptionLong: [Art by sanamaru1827.](https://img.frizzle.dev/mudd/frizzle_sanamaru1827.png)
+DescriptionShort: {{ e.name }} (sanamaru1827)
+DescriptionLong: Art by sanamaru1827. [Frizzle Jump Painting](https://img.frizzle.dev/mudd/frizzle_sanamaru1827.png)
 
 Id: frizzle_applekouhai_garfield_jpg
 Name: Garfield Frizzle Painting
 Prototype: painting
 Tags: gallery_painting
 Rarity: legendary
-DescriptionShort: {{ name }} (applekouhai)
-DescriptionLong: [Art by applekouhai.](https://img.frizzle.dev/mudd/frizzle_applekouhai_garfield.jpg)
+DescriptionShort: {{ e.name }} (applekouhai)
+DescriptionLong: Art by applekouhai. [Garfield Frizzle Painting](https://img.frizzle.dev/mudd/frizzle_applekouhai_garfield.jpg)
 OnUse: You begin to hate mondays.
 OnLook: {{ e.description_long }} The longer you stare, the more it stares back.
 OnTouch: The paint feels warm. Too warm.
@@ -885,7 +880,7 @@ Id: gallery_sign
 Name: Posted Sign
 Prototype: object
 Room: gallery
-DescriptionShort: A {{ name }} hangs on the wall near the entrance
+DescriptionShort: A {{ e.name }} hangs on the wall near the entrance
 DescriptionLong: A formal notice from the management, printed on thick cardstock in an elegant serif font. It reads: "Dear Valued Guests, Please do NOT __attack__ or __steal__ the paintings. They are priceless works of art and should be treated with respect. Thank you for your cooperation. - The Management"
 
 # ----------------------------------------------------------------------------
@@ -896,30 +891,28 @@ Id: lounge_globe_minibar
 Name: Globe Minibar
 Prototype: furniture
 Room: lounge
-FocusMode: container
-DescriptionShort: An oversized {{ name }} sits in the corner.
+DescriptionShort: An oversized {{ e.name }} sits in the corner.
 DescriptionLong: A vintage wooden globe on a brass stand. You can __open__ the northern hemisphere to reveal the minibar inside.
 ContentsVisible: no
 OnUse: You swing open the globe and pour yourself a drink. It restores health.
-OnOpen: You swing open the northern hemisphere.{% if contents %} Inside:{{ contents }}{% else %} It's empty.{% endif %}
-OnClose: You swing the globe closed.
+OnOpen: {{ effects.set_focus() }}You swing open the northern hemisphere.{% if e.contents %} Inside:{{ e.contents }}{% else %} It's empty.{% endif %}
+OnClose: {{ effects.clear_focus() }}You swing the globe closed.
 
 Id: lounge_fridge
 Name: Drink Fridge
 Prototype: furniture
 Room: lounge
-FocusMode: container
-DescriptionShort: A windowed {{ name }} sits against the east wall.
+DescriptionShort: A windowed {{ e.name }} sits against the east wall.
 DescriptionLong: A glass-door mini fridge humming quietly. The glass is fogged with condensation. You can __open__ it to see what's inside.
 OnTouch: The glass is cold and slightly damp with condensation.
-OnOpen: You swing open the fridge door.{% if contents %} Inside:{{ contents }}{% else %} It's empty.{% endif %}
-OnClose: You close the fridge door.
+OnOpen: {{ effects.set_focus() }}You swing open the fridge door.{% if e.contents %} Inside:{{ e.contents }}{% else %} It's empty.{% endif %}
+OnClose: {{ effects.clear_focus() }}You close the fridge door.
 
 Id: lounge_chairs
 Name: Comfy Chairs
 Prototype: furniture
 Room: lounge
-DescriptionShort: Several {{ name }} are scattered around the room.
+DescriptionShort: Several {{ e.name }} are scattered around the room.
 DescriptionLong: Plush leather armchairs that look like they've hosted many late-night conversations.
 OnUse: You sink into one of the leather chairs and close your eyes for a moment. You feel your health regenerating.
 
@@ -928,10 +921,10 @@ Name: Slot Machine
 Prototype: furniture
 Room: lounge
 ContentsVisible: no
-DescriptionShort: A vintage {{ name }} stands against the wall.
+DescriptionShort: A vintage {{ e.name }} stands against the wall.
 DescriptionLong: A classic one-armed bandit with three spinning reels. The chrome handle gleams invitingly. __Pull__ the handle to try your luck!
 OnTouch: The cold metal handle vibrates slightly.
-OnUse: {% if contents %}{{ effects.dispense() }}{{ effects.broadcast("**" ~ user.name ~ "** spins the slot machine...") }}The wheels spin... click click click...{% else %}The slot machine sits empty, waiting to be refilled.{% endif %}
+OnUse: {% if e.contents %}{{ effects.dispense() }}{{ effects.broadcast("**" ~ user ~ "** spins the slot machine...") }}The wheels spin... click click click...{% else %}The slot machine sits empty, waiting to be refilled.{% endif %}
 OnAttack: You kick the machine in frustration. It remains unmoved.
 
 # Slot machine prizes (spawned by lounge_slot_machine_pool)
@@ -942,7 +935,7 @@ Name: Participation Coupon
 Prototype: item
 Tags: slot_prize
 Rarity: common
-DescriptionShort: a crumpled {{ name }}
+DescriptionShort: a crumpled {{ e.name }}
 DescriptionLong: A small slip of paper printed on cheap stock. It reads: "Dear Valued Patron, Thank you for your interest in winning at the Slot Machine. After careful consideration of all candidates, we regret to inform you that we have decided to move forward with other applicants whose qualifications more closely match our current jackpot needs. We were impressed by your enthusiasm for pulling the handle, and we encourage you to apply again in the future. We wish you the best in your future gambling endeavors. Sincerely, The Slot Machine."
 OnUse: You read the coupon again. It doesn't get any better the second time.
 
@@ -951,7 +944,7 @@ Name: Sour Cherry Ring Pop
 Prototype: item
 Tags: slot_prize
 Rarity: common
-DescriptionShort: a {{ name }}
+DescriptionShort: a {{ e.name }}
 DescriptionLong: A bright red Ring Pop. The gem-shaped candy sits on a plastic ring.
 OnUse: You lick the Ring Pop. Sour cherry.
 
@@ -960,7 +953,7 @@ Name: Sour Lemonade Ring Pop
 Prototype: item
 Tags: slot_prize
 Rarity: common
-DescriptionShort: a {{ name }}
+DescriptionShort: a {{ e.name }}
 DescriptionLong: A pale yellow Ring Pop coated in sour crystals.
 OnUse: You lick the Ring Pop. Your face puckers.
 
@@ -969,7 +962,7 @@ Name: Sour Green Apple Ring Pop
 Prototype: item
 Tags: slot_prize
 Rarity: uncommon
-DescriptionShort: a {{ name }}
+DescriptionShort: a {{ e.name }}
 DescriptionLong: A green Ring Pop that smells like Granny Smith apples.
 OnUse: You lick the Ring Pop. Tart and sweet.
 
@@ -978,7 +971,7 @@ Name: Sour Cherry Berry Ring Pop
 Prototype: item
 Tags: slot_prize
 Rarity: uncommon
-DescriptionShort: a {{ name }}
+DescriptionShort: a {{ e.name }}
 DescriptionLong: A deep purple Ring Pop combining cherry and mixed berry.
 OnUse: You lick the Ring Pop. Berry medley.
 
@@ -987,7 +980,7 @@ Name: Sour Raspberry Lemonade Ring Pop
 Prototype: item
 Tags: slot_prize
 Rarity: rare
-DescriptionShort: a {{ name }}
+DescriptionShort: a {{ e.name }}
 DescriptionLong: A pink and yellow swirled Ring Pop.
 OnUse: You lick the Ring Pop. Raspberry lemonade.
 
@@ -996,7 +989,7 @@ Name: Sour Watermelon Ring Pop
 Prototype: item
 Tags: slot_prize
 Rarity: legendary
-DescriptionShort: a {{ name }}
+DescriptionShort: a {{ e.name }}
 DescriptionLong: A pink-green Ring Pop. Watermelon flavor. Hard to find.
 OnUse: You lick the Ring Pop. Watermelon.
 
@@ -1007,7 +1000,7 @@ Name: White Claw Mango
 Prototype: beverage
 Rarity: rare
 Tags: beverage lounge_drink foyer_vase_loot slot_prize
-DescriptionShort: a chilled {{ name }}
+DescriptionShort: a chilled {{ e.name }}
 DescriptionLong: A slim can of White Claw Hard Seltzer, Mango flavor. 100 calories of refreshment.
 
 Id: lounge_white_claw_lime
@@ -1015,7 +1008,7 @@ Name: White Claw Lime
 Prototype: beverage
 Rarity: common
 Tags: beverage lounge_drink slot_prize
-DescriptionShort: a chilled {{ name }}
+DescriptionShort: a chilled {{ e.name }}
 DescriptionLong: A slim can of White Claw Hard Seltzer, Natural Lime flavor. Crisp and clean.
 
 Id: lounge_white_claw_black_cherry
@@ -1023,7 +1016,7 @@ Name: White Claw Black Cherry
 Prototype: beverage
 Rarity: common
 Tags: beverage lounge_drink slot_prize
-DescriptionShort: a chilled {{ name }}
+DescriptionShort: a chilled {{ e.name }}
 DescriptionLong: A slim can of White Claw Hard Seltzer, Black Cherry flavor. Sweet with a hint of tart.
 
 Id: lounge_lone_star
@@ -1031,7 +1024,7 @@ Name: Lone Star Tallboy
 Prototype: beverage
 Rarity: common
 Tags: beverage lounge_drink
-DescriptionShort: a cold {{ name }}
+DescriptionShort: a cold {{ e.name }}
 DescriptionLong: A 16oz can of Lone Star, the National Beer of Texas. It's cheap and it's cold.
 
 Id: lounge_shiner_bock
@@ -1039,7 +1032,7 @@ Name: Shiner Bock
 Prototype: beverage
 Rarity: rare
 Tags: beverage lounge_drink
-DescriptionShort: a frosty {{ name }}
+DescriptionShort: a frosty {{ e.name }}
 DescriptionLong: A bottle of Shiner Bock from the Spoetzl Brewery in Shiner, Texas. A proper Texas lager.
 
 Id: lounge_topo_chico
@@ -1047,7 +1040,7 @@ Name: Topo Chico
 Prototype: beverage
 Rarity: common
 Tags: beverage lounge_drink
-DescriptionShort: a sparkling {{ name }}
+DescriptionShort: a sparkling {{ e.name }}
 DescriptionLong: A glass bottle of Topo Chico mineral water. The bubbles are aggressive in the best way.
 
 Id: lounge_makers_mark
@@ -1055,27 +1048,27 @@ Name: Maker's Mark Bourbon
 Prototype: beverage
 Rarity: uncommon
 Tags: beverage globe_minibar_liquor
-DescriptionShort: a bottle of {{ name }}
+DescriptionShort: a bottle of {{ e.name }}
 DescriptionLong: A bottle of Maker's Mark Kentucky Straight Bourbon Whisky. The iconic red wax seal drips down the neck.
-OnUse: You pour yourself a glass of {{ name }}. The caramel and vanilla notes warm your throat. It restores health.
+OnUse: You pour yourself a glass of {{ e.name }}. The caramel and vanilla notes warm your throat. It restores health.
 
 Id: lounge_yamazaki_12
 Name: Yamazaki 12 Year
 Prototype: beverage
 Rarity: rare
 Tags: beverage globe_minibar_liquor
-DescriptionShort: a bottle of {{ name }}
+DescriptionShort: a bottle of {{ e.name }}
 DescriptionLong: A bottle of Suntory Yamazaki 12 Year Single Malt Japanese Whisky. Aged in a combination of American, Spanish, and Japanese oak casks.
-OnUse: You pour yourself a dram of {{ name }}. Delicate notes of peach, vanilla, and Mizunara oak. It restores health.
+OnUse: You pour yourself a dram of {{ e.name }}. Delicate notes of peach, vanilla, and Mizunara oak. It restores health.
 
 Id: lounge_nikka_yoichi_20
 Name: Nikka Yoichi 20-Year Limited Edition
 Prototype: beverage
 Rarity: legendary
 Tags: beverage globe_minibar_liquor
-DescriptionShort: a bottle of {{ name }}
+DescriptionShort: a bottle of {{ e.name }}
 DescriptionLong: A bottle of Nikka Yoichi Limited Edition Final Version 20-Year-Old Single Malt Japanese Whisky. One of the last bottles ever produced before the age-statement line was discontinued. Peated barley, coastal air, decades of patience.
-OnUse: You pour yourself a reverent measure of {{ name }}. Smoke, sea salt, dried fruit, and a finish that lasts forever. You feel blessed. It restores health.
+OnUse: You pour yourself a reverent measure of {{ e.name }}. Smoke, sea salt, dried fruit, and a finish that lasts forever. You feel blessed. It restores health.
 
 # ----------------------------------------------------------------------------
 # Library entities
@@ -1085,7 +1078,7 @@ Id: library_couches
 Name: Long Couches
 Prototype: furniture
 Room: library
-DescriptionShort: A pair of {{ name }} surround a coffee table in the center.
+DescriptionShort: A pair of {{ e.name }} surround a coffee table in the center.
 DescriptionLong: Overstuffed leather couches arranged in a U-shape, perfect for reading or napping.
 OnUse: You stretch out on one of the couches. The leather is soft and worn in all the right places. You feel your health regenerating.
 
@@ -1093,7 +1086,7 @@ Id: library_coffee_table
 Name: Coffee Table
 Prototype: furniture
 Room: library
-DescriptionShort: A {{ name }} sits between the couches{% if contents %}. On it:{{ contents }}{% endif %}
+DescriptionShort: A {{ e.name }} sits between the couches{% if e.contents %}. On it:{{ e.contents }}{% endif %}
 DescriptionLong: A low wooden coffee table with some ring stains from forgotten drinks.
 ContentsVisible: yes
 
@@ -1101,24 +1094,24 @@ Id: library_bookshelves
 Name: Bookshelves
 Prototype: furniture
 Room: library
-DescriptionShort: Tall {{ name }} cover three walls.
+DescriptionShort: Tall {{ e.name }} cover three walls.
 DescriptionLong: Floor-to-ceiling bookshelves stuffed with books that look brand new, as if the owner read the first chapter and then never picked them up again. Some shelves are reserved for movies, others for showing off trinkets.
 
 Id: library_desk
 Name: Writing Desk
 Prototype: chest
 Room: library
-DescriptionShort: A {{ name }} sits in the southern half of the room.
+DescriptionShort: A {{ e.name }} sits in the southern half of the room.
 DescriptionLong: An antique writing desk with a worn leather top. There's a drawer you can __open__.
 ContentsVisible: no
-OnOpen: You pull open the drawer.{% if contents %} Inside:{{ contents }}{% else %} It's empty.{% endif %}
+OnOpen: You pull open the drawer.{% if e.contents %} Inside:{{ e.contents }}{% else %} It's empty.{% endif %}
 OnClose: You slide the drawer shut.
 
 Id: library_side_table
 Name: Side Table
 Prototype: furniture
 Room: library
-DescriptionShort: A small {{ name }} stands by the bookshelves{% if contents %}. On it:{{ contents }}{% endif %}
+DescriptionShort: A small {{ e.name }} stands by the bookshelves{% if e.contents %}. On it:{{ e.contents }}{% endif %}
 DescriptionLong: A narrow wooden side table with turned legs, tucked between the bookshelves.
 ContentsVisible: yes
 
@@ -1127,7 +1120,7 @@ Name: Record Player
 Prototype: object
 Room: library
 Container: library_side_table
-DescriptionShort: An Audio Technica {{ name }}
+DescriptionShort: An Audio Technica {{ e.name }}
 DescriptionLong: An Audio Technica AT-LP60XBT turntable. Not the fanciest record player by any means, but gets the job done. There is a record ready to play.
 OnUse: You press the play button and the automatic mechanism spins the record and drops the needle. Music fills the room. You like this song!
 
@@ -1138,7 +1131,7 @@ Name: Avatar Blu-ray
 Prototype: item
 Tags: desk_drawer_loot slot_prize
 Rarity: rare
-DescriptionShort: a {{ name }} in pristine condition
+DescriptionShort: a {{ e.name }} in pristine condition
 DescriptionLong: A Blu-ray copy of James Cameron's Avatar (2009). The case is immaculate, still sealed in plastic. The back promises "A journey to Pandora you'll never forget." At the time it was the highest-grossing film ever made, a technical marvel that pushed the boundaries of 3D cinema. The blue Na'vi faces stare back at you from the cover art.
 OnTouch: You run your fingers across the smooth plastic wrap. Still sealed after all these years.
 OnAttack: You bend the case slightly but think better of destroying this piece of cinema history.
@@ -1149,7 +1142,7 @@ Name: Avatar Extended Collector's Edition
 Prototype: item
 Tags: desk_drawer_loot slot_prize
 Rarity: epic
-DescriptionShort: a {{ name }} in a slipcase
+DescriptionShort: a {{ e.name }} in a slipcase
 DescriptionLong: The Avatar Extended Collector's Edition Blu-ray (2010). A three-disc set in an embossed slipcase featuring exclusive artwork of the Hallelujah Mountains. Contains the original theatrical cut, the Special Edition with 8 additional minutes, and the Extended Collector's Edition with 16 minutes of new footage. Includes a family archive, production materials, and over three hours of documentaries on the making of Pandora. The discs gleam with an iridescent coating that shifts between blue and green like bioluminescence.
 OnTouch: The embossed Na'vi on the slipcase feels raised under your fingertips. Premium packaging.
 OnAttack: This is too valuable to destroy. James Cameron spent 15 years making this film.
@@ -1160,7 +1153,7 @@ Name: Dev Note - Prototype Inheritance
 Prototype: item
 Tags: desk_drawer_loot
 Rarity: uncommon
-DescriptionShort: a crumpled {{ name }}
+DescriptionShort: a crumpled {{ e.name }}
 DescriptionLong: A handwritten note on yellow legal paper. It reads:
 +
 + "PROTOTYPE INHERITANCE SYSTEM
@@ -1178,7 +1171,7 @@ Name: Dev Note - Recfiles
 Prototype: item
 Tags: desk_drawer_loot
 Rarity: uncommon
-DescriptionShort: a folded {{ name }}
+DescriptionShort: a folded {{ e.name }}
 DescriptionLong: A typed note with coffee stains. It reads:
 +
 + "GNU RECUTILS - THE WORLD FORMAT
@@ -1198,7 +1191,7 @@ Name: Dev Note - Flyweight Pattern
 Prototype: item
 Tags: desk_drawer_loot
 Rarity: uncommon
-DescriptionShort: a {{ name }} with diagrams
+DescriptionShort: a {{ e.name }} with diagrams
 DescriptionLong: A note covered in boxes and arrows. It reads:
 +
 + "THE FLYWEIGHT PATTERN
@@ -1218,14 +1211,14 @@ Name: Dev Note - Focus Context
 Prototype: item
 Tags: desk_drawer_loot
 Rarity: uncommon
-DescriptionShort: a sticky {{ name }}
+DescriptionShort: a sticky {{ e.name }}
 DescriptionLong: A Post-it note with tiny handwriting. It reads:
 +
 + "FOCUS CONTEXT SYSTEM
 +
 + The original design was stateless - containers had no 'opened' state. But opening a chest with 20 items meant a wall of text and no autocomplete help.
 +
-+ Solution: track what the user is 'focused' on. When you open a container with FocusMode='container', we store that focus in the database. Now autocomplete shows ONLY the container contents, plus an escape option to close it.
++ Solution: track what the user is 'focused' on. When a template calls effects.set_focus(), we store that focus in the database. Now autocomplete shows ONLY the container contents, plus an escape option to close it.
 +
 + Focus persists across bot restarts (stored in PostgreSQL), clears on room movement or 5-minute timeout, and is per-user. Looking at things doesn't affect focus - only explicit open/close/interact actions do.
 +
@@ -1238,7 +1231,7 @@ Name: Dev Note - Fog of War
 Prototype: item
 Tags: desk_drawer_loot
 Rarity: uncommon
-DescriptionShort: a torn {{ name }}
+DescriptionShort: a torn {{ e.name }}
 DescriptionLong: A note torn from a spiral notebook. It reads:
 +
 + "DISCORD AS FOG OF WAR
@@ -1258,7 +1251,7 @@ Name: Dev Note - Inventory Forums
 Prototype: item
 Tags: desk_drawer_loot
 Rarity: uncommon
-DescriptionShort: a laminated {{ name }}
+DescriptionShort: a laminated {{ e.name }}
 DescriptionLong: A laminated card with bullet points. It reads:
 +
 + "INVENTORY AS DISCORD FORUMS
@@ -1278,7 +1271,7 @@ Name: Dev Note - Jinja2 Templates
 Prototype: item
 Tags: desk_drawer_loot
 Rarity: uncommon
-DescriptionShort: a colorful {{ name }}
+DescriptionShort: a colorful {{ e.name }}
 DescriptionLong: A note written in multiple colored pens. It reads:
 +
 + "JINJA2 TEMPLATES FOR EVERYTHING
@@ -1298,7 +1291,7 @@ Name: Dev Note - Spawning Pools
 Prototype: item
 Tags: desk_drawer_loot
 Rarity: uncommon
-DescriptionShort: a damp {{ name }}
+DescriptionShort: a damp {{ e.name }}
 DescriptionLong: A slightly water-damaged note. It reads:
 +
 + "SPAWNING POOL SYSTEM
@@ -1318,7 +1311,7 @@ Name: Dev Note - Sync System
 Prototype: item
 Tags: desk_drawer_loot
 Rarity: uncommon
-DescriptionShort: a {{ name }} with flowcharts
+DescriptionShort: a {{ e.name }} with flowcharts
 DescriptionLong: A note covered in flowchart symbols. It reads:
 +
 + "THE SYNC SYSTEM
@@ -1338,7 +1331,7 @@ Name: Dev Note - Entity Resolution
 Prototype: item
 Tags: desk_drawer_loot
 Rarity: uncommon
-DescriptionShort: a dense {{ name }}
+DescriptionShort: a dense {{ e.name }}
 DescriptionLong: A note with dense text and no margins. It reads:
 +
 + "ENTITY RESOLUTION SERVICE
@@ -1360,7 +1353,7 @@ Name: Wooden Chest
 Prototype: chest
 Room: library
 ContentsVisible: no
-DescriptionShort: A {{ name }} sits on the floor next to the desk.
+DescriptionShort: A {{ e.name }} sits on the floor next to the desk.
 DescriptionLong: A large wooden chest, it's not locked so you can __open__ it.
 
 Id: record_machine_girl
@@ -1368,225 +1361,225 @@ Name: Machine Girl - WLFGRL
 Prototype: record
 Room: library
 Container: library_records
-DescriptionShort: A vinyl copy of {{ name }}
+DescriptionShort: A vinyl copy of {{ e.name }}
 DescriptionLong: 2014. Chaotic internet-era experimental electronic.
-OnUse: You unsleeve {{ name }} and place it on the turntable.{{ effects.broadcast(user.mention ~ " put " ~ name ~ " on the record player. [MG1](https://youtu.be/oWzzNvcxY4w) fills the room.") }}
+OnUse: You unsleeve {{ e.name }} and place it on the turntable.{{ effects.broadcast(user ~ " put " ~ e.name ~ " on the record player. [MG1](https://youtu.be/oWzzNvcxY4w) fills the room.") }}
 
 Id: record_tv_girl
 Name: TV Girl - Who Really Cares
 Prototype: record
 Room: library
 Container: library_records
-DescriptionShort: A vinyl copy of {{ name }}
+DescriptionShort: A vinyl copy of {{ e.name }}
 DescriptionLong: 2016. Dreamy indie pop sampling obscure 60s and 70s tracks.
-OnUse: You slide {{ name }} from its sleeve and drop the needle.{{ effects.broadcast(user.mention ~ " is playing " ~ name ~ " on the record player. [Taking What's Not Yours](https://youtu.be/Ox5ENW0CeAU) fills the room.") }}
+OnUse: You slide {{ e.name }} from its sleeve and drop the needle.{{ effects.broadcast(user ~ " is playing " ~ e.name ~ " on the record player. [Taking What's Not Yours](https://youtu.be/Ox5ENW0CeAU) fills the room.") }}
 
 Id: record_the_clash
 Name: The Clash - Combat Rock
 Prototype: record
 Room: library
 Container: library_records
-DescriptionShort: A vinyl copy of {{ name }}
+DescriptionShort: A vinyl copy of {{ e.name }}
 DescriptionLong: 1982. Features "Should I Stay or Should I Go" and "Rock the Casbah". Allen Ginsberg does backing vocals.
-OnUse: You put {{ name }} on and crank the volume.{{ effects.broadcast(user.mention ~ " put on " ~ name ~ ". [Know Your Rights](https://youtu.be/AxB8xGJvCQQ) fills the room.") }}
+OnUse: You put {{ e.name }} on and crank the volume.{{ effects.broadcast(user ~ " put on " ~ e.name ~ ". [Know Your Rights](https://youtu.be/AxB8xGJvCQQ) fills the room.") }}
 
 Id: record_saib
 Name: Saib. - Bebop
 Prototype: record
 Room: library
 Container: library_records
-DescriptionShort: A vinyl copy of {{ name }}
+DescriptionShort: A vinyl copy of {{ e.name }}
 DescriptionLong: 2017. Lo-fi jazzy hip-hop. Perfect study music.
-OnUse: You queue up {{ name }}.{{ effects.broadcast(user.mention ~ " put " ~ name ~ " on the record player. [Serenade](https://youtu.be/gVWqdnLH9-U) fills the room.") }}
+OnUse: You queue up {{ e.name }}.{{ effects.broadcast(user ~ " put " ~ e.name ~ " on the record player. [Serenade](https://youtu.be/gVWqdnLH9-U) fills the room.") }}
 
 Id: record_mgmt
 Name: MGMT - Oracular Spectacular
 Prototype: record
 Room: library
 Container: library_records
-DescriptionShort: A vinyl copy of {{ name }}
+DescriptionShort: A vinyl copy of {{ e.name }}
 DescriptionLong: 2007. "Time to Pretend", "Electric Feel", "Kids" - defined late 2000s indie.
-OnUse: You spin up {{ name }}.{{ effects.broadcast(user.mention ~ " started " ~ name ~ " on the record player. [Time To Pretend](https://youtu.be/B9dSYgd5Elk) fills the room.") }}
+OnUse: You spin up {{ e.name }}.{{ effects.broadcast(user ~ " started " ~ e.name ~ " on the record player. [Time To Pretend](https://youtu.be/B9dSYgd5Elk) fills the room.") }}
 
 Id: record_avalanches_sily
 Name: The Avalanches - Since I Left You
 Prototype: record
 Room: library
 Container: library_records
-DescriptionShort: A vinyl copy of {{ name }}
+DescriptionShort: A vinyl copy of {{ e.name }}
 DescriptionLong: 2000. Built from 3,500+ vinyl samples. Took years to clear them all.
-OnUse: You set {{ name }} on the turntable and hit play.{{ effects.broadcast(user.mention ~ " put " ~ name ~ " on the record player. [Since I Left You](https://youtu.be/R2qYK2siDkE) fills the room.") }}
+OnUse: You set {{ e.name }} on the turntable and hit play.{{ effects.broadcast(user ~ " put " ~ e.name ~ " on the record player. [Since I Left You](https://youtu.be/R2qYK2siDkE) fills the room.") }}
 
 Id: record_avalanches_wwaly
 Name: The Avalanches - We Will Always Love You
 Prototype: record
 Room: library
 Container: library_records
-DescriptionShort: A vinyl copy of {{ name }}
+DescriptionShort: A vinyl copy of {{ e.name }}
 DescriptionLong: 2020. Their third album, 16 years after the second. Worth the wait.
-OnUse: You place {{ name }} on the turntable.{{ effects.broadcast(user.mention ~ " put " ~ name ~ " on the record player. [Ghost Story](https://youtu.be/c9tgCR_VjSM) fills the room.") }}
+OnUse: You place {{ e.name }} on the turntable.{{ effects.broadcast(user ~ " put " ~ e.name ~ " on the record player. [Ghost Story](https://youtu.be/c9tgCR_VjSM) fills the room.") }}
 
 Id: record_the_smiths
 Name: The Smiths - Louder Than Bombs
 Prototype: record
 Room: library
 Container: library_records
-DescriptionShort: A vinyl copy of {{ name }}
+DescriptionShort: A vinyl copy of {{ e.name }}
 DescriptionLong: 1987. Compilation of singles and B-sides. Morrissey at his mopiest.
-OnUse: You slide {{ name }} onto the player.{{ effects.broadcast(user.mention ~ " is playing " ~ name ~ " on the record player. [Is It Really So Strange?](https://youtu.be/w_tG4xAUD1k) fills the room.") }}
+OnUse: You slide {{ e.name }} onto the player.{{ effects.broadcast(user ~ " is playing " ~ e.name ~ " on the record player. [Is It Really So Strange?](https://youtu.be/w_tG4xAUD1k) fills the room.") }}
 
 Id: record_alvvays_anti
 Name: Alvvays - Antisocialites
 Prototype: record
 Room: library
 Container: library_records
-DescriptionShort: A vinyl copy of {{ name }}
+DescriptionShort: A vinyl copy of {{ e.name }}
 DescriptionLong: 2017. "Dreams Tonite" is a perfect shoegaze-pop song.
-OnUse: You unsleeve {{ name }} and put it on.{{ effects.broadcast(user.mention ~ " put " ~ name ~ " on the record player. [In Undertow](https://youtu.be/T1n72aCdwdU) fills the room.") }}
+OnUse: You unsleeve {{ e.name }} and put it on.{{ effects.broadcast(user ~ " put " ~ e.name ~ " on the record player. [In Undertow](https://youtu.be/T1n72aCdwdU) fills the room.") }}
 
 Id: record_first_aid_kit
 Name: First Aid Kit - Stay Gold
 Prototype: record
 Room: library
 Container: library_records
-DescriptionShort: A vinyl copy of {{ name }}
+DescriptionShort: A vinyl copy of {{ e.name }}
 DescriptionLong: 2014. Swedish sisters channeling Laurel Canyon folk.
-OnUse: You put {{ name }} on the turntable.{{ effects.broadcast(user.mention ~ " put " ~ name ~ " on the record player. [My Silver Lining](https://youtu.be/DKL4X0PZz7M) fills the room.") }}
+OnUse: You put {{ e.name }} on the turntable.{{ effects.broadcast(user ~ " put " ~ e.name ~ " on the record player. [My Silver Lining](https://youtu.be/DKL4X0PZz7M) fills the room.") }}
 
 Id: record_justice
 Name: Justice - Cross
 Prototype: record
 Room: library
 Container: library_records
-DescriptionShort: A vinyl copy of {{ name }}
+DescriptionShort: A vinyl copy of {{ e.name }}
 DescriptionLong: 2007. French electro house.
-OnUse: You drop the needle on {{ name }}.{{ effects.broadcast(user.mention ~ " started " ~ name ~ " on the record player. [Genesis](https://youtu.be/VKzWLUQizz8) fills the room.") }}
+OnUse: You drop the needle on {{ e.name }}.{{ effects.broadcast(user ~ " started " ~ e.name ~ " on the record player. [Genesis](https://youtu.be/VKzWLUQizz8) fills the room.") }}
 
 Id: record_american_football
 Name: American Football - American Football
 Prototype: record
 Room: library
 Container: library_records
-DescriptionShort: A vinyl copy of {{ name }}
+DescriptionShort: A vinyl copy of {{ e.name }}
 DescriptionLong: 1999. The house on the cover is real, in Urbana IL. Emo kids make pilgrimages.
-OnUse: You carefully place {{ name }} on the player.{{ effects.broadcast(user.mention ~ " put on " ~ name ~ " on the record player. [Never Meant](https://youtu.be/QZNYVt87y60) starts.") }}
+OnUse: You carefully place {{ e.name }} on the player.{{ effects.broadcast(user ~ " put on " ~ e.name ~ " on the record player. [Never Meant](https://youtu.be/QZNYVt87y60) starts.") }}
 
 Id: record_nujabes_meta
 Name: Nujabes - Metaphorical Music
 Prototype: record
 Room: library
 Container: library_records
-DescriptionShort: A vinyl copy of {{ name }}
+DescriptionShort: A vinyl copy of {{ e.name }}
 DescriptionLong: 2003. Japanese producer who pioneered jazzy hip-hop. Tragically died in 2010.
-OnUse: You load {{ name }} onto the player.{{ effects.broadcast(user.mention ~ " put " ~ name ~ " on the record player. [Blessing It (Remix)](https://youtu.be/7xZY8VJHqU4) fills the room.") }}
+OnUse: You load {{ e.name }} onto the player.{{ effects.broadcast(user ~ " put " ~ e.name ~ " on the record player. [Blessing It (Remix)](https://youtu.be/7xZY8VJHqU4) fills the room.") }}
 
 Id: record_talking_heads
 Name: Talking Heads - Remain In Light
 Prototype: record
 Room: library
 Container: library_records
-DescriptionShort: A vinyl copy of {{ name }}
+DescriptionShort: A vinyl copy of {{ e.name }}
 DescriptionLong: 1980. Produced by Brian Eno. "Once In A Lifetime" - how did I get here?
-OnUse: You unsleeve {{ name }} and press play.{{ effects.broadcast(user.mention ~ " put " ~ name ~ " on the record player. [Born Under Punches (The Heat Goes On)](https://youtu.be/Mmp5jAKpyns) comes on.") }}
+OnUse: You unsleeve {{ e.name }} and press play.{{ effects.broadcast(user ~ " put " ~ e.name ~ " on the record player. [Born Under Punches (The Heat Goes On)](https://youtu.be/Mmp5jAKpyns) comes on.") }}
 
 Id: record_skee_mask_resort
 Name: Skee Mask - Resort
 Prototype: record
 Room: library
 Container: library_records
-DescriptionShort: A vinyl copy of {{ name }}
+DescriptionShort: A vinyl copy of {{ e.name }}
 DescriptionLong: 2024. German producer blending ambient, techno, and jungle.
-OnUse: You start up {{ name }} on the player.{{ effects.broadcast(user.mention ~ " started " ~ name ~ " on the record player. [Hedwig Transformation Group](https://youtu.be/dVb6oGdK0uk) starts.") }}
+OnUse: You start up {{ e.name }} on the player.{{ effects.broadcast(user ~ " started " ~ e.name ~ " on the record player. [Hedwig Transformation Group](https://youtu.be/dVb6oGdK0uk) starts.") }}
 
 Id: record_fleet_foxes
 Name: Fleet Foxes - A Very Lonely Solstice
 Prototype: record
 Room: library
 Container: library_records
-DescriptionShort: A vinyl copy of {{ name }}
+DescriptionShort: A vinyl copy of {{ e.name }}
 DescriptionLong: 2022. Live album recorded during COVID.
-OnUse: You put {{ name }} on and press play.{{ effects.broadcast(user.mention ~ " put on " ~ name ~ " on the record player. [Wading In Waist-High Water](https://youtu.be/zKwchungRrM) starts.") }}
+OnUse: You put {{ e.name }} on and press play.{{ effects.broadcast(user ~ " put on " ~ e.name ~ " on the record player. [Wading In Waist-High Water](https://youtu.be/zKwchungRrM) starts.") }}
 
 Id: record_skee_mask_iss009
 Name: Skee Mask - ISS009
 Prototype: record
 Room: library
 Container: library_records
-DescriptionShort: A vinyl copy of {{ name }}
+DescriptionShort: A vinyl copy of {{ e.name }}
 DescriptionLong: 2023. Experimental breaks EP on Ilian Tape.
-OnUse: You cue up {{ name }} on the turntable.{{ effects.broadcast(user.mention ~ " put " ~ name ~ " on the record player. [UWLSD](https://youtu.be/IUJQ4Fw2uXY) comes on.") }}
+OnUse: You cue up {{ e.name }} on the turntable.{{ effects.broadcast(user ~ " put " ~ e.name ~ " on the record player. [UWLSD](https://youtu.be/IUJQ4Fw2uXY) comes on.") }}
 
 Id: record_santigold
 Name: Santigold - Santigold
 Prototype: record
 Room: library
 Container: library_records
-DescriptionShort: A vinyl copy of {{ name }}
+DescriptionShort: A vinyl copy of {{ e.name }}
 DescriptionLong: 2008. Diplo-produced indie-electronic. She spelled it "Santogold" at first.
-OnUse: You throw {{ name }} on the record player.{{ effects.broadcast(user.mention ~ " is playing " ~ name ~ " on the record player. [L.E.S. Artistes](https://youtu.be/ciJDA0tcQfs) fills the room.") }}
+OnUse: You throw {{ e.name }} on the record player.{{ effects.broadcast(user ~ " is playing " ~ e.name ~ " on the record player. [L.E.S. Artistes](https://youtu.be/ciJDA0tcQfs) fills the room.") }}
 
 Id: record_cranberries
 Name: The Cranberries - Everybody Else Is Doing It
 Prototype: record
 Room: library
 Container: library_records
-DescriptionShort: A vinyl copy of {{ name }}
+DescriptionShort: A vinyl copy of {{ e.name }}
 DescriptionLong: 1993. "Linger" and "Dreams".
-OnUse: You slide {{ name }} from its sleeve.{{ effects.broadcast(user.mention ~ " put " ~ name ~ " on the record player. [I Still Do](https://youtu.be/vovVgQ2BsTo) comes on.") }}
+OnUse: You slide {{ e.name }} from its sleeve.{{ effects.broadcast(user ~ " put " ~ e.name ~ " on the record player. [I Still Do](https://youtu.be/vovVgQ2BsTo) comes on.") }}
 
 Id: record_alvvays
 Name: Alvvays - Alvvays
 Prototype: record
 Room: library
 Container: library_records
-DescriptionShort: A vinyl copy of {{ name }}
+DescriptionShort: A vinyl copy of {{ e.name }}
 DescriptionLong: 2014. "Archie, Marry Me" - jangly Canadian indie pop perfection.
-OnUse: You get {{ name }} spinning on the turntable.{{ effects.broadcast(user.mention ~ " put " ~ name ~ " on the record player. [Adult Diversion](https://youtu.be/rZHPCcFmEjc) fills the room.") }}
+OnUse: You get {{ e.name }} spinning on the turntable.{{ effects.broadcast(user ~ " put " ~ e.name ~ " on the record player. [Adult Diversion](https://youtu.be/rZHPCcFmEjc) fills the room.") }}
 
 Id: record_gorillaz
 Name: Gorillaz - Gorillaz
 Prototype: record
 Room: library
 Container: library_records
-DescriptionShort: A vinyl copy of {{ name }}
+DescriptionShort: A vinyl copy of {{ e.name }}
 DescriptionLong: 2001. Virtual band by Damon Albarn. "Clint Eastwood" features Del the Funky Homosapien.
-OnUse: You drop {{ name }} on the turntable and let it spin.{{ effects.broadcast(user.mention ~ " started " ~ name ~ " on the record player. [Re-Hash](https://youtu.be/Tv1SYqLllKI) starts.") }}
+OnUse: You drop {{ e.name }} on the turntable and let it spin.{{ effects.broadcast(user ~ " started " ~ e.name ~ " on the record player. [Re-Hash](https://youtu.be/Tv1SYqLllKI) starts.") }}
 
 Id: record_nujabes_modal
 Name: Nujabes - Modal Soul
 Prototype: record
 Room: library
 Container: library_records
-DescriptionShort: A vinyl copy of {{ name }}
+DescriptionShort: A vinyl copy of {{ e.name }}
 DescriptionLong: 2005. Featured in Samurai Champloo. Birthed the lo-fi hip-hop movement.
-OnUse: You lay {{ name }} on the platter and start it up.{{ effects.broadcast(user.mention ~ " put on " ~ name ~ " on the record player. [Feather](https://youtu.be/8iP3J8jFYdM) comes on.") }}
+OnUse: You lay {{ e.name }} on the platter and start it up.{{ effects.broadcast(user ~ " put on " ~ e.name ~ " on the record player. [Feather](https://youtu.be/8iP3J8jFYdM) comes on.") }}
 
 Id: record_flaming_lips
 Name: The Flaming Lips - Fight Test
 Prototype: record
 Room: library
 Container: library_records
-DescriptionShort: A vinyl copy of {{ name }}
+DescriptionShort: A vinyl copy of {{ e.name }}
 DescriptionLong: 2003. From Yoshimi Battles the Pink Robots.
-OnUse: You pop {{ name }} on the record player.{{ effects.broadcast(user.mention ~ " put " ~ name ~ " on the record player. [Fight Test](https://youtu.be/fye1XtXQn9s) fills the room.") }}
+OnUse: You pop {{ e.name }} on the record player.{{ effects.broadcast(user ~ " put " ~ e.name ~ " on the record player. [Fight Test](https://youtu.be/fye1XtXQn9s) fills the room.") }}
 
 Id: record_jet
 Name: Jet - Get Born
 Prototype: record
 Room: library
 Container: library_records
-DescriptionShort: A vinyl copy of {{ name }}
+DescriptionShort: A vinyl copy of {{ e.name }}
 DescriptionLong: 2003. "Are You Gonna Be My Girl" - you've heard it in every commercial.
-OnUse: You stick {{ name }} on the player and hit play.{{ effects.broadcast(user.mention ~ " is playing " ~ name ~ " on the record player. [Last Chance](https://youtu.be/pjdn5m2LvNo) starts.") }}
+OnUse: You stick {{ e.name }} on the player and hit play.{{ effects.broadcast(user ~ " is playing " ~ e.name ~ " on the record player. [Last Chance](https://youtu.be/pjdn5m2LvNo) starts.") }}
 
 Id: record_death_cab_plans
 Name: Death Cab For Cutie - Plans
 Prototype: record
 Room: library
 Container: library_records
-DescriptionShort: A vinyl copy of {{ name }}
+DescriptionShort: A vinyl copy of {{ e.name }}
 DescriptionLong: 2005. "I Will Follow You Into the Dark", "Soul Meets Body". Their Atlantic debut went platinum.
-OnUse: You place {{ name }} on the player.{{ effects.broadcast(user.mention ~ " put on " ~ name ~ " on the record player. [Marching Bands Of Manhattan](https://youtu.be/be2LvYXOcSI) fills the room.") }}
+OnUse: You place {{ e.name }} on the player.{{ effects.broadcast(user ~ " put on " ~ e.name ~ " on the record player. [Marching Bands Of Manhattan](https://youtu.be/be2LvYXOcSI) fills the room.") }}
 
 # ----------------------------------------------------------------------------
 # Sitting Room entities
@@ -1596,267 +1589,21 @@ Id: sitting_room_chairs
 Name: Comfy Chairs
 Prototype: chest
 Room: sitting-room
-FocusMode: container
 ContentsVisible: no
-DescriptionShort: Several {{ name }} are arranged around the room.
+DescriptionShort: Several {{ e.name }} are arranged around the room.
 DescriptionLong: Plush armchairs upholstered in faded floral fabric. They look well-loved. You could __search__ between the cushions.
 OnUse: You settle into one of the armchairs near the fire. The warmth and comfort wash over you. You feel your health regenerating.
-OnOpen: You dig around between the cushions.{% if contents %} You find:{{ contents }}{% else %} Nothing but lint and crumbs.{% endif %}
-OnClose: You stop rummaging through the cushions.
+OnOpen: {{ effects.set_focus() }}You dig around between the cushions.{% if e.contents %} You find:{{ e.contents }}{% else %} Nothing but lint and crumbs.{% endif %}
+OnClose: {{ effects.clear_focus() }}You stop rummaging through the cushions.
 
 Id: sitting_room_fireplace
 Name: Fireplace
 Prototype: object
 Room: sitting-room
-DescriptionShort: A cozy {{ name }} crackles on the wall.
+DescriptionShort: A cozy {{ e.name }} crackles on the wall.
 DescriptionLong: A stone fireplace with a carved wooden mantle. A small fire crackles warmly.
 OnTouch: The warmth feels nice on your hands.
 OnAttack: You poke at the fire with the stoker. The logs shift and sparks fly up the chimney.
-
-# ----------------------------------------------------------------------------
-# Store Room entities (test fixtures)
-# ----------------------------------------------------------------------------
-
-Id: storeroom_box
-Name: Cardboard Box
-Prototype: chest
-Room: store-room
-ContentsVisible: no
-DescriptionShort: a beat-up {{ name }} sits in the corner
-DescriptionLong: A cardboard box with "TEST FIXTURES - DO NOT REMOVE" written on it in marker.
-OnOpen: You open the {{ name }}.{% if contents %} Inside:{{ contents }}{% else %} It's empty.{% endif %}
-OnClose: You close the {{ name }}.
-
-Id: storeroom_crate
-Name: Wooden Crate
-Prototype: chest
-Room: store-room
-ContentsVisible: no
-DescriptionShort: a sturdy {{ name }}
-DescriptionLong: A wooden crate, slightly worn from use.
-OnOpen: You pry open the *{{ name }}*.{% if contents %} Inside:{{ contents }}{% else %} It's empty.{% endif %}
-OnClose: You close the *{{ name }}*.
-
-Id: test_orb
-Name: Test Orb
-Prototype: object
-Room: store-room
-Container: storeroom_box
-DescriptionShort: a glowing {{ name }}
-DescriptionLong: TEST_LOOK_RESPONSE - A mysterious orb used for testing.
-OnTouch: TEST_TOUCH_RESPONSE - The orb hums softly.
-OnAttack: TEST_ATTACK_RESPONSE - The orb absorbs the blow.
-
-Id: test_gadget
-Name: Test Gadget
-Prototype: object
-Room: store-room
-Container: storeroom_box
-DescriptionShort: a strange {{ name }}
-DescriptionLong: A device with many buttons.
-OnUse: TEST_USE_RESPONSE - The gadget whirs to life.
-OnTake: TEST_TAKE_RESPONSE - You pick up the gadget.
-
-Id: test_lockbox
-Name: Test Lockbox
-Prototype: chest
-Room: store-room
-Container: storeroom_box
-DescriptionShort: a small {{ name }}
-DescriptionLong: A metal lockbox.
-OnOpen: TEST_OPEN_RESPONSE - You open the lockbox.
-OnClose: TEST_CLOSE_RESPONSE - You close the lockbox.
-
-Id: test_record
-Name: Test Record
-Prototype: record
-Room: store-room
-Container: storeroom_box
-DescriptionShort: a {{ name }} for testing
-DescriptionLong: A test record.
-OnUse: TEST_EPHEMERAL_RESPONSE{{ effects.broadcast("TEST_BROADCAST_RESPONSE " ~ user.mention) }}
-
-Id: test_takeable
-Name: Test Takeable
-Prototype: item
-Room: store-room
-Container: storeroom_box
-Rarity: common
-DescriptionShort: a {{ name }} you can pick up
-DescriptionLong: A test item that can be picked up.
-OnTake: {{ effects.pickup() }}TEST_TAKE_MOVE_RESPONSE - You pick up the {{ name }}.
-
-Id: test_quest_map
-Name: Test Quest Map
-Prototype: item
-Room: store-room
-Container: storeroom_box
-Rarity: quest
-Tags: test_quest_map_spawn
-DescriptionShort: a {{ name }} for your quest
-DescriptionLong: A test quest item that moves to inventory and respawns via spawning pool.
-OnTake: {{ effects.pickup() }}TEST_TAKE_MOVE_RESPONSE - You pick up the {{ name }}.
-
-Id: test_droppable
-Name: Test Droppable
-Prototype: item
-Room: store-room
-Container: storeroom_box
-Rarity: common
-DescriptionShort: a {{ name }} you can drop
-DescriptionLong: A test item that can be dropped.
-OnDrop: TEST_DROP_RESPONSE - You drop the {{ name }}.{{ effects.drop() }}{{ effects.broadcast(user.name ~ " drops " ~ e.display_name ~ ".") }}
-
-Id: test_sticky
-Name: Test Sticky
-Prototype: item
-Room: store-room
-Container: storeroom_box
-Rarity: common
-DescriptionShort: a {{ name }} that sticks to you
-DescriptionLong: A test item that cannot be dropped.
-OnDrop: The {{ name }} is stuck to your hand! You can't drop it.
-
-Id: test_granting_key
-Name: Test Granting Key
-Prototype: object
-Room: store-room
-Container: storeroom_box
-DescriptionShort: a {{ name }} that grants an item
-DescriptionLong: A test key that grants a specific item when used.
-OnUse: TEST_GRANT_RESPONSE - The key glows and grants you an item!{{ effects.grant("test_granted_item") }}
-
-Id: test_granted_item
-Name: Test Granted Item
-Prototype: item
-Rarity: quest
-DescriptionShort: a {{ name }} received from a key
-DescriptionLong: A test item that is granted by the test key.
-
-Id: test_random_grantor
-Name: Test Random Grantor
-Prototype: chest
-Room: store-room
-Container: storeroom_box
-DescriptionShort: a {{ name }} that grants random loot
-DescriptionLong: A test chest that grants random loot when opened.
-OnOpen: TEST_RANDOM_GRANT_RESPONSE - You open the chest and find something inside!{{ effects.grant_random("test_loot") }}
-
-Id: test_common_loot
-Name: Test Common Loot
-Prototype: item
-Rarity: common
-Tags: test_loot
-DescriptionShort: a {{ name }} of common quality
-DescriptionLong: A common test item from the loot pool.
-
-Id: test_rare_loot
-Name: Test Rare Loot
-Prototype: item
-Rarity: rare
-Tags: test_loot
-DescriptionShort: a {{ name }} of rare quality
-DescriptionLong: A rare test item from the loot pool.
-
-Id: test_droppable_2
-Name: Test Droppable 2
-Prototype: item
-Room: store-room
-Container: storeroom_box
-Rarity: common
-DescriptionShort: a {{ name }} you can drop
-DescriptionLong: A test item for floor clutter testing.
-
-Id: test_droppable_3
-Name: Test Droppable 3
-Prototype: item
-Room: store-room
-Container: storeroom_box
-Rarity: common
-DescriptionShort: a {{ name }} you can drop
-DescriptionLong: A test item for floor clutter testing.
-
-Id: test_droppable_4
-Name: Test Droppable 4
-Prototype: item
-Room: store-room
-Container: storeroom_box
-Rarity: common
-DescriptionShort: a {{ name }} you can drop
-DescriptionLong: A test item for floor clutter testing.
-
-Id: test_droppable_5
-Name: Test Droppable 5
-Prototype: item
-Room: store-room
-Container: storeroom_box
-Rarity: common
-DescriptionShort: a {{ name }} you can drop
-DescriptionLong: A test item for floor clutter testing.
-
-Id: test_droppable_6
-Name: Test Droppable 6
-Prototype: item
-Room: store-room
-Container: storeroom_box
-Rarity: common
-DescriptionShort: a {{ name }} you can drop
-DescriptionLong: A test item for floor clutter testing.
-
-Id: test_droppable_7
-Name: Test Droppable 7
-Prototype: item
-Room: store-room
-Container: storeroom_box
-Rarity: common
-DescriptionShort: a {{ name }} you can drop
-DescriptionLong: A test item for floor clutter testing.
-
-Id: test_droppable_8
-Name: Test Droppable 8
-Prototype: item
-Room: store-room
-Container: storeroom_box
-Rarity: common
-DescriptionShort: a {{ name }} you can drop
-DescriptionLong: A test item for floor clutter testing.
-
-Id: test_droppable_9
-Name: Test Droppable 9
-Prototype: item
-Room: store-room
-Container: storeroom_box
-Rarity: common
-DescriptionShort: a {{ name }} you can drop
-DescriptionLong: A test item for floor clutter testing.
-
-Id: test_droppable_10
-Name: Test Droppable 10
-Prototype: item
-Room: store-room
-Container: storeroom_box
-Rarity: common
-DescriptionShort: a {{ name }} you can drop
-DescriptionLong: A test item for floor clutter testing.
-
-Id: test_droppable_11
-Name: Test Droppable 11
-Prototype: item
-Room: store-room
-Container: storeroom_box
-Rarity: common
-DescriptionShort: a {{ name }} you can drop
-DescriptionLong: A test item for floor clutter testing.
-
-Id: test_smashable
-Name: Test Smashable
-Prototype: glass_object
-Container: storeroom_box
-Tags: test_smashable_spawn
-Rarity: common
-DescriptionShort: a fragile {{ name }}
-DescriptionLong: A glass object used for testing destruction effects.
-OnAttack: {{ effects.destroy() }}{{ effects.broadcast("**" ~ user.name ~ "** smashes the " ~ name ~ "!") }}TEST_SMASH_RESPONSE - You smash it! Shards scatter everywhere.{{ effects.grant_random("test_loot") }}
 
 # ============================================================================
 # Spawning Pool record type
@@ -1865,20 +1612,6 @@ OnAttack: {{ effects.destroy() }}{{ effects.broadcast("**" ~ user.name ~ "** sma
 %key: Id
 %mandatory: Id Room TagQuery
 %allowed: Id Room Container TagQuery MaxCount RespawnIntervalMinutes NoDuplicates
-
-Id: test_quest_map_pool
-Room: store-room
-Container: storeroom_box
-TagQuery: test_quest_map_spawn
-MaxCount: 1
-RespawnIntervalMinutes: 1
-
-Id: test_smashable_pool
-Room: store-room
-Container: storeroom_box
-TagQuery: test_smashable_spawn
-MaxCount: 1
-RespawnIntervalMinutes: 1
 
 Id: lounge_fridge_pool
 Room: lounge
