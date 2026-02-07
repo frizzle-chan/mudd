@@ -183,8 +183,9 @@ class Movement(commands.Cog):
             # Defer response to give us time for permission sync
             await interaction.response.defer(ephemeral=True)
 
-            # Flush observer (syncs permissions)
-            await reconciler.flush()
+            # Flush all observers (syncs permissions + rebuilds caches)
+            for observer in observers:
+                await observer.flush()
 
             # Send followup (user now has access to target channel)
             await interaction.followup.send(

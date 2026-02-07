@@ -23,7 +23,7 @@ discord.VoiceClient.warn_nacl = False
 
 load_dotenv()
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO").upper())
 logger = logging.getLogger(__name__)
 
 # Default world file for backwards compatibility
