@@ -164,31 +164,6 @@ class EntityAutocompleteCache:
         )
 
 
-async def build_room_entity_list(
-    room: Room,
-) -> list[EntityInstance | RoomEntityInstance]:
-    """Build the entity list for a room with no active focus.
-
-    Single source of truth for "what entities appear in autocomplete for a
-    room context". Used by both the cache rebuild and the live slow path.
-    """
-    visible = await room.get_visible_entities()
-    return [room.as_entity(focus_name=None), *visible]
-
-
-async def build_focus_entity_list(
-    room: Room, entity: EntityInstance
-) -> list[EntityInstance | RoomEntityInstance]:
-    """Build the entity list for a room with an active focus on *entity*.
-
-    Single source of truth for "what entities appear in autocomplete when
-    the user has a container open". Used by both the cache rebuild and the
-    live slow path.
-    """
-    contents = await entity.get_contents()
-    return [room.as_entity(focus_name=entity.name), entity, *contents]
-
-
 async def _compute_room_entries(
     pool: asyncpg.Pool, room: Room
 ) -> tuple[
@@ -200,14 +175,20 @@ async def _compute_room_entries(
     Returns:
         Tuple of (room_choices, focus_choices_dict)
     """
-    room_choices = entities_to_choices(await build_room_entity_list(room))
+    # No-focus choices: room entity + visible entities
+    visible = await room.get_visible_entities()
+    room_entity = room.as_entity(focus_name=None)
+
+    room_choices = entities_to_choices([room_entity, *visible])
 
     # Focus choices for each top-level entity
     focus_choices: dict[tuple[str, str], list[app_commands.Choice[str]]] = {}
     top_level = await EntityInstance.get_top_level_by_room(pool, room)
     for entity in top_level:
+        focus_room_entity = room.as_entity(focus_name=entity.name)
+        contents = await entity.get_contents()
         focus_choices[(room.id, str(entity.instance_id))] = entities_to_choices(
-            await build_focus_entity_list(room, entity)
+            [focus_room_entity, entity, *contents]
         )
 
     return room_choices, focus_choices

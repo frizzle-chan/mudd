@@ -13,11 +13,7 @@ import discord
 from discord import Interaction, app_commands
 from rapidfuzz import fuzz
 
-from mudd.caches.entity_autocomplete import (
-    build_focus_entity_list,
-    build_room_entity_list,
-    entities_to_choices,
-)
+from mudd.caches.entity_autocomplete import entities_to_choices
 from mudd.models import EntityInstance, Room
 from mudd.models.room import RoomEntityInstance
 from mudd.models.user import User
@@ -141,54 +137,37 @@ async def entity_instance_id_autocomplete(
         and entity_cache is not None
         and not isinstance(interaction.channel, discord.Thread)
     ):
-        room_id: str | None = None
-        focus_id: UUID | None = None
-
         # Try fully cached path (zero queries) via user cache
         if user_cache is not None:
             state = user_cache.get(interaction.user.id)
             if state is not None:
-                room_id = state.current_room
-                focus_id = state.focus_id
-                if focus_id is not None:
-                    choices = entity_cache.get_focus_choices(room_id, focus_id)
+                if state.focus_id is not None:
+                    choices = entity_cache.get_focus_choices(
+                        state.current_room, state.focus_id
+                    )
                     if choices is not None:
                         return choices
                 else:
-                    choices = entity_cache.get_room_choices(room_id)
+                    choices = entity_cache.get_room_choices(state.current_room)
                     if choices is not None:
                         return choices
 
         # Fallback: user cache miss, try with DB queries (2 queries)
-        if room_id is None:
-            room_id = await User.get_current_room(pool, interaction.user.id)
-            if room_id is not None:
-                focus_id = await User.get_active_focus_id(
-                    pool, interaction.user.id, room_id
-                )
-                if focus_id is not None:
-                    choices = entity_cache.get_focus_choices(room_id, focus_id)
-                    if choices is not None:
-                        return choices
-                else:
-                    choices = entity_cache.get_room_choices(room_id)
-                    if choices is not None:
-                        return choices
-
-        # Entity cache miss — build entity list directly using the same
-        # helpers the cache rebuild uses (avoids full Scene construction).
+        room_id = await User.get_current_room(pool, interaction.user.id)
         if room_id is not None:
-            room = await Room.get(pool, room_id)
-            if room is not None:
-                if focus_id is not None:
-                    entity = await EntityInstance.get(pool, focus_id)
-                    if entity is not None:
-                        return entities_to_choices(
-                            await build_focus_entity_list(room, entity)
-                        )
-                return entities_to_choices(await build_room_entity_list(room))
+            focus_id = await User.get_active_focus_id(
+                pool, interaction.user.id, room_id
+            )
+            if focus_id is not None:
+                choices = entity_cache.get_focus_choices(room_id, focus_id)
+                if choices is not None:
+                    return choices
+            else:
+                choices = entity_cache.get_room_choices(room_id)
+                if choices is not None:
+                    return choices
 
-    # Slow path: build scene and query entities (typed input or thread)
+    # Slow path: build scene and query entities
     entities = await autocomplete_entities(
         await Scene.from_interaction(pool, interaction), current
     )
