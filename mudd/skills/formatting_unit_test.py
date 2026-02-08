@@ -38,31 +38,61 @@ class TestFormatProgressBar:
 
 
 class TestFormatSkillsMessage:
+    _skills = [
+        UserSkill(user_id=1, skill="agility", xp=0, level=1),
+        UserSkill(user_id=1, skill="attack", xp=0, level=1),
+        UserSkill(user_id=1, skill="speech", xp=0, level=1),
+        UserSkill(user_id=1, skill="vitality", xp=0, level=1),
+        UserSkill(user_id=1, skill="fishing", xp=0, level=1),
+    ]
+
     def test_contains_total_level(self) -> None:
-        skills = [
-            UserSkill(user_id=1, skill="agility", xp=0, level=1),
-            UserSkill(user_id=1, skill="attack", xp=0, level=1),
-            UserSkill(user_id=1, skill="speech", xp=0, level=1),
-            UserSkill(user_id=1, skill="vitality", xp=0, level=1),
-            UserSkill(user_id=1, skill="fishing", xp=0, level=1),
-        ]
-        msg = format_skills_message(skills, 5)
+        msg = format_skills_message(self._skills, 5)
         assert "**Total Level: 5**" in msg
 
     def test_contains_all_skills(self) -> None:
-        skills = [
-            UserSkill(user_id=1, skill="agility", xp=0, level=1),
-            UserSkill(user_id=1, skill="attack", xp=0, level=1),
-            UserSkill(user_id=1, skill="speech", xp=0, level=1),
-            UserSkill(user_id=1, skill="vitality", xp=0, level=1),
-            UserSkill(user_id=1, skill="fishing", xp=0, level=1),
-        ]
-        msg = format_skills_message(skills, 5)
-        assert "**Agility**" in msg
-        assert "**Attack**" in msg
-        assert "**Speech**" in msg
-        assert "**Vitality**" in msg
-        assert "**Fishing**" in msg
+        msg = format_skills_message(self._skills, 5)
+        # Each skill name appears at least once across the options
+        assert "Agility" in msg
+        assert "Attack" in msg
+        assert "Speech" in msg
+        assert "Vitality" in msg
+        assert "Fishing" in msg
+
+    def test_contains_all_option_headers(self) -> None:
+        msg = format_skills_message(self._skills, 5)
+        assert "Option A" in msg
+        assert "Option B" in msg
+        assert "Option C" in msg
+        assert "Option D" in msg
+
+    def test_option_a_in_code_block(self) -> None:
+        msg = format_skills_message(self._skills, 5)
+        assert "```" in msg
+
+    def test_option_b_has_separator_lines(self) -> None:
+        msg = format_skills_message(self._skills, 5)
+        # Option B uses em-dash separator between name and level
+        assert "\u2014 Lv." in msg
+
+    def test_option_c_compact_no_blank_lines(self) -> None:
+        msg = format_skills_message(self._skills, 5)
+        # Extract just the Option C skill lines (after header, before next header)
+        start = msg.index("Option C")
+        end = msg.index("Option D")
+        section_c = msg[start:end]
+        lines = section_c.split("\n")
+        # The skill content lines (1 through 10) should have no blanks between them
+        skill_lines = lines[1:11]  # 5 skills * 2 lines each
+        assert all(line.strip() for line in skill_lines)
+
+    def test_option_d_has_inline_code_xp(self) -> None:
+        msg = format_skills_message(self._skills, 5)
+        # Option D wraps XP in backticks
+        start = msg.index("Option D")
+        section_d = msg[start:]
+        assert "`" in section_d
+        assert "XP`" in section_d
 
 
 class TestFormatNickname:
