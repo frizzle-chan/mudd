@@ -9,11 +9,11 @@ from mudd.views import ViewSkill
 class TestViewSkill:
     def test_name_bold_with_emoji(self) -> None:
         view = ViewSkill(Skill.AGILITY)
-        assert view.name == "**🏃 Agility**"
+        assert view.name == "**⚡ Agility**"
 
     def test_display_name_emoji_no_bold(self) -> None:
         view = ViewSkill(Skill.AGILITY)
-        assert view.display_name == "🏃 Agility"
+        assert view.display_name == "⚡ Agility"
 
     def test_str_returns_name(self) -> None:
         view = ViewSkill(Skill.AGILITY)
