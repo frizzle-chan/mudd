@@ -63,6 +63,7 @@ class ResolvedEntity:
     on_open: str | None
     on_close: str | None
     on_drop: str | None
+    on_fish: str | None
     contents_visible: bool
     rarity: Rarity
 
@@ -87,6 +88,7 @@ class ResolvedEntity:
             on_open=row["on_open"],
             on_close=row["on_close"],
             on_drop=row["on_drop"],
+            on_fish=row["on_fish"],
             contents_visible=contents_visible,
             rarity=row["rarity"],
         )

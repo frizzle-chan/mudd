@@ -145,7 +145,7 @@ Description: A dimly lit lounge.
 %type: Rarity enum none common uncommon rare epic legendary mythic quest
 %mandatory: Id Name
 %allowed: Id Name Prototype Container Room ContentsVisible DescriptionShort DescriptionLong
-%allowed: OnLook OnTouch OnAttack OnUse OnTake OnOpen OnClose OnDrop
+%allowed: OnLook OnTouch OnAttack OnUse OnTake OnOpen OnClose OnDrop OnFish
 %allowed: Tags Rarity
 
 # ----------------------------------------------------------------------------
@@ -161,6 +161,7 @@ OnTouch: You touch the {{ e.name }}. Nothing happens.
 OnAttack: You attack the {{ e.name }}, but it has no effect.
 OnUse: You can't use the {{ e.name }}.
 OnTake: You can't take the {{ e.name }}.
+OnFish: You can't fish here.
 
 Id: furniture
 Name: furniture
@@ -286,6 +287,45 @@ OnClose: You snap the lid shut, trapping the worms inside.
 OnTake: {{ effects.pickup() }}{{ effects.broadcast(user ~ " grabs " ~ e ~ ".") }}You grab the {{ e.name }}.
 OnDrop: {% if container %}You toss the {{ e.name }} into the *{{ container.name }}*.{% else %}You set the {{ e.name }} down.{% endif %}{{ effects.drop() }}{{ effects.broadcast(user ~ " drops " ~ e ~ ".") }}
 
+Id: fishing_pole_basic
+Name: Bamboo Fishing Pole
+Prototype: item
+Tags: fishing_pole kitchen_rack_loot
+Rarity: common
+DescriptionShort: a rickety {{ e.name }}
+DescriptionLong: A simple bamboo fishing pole held together with twine. It's seen better days, but it'll do.
+OnTouch: The bamboo flexes slightly under your grip. It smells like river mud.
+OnUse: You give the {{ e.name }} a practice cast. Swoosh.
+OnFish: Try `/interact fish` near some water.
+OnTake: {{ effects.pickup() }}{{ effects.broadcast(user ~ " grabs " ~ e ~ ".") }}You grab the {{ e.name }}.
+OnDrop: {% if container %}You lean the {{ e.name }} against the *{{ container.name }}*.{% else %}You set the {{ e.name }} down.{% endif %}{{ effects.drop() }}{{ effects.broadcast(user ~ " puts down " ~ e ~ ".") }}
+
+Id: fishing_pole_carbon
+Name: Carbon Fiber Rod
+Prototype: item
+Tags: fishing_pole slot_prize
+Rarity: rare
+DescriptionShort: a sleek {{ e.name }}
+DescriptionLong: A professional-grade carbon fiber fishing rod with a smooth reel mechanism. Lightweight and responsive. Someone paid good money for this.
+OnTouch: The carbon fiber is smooth and impossibly light.
+OnUse: You give the {{ e.name }} a test flick. It whips through the air with a satisfying *thwip*.
+OnFish: Try `/interact fish` near some water.
+OnTake: {{ effects.pickup() }}{{ effects.broadcast("**" ~ user ~ "** picks up " ~ e ~ ". Nice rod!") }}You pick up the {{ e.name }}.
+OnDrop: {% if container %}You carefully place the {{ e.name }} in the *{{ container.name }}*.{% else %}You set the {{ e.name }} down carefully.{% endif %}{{ effects.drop() }}{{ effects.broadcast(user ~ " puts down " ~ e ~ ".") }}
+
+Id: fishing_pole_golden
+Name: Golden Rod
+Prototype: item
+Tags: fishing_pole desk_drawer_loot
+Rarity: legendary
+DescriptionShort: a dazzling {{ e.name }} that radiates wealth
+DescriptionLong: An ornate fishing rod plated in 24k gold with a jewel-encrusted reel. It's completely impractical but absolutely magnificent. The kind of thing a billionaire would use to fish from their yacht.
+OnTouch: The gold is warm to the touch. You can see your reflection in the polished surface.
+OnUse: You give the {{ e.name }} a regal flourish. You feel like royalty.
+OnFish: Try `/interact fish` near some water.
+OnTake: {{ effects.pickup() }}{{ effects.broadcast("**" ~ user ~ "** picks up " ~ e ~ "! It gleams brilliantly!") }}You claim the {{ e.name }}. It's heavier than you expected.
+OnDrop: {% if container %}You place the {{ e.name }} reverently into the *{{ container.name }}*.{% else %}You set the {{ e.name }} down. It glimmers on the ground.{% endif %}{{ effects.drop() }}{{ effects.broadcast("**" ~ user ~ "** parts with " ~ e ~ ".") }}
+
 Id: blade_of_dissonance
 Name: Blade of Dissonance
 Prototype: item
@@ -297,6 +337,286 @@ OnTouch: The blade is actually quite dull. It's got oopey goopey all over it.
 OnTake: {{ effects.pickup() }}{{ effects.broadcast("**" ~ user ~ "** picks up " ~ e ~ ". That seems like a bad idea.") }}You heft the impractically large {{ e.name }} onto your shoulder. \
 You feel you made a grave mistake.
 OnDrop: You cannot drop the sword, it's evil. It compels you to keep it in your inventory, taking up a ton of space.
+
+# ----------------------------------------------------------------------------
+# Fish (dispensed by toilet/urinal fishing)
+# The "nothing" fish destroys itself on take, simulating the fish getting away.
+# ----------------------------------------------------------------------------
+
+Id: fish
+Name: fish
+Prototype: item
+Rarity: common
+OnTouch: The {{ e.name }} flops against your hand. It's slimy.
+OnTake: {{ effects.pickup() }}{{ effects.broadcast("**" ~ user ~ "** catches " ~ e ~ "!") }}You pull the {{ e.name }} out. Got it!
+OnDrop: {% if container %}You toss the {{ e.name }} into the *{{ container.name }}*.{% else %}You set the {{ e.name }} down. It flops around.{% endif %}{{ effects.drop() }}{{ effects.broadcast(user ~ " drops " ~ e ~ ".") }}
+
+Id: fish_nothing
+Name: a tug on the line
+Prototype: object
+Tags: toilet_fish urinal_fish sink_fish kitchen_sink_fish
+Rarity: common
+DescriptionShort: a ripple in the water
+OnTake: {{ effects.destroy() }}You feel a tug, but it slips away! The fish got away.
+
+Id: fish_crucian_carp
+Name: Crucian Carp
+Prototype: fish
+Tags: toilet_fish urinal_fish sink_fish kitchen_sink_fish size_tiny location_river time_all_day
+Rarity: common
+DescriptionShort: a small {{ e.name }}
+DescriptionLong: A tiny crucian carp.
+
+Id: fish_bluegill
+Name: Bluegill
+Prototype: fish
+Tags: toilet_fish urinal_fish sink_fish size_tiny location_river time_day
+Rarity: common
+DescriptionShort: a little {{ e.name }}
+DescriptionLong: A tiny bluegill with iridescent scales.
+
+Id: fish_barbel_steed
+Name: Barbel Steed
+Prototype: fish
+Tags: toilet_fish urinal_fish size_medium location_river time_all_day
+Rarity: common
+DescriptionShort: a {{ e.name }} swimming in circles
+DescriptionLong: A medium-sized barbel steed with twitching whisker-like barbels.
+
+Id: fish_dace
+Name: Dace
+Prototype: fish
+Tags: toilet_fish urinal_fish size_medium location_river time_all_day
+Rarity: common
+DescriptionShort: a silvery {{ e.name }}
+DescriptionLong: A medium-sized dace with silvery scales.
+
+Id: fish_catfish
+Name: Catfish
+Prototype: fish
+Tags: toilet_fish size_large location_lake time_all_day
+Rarity: common
+DescriptionShort: a whiskered {{ e.name }}
+DescriptionLong: A large catfish with long whiskers.
+
+Id: fish_pale_chub
+Name: Pale Chub
+Prototype: fish
+Tags: toilet_fish urinal_fish sink_fish kitchen_sink_fish size_tiny location_river time_day
+Rarity: common
+DescriptionShort: a pale {{ e.name }}
+DescriptionLong: A tiny, almost translucent chub.
+
+Id: fish_small_bass
+Name: Small Bass
+Prototype: fish
+Tags: toilet_fish urinal_fish size_medium location_river time_all_day
+Rarity: common
+DescriptionShort: a {{ e.name }}
+DescriptionLong: A medium-sized bass.
+
+Id: fish_herabuna
+Name: Herabuna
+Prototype: fish
+Tags: toilet_fish urinal_fish size_medium location_lake time_all_day
+Rarity: common
+DescriptionShort: a {{ e.name }}
+DescriptionLong: A medium-sized herabuna, a type of crucian carp.
+
+Id: fish_carp
+Name: Carp
+Prototype: fish
+Tags: toilet_fish size_large location_river time_all_day
+Rarity: common
+DescriptionShort: a big {{ e.name }}
+DescriptionLong: A large, hardy carp.
+
+Id: fish_loach
+Name: Loach
+Prototype: fish
+Tags: toilet_fish urinal_fish sink_fish kitchen_sink_fish size_small location_river time_all_day
+Rarity: common
+DescriptionShort: a wriggly {{ e.name }}
+DescriptionLong: A small, eel-like loach. Slippery.
+
+Id: fish_bass
+Name: Bass
+Prototype: fish
+Tags: toilet_fish size_large location_river time_all_day
+Rarity: common
+DescriptionShort: a {{ e.name }}
+DescriptionLong: A large bass. Fights hard on the line.
+
+Id: fish_freshwater_goby
+Name: Freshwater Goby
+Prototype: fish
+Tags: kitchen_sink_fish size_small location_river time_all_day
+Rarity: common
+DescriptionShort: a tiny {{ e.name }}
+DescriptionLong: A small freshwater goby.
+
+Id: fish_pond_smelt
+Name: Pond Smelt
+Prototype: fish
+Tags: urinal_fish sink_fish size_small location_river time_all_day
+Rarity: common
+DescriptionShort: a delicate {{ e.name }}
+DescriptionLong: A small pond smelt. Smells faintly of cucumber.
+
+Id: fish_rainbow_trout
+Name: Rainbow Trout
+Prototype: fish
+Tags: toilet_fish size_large location_river time_all_day
+Rarity: uncommon
+DescriptionShort: a colorful {{ e.name }}
+DescriptionLong: A large rainbow trout with iridescent scales.
+
+Id: fish_salmon
+Name: Salmon
+Prototype: fish
+Tags: toilet_fish size_large location_river_mouth time_all_day
+Rarity: uncommon
+DescriptionShort: a powerful {{ e.name }}
+DescriptionLong: A large salmon. Must have swum a long way to get here.
+
+Id: fish_bitterling
+Name: Bitterling
+Prototype: fish
+Tags: toilet_fish urinal_fish sink_fish size_tiny location_river time_all_day
+Rarity: uncommon
+DescriptionShort: a shimmering {{ e.name }}
+DescriptionLong: A tiny bitterling with vibrant colors.
+
+Id: fish_sweetfish
+Name: Sweetfish
+Prototype: fish
+Tags: toilet_fish urinal_fish size_medium location_river time_all_day
+Rarity: uncommon
+DescriptionShort: a {{ e.name }}
+DescriptionLong: A medium-sized sweetfish, also known as ayu. Smells faintly of watermelon.
+
+Id: fish_cherry_salmon
+Name: Cherry Salmon
+Prototype: fish
+Tags: urinal_fish size_medium location_river time_all_day
+Rarity: uncommon
+DescriptionShort: a spotted {{ e.name }}
+DescriptionLong: A medium-sized cherry salmon with pinkish spotted markings.
+
+Id: fish_goldfish
+Name: Goldfish
+Prototype: fish
+Tags: urinal_fish sink_fish kitchen_sink_fish size_tiny location_river time_day
+Rarity: uncommon
+DescriptionShort: a bright {{ e.name }}
+DescriptionLong: A tiny, bright orange goldfish.
+
+Id: fish_popeyed_goldfish
+Name: Popeyed Goldfish
+Prototype: fish
+Tags: kitchen_sink_fish size_tiny location_river time_day
+Rarity: uncommon
+DescriptionShort: a bug-eyed {{ e.name }}
+DescriptionLong: A tiny goldfish with enormous, protruding eyes.
+
+Id: fish_guppy
+Name: Guppy
+Prototype: fish
+Tags: urinal_fish sink_fish size_tiny location_river time_day
+Rarity: uncommon
+DescriptionShort: a colorful {{ e.name }}
+DescriptionLong: A tiny, vibrantly colored guppy with a fan-shaped tail.
+
+Id: fish_koi
+Name: Koi
+Prototype: fish
+Tags: toilet_fish urinal_fish size_medium location_river time_night
+Rarity: rare
+DescriptionShort: a {{ e.name }} with orange and white scales
+DescriptionLong: A medium-sized koi with orange and white scales.
+
+Id: fish_eel
+Name: Eel
+Prototype: fish
+Tags: toilet_fish size_large location_river time_night
+Rarity: rare
+DescriptionShort: a slithery {{ e.name }}
+DescriptionLong: A long, sinuous eel.
+
+Id: fish_giant_catfish
+Name: Giant Catfish
+Prototype: fish
+Tags: toilet_fish size_very_large location_lake time_all_day
+Rarity: rare
+DescriptionShort: an enormous {{ e.name }}
+DescriptionLong: A very large catfish with whiskers as thick as fingers.
+
+Id: fish_large_bass
+Name: Large Bass
+Prototype: fish
+Tags: toilet_fish size_very_large location_river time_all_day
+Rarity: rare
+DescriptionShort: a massive {{ e.name }}
+DescriptionLong: A very large bass.
+
+Id: fish_angelfish
+Name: Angelfish
+Prototype: fish
+Tags: urinal_fish sink_fish size_small location_river time_night
+Rarity: rare
+DescriptionShort: a graceful {{ e.name }}
+DescriptionLong: A small angelfish with flowing fins.
+
+Id: fish_giant_snakehead
+Name: Giant Snakehead
+Prototype: fish
+Tags: toilet_fish size_very_large location_lake time_day
+Rarity: epic
+DescriptionShort: a fearsome {{ e.name }}
+DescriptionLong: A very large giant snakehead with a mouthful of teeth. Known to breathe air and walk on land.
+OnTouch: The {{ e.name }} snaps at your hand.
+
+Id: fish_piranha
+Name: Piranha
+Prototype: fish
+Tags: toilet_fish urinal_fish size_small location_river time_day
+Rarity: epic
+DescriptionShort: a razor-toothed {{ e.name }}
+DescriptionLong: A small piranha. Its teeth glint in the light.
+OnTouch: The {{ e.name }} bites your finger.
+
+Id: fish_large_char
+Name: Large Char
+Prototype: fish
+Tags: toilet_fish size_large location_waterfall time_all_day
+Rarity: legendary
+DescriptionShort: a spotted {{ e.name }}
+DescriptionLong: A large char with spotted markings. Usually found in mountain streams.
+
+Id: fish_arowana
+Name: Arowana
+Prototype: fish
+Tags: toilet_fish size_large location_river time_night
+Rarity: legendary
+DescriptionShort: a {{ e.name }} gleaming like polished metal
+DescriptionLong: A large arowana with metallic scales. Known as the "dragon fish."
+
+Id: fish_stringfish
+Name: Stringfish
+Prototype: fish
+Tags: toilet_fish size_very_large location_river time_night
+Rarity: mythic
+DescriptionShort: a {{ e.name }}
+DescriptionLong: A very large stringfish. One of the rarest freshwater fish in existence.
+
+Id: fish_coelacanth
+Name: Coelacanth
+Prototype: fish
+Tags: toilet_fish size_very_large location_sea time_night
+Rarity: mythic
+DescriptionShort: an ancient {{ e.name }}
+DescriptionLong: A very large coelacanth. A living fossil, thought extinct for 65 million years.
+
 
 # ----------------------------------------------------------------------------
 # Foyer entities
@@ -390,53 +710,22 @@ Id: restroom_sinks
 Name: Row of Sinks
 Prototype: furniture
 Room: restroom
-ContentsVisible: no
 DescriptionShort: A {{ e.name }} lines the wall beneath a long mirror, with soap and paper towel dispensers mounted above.
 DescriptionLong: Four white porcelain sinks with chrome fixtures. Above them stretches a long mirror, and mounted on the wall are soap dispensers and paper towel dispensers.
 OnTouch: You run your hand under the faucet. The water is lukewarm.
 OnUse: You turn on the faucet and wash your hands. The soap smells vaguely of industrial lavender.
-OnOpen: {{ effects.set_focus() }}You step up to the sinks and survey your options.{% if e.contents %} Above:{{ e.contents }}{% endif %}
-OnClose: {{ effects.clear_focus() }}You step back from the sinks.
-
-Id: restroom_mirror
-Name: Long Mirror
-Prototype: object
-Room: restroom
-Container: restroom_sinks
-DescriptionShort: a {{ e.name }} stretching above the sinks
-DescriptionLong: A clean mirror spanning the length of the sink counter. The fluorescent lighting is unforgiving.
-OnLook: You look at your reflection in the {{ e.name }}. You look tired but determined.
-OnTouch: You touch the cool glass. Your reflection mimics you perfectly.
-OnAttack: You resist the urge to punch your own reflection. Seven years bad luck isn't worth it.
-
-Id: restroom_soap_dispenser
-Name: Soap Dispenser
-Prototype: object
-Room: restroom
-Container: restroom_sinks
-DescriptionShort: a wall-mounted {{ e.name }}
-DescriptionLong: A chrome soap dispenser with a translucent reservoir. The pink liquid inside is running low.
-OnUse: You pump the dispenser. A small amount of pink soap oozes into your palm.
-OnTouch: The chrome is cold and slightly sticky from soap residue.
-
-Id: restroom_paper_towels
-Name: Paper Towel Dispenser
-Prototype: object
-Room: restroom
-Container: restroom_sinks
-DescriptionShort: a {{ e.name }} mounted on the wall
-DescriptionLong: A metal paper towel dispenser. You can see brown paper towels through the slot.
-OnUse: You yank a paper towel from the dispenser. It tears unevenly.
-OnTouch: The metal housing rattles slightly when you touch it.
+OnFish: {% if e.contents %}{{ effects.dispense() }}{{ effects.broadcast("**" ~ user ~ "** is fishing in the sink...") }}You cast your line into the sink and wait...{% else %}You cast into the sink but nothing is biting.{% endif %}
 
 Id: restroom_urinals
 Name: Urinals
 Prototype: furniture
 Room: restroom
+ContentsVisible: no
 DescriptionShort: Three {{ e.name }} line the wall, separated by privacy dividers.
 DescriptionLong: A row of white porcelain urinals with automatic flush sensors. Blue deodorizer pucks sit in the drains. Privacy dividers offer a modicum of dignity.
 OnTouch: You touch the porcelain. It's cold. Why did you do that?
 OnUse: {{ effects.broadcast("**" ~ user ~ "** uses the urinal.") }}You step up to the urinal and do your business. The automatic sensor flushes when you step away. You feel relieved.
+OnFish: {% if e.contents %}{{ effects.dispense() }}{{ effects.broadcast("**" ~ user ~ "** is fishing in the urinal...") }}You cast your line into the urinal and wait...{% else %}You cast into the urinal but nothing is biting.{% endif %}
 
 Id: restroom_stalls
 Name: Toilet Stalls
@@ -453,12 +742,14 @@ Name: Toilet
 Prototype: furniture
 Room: restroom
 Container: restroom_stalls
+ContentsVisible: no
 DescriptionShort: a standard white {{ e.name }}
 DescriptionLong: A white porcelain toilet with a black plastic seat. There's a chrome flush handle on the side. Surprisingly clean for a public restroom.
 OnTouch: You touch the toilet seat. It's cold. The handle is cold too. Everything in here is cold.
 OnUse: {{ effects.broadcast("**" ~ user ~ "** occupies a toilet stall.") }}You enter the stall and lock the flimsy door behind you. After taking care of business, you flush and exit. You feel much better now.
 OnOpen: You lift the toilet lid. It's a toilet. What did you expect?
 OnClose: You close the toilet lid with a satisfying clunk.
+OnFish: {% if e.contents %}{{ effects.dispense() }}{{ effects.broadcast("**" ~ user ~ "** is fishing in the toilet...") }}You cast your line into the toilet bowl and wait...{% else %}You cast into the toilet but nothing is biting.{% endif %}
 
 Id: restroom_toilet_paper
 Name: Toilet Paper Roll
@@ -1069,6 +1360,32 @@ Tags: beverage globe_minibar_liquor
 DescriptionShort: a bottle of {{ e.name }}
 DescriptionLong: A bottle of Nikka Yoichi Limited Edition Final Version 20-Year-Old Single Malt Japanese Whisky. One of the last bottles ever produced before the age-statement line was discontinued. Peated barley, coastal air, decades of patience.
 OnUse: You pour yourself a reverent measure of {{ e.name }}. Smoke, sea salt, dried fruit, and a finish that lasts forever. You feel blessed. It restores health.
+
+# ----------------------------------------------------------------------------
+# Kitchen entities
+# ----------------------------------------------------------------------------
+
+Id: kitchen_rack
+Name: Fishing Pole Rack
+Prototype: chest
+Room: kitchen
+ContentsVisible: yes
+DescriptionShort: a wall-mounted {{ e.name }}{% if e.contents %} holds:{{ e.contents }}{% endif %}
+DescriptionLong: A stainless steel rack bolted to the wall above the counter. A row of hooks juts out for holding fishing poles.
+OnOpen: {{ effects.set_focus() }}You rummage through the rack.{% if e.contents %} You spot:{{ e.contents }}{% else %} Nothing but empty hooks.{% endif %}
+OnClose: {{ effects.clear_focus() }}You stop searching the rack.
+OnTouch: You run your hand along the cold steel hooks.
+
+Id: kitchen_sink
+Name: Kitchen Sink
+Prototype: furniture
+Room: kitchen
+ContentsVisible: no
+DescriptionShort: a deep industrial {{ e.name }} with a dripping faucet
+DescriptionLong: A massive stainless steel basin stained with years of use. The faucet drips steadily, keeping a few inches of murky water pooled at the bottom.
+OnTouch: You dip your hand in. The water is tepid and slightly greasy.
+OnUse: You turn the faucet on full blast. The water sputters and coughs before flowing steadily.
+OnFish: {% if e.contents %}{{ effects.dispense() }}{{ effects.broadcast("**" ~ user ~ "** is fishing in the kitchen sink...") }}You cast into the basin and wait...{% else %}You swirl the greasy water around but nothing is biting.{% endif %}
 
 # ----------------------------------------------------------------------------
 # Library entities
@@ -1684,3 +2001,38 @@ Container: restroom_trash_can
 TagQuery: restroom_trash_loot
 MaxCount: 1
 RespawnIntervalMinutes: 30
+
+Id: restroom_toilet_fish_pool
+Room: restroom
+Container: restroom_toilet
+TagQuery: toilet_fish
+MaxCount: 1
+RespawnIntervalMinutes: 10
+
+Id: restroom_urinal_fish_pool
+Room: restroom
+Container: restroom_urinals
+TagQuery: urinal_fish
+MaxCount: 1
+RespawnIntervalMinutes: 10
+
+Id: restroom_sink_fish_pool
+Room: restroom
+Container: restroom_sinks
+TagQuery: sink_fish
+MaxCount: 1
+RespawnIntervalMinutes: 10
+
+Id: kitchen_sink_fish_pool
+Room: kitchen
+Container: kitchen_sink
+TagQuery: kitchen_sink_fish
+MaxCount: 1
+RespawnIntervalMinutes: 10
+
+Id: kitchen_rack_pool
+Room: kitchen
+Container: kitchen_rack
+TagQuery: kitchen_rack_loot
+MaxCount: 1
+RespawnIntervalMinutes: 15

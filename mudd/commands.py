@@ -199,6 +199,32 @@ class CloseCommand(ActionCommand):
         return entity.entity.on_close
 
 
+class FishCommand(ActionCommand):
+    """Command for the 'fish' action.
+
+    Requires the user to have a fishing pole (tagged 'fishing_pole') in
+    their inventory before allowing fishing.
+    """
+
+    @override
+    def get_handler_text(self, entity: IReadableEntity) -> str | None:
+        """Return the entity's on_fish handler template."""
+        return entity.entity.on_fish
+
+    @override
+    async def execute(
+        self,
+        user: IUser,
+        room: IRoom,
+        effects: EffectsObserver,
+        entity: IReadableEntity,
+    ) -> ActionResult:
+        """Execute fish command with fishing pole validation."""
+        if not await user.has_entity_by_tag("fishing_pole"):
+            return ActionResult(output="You need a fishing pole to fish.")
+        return await super().execute(user, room, effects, entity)
+
+
 def get_command(action: VerbAction) -> ActionCommand:
     """Get command instance for a verb action."""
     return {
@@ -210,4 +236,5 @@ def get_command(action: VerbAction) -> ActionCommand:
         VerbAction.ON_DROP: DropCommand(),
         VerbAction.ON_OPEN: OpenCommand(),
         VerbAction.ON_CLOSE: CloseCommand(),
+        VerbAction.ON_FISH: FishCommand(),
     }[action]

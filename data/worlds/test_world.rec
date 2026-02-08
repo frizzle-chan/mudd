@@ -47,7 +47,7 @@ Description: A store room for test fixtures
 %type: Rarity enum none common uncommon rare epic legendary mythic quest
 %mandatory: Id Name
 %allowed: Id Name Prototype Container Room ContentsVisible DescriptionShort DescriptionLong
-%allowed: OnLook OnTouch OnAttack OnUse OnTake OnOpen OnClose OnDrop
+%allowed: OnLook OnTouch OnAttack OnUse OnTake OnOpen OnClose OnDrop OnFish
 %allowed: Tags Rarity
 
 # ----------------------------------------------------------------------------
@@ -127,6 +127,14 @@ OnTake: {{ effects.pickup() }}You carefully lift the {{ e.name }} from its hook.
 OnDrop: {% if container %}You hang the {{ e.name }} on the *{{ container.name }}*.{% else %}You set the {{ e.name }} down, leaning it against the wall.{% endif %}{{ effects.drop() }}{{ effects.broadcast(user ~ " places " ~ e ~ ".") }}
 OnTouch: You run your fingers along the frame. The paint is dry and textured.
 OnAttack: {{ effects.destroy() }}{{ effects.broadcast("**" ~ user ~ "** slashes " ~ e ~ " with a knife!") }}You drag your blade across the canvas. The painting is ruined.
+
+Id: fish
+Name: fish
+Prototype: item
+Rarity: common
+OnTouch: The {{ e.name }} flops against your hand. It's slimy.
+OnTake: {{ effects.pickup() }}{{ effects.broadcast("**" ~ user ~ "** catches " ~ e ~ "!") }}You pull the {{ e.name }} out. Got it!
+OnDrop: {% if container %}You toss the {{ e.name }} into the *{{ container.name }}*.{% else %}You set the {{ e.name }} down. It flops around.{% endif %}{{ effects.drop() }}{{ effects.broadcast(user ~ " drops " ~ e ~ ".") }}
 
 # ----------------------------------------------------------------------------
 # Store Room entities (test fixtures)
@@ -375,6 +383,40 @@ DescriptionLong: A glass object used for testing destruction effects.
 OnAttack: {{ effects.destroy() }}{{ effects.broadcast("**" ~ user ~ "** smashes the " ~ e.name ~ "!") }}TEST_SMASH_RESPONSE - You smash it! Shards scatter everywhere.{{ effects.grant_random("test_loot") }}
 
 # ----------------------------------------------------------------------------
+# Fishing test fixtures
+# ----------------------------------------------------------------------------
+
+Id: test_fishing_pole
+Name: Test Fishing Pole
+Prototype: item
+Room: store-room
+Container: storeroom_box
+Rarity: common
+Tags: fishing_pole
+DescriptionShort: a {{ e.name }}
+DescriptionLong: A test fishing pole for fishing mechanic testing.
+OnTake: {{ effects.pickup() }}You grab the {{ e.name }}.
+
+Id: test_water_basin
+Name: Test Water Basin
+Prototype: furniture
+Room: store-room
+ContentsVisible: no
+DescriptionShort: A {{ e.name }} full of murky water.
+DescriptionLong: A basin of water for fishing mechanic testing.
+OnFish: {% if e.contents %}{{ effects.dispense() }}TEST_FISH_RESPONSE{% else %}nothing is biting{% endif %}
+
+Id: test_fish
+Name: Test Fish
+Prototype: fish
+Room: store-room
+Container: test_water_basin
+Rarity: common
+Tags: test_basin_fish
+DescriptionShort: a {{ e.name }}
+DescriptionLong: A test fish for fishing mechanic testing.
+
+# ----------------------------------------------------------------------------
 # Novel mechanic test fixtures
 # ----------------------------------------------------------------------------
 
@@ -500,3 +542,10 @@ TagQuery: test_painting_spawn
 MaxCount: 2
 RespawnIntervalMinutes: 1
 NoDuplicates: yes
+
+Id: test_basin_fish_pool
+Room: store-room
+Container: test_water_basin
+TagQuery: test_basin_fish
+MaxCount: 1
+RespawnIntervalMinutes: 1

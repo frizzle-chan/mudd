@@ -10,6 +10,7 @@ from mudd.commands import (
     AttackCommand,
     CloseCommand,
     DropCommand,
+    FishCommand,
     LookCommand,
     OpenCommand,
     TakeCommand,
@@ -87,6 +88,7 @@ async def test_new_player_explores_the_world(test_db, clean_user_state):
     assert "Test Table" in entity_names
     assert "Test Dispenser" in entity_names
     assert "Test Terminal" in entity_names
+    assert "Test Water Basin" in entity_names
     # Items inside opaque containers should NOT be visible
     assert "Test Orb" not in entity_names
     # But Test Painting IS visible (on table with contents_visible=yes)
@@ -250,6 +252,51 @@ async def test_new_player_explores_the_world(test_db, clean_user_state):
     # Prize should have been picked up
     inv = await autocomplete(test_db, user.id, "i.")
     assert any(e.entity.name == "Test Dispenser Prize" for e in inv)
+
+    # === FISHING MECHANIC ===
+
+    # Fish without a pole -- should be rejected
+    basin = next(
+        o
+        for o in await autocomplete(test_db, user.id, "Water Basin")
+        if not isinstance(o, RoomEntityInstance)
+    )
+    result = await act(test_db, user.id, FishCommand(), f"entity://{basin.instance_id}")
+    assert result.output == "You need a fishing pole to fish."
+
+    # Acquire fishing pole from box
+    await act(test_db, user.id, OpenCommand(), f"entity://{box.instance_id}")
+    options = await autocomplete(test_db, user.id, "")
+    pole = next(
+        o
+        for o in options
+        if not isinstance(o, RoomEntityInstance)
+        and o.entity.name == "Test Fishing Pole"
+    )
+    result = await act(test_db, user.id, TakeCommand(), f"entity://{pole.instance_id}")
+    assert any(isinstance(e, EntityPickedUpEvent) for e in result.reconciler.events)
+    inv = await autocomplete(test_db, user.id, "i.")
+    assert any(e.entity.name == "Test Fishing Pole" for e in inv)
+
+    # Close box, back to room view
+    await act(test_db, user.id, CloseCommand(), f"entity://{box.instance_id}")
+
+    # Fish from basin (has a fish inside)
+    basin = next(
+        o
+        for o in await autocomplete(test_db, user.id, "Water Basin")
+        if not isinstance(o, RoomEntityInstance)
+    )
+    result = await act(test_db, user.id, FishCommand(), f"entity://{basin.instance_id}")
+    assert "TEST_FISH_RESPONSE" in result.output
+
+    # Fish should now be in inventory
+    inv = await autocomplete(test_db, user.id, "i.")
+    assert any(e.entity.name == "Test Fish" for e in inv)
+
+    # Fish again from empty basin
+    result = await act(test_db, user.id, FishCommand(), f"entity://{basin.instance_id}")
+    assert "nothing is biting" in result.output
 
     # === TERMINAL FOCUS (open/read/close) ===
 
