@@ -159,7 +159,7 @@ pytest tests/integration/        # Run only integration tests
 pytest mudd/                     # Run only colocated unit tests
 ```
 
-**Unit test convention**: Pure unit tests live alongside source files with the `_unit_test.py` suffix (e.g., `mudd/utils/text_unit_test.py` tests `mudd/utils/text.py`).
+**Unit test convention**: Pure unit tests live alongside source files with the `_unit_test.py` suffix (e.g., `mudd/utils/text_unit_test.py` tests `mudd/utils/text.py`). No `unittest.mock` in unit tests — if it needs mocks, write an integration test instead.
 
 ## Devcontainer Setup
 
