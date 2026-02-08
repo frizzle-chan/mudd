@@ -8,7 +8,7 @@ from mudd.cogs.speech import SPEECH_XP_PER_MESSAGE
 from mudd.commands import AttackCommand, LookCommand, UseCommand
 from mudd.models import RoomEntityInstance
 from mudd.models.skills import UserSkill
-from mudd.observers.skills import AGILITY_XP_PER_MOVE, ATTACK_XP_PER_DESTROY
+from mudd.observers.skills import AGILITY_XP_PER_MOVE
 from mudd.skills.registry import SKILL_COUNT, Skill
 from mudd.skills.xp import MAX_XP, xp_for_level
 from tests.helpers import act, autocomplete, create_test_user, move
@@ -279,10 +279,10 @@ async def test_movement_grants_agility_xp(test_db, clean_user_state):
 
 
 async def test_attack_destroy_grants_attack_xp(test_db, clean_user_state):
-    """Destroying an entity via attack grants Attack XP implicitly."""
+    """Destroying an entity via attack grants Attack XP via template effect."""
     user = await create_test_user(test_db, room_id="store-room")
 
-    # Find the test target dummy in the room (has destroy on attack)
+    # Find the test target dummy in the room (has grant_xp + destroy on attack)
     dummy = next(
         o
         for o in await autocomplete(test_db, user.id, "Test Target Dummy")
@@ -295,23 +295,27 @@ async def test_attack_destroy_grants_attack_xp(test_db, clean_user_state):
     assert skill_before.xp == 0
     assert skill_before.level == 1
 
-    # Attack the dummy (triggers destroy + implicit attack XP)
+    # Attack the dummy (triggers grant_xp("attack", 25) + destroy via template)
     result = await act(
         test_db, user.id, AttackCommand(), f"entity://{dummy.instance_id}"
     )
     assert "smash" in result.output.lower()
 
-    # SkillsObserver should have processed the implicit attack XP grant
+    # Verify effects observed the XP grant signal from template
+    assert result.effects.has_xp_grants
+    assert result.effects.xp_grants == [("attack", 25)]
+
+    # SkillsObserver should have processed the XP grant during flush
     assert len(result.skills.results) == 1
     xp_result = result.skills.results[0]
     assert xp_result.skill == Skill.ATTACK
     assert xp_result.old_xp == 0
-    assert xp_result.new_xp == ATTACK_XP_PER_DESTROY
+    assert xp_result.new_xp == 25
     assert xp_result.old_level == 1
-    assert xp_result.new_level == 2  # 100 XP crosses level 2 boundary (83 XP)
-    assert xp_result.leveled_up is True
+    assert xp_result.new_level == 1  # 25 XP doesn't cross level 2 boundary (83 XP)
+    assert xp_result.leveled_up is False
 
     # Verify XP persisted in database
     skill_after = await UserSkill.get(test_db, user.id, Skill.ATTACK)
-    assert skill_after.xp == ATTACK_XP_PER_DESTROY
-    assert skill_after.level == 2
+    assert skill_after.xp == 25
+    assert skill_after.level == 1
