@@ -1,6 +1,6 @@
 """OSRS-style XP formula for the skills system.
 
-Pre-computes the XP table at module load for O(1) lookups.
+Pre-computes the XP table at module load for fast lookups.
 Formula: xp_for_level(L) = floor(sum(floor(i + 300 * 2^(i/7)) for i in 1..L-1) / 4)
 """
 

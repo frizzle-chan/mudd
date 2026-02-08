@@ -54,7 +54,7 @@ Skills gain XP through two distinct mechanisms:
 |-------|--------|-----------|-------------|---------------------|
 | Agility | Room transitions | Implicit: skills observer listens to movement events | 28 | 3 moves |
 | Attack | Attacking entities | Explicit: attack handlers call `grant_xp` effect with rarity-based amounts | 25-400 | 4 actions (common) |
-| Speech | Sending messages | Implicit: Discord event handler on messages in room channels | 17 | 5 messages |
+| Speech | Sending messages | Implicit: Discord event handler on messages in room channels | 15 | 6 messages |
 | Vitality | Eating/drinking | Explicit: food/drink handlers call `grant_xp` effect, then destroy the item | 100 | 1 action |
 | Fishing | Catching fish | TBD: future fishing minigame | TBD | TBD |
 
