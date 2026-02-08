@@ -106,6 +106,7 @@ class EntityDestroyedEvent:
     """Fact: entity was destroyed."""
 
     instance: EntityInstance
+    thread_id: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
