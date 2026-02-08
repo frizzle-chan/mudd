@@ -156,7 +156,9 @@ Id: object
 Name: object
 Rarity: none
 DescriptionShort: A {{ e.name }}.
-OnLook: {{ e.description_long or e.description_short or "You see nothing special." }}{{ e.contents }}
+OnLook: {{ e.description_long or e.description_short or "You see nothing special." }}{% if e.contents %}
++
++ {{ e.contents }}{% endif %}
 OnTouch: You touch the {{ e.name }}. Nothing happens.
 OnAttack: You attack the {{ e.name }}, but it has no effect.
 OnUse: You can't use the {{ e.name }}.
@@ -166,15 +168,18 @@ OnFish: You can't fish here.
 Id: furniture
 Name: furniture
 Prototype: object
-DescriptionShort: A {{ e.name }} sits here{% if e.contents %}. On it:{{ e.contents }}{% endif %}
+DescriptionShort: A {{ e.name }} sits here{% if e.contents %}. On it:
++ {{ e.contents }}{% endif %}
 
 Id: chest
 Name: chest
 Prototype: object
 DescriptionShort: A {{ e.name }} sits here.
 OnLook: {{ e.description_long or e.description_short or "You see nothing special." }}
-OnUse: {{ effects.set_focus() }}You open the {{ e.name }}.{% if e.contents %} Inside:{{ e.contents }}{% else %} It's empty.{% endif %}
-OnOpen: {{ effects.set_focus() }}You open the {{ e.name }}.{% if e.contents %} Inside:{{ e.contents }}{% else %} It's empty.{% endif %}
+OnUse: {{ effects.set_focus() }}You open the {{ e.name }}.{% if e.contents %} Inside:
++ {{ e.contents }}{% else %} It's empty.{% endif %}
+OnOpen: {{ effects.set_focus() }}You open the {{ e.name }}.{% if e.contents %} Inside:
++ {{ e.contents }}{% else %} It's empty.{% endif %}
 OnClose: {{ effects.clear_focus() }}You close the {{ e.name }}.
 
 Id: glass_object
@@ -626,7 +631,8 @@ Id: foyer_table
 Name: Wooden Table
 Prototype: furniture
 Room: foyer
-DescriptionShort: A {{ e.name }} sits in the middle of the room{% if e.contents %}. On it:{{ e.contents }}{% endif %}
+DescriptionShort: A {{ e.name }} sits in the middle of the room{% if e.contents %}. On it:
++ {{ e.contents }}{% endif %}
 DescriptionLong: A sturdy oak table with worn edges.
 ContentsVisible: yes
 
@@ -732,9 +738,11 @@ Name: Toilet Stalls
 Prototype: furniture
 Room: restroom
 ContentsVisible: yes
-DescriptionShort: Three {{ e.name }} with wooden doors line the back wall{% if e.contents %}. Inside:{{ e.contents }}{% endif %}
+DescriptionShort: Three {{ e.name }} with wooden doors line the back wall{% if e.contents %}. Inside:
++ {{ e.contents }}{% endif %}
 DescriptionLong: Three toilet stalls with honey-colored wooden doors. The gaps around the doors are uncomfortably wide, as is tradition.
-OnOpen: {{ effects.set_focus() }}You push open a stall door.{% if e.contents %} Inside you see:{{ e.contents }}{% else %} Just an empty stall.{% endif %}
+OnOpen: {{ effects.set_focus() }}You push open a stall door.{% if e.contents %} Inside you see:
++ {{ e.contents }}{% else %} Just an empty stall.{% endif %}
 OnClose: {{ effects.clear_focus() }}You let the stall door swing shut. It bounces a few times before settling.
 
 Id: restroom_toilet
@@ -758,7 +766,8 @@ Room: restroom
 ContentsVisible: no
 DescriptionShort: A metal {{ e.name }} sits in the corner.
 DescriptionLong: A stainless steel trash can with a swinging lid. It's overflowing with crumpled paper towels.
-OnOpen: You peer into the {{ e.name }}, pushing aside damp paper towels.{% if e.contents %} You spot:{{ e.contents }}{% else %} Nothing but garbage.{% endif %}
+OnOpen: You peer into the {{ e.name }}, pushing aside damp paper towels.{% if e.contents %} You spot:
++ {{ e.contents }}{% else %} Nothing but garbage.{% endif %}
 OnClose: You let the lid swing shut.
 OnTouch: The metal is cold and slightly damp.
 
@@ -788,7 +797,8 @@ OnOpen: {{ effects.set_focus() }}```
 + ╹ ╹┗━┛╺┻┛╺┻┛   ┗━┛┗━┛
 + ```
 + *MUDD-OS v0.2.1 — Multi-User Dungeon (Discord)*
-+ Welcome, GUEST. You have access to the following files:{% if e.contents %}{{ e.contents }}{% else %} (none){% endif %}
++ Welcome, GUEST. You have access to the following files:{% if e.contents %}
++ {{ e.contents }}{% else %} (none){% endif %}
 OnClose: {{ effects.clear_focus() }}```
 + LOGGING OUT...
 +
@@ -1019,10 +1029,12 @@ Id: gallery_wall
 Name: Gallery Wall
 Prototype: furniture
 Room: gallery
-DescriptionShort: A section of {{ e.name }} displays rotating artwork{% if e.contents %}:{{ e.contents }}{% endif %}
+DescriptionShort: A section of {{ e.name }} displays rotating artwork{% if e.contents %}:
++ {{ e.contents }}{% endif %}
 DescriptionLong: A dedicated wall space where the curator rotates pieces from the collection. A small placard reads "Featured Works - Selection changes periodically. All artwork drawn by real human beings."
 ContentsVisible: yes
-OnOpen: {{ effects.set_focus() }}You step closer to examine the {{ e.name }}.{% if e.contents %} Currently on display:{{ e.contents }}{% else %} The wall is bare.{% endif %}
+OnOpen: {{ effects.set_focus() }}You step closer to examine the {{ e.name }}.{% if e.contents %} Currently on display:
++ {{ e.contents }}{% else %} The wall is bare.{% endif %}
 OnClose: {{ effects.clear_focus() }}You step back from the {{ e.name }}.
 
 # Gallery wall paintings (spawned by gallery_wall_pool)
@@ -1165,7 +1177,8 @@ DescriptionShort: An oversized {{ e.name }} sits in the corner.
 DescriptionLong: A vintage wooden globe on a brass stand. You can __open__ the northern hemisphere to reveal the minibar inside.
 ContentsVisible: no
 OnUse: You swing open the globe and pour yourself a drink. It restores health.
-OnOpen: {{ effects.set_focus() }}You swing open the northern hemisphere.{% if e.contents %} Inside:{{ e.contents }}{% else %} It's empty.{% endif %}
+OnOpen: {{ effects.set_focus() }}You swing open the northern hemisphere.{% if e.contents %} Inside:
++ {{ e.contents }}{% else %} It's empty.{% endif %}
 OnClose: {{ effects.clear_focus() }}You swing the globe closed.
 
 Id: lounge_fridge
@@ -1175,7 +1188,8 @@ Room: lounge
 DescriptionShort: A windowed {{ e.name }} sits against the east wall.
 DescriptionLong: A glass-door mini fridge humming quietly. The glass is fogged with condensation. You can __open__ it to see what's inside.
 OnTouch: The glass is cold and slightly damp with condensation.
-OnOpen: {{ effects.set_focus() }}You swing open the fridge door.{% if e.contents %} Inside:{{ e.contents }}{% else %} It's empty.{% endif %}
+OnOpen: {{ effects.set_focus() }}You swing open the fridge door.{% if e.contents %} Inside:
++ {{ e.contents }}{% else %} It's empty.{% endif %}
 OnClose: {{ effects.clear_focus() }}You close the fridge door.
 
 Id: lounge_chairs
@@ -1349,9 +1363,11 @@ Name: Fishing Pole Rack
 Prototype: chest
 Room: kitchen
 ContentsVisible: yes
-DescriptionShort: a wall-mounted {{ e.name }}{% if e.contents %} holds:{{ e.contents }}{% endif %}
+DescriptionShort: a wall-mounted {{ e.name }}{% if e.contents %} holds:
++ {{ e.contents }}{% endif %}
 DescriptionLong: A stainless steel rack bolted to the wall above the counter. A row of hooks juts out for holding fishing poles.
-OnOpen: {{ effects.set_focus() }}You rummage through the rack.{% if e.contents %} You spot:{{ e.contents }}{% else %} Nothing but empty hooks.{% endif %}
+OnOpen: {{ effects.set_focus() }}You rummage through the rack.{% if e.contents %} You spot:
++ {{ e.contents }}{% else %} Nothing but empty hooks.{% endif %}
 OnClose: {{ effects.clear_focus() }}You stop searching the rack.
 OnTouch: You run your hand along the cold steel hooks.
 
@@ -1382,7 +1398,8 @@ Id: library_coffee_table
 Name: Coffee Table
 Prototype: furniture
 Room: library
-DescriptionShort: A {{ e.name }} sits between the couches{% if e.contents %}. On it:{{ e.contents }}{% endif %}
+DescriptionShort: A {{ e.name }} sits between the couches{% if e.contents %}. On it:
++ {{ e.contents }}{% endif %}
 DescriptionLong: A low wooden coffee table with some ring stains from forgotten drinks.
 ContentsVisible: yes
 
@@ -1400,14 +1417,16 @@ Room: library
 DescriptionShort: A {{ e.name }} sits in the southern half of the room.
 DescriptionLong: An antique writing desk with a worn leather top. There's a drawer you can __open__.
 ContentsVisible: no
-OnOpen: You pull open the drawer.{% if e.contents %} Inside:{{ e.contents }}{% else %} It's empty.{% endif %}
+OnOpen: You pull open the drawer.{% if e.contents %} Inside:
++ {{ e.contents }}{% else %} It's empty.{% endif %}
 OnClose: You slide the drawer shut.
 
 Id: library_side_table
 Name: Side Table
 Prototype: furniture
 Room: library
-DescriptionShort: A small {{ e.name }} stands by the bookshelves{% if e.contents %}. On it:{{ e.contents }}{% endif %}
+DescriptionShort: A small {{ e.name }} stands by the bookshelves{% if e.contents %}. On it:
++ {{ e.contents }}{% endif %}
 DescriptionLong: A narrow wooden side table with turned legs, tucked between the bookshelves.
 ContentsVisible: yes
 
@@ -1889,7 +1908,8 @@ ContentsVisible: no
 DescriptionShort: Several {{ e.name }} are arranged around the room.
 DescriptionLong: Plush armchairs upholstered in faded floral fabric. They look well-loved. You could __search__ between the cushions.
 OnUse: You settle into one of the armchairs near the fire. The warmth and comfort wash over you. You feel your health regenerating.
-OnOpen: {{ effects.set_focus() }}You dig around between the cushions.{% if e.contents %} You find:{{ e.contents }}{% else %} Nothing but lint and crumbs.{% endif %}
+OnOpen: {{ effects.set_focus() }}You dig around between the cushions.{% if e.contents %} You find:
++ {{ e.contents }}{% else %} Nothing but lint and crumbs.{% endif %}
 OnClose: {{ effects.clear_focus() }}You stop rummaging through the cushions.
 
 Id: sitting_room_fireplace
