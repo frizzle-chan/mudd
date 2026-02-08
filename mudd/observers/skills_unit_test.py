@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 
@@ -22,16 +22,12 @@ from mudd.observers.skills import (
 from mudd.skills.registry import Skill
 
 
-def _make_observer(
-    *,
-    reconciler: object | None = None,
-) -> SkillsObserver:
+def _make_observer() -> SkillsObserver:
     """Create a SkillsObserver with a fake pool."""
     return SkillsObserver(
         _pool=None,  # type: ignore[arg-type]
         _user_id=123,
         _room_id="foyer",
-        _reconciler=reconciler,  # type: ignore[arg-type]
     )
 
 
@@ -180,29 +176,8 @@ class TestFlush:
         assert obs._queued_grants == []
 
     @pytest.mark.asyncio
-    async def test_reconciler_receives_events(self) -> None:
-        """After flush, reconciler.notify() gets XP and level-up events."""
-        mock_reconciler = MagicMock()
-        mock_reconciler.notify = MagicMock()  # sync method
-        mock_reconciler.flush = AsyncMock()  # async method
-        obs = _make_observer(reconciler=mock_reconciler)
-        obs.notify(GrantXPSignal(skill="vitality", amount=100))
-
-        with patch(
-            "mudd.observers.skills.UserSkill.grant_xp",
-            return_value=_LEVELUP,
-        ):
-            await obs.flush()
-
-        # Should have been called with an XPGainedEvent and a LevelUpEvent
-        calls = [c.args[0] for c in mock_reconciler.notify.call_args_list]
-        assert any(isinstance(e, XPGainedEvent) for e in calls)
-        assert any(isinstance(e, LevelUpEvent) for e in calls)
-        mock_reconciler.flush.assert_awaited_once()
-
-    @pytest.mark.asyncio
-    async def test_reconciler_not_called_when_none(self) -> None:
-        """Flush works when no reconciler is set."""
+    async def test_flush_stores_results_without_forwarding(self) -> None:
+        """Flush writes XP to DB and stores results (no reconciler interaction)."""
         obs = _make_observer()
         obs.notify(GrantXPSignal(skill="agility", amount=28))
 
@@ -213,3 +188,4 @@ class TestFlush:
             await obs.flush()
 
         assert len(obs._results) == 1
+        assert obs._results[0].skill == "agility"

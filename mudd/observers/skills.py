@@ -15,7 +15,6 @@ from mudd.events.types import (
     XPGainedEvent,
 )
 from mudd.models.skills import UserSkill, XPResult
-from mudd.observers.skills_reconciler import SkillsReconciler
 from mudd.skills.registry import Skill
 
 logger = logging.getLogger(__name__)
@@ -33,13 +32,13 @@ class SkillsObserver:
     - GrantXPSignal -> explicit XP from template effects
 
     During flush(), processes all queued grants via UserSkill.grant_xp()
-    and emits XPGainedEvent/LevelUpEvent to the reconciler.
+    and stores results. Event forwarding to DiscordReconciler is handled
+    externally by flush_all().
     """
 
     _pool: asyncpg.Pool
     _user_id: int
     _room_id: str
-    _reconciler: SkillsReconciler | None = None
     _queued_grants: list[tuple[str, int]] = field(default_factory=list)
     _results: list[XPResult] = field(default_factory=list)
 
@@ -58,9 +57,9 @@ class SkillsObserver:
     async def flush(self) -> None:
         """Process all queued XP grants.
 
-        Calls UserSkill.grant_xp() for each queued grant,
-        collects the results, and emits XPGainedEvent/LevelUpEvent
-        to the reconciler.
+        Calls UserSkill.grant_xp() for each queued grant and
+        collects the results. Event forwarding to DiscordReconciler
+        is handled externally by flush_all().
         """
         for skill, amount in self._queued_grants:
             try:
@@ -76,14 +75,6 @@ class SkillsObserver:
                     self._user_id,
                 )
         self._queued_grants.clear()
-
-        # Emit events to reconciler
-        if self._reconciler:
-            for event in self.get_xp_events():
-                self._reconciler.notify(event)
-            for event in self.get_level_up_events():
-                self._reconciler.notify(event)
-            await self._reconciler.flush()
 
     @property
     def results(self) -> list[XPResult]:

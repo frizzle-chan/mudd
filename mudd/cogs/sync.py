@@ -36,7 +36,6 @@ from mudd.loaders.zone_loader import (
 )
 from mudd.models import Room, Zone
 from mudd.observers import DiscordReconciler, RoomChannelCache
-from mudd.observers.skills_reconciler import SkillsReconciler
 
 logger = logging.getLogger(__name__)
 
@@ -267,11 +266,11 @@ class Sync(commands.Cog):
             guild: Discord guild
             pool: Database connection pool
         """
-        skills_reconciler = SkillsReconciler(self.bot, pool)
+        reconciler = DiscordReconciler(self.bot, pool)
 
         # Ensure milestone roles and skills category exist
-        await skills_reconciler.ensure_roles(guild)
-        await skills_reconciler.ensure_category(guild)
+        await reconciler.skills.ensure_roles(guild)
+        await reconciler.skills.ensure_category(guild)
 
         # Sync each non-bot member
         synced = 0
@@ -279,7 +278,7 @@ class Sync(commands.Cog):
             if member.bot:
                 continue
             try:
-                await skills_reconciler.sync_user(guild, member)
+                await reconciler.skills.sync_user(guild, member)
                 synced += 1
             except Exception:
                 logger.exception("Failed to sync skills for user %d", member.id)
