@@ -2,13 +2,8 @@
 
 from __future__ import annotations
 
-from unittest.mock import patch
-
-import pytest
-
 from mudd.events.types import (
     BroadcastEvent,
-    EntityDestroyedEvent,
     GrantXPSignal,
     LevelUpEvent,
     UserMovedEvent,
@@ -85,26 +80,6 @@ class TestGrantXPSignal:
         assert len(obs._queued_grants) == 2
 
 
-class TestEntityDestroyedNotQueued:
-    def test_entity_destroyed_does_not_queue_attack_xp(
-        self,
-    ) -> None:
-        """EntityDestroyedEvent is not handled by SkillsObserver.
-
-        Attack XP should be handled by the cog/scene, not
-        implicitly, because destruction can come from non-attack
-        sources (e.g., food consumption).
-        """
-        obs = _make_observer()
-        # EntityDestroyedEvent requires an EntityInstance;
-        # since we're testing notify routing, we use a mock
-        from unittest.mock import MagicMock
-
-        fake_instance = MagicMock()
-        obs.notify(EntityDestroyedEvent(instance=fake_instance))
-        assert obs._queued_grants == []
-
-
 # -- XPResult fixtures for event tests --
 
 _NO_LEVELUP = XPResult(skill="agility", old_level=1, new_level=1, old_xp=0, new_xp=28)
@@ -161,51 +136,3 @@ class TestGetLevelUpEvents:
         obs = _make_observer()
         obs._results = [_NO_LEVELUP]
         assert obs.get_level_up_events() == []
-
-
-class TestFlush:
-    @pytest.mark.asyncio
-    async def test_exception_does_not_block_later_grants(self) -> None:
-        """A failed grant_xp call should not prevent subsequent grants."""
-        obs = _make_observer()
-        obs.notify(GrantXPSignal(skill="agility", amount=28))
-        obs.notify(GrantXPSignal(skill="vitality", amount=100))
-
-        call_count = 0
-
-        async def mock_grant_xp(
-            pool: object, user_id: int, skill: str, amount: int
-        ) -> XPResult:
-            nonlocal call_count
-            call_count += 1
-            if skill == "agility":
-                raise RuntimeError("db down")
-            return _LEVELUP
-
-        with patch(
-            "mudd.observers.skills.UserSkill.grant_xp",
-            side_effect=mock_grant_xp,
-        ):
-            await obs.flush()
-
-        assert call_count == 2
-        # Only the second grant succeeded
-        assert len(obs._results) == 1
-        assert obs._results[0].skill == "vitality"
-        # Queue was cleared
-        assert obs._queued_grants == []
-
-    @pytest.mark.asyncio
-    async def test_flush_stores_results_without_forwarding(self) -> None:
-        """Flush writes XP to DB and stores results (no reconciler interaction)."""
-        obs = _make_observer()
-        obs.notify(GrantXPSignal(skill="agility", amount=28))
-
-        with patch(
-            "mudd.observers.skills.UserSkill.grant_xp",
-            return_value=_NO_LEVELUP,
-        ):
-            await obs.flush()
-
-        assert len(obs._results) == 1
-        assert obs._results[0].skill == "agility"

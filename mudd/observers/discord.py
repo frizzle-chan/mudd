@@ -172,15 +172,25 @@ class DiscordReconciler:
         self._inventory.notify(event)
         self._skills.notify(event)
 
-    async def flush(self) -> None:
+    async def flush(self, *, defer_announcements: bool = False) -> None:
         """Process queued notifications. Call after response sent.
 
-        Preserves ordering: zones/rooms/orphans -> inventory -> permissions.
+        Preserves ordering: zones/rooms -> inventory -> permissions -> skills.
+        Skills flush last so level-up announcements post after the user
+        has visibility into the destination room.
+
+        Args:
+            defer_announcements: If True, prepare level-up announcements
+                but don't send them. Call post_skill_announcements() later.
         """
         await self._zone_room.flush()
         await self._inventory.flush()
-        await self._skills.flush()
         await self._permissions.flush()
+        await self._skills.flush(defer_announcements=defer_announcements)
+
+    async def post_skill_announcements(self) -> None:
+        """Send deferred level-up announcements."""
+        await self._skills.post_announcements()
 
     @property
     def skills(self) -> SkillsReconciler:

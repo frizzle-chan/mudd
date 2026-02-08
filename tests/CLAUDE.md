@@ -14,7 +14,7 @@ Integration tests should read like chat transcripts - each test tells a complete
 
 ## Colocated Unit Tests
 
-Pure unit tests (no DB) live alongside their source files using the `_unit_test.py` suffix:
+Pure unit tests (no DB, no `unittest.mock`) live alongside their source files using the `_unit_test.py` suffix. Test only pure logic — if a test needs mocks or patches, it belongs in integration tests instead.
 
 ```
 mudd/

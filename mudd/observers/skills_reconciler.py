@@ -31,6 +31,8 @@ class SkillsReconciler:
     - LevelUpEvent: Queues level-up announcement + nickname update
 
     During flush(), executes all queued Discord operations.
+    Announcements can be deferred via defer_announcements=True
+    so callers can control when they appear in the channel.
     """
 
     def __init__(
@@ -42,6 +44,7 @@ class SkillsReconciler:
         self._pool = pool
         self._xp_events: list[XPGainedEvent] = []
         self._level_up_events: list[LevelUpEvent] = []
+        self._pending_announcements: list[tuple[discord.TextChannel, str]] = []
 
     def notify(self, event: GameEvent) -> None:
         """Queue XP and level-up events for processing."""
@@ -51,8 +54,13 @@ class SkillsReconciler:
             case LevelUpEvent() as evt:
                 self._level_up_events.append(evt)
 
-    async def flush(self) -> None:
-        """Process queued events."""
+    async def flush(self, *, defer_announcements: bool = False) -> None:
+        """Process queued events.
+
+        Args:
+            defer_announcements: If True, prepare announcements but don't
+                send them. Call post_announcements() later to send.
+        """
         # Collect unique user IDs that need updates
         user_ids: set[int] = set()
         for evt in self._xp_events:
@@ -89,18 +97,41 @@ class SkillsReconciler:
                     user_id,
                 )
 
-        # Post level-up announcements
+        # Prepare level-up announcements
+        logger.info(
+            "SkillsReconciler flushing %d level-up events",
+            len(self._level_up_events),
+        )
         for evt in self._level_up_events:
             try:
-                await self._announce_level_up(evt)
+                self._prepare_announcement(evt)
             except Exception:
                 logger.exception(
-                    "Failed to announce level-up for user %d",
+                    "Failed to prepare level-up announcement for user %d",
                     evt.user_id,
                 )
 
         self._xp_events.clear()
         self._level_up_events.clear()
+
+        if not defer_announcements:
+            await self.post_announcements()
+
+    async def post_announcements(self) -> None:
+        """Send all pending level-up announcements and clear them."""
+        for channel, message in self._pending_announcements:
+            try:
+                await channel.send(message)
+                logger.info(
+                    "Level-up announcement sent to #%s",
+                    channel.name,
+                )
+            except Exception:
+                logger.exception(
+                    "Failed to send level-up announcement to #%s",
+                    channel.name,
+                )
+        self._pending_announcements.clear()
 
     async def sync_user(self, guild: discord.Guild, member: discord.Member) -> None:
         """Full skills sync for a single user during periodic sync.
@@ -306,28 +337,42 @@ class SkillsReconciler:
         msg = await channel.send(content)
         await UserSkillsChannel.update_message_id(self._pool, user_id, msg.id)
 
-    async def _announce_level_up(self, event: LevelUpEvent) -> None:
-        """Post a level-up announcement to the user's room channel.
+    def _prepare_announcement(self, event: LevelUpEvent) -> None:
+        """Prepare a level-up announcement for later sending.
+
+        Finds the target channel and formats the message, storing
+        them in _pending_announcements for post_announcements().
 
         Args:
             event: LevelUpEvent with user/skill/level info
         """
-        # Find the room channel by name across guilds
+        logger.info(
+            "Preparing level-up: user %d, %s to level %d in '%s'",
+            event.user_id,
+            event.skill,
+            event.new_level,
+            event.room_id,
+        )
         for guild in self._bot.guilds:
             member = guild.get_member(event.user_id)
             if member is None:
                 continue
 
-            # Find room channel by iterating text channels
             for channel in guild.text_channels:
                 if channel.name == event.room_id:
                     message = format_level_up_message(
-                        member.display_name,
+                        member.mention,
                         event.skill,
                         event.new_level,
                     )
-                    await channel.send(message)
+                    self._pending_announcements.append((channel, message))
                     return
+
+        logger.warning(
+            "No channel found for level-up announcement: room_id='%s', user_id=%d",
+            event.room_id,
+            event.user_id,
+        )
 
     async def _update_nickname(self, user_id: int, total_level: int) -> None:
         """Update user's nickname with total level.
@@ -340,6 +385,8 @@ class SkillsReconciler:
         for guild in self._bot.guilds:
             member = guild.get_member(user_id)
             if member is None:
+                continue
+            if member.id == guild.owner_id:
                 continue
 
             nick = format_nickname(member.display_name, total_level)
