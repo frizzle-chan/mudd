@@ -63,7 +63,9 @@ class SkillsObserver:
         collects the results. Event forwarding to DiscordReconciler
         is handled externally by flush_all().
         """
-        for skill, amount, room_id in self._queued_grants:
+        queued_grants = self._queued_grants
+        self._queued_grants = []
+        for skill, amount, room_id in queued_grants:
             try:
                 result = await UserSkill.grant_xp(
                     self._pool, self._user_id, skill, amount
@@ -76,7 +78,6 @@ class SkillsObserver:
                     skill,
                     self._user_id,
                 )
-        self._queued_grants.clear()
 
     @property
     def results(self) -> list[XPResult]:

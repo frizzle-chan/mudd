@@ -61,11 +61,16 @@ class SkillsReconciler:
             defer_announcements: If True, prepare announcements but don't
                 send them. Call post_announcements() later to send.
         """
+        xp_events = self._xp_events
+        self._xp_events = []
+        level_up_events = self._level_up_events
+        self._level_up_events = []
+
         # Collect unique user IDs that need updates
         user_ids: set[int] = set()
-        for evt in self._xp_events:
+        for evt in xp_events:
             user_ids.add(evt.user_id)
-        for evt in self._level_up_events:
+        for evt in level_up_events:
             user_ids.add(evt.user_id)
 
         # Fetch skills once per user and run all updates
@@ -100,9 +105,9 @@ class SkillsReconciler:
         # Prepare level-up announcements
         logger.info(
             "SkillsReconciler flushing %d level-up events",
-            len(self._level_up_events),
+            len(level_up_events),
         )
-        for evt in self._level_up_events:
+        for evt in level_up_events:
             try:
                 self._prepare_announcement(evt)
             except Exception:
@@ -110,9 +115,6 @@ class SkillsReconciler:
                     "Failed to prepare level-up announcement for user %d",
                     evt.user_id,
                 )
-
-        self._xp_events.clear()
-        self._level_up_events.clear()
 
         if not defer_announcements:
             await self.post_announcements()
