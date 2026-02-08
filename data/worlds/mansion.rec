@@ -354,7 +354,7 @@ OnDrop: {% if container %}You toss the {{ e.name }} into the *{{ container.name 
 Id: fish_nothing
 Name: a tug on the line
 Prototype: object
-Tags: toilet_fish urinal_fish sink_fish
+Tags: toilet_fish urinal_fish sink_fish kitchen_sink_fish
 Rarity: common
 DescriptionShort: a ripple in the water
 OnTake: {{ effects.destroy() }}You feel a tug, but it slips away! The fish got away.
@@ -362,7 +362,7 @@ OnTake: {{ effects.destroy() }}You feel a tug, but it slips away! The fish got a
 Id: fish_crucian_carp
 Name: Crucian Carp
 Prototype: fish
-Tags: toilet_fish urinal_fish sink_fish size_tiny location_river time_all_day
+Tags: toilet_fish urinal_fish sink_fish kitchen_sink_fish size_tiny location_river time_all_day
 Rarity: common
 DescriptionShort: a small {{ e.name }}
 DescriptionLong: A tiny crucian carp.
@@ -402,7 +402,7 @@ DescriptionLong: A large catfish with long whiskers.
 Id: fish_pale_chub
 Name: Pale Chub
 Prototype: fish
-Tags: toilet_fish urinal_fish sink_fish size_tiny location_river time_day
+Tags: toilet_fish urinal_fish sink_fish kitchen_sink_fish size_tiny location_river time_day
 Rarity: common
 DescriptionShort: a pale {{ e.name }}
 DescriptionLong: A tiny, almost translucent chub.
@@ -434,7 +434,7 @@ DescriptionLong: A large, hardy carp.
 Id: fish_loach
 Name: Loach
 Prototype: fish
-Tags: toilet_fish urinal_fish sink_fish size_small location_river time_all_day
+Tags: toilet_fish urinal_fish sink_fish kitchen_sink_fish size_small location_river time_all_day
 Rarity: common
 DescriptionShort: a wriggly {{ e.name }}
 DescriptionLong: A small, eel-like loach. Slippery.
@@ -450,7 +450,7 @@ DescriptionLong: A large bass. Fights hard on the line.
 Id: fish_freshwater_goby
 Name: Freshwater Goby
 Prototype: fish
-Tags: urinal_fish sink_fish size_small location_river time_all_day
+Tags: kitchen_sink_fish size_small location_river time_all_day
 Rarity: common
 DescriptionShort: a tiny {{ e.name }}
 DescriptionLong: A small freshwater goby.
@@ -506,7 +506,7 @@ DescriptionLong: A medium-sized cherry salmon with pinkish spotted markings.
 Id: fish_goldfish
 Name: Goldfish
 Prototype: fish
-Tags: urinal_fish sink_fish size_tiny location_river time_day
+Tags: urinal_fish sink_fish kitchen_sink_fish size_tiny location_river time_day
 Rarity: uncommon
 DescriptionShort: a bright {{ e.name }}
 DescriptionLong: A tiny, bright orange goldfish.
@@ -514,7 +514,7 @@ DescriptionLong: A tiny, bright orange goldfish.
 Id: fish_popeyed_goldfish
 Name: Popeyed Goldfish
 Prototype: fish
-Tags: sink_fish size_tiny location_river time_day
+Tags: kitchen_sink_fish size_tiny location_river time_day
 Rarity: uncommon
 DescriptionShort: a bug-eyed {{ e.name }}
 DescriptionLong: A tiny goldfish with enormous, protruding eyes.
@@ -617,6 +617,7 @@ Rarity: mythic
 DescriptionShort: an ancient {{ e.name }}
 DescriptionLong: A very large coelacanth. A living fossil, thought extinct for 65 million years.
 
+
 # ----------------------------------------------------------------------------
 # Foyer entities
 # ----------------------------------------------------------------------------
@@ -709,45 +710,11 @@ Id: restroom_sinks
 Name: Row of Sinks
 Prototype: furniture
 Room: restroom
-ContentsVisible: no
 DescriptionShort: A {{ e.name }} lines the wall beneath a long mirror, with soap and paper towel dispensers mounted above.
 DescriptionLong: Four white porcelain sinks with chrome fixtures. Above them stretches a long mirror, and mounted on the wall are soap dispensers and paper towel dispensers.
 OnTouch: You run your hand under the faucet. The water is lukewarm.
 OnUse: You turn on the faucet and wash your hands. The soap smells vaguely of industrial lavender.
-OnFish: {% if e.contents %}{{ effects.dispense() }}{{ effects.broadcast("**" ~ user ~ "** is fishing in the sink...") }}You plug the drain and wait...{% else %}You swirl the water around but nothing is biting.{% endif %}
-OnOpen: {{ effects.set_focus() }}You step up to the sinks and survey your options.{% if e.contents %} Above:{{ e.contents }}{% endif %}
-OnClose: {{ effects.clear_focus() }}You step back from the sinks.
-
-Id: restroom_mirror
-Name: Long Mirror
-Prototype: object
-Room: restroom
-Container: restroom_sinks
-DescriptionShort: a {{ e.name }} stretching above the sinks
-DescriptionLong: A clean mirror spanning the length of the sink counter. The fluorescent lighting is unforgiving.
-OnLook: You look at your reflection in the {{ e.name }}. You look tired but determined.
-OnTouch: You touch the cool glass. Your reflection mimics you perfectly.
-OnAttack: You resist the urge to punch your own reflection. Seven years bad luck isn't worth it.
-
-Id: restroom_soap_dispenser
-Name: Soap Dispenser
-Prototype: object
-Room: restroom
-Container: restroom_sinks
-DescriptionShort: a wall-mounted {{ e.name }}
-DescriptionLong: A chrome soap dispenser with a translucent reservoir. The pink liquid inside is running low.
-OnUse: You pump the dispenser. A small amount of pink soap oozes into your palm.
-OnTouch: The chrome is cold and slightly sticky from soap residue.
-
-Id: restroom_paper_towels
-Name: Paper Towel Dispenser
-Prototype: object
-Room: restroom
-Container: restroom_sinks
-DescriptionShort: a {{ e.name }} mounted on the wall
-DescriptionLong: A metal paper towel dispenser. You can see brown paper towels through the slot.
-OnUse: You yank a paper towel from the dispenser. It tears unevenly.
-OnTouch: The metal housing rattles slightly when you touch it.
+OnFish: {% if e.contents %}{{ effects.dispense() }}{{ effects.broadcast("**" ~ user ~ "** is fishing in the sink...") }}You cast your line into the sink and wait...{% else %}You cast into the sink but nothing is biting.{% endif %}
 
 Id: restroom_urinals
 Name: Urinals
@@ -758,7 +725,7 @@ DescriptionShort: Three {{ e.name }} line the wall, separated by privacy divider
 DescriptionLong: A row of white porcelain urinals with automatic flush sensors. Blue deodorizer pucks sit in the drains. Privacy dividers offer a modicum of dignity.
 OnTouch: You touch the porcelain. It's cold. Why did you do that?
 OnUse: {{ effects.broadcast("**" ~ user ~ "** uses the urinal.") }}You step up to the urinal and do your business. The automatic sensor flushes when you step away. You feel relieved.
-OnFish: {% if e.contents %}{{ effects.dispense() }}{{ effects.broadcast("**" ~ user ~ "** is fishing in the urinal...") }}You dip your hands into the urinal water and feel around...{% else %}You swirl the water around but nothing is biting.{% endif %}
+OnFish: {% if e.contents %}{{ effects.dispense() }}{{ effects.broadcast("**" ~ user ~ "** is fishing in the urinal...") }}You cast your line into the urinal and wait...{% else %}You cast into the urinal but nothing is biting.{% endif %}
 
 Id: restroom_stalls
 Name: Toilet Stalls
@@ -782,7 +749,7 @@ OnTouch: You touch the toilet seat. It's cold. The handle is cold too. Everythin
 OnUse: {{ effects.broadcast("**" ~ user ~ "** occupies a toilet stall.") }}You enter the stall and lock the flimsy door behind you. After taking care of business, you flush and exit. You feel much better now.
 OnOpen: You lift the toilet lid. It's a toilet. What did you expect?
 OnClose: You close the toilet lid with a satisfying clunk.
-OnFish: {% if e.contents %}{{ effects.dispense() }}{{ effects.broadcast("**" ~ user ~ "** is fishing in the toilet...") }}You plunge your hand into the toilet bowl and feel around...{% else %}You swirl the water around but nothing is biting.{% endif %}
+OnFish: {% if e.contents %}{{ effects.dispense() }}{{ effects.broadcast("**" ~ user ~ "** is fishing in the toilet...") }}You cast your line into the toilet bowl and wait...{% else %}You cast into the toilet but nothing is biting.{% endif %}
 
 Id: restroom_toilet_paper
 Name: Toilet Paper Roll
@@ -1399,15 +1366,26 @@ OnUse: You pour yourself a reverent measure of {{ e.name }}. Smoke, sea salt, dr
 # ----------------------------------------------------------------------------
 
 Id: kitchen_rack
-Name: Utensil Rack
+Name: Fishing Pole Rack
 Prototype: chest
 Room: kitchen
-ContentsVisible: no
-DescriptionShort: A wall-mounted {{ e.name }} holds various cooking implements and tools.
-DescriptionLong: A stainless steel rack bolted to the wall above the counter. Various utensils and tools dangle from hooks. You could __search__ it.
-OnOpen: {{ effects.set_focus() }}You rummage through the rack.{% if e.contents %} Among the utensils you spot:{{ e.contents }}{% else %} Nothing but spatulas and ladles.{% endif %}
+ContentsVisible: yes
+DescriptionShort: a wall-mounted {{ e.name }}{% if e.contents %} holds:{{ e.contents }}{% endif %}
+DescriptionLong: A stainless steel rack bolted to the wall above the counter. A row of hooks juts out for holding fishing poles.
+OnOpen: {{ effects.set_focus() }}You rummage through the rack.{% if e.contents %} You spot:{{ e.contents }}{% else %} Nothing but empty hooks.{% endif %}
 OnClose: {{ effects.clear_focus() }}You stop searching the rack.
-OnTouch: The utensils clank together as you brush past them.
+OnTouch: You run your hand along the cold steel hooks.
+
+Id: kitchen_sink
+Name: Kitchen Sink
+Prototype: furniture
+Room: kitchen
+ContentsVisible: no
+DescriptionShort: a deep industrial {{ e.name }} with a dripping faucet
+DescriptionLong: A massive stainless steel basin stained with years of use. The faucet drips steadily, keeping a few inches of murky water pooled at the bottom.
+OnTouch: You dip your hand in. The water is tepid and slightly greasy.
+OnUse: You turn the faucet on full blast. The water sputters and coughs before flowing steadily.
+OnFish: {% if e.contents %}{{ effects.dispense() }}{{ effects.broadcast("**" ~ user ~ "** is fishing in the kitchen sink...") }}You cast into the basin and wait...{% else %}You swirl the greasy water around but nothing is biting.{% endif %}
 
 # ----------------------------------------------------------------------------
 # Library entities
@@ -2042,6 +2020,13 @@ Id: restroom_sink_fish_pool
 Room: restroom
 Container: restroom_sinks
 TagQuery: sink_fish
+MaxCount: 1
+RespawnIntervalMinutes: 10
+
+Id: kitchen_sink_fish_pool
+Room: kitchen
+Container: kitchen_sink
+TagQuery: kitchen_sink_fish
 MaxCount: 1
 RespawnIntervalMinutes: 10
 
