@@ -353,8 +353,38 @@ Name: fish
 Prototype: item
 Rarity: common
 OnTouch: The {{ e.name }} flops against your hand. It's slimy.
-OnTake: {{ effects.pickup() }}{{ effects.broadcast("**" ~ user ~ "** catches " ~ e ~ "!") }}You pull the {{ e.name }} out. Got it!
+OnTake: {{ effects.grant_xp("fishing", 25) }}{{ effects.pickup() }}{{ effects.broadcast("**" ~ user ~ "** catches " ~ e ~ "!") }}You pull the {{ e.name }} out. Got it!
 OnDrop: {% if container %}You toss the {{ e.name }} into the *{{ container.name }}*.{% else %}You set the {{ e.name }} down. It flops around.{% endif %}{{ effects.drop() }}{{ effects.broadcast(user ~ " drops " ~ e ~ ".") }}
+
+Id: fish_uncommon
+Name: fish (uncommon)
+Prototype: fish
+Rarity: uncommon
+OnTake: {{ effects.grant_xp("fishing", 50) }}{{ effects.pickup() }}{{ effects.broadcast("**" ~ user ~ "** catches " ~ e ~ "!") }}You pull the {{ e.name }} out. Got it!
+
+Id: fish_rare
+Name: fish (rare)
+Prototype: fish
+Rarity: rare
+OnTake: {{ effects.grant_xp("fishing", 100) }}{{ effects.pickup() }}{{ effects.broadcast("**" ~ user ~ "** catches " ~ e ~ "!") }}You pull the {{ e.name }} out. Got it!
+
+Id: fish_epic
+Name: fish (epic)
+Prototype: fish
+Rarity: epic
+OnTake: {{ effects.grant_xp("fishing", 200) }}{{ effects.pickup() }}{{ effects.broadcast("**" ~ user ~ "** catches " ~ e ~ "!") }}You pull the {{ e.name }} out. Got it!
+
+Id: fish_legendary
+Name: fish (legendary)
+Prototype: fish
+Rarity: legendary
+OnTake: {{ effects.grant_xp("fishing", 400) }}{{ effects.pickup() }}{{ effects.broadcast("**" ~ user ~ "** catches " ~ e ~ "!") }}You pull the {{ e.name }} out. Got it!
+
+Id: fish_mythic
+Name: fish (mythic)
+Prototype: fish
+Rarity: mythic
+OnTake: {{ effects.grant_xp("fishing", 800) }}{{ effects.pickup() }}{{ effects.broadcast("**" ~ user ~ "** catches " ~ e ~ "!") }}You pull the {{ e.name }} out. Got it!
 
 Id: fish_nothing
 Name: a tug on the line
@@ -470,7 +500,7 @@ DescriptionLong: A small pond smelt. Smells faintly of cucumber.
 
 Id: fish_rainbow_trout
 Name: Rainbow Trout
-Prototype: fish
+Prototype: fish_uncommon
 Tags: toilet_fish size_large location_river time_all_day
 Rarity: uncommon
 DescriptionShort: a colorful {{ e.name }}
@@ -478,7 +508,7 @@ DescriptionLong: A large rainbow trout with iridescent scales.
 
 Id: fish_salmon
 Name: Salmon
-Prototype: fish
+Prototype: fish_uncommon
 Tags: toilet_fish size_large location_river_mouth time_all_day
 Rarity: uncommon
 DescriptionShort: a powerful {{ e.name }}
@@ -486,7 +516,7 @@ DescriptionLong: A large salmon. Must have swum a long way to get here.
 
 Id: fish_bitterling
 Name: Bitterling
-Prototype: fish
+Prototype: fish_uncommon
 Tags: toilet_fish urinal_fish sink_fish size_tiny location_river time_all_day
 Rarity: uncommon
 DescriptionShort: a shimmering {{ e.name }}
@@ -494,7 +524,7 @@ DescriptionLong: A tiny bitterling with vibrant colors.
 
 Id: fish_sweetfish
 Name: Sweetfish
-Prototype: fish
+Prototype: fish_uncommon
 Tags: toilet_fish urinal_fish size_medium location_river time_all_day
 Rarity: uncommon
 DescriptionShort: a {{ e.name }}
@@ -502,7 +532,7 @@ DescriptionLong: A medium-sized sweetfish, also known as ayu. Smells faintly of 
 
 Id: fish_cherry_salmon
 Name: Cherry Salmon
-Prototype: fish
+Prototype: fish_uncommon
 Tags: urinal_fish size_medium location_river time_all_day
 Rarity: uncommon
 DescriptionShort: a spotted {{ e.name }}
@@ -510,7 +540,7 @@ DescriptionLong: A medium-sized cherry salmon with pinkish spotted markings.
 
 Id: fish_goldfish
 Name: Goldfish
-Prototype: fish
+Prototype: fish_uncommon
 Tags: urinal_fish sink_fish kitchen_sink_fish size_tiny location_river time_day
 Rarity: uncommon
 DescriptionShort: a bright {{ e.name }}
@@ -518,7 +548,7 @@ DescriptionLong: A tiny, bright orange goldfish.
 
 Id: fish_popeyed_goldfish
 Name: Popeyed Goldfish
-Prototype: fish
+Prototype: fish_uncommon
 Tags: kitchen_sink_fish size_tiny location_river time_day
 Rarity: uncommon
 DescriptionShort: a bug-eyed {{ e.name }}
@@ -526,7 +556,7 @@ DescriptionLong: A tiny goldfish with enormous, protruding eyes.
 
 Id: fish_guppy
 Name: Guppy
-Prototype: fish
+Prototype: fish_uncommon
 Tags: urinal_fish sink_fish size_tiny location_river time_day
 Rarity: uncommon
 DescriptionShort: a colorful {{ e.name }}
@@ -534,7 +564,7 @@ DescriptionLong: A tiny, vibrantly colored guppy with a fan-shaped tail.
 
 Id: fish_koi
 Name: Koi
-Prototype: fish
+Prototype: fish_rare
 Tags: toilet_fish urinal_fish size_medium location_river time_night
 Rarity: rare
 DescriptionShort: a {{ e.name }} with orange and white scales
@@ -542,7 +572,7 @@ DescriptionLong: A medium-sized koi with orange and white scales.
 
 Id: fish_eel
 Name: Eel
-Prototype: fish
+Prototype: fish_rare
 Tags: toilet_fish size_large location_river time_night
 Rarity: rare
 DescriptionShort: a slithery {{ e.name }}
@@ -550,7 +580,7 @@ DescriptionLong: A long, sinuous eel.
 
 Id: fish_giant_catfish
 Name: Giant Catfish
-Prototype: fish
+Prototype: fish_rare
 Tags: toilet_fish size_very_large location_lake time_all_day
 Rarity: rare
 DescriptionShort: an enormous {{ e.name }}
@@ -558,7 +588,7 @@ DescriptionLong: A very large catfish with whiskers as thick as fingers.
 
 Id: fish_large_bass
 Name: Large Bass
-Prototype: fish
+Prototype: fish_rare
 Tags: toilet_fish size_very_large location_river time_all_day
 Rarity: rare
 DescriptionShort: a massive {{ e.name }}
@@ -566,7 +596,7 @@ DescriptionLong: A very large bass.
 
 Id: fish_angelfish
 Name: Angelfish
-Prototype: fish
+Prototype: fish_rare
 Tags: urinal_fish sink_fish size_small location_river time_night
 Rarity: rare
 DescriptionShort: a graceful {{ e.name }}
@@ -574,7 +604,7 @@ DescriptionLong: A small angelfish with flowing fins.
 
 Id: fish_giant_snakehead
 Name: Giant Snakehead
-Prototype: fish
+Prototype: fish_epic
 Tags: toilet_fish size_very_large location_lake time_day
 Rarity: epic
 DescriptionShort: a fearsome {{ e.name }}
@@ -583,7 +613,7 @@ OnTouch: The {{ e.name }} snaps at your hand.
 
 Id: fish_piranha
 Name: Piranha
-Prototype: fish
+Prototype: fish_epic
 Tags: toilet_fish urinal_fish size_small location_river time_day
 Rarity: epic
 DescriptionShort: a razor-toothed {{ e.name }}
@@ -592,7 +622,7 @@ OnTouch: The {{ e.name }} bites your finger.
 
 Id: fish_large_char
 Name: Large Char
-Prototype: fish
+Prototype: fish_legendary
 Tags: toilet_fish size_large location_waterfall time_all_day
 Rarity: legendary
 DescriptionShort: a spotted {{ e.name }}
@@ -600,7 +630,7 @@ DescriptionLong: A large char with spotted markings. Usually found in mountain s
 
 Id: fish_arowana
 Name: Arowana
-Prototype: fish
+Prototype: fish_legendary
 Tags: toilet_fish size_large location_river time_night
 Rarity: legendary
 DescriptionShort: a {{ e.name }} gleaming like polished metal
@@ -608,7 +638,7 @@ DescriptionLong: A large arowana with metallic scales. Known as the "dragon fish
 
 Id: fish_stringfish
 Name: Stringfish
-Prototype: fish
+Prototype: fish_mythic
 Tags: toilet_fish size_very_large location_river time_night
 Rarity: mythic
 DescriptionShort: a {{ e.name }}
@@ -616,7 +646,7 @@ DescriptionLong: A very large stringfish. One of the rarest freshwater fish in e
 
 Id: fish_coelacanth
 Name: Coelacanth
-Prototype: fish
+Prototype: fish_mythic
 Tags: toilet_fish size_very_large location_sea time_night
 Rarity: mythic
 DescriptionShort: an ancient {{ e.name }}
