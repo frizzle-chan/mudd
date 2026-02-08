@@ -8,13 +8,15 @@ import asyncpg
 import discord
 from discord import Interaction
 
-from mudd.commands import ActionCommand, ActionResult, TakeCommand
+from mudd.commands import ActionCommand, ActionResult, AttackCommand, TakeCommand
 from mudd.events import GrantXPSignal, Observer
 from mudd.models.entity import EntityInstance, ResolvedEntity
 from mudd.models.interfaces import IReadableEntity, IRoom
 from mudd.models.room import EntityModal, InventoryThread, Room
 from mudd.models.user import User
 from mudd.observers import EffectsObserver, build_observers, flush_all
+from mudd.observers.skills import ATTACK_XP_PER_DESTROY
+from mudd.skills.registry import Skill
 from mudd.views import ViewEntity
 
 logger = logging.getLogger(__name__)
@@ -265,6 +267,16 @@ class Scene:
                     await target.drop_to_room(drop_room)
             if effects.has_destroy:
                 await target.destroy()
+                # Implicit Attack XP: destroying via attack verb grants XP
+                if isinstance(command, AttackCommand):
+                    for obs in self._observers:
+                        if obs is not effects:
+                            obs.notify(
+                                GrantXPSignal(
+                                    skill=Skill.ATTACK,
+                                    amount=ATTACK_XP_PER_DESTROY,
+                                )
+                            )
             if effects.has_set_focus:
                 await self.user.set_focus(target.instance_id)
         if effects.has_clear_focus:

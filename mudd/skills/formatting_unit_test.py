@@ -59,11 +59,11 @@ class TestFormatSkillsMessage:
 
     def test_contains_all_skills(self) -> None:
         msg = format_skills_message(self._skills, 5, "Alice")
-        assert "**Agility**" in msg
-        assert "**Attack**" in msg
-        assert "**Speech**" in msg
-        assert "**Vitality**" in msg
-        assert "**Fishing**" in msg
+        assert "**🏃 Agility**" in msg
+        assert "**⚔️ Attack**" in msg
+        assert "**💬 Speech**" in msg
+        assert "**❤️ Vitality**" in msg
+        assert "**🎣 Fishing**" in msg
 
     def test_two_line_layout(self) -> None:
         msg = format_skills_message(self._skills, 5, "Alice")
@@ -74,7 +74,9 @@ class TestFormatSkillsMessage:
         msg = format_skills_message(self._skills, 5, "Alice")
         # Skills are separated by blank lines for readability
         lines = msg.split("\n")
-        skill_blocks = [i for i, line in enumerate(lines) if line.startswith("**")]
+        skill_blocks = [
+            i for i, line in enumerate(lines) if "LV" in line and line.startswith("**")
+        ]
         # Each skill block should have a blank line after its progress bar
         for idx in skill_blocks[:-1]:
             assert lines[idx + 2] == ""
@@ -137,7 +139,7 @@ class TestFormatLevelUpMessage:
     def test_basic_format(self) -> None:
         msg = format_level_up_message("Alice", "agility", 5)
         assert "**Alice**" in msg
-        assert "**Agility**" in msg
+        assert "**🏃 Agility**" in msg
         assert "level 5" in msg
 
     def test_unknown_skill_capitalized(self) -> None:

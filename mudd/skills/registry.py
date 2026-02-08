@@ -20,4 +20,12 @@ class Skill(StrEnum):
         return self.value.capitalize()
 
 
+SKILL_EMOJI: dict[Skill, str] = {
+    Skill.AGILITY: "\U0001f3c3",
+    Skill.ATTACK: "\u2694\ufe0f",
+    Skill.SPEECH: "\U0001f4ac",
+    Skill.VITALITY: "\u2764\ufe0f",
+    Skill.FISHING: "\U0001f3a3",
+}
+
 SKILL_COUNT: int = len(Skill)
