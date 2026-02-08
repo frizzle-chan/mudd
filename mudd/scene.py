@@ -15,6 +15,8 @@ from mudd.models.interfaces import IReadableEntity, IRoom
 from mudd.models.room import EntityModal, InventoryThread, Room
 from mudd.models.user import User
 from mudd.observers import EffectsObserver
+from mudd.observers.skills import SkillsObserver
+from mudd.observers.skills_reconciler import SkillsReconciler
 from mudd.views import ViewEntity
 
 logger = logging.getLogger(__name__)
@@ -70,9 +72,21 @@ class Scene:
             from mudd.observers.discord import DiscordReconciler
 
             reconciler = DiscordReconciler(bot, pool)
-            scene = scene.with_observers(effects, reconciler)
+            skills_reconciler = SkillsReconciler(bot, pool)
+            skills = SkillsObserver(
+                _pool=pool,
+                _user_id=scene.user.id,
+                _room_id=scene.user.current_room,
+                _downstream=(skills_reconciler,),
+            )
+            scene = scene.with_observers(effects, skills, skills_reconciler, reconciler)
         else:
-            scene = scene.with_observers(effects)
+            skills = SkillsObserver(
+                _pool=pool,
+                _user_id=scene.user.id,
+                _room_id=scene.user.current_room,
+            )
+            scene = scene.with_observers(effects, skills)
         return scene
 
     @classmethod
@@ -280,6 +294,12 @@ class Scene:
             await self.user.credit_from_house(
                 amount, memo=f"Picked up from {view.name}"
             )
+
+        # XP grants: queue for SkillsObserver to process during flush
+        skills_observer = self.get_observer(SkillsObserver)
+        if skills_observer:
+            for skill, amount in effects.xp_grants:
+                skills_observer.queue_xp(skill, amount)
 
         # Grant specific items → create in room, then _take_item runs on_take
         # (currency items destroy themselves + credit balance, normal items pick up)

@@ -15,6 +15,7 @@ from mudd.events.types import (
     GrantCurrencyEvent,
     GrantEvent,
     GrantRandomEvent,
+    GrantXPSignal,
     PickupSignal,
     SetFocusSignal,
 )
@@ -46,6 +47,7 @@ class EffectsObserver:
     _grants: list[str] = field(default_factory=list)
     _grant_randoms: list[str] = field(default_factory=list)
     _currency_grants: list[int] = field(default_factory=list)
+    _xp_grants: list[tuple[str, int]] = field(default_factory=list)
     _pickup_signaled: bool = False
     _drop_signaled: bool = False
     _destroy_signaled: bool = False
@@ -68,6 +70,8 @@ class EffectsObserver:
                 self._grant_randoms.append(tag)
             case GrantCurrencyEvent(amount=amount):
                 self._currency_grants.append(amount)
+            case GrantXPSignal(skill=skill, amount=amount):
+                self._xp_grants.append((skill, amount))
             case PickupSignal():
                 self._pickup_signaled = True
             case DropSignal():
@@ -109,6 +113,16 @@ class EffectsObserver:
     def currency_grants(self) -> list[int]:
         """Amounts of currency to grant."""
         return self._currency_grants
+
+    @property
+    def xp_grants(self) -> list[tuple[str, int]]:
+        """XP grants as (skill, amount) tuples."""
+        return self._xp_grants
+
+    @property
+    def has_xp_grants(self) -> bool:
+        """Whether any XP grants were signaled during template rendering."""
+        return len(self._xp_grants) > 0
 
     @property
     def has_pickup(self) -> bool:

@@ -10,6 +10,7 @@ from mudd.events.types import (
     GrantCurrencyEvent,
     GrantEvent,
     GrantRandomEvent,
+    GrantXPSignal,
     PickupSignal,
     SetFocusSignal,
 )
@@ -111,6 +112,20 @@ class EffectsCollector:
         """
         if amount > 0:
             self._observer.notify(GrantCurrencyEvent(amount=amount))
+        return ""
+
+    def grant_xp(self, skill: str, amount: int) -> str:
+        """Queue granting XP in a skill to the user.
+
+        Args:
+            skill: The skill to grant XP in
+            amount: Amount of XP to grant
+
+        Returns:
+            Empty string (allows inline use in templates)
+        """
+        if skill and amount > 0:
+            self._observer.notify(GrantXPSignal(skill=skill, amount=amount))
         return ""
 
     def dispense(self) -> str:
