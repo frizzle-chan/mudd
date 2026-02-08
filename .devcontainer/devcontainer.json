@@ -19,7 +19,8 @@
                 "editorconfig.editorconfig",
                 "ms-python.python",
                 "ms-ossdata.vscode-pgsql",
-                "vstirbu.vscode-mermaid-preview"
+                "vstirbu.vscode-mermaid-preview",
+                "ryanluker.vscode-coverage-gutters"
             ]
         }
     },
