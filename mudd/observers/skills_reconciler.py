@@ -201,9 +201,9 @@ class SkillsReconciler:
         # Check DB first
         record = await UserSkillsChannel.get(self._pool, user_id)
         if record is not None:
-            channel = guild.get_channel(record["channel_id"])
+            channel = guild.get_channel(record.channel_id)
             if channel is not None:
-                return record["channel_id"]
+                return record.channel_id
 
         # Create channel
         category = await self.ensure_category(guild)
@@ -261,8 +261,8 @@ class SkillsReconciler:
         if record is None:
             return
 
-        channel_id = record["channel_id"]
-        message_id = record["message_id"]
+        channel_id = record.channel_id
+        message_id = record.message_id
 
         # Find the channel across all guilds
         channel = self._bot.get_channel(channel_id)
