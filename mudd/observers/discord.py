@@ -13,6 +13,7 @@ from mudd.models.user import User
 from mudd.models.zone import Zone
 from mudd.observers.inventory import InventoryReconciler
 from mudd.observers.permissions import PermissionReconciler
+from mudd.observers.skills_reconciler import SkillsReconciler
 from mudd.observers.zone_room import ZoneRoomReconciler
 
 logger = logging.getLogger(__name__)
@@ -162,12 +163,14 @@ class DiscordReconciler:
         self._zone_room = ZoneRoomReconciler(bot, pool, console_channel, seen_orphans)
         self._permissions = PermissionReconciler(bot, pool, room_cache)
         self._inventory = InventoryReconciler(bot, pool)
+        self._skills = SkillsReconciler(bot, pool)
 
     def notify(self, event: GameEvent) -> None:
         """Receive notification (sync). Delegate to sub-reconcilers."""
         self._zone_room.notify(event)
         self._permissions.notify(event)
         self._inventory.notify(event)
+        self._skills.notify(event)
 
     async def flush(self) -> None:
         """Process queued notifications. Call after response sent.
@@ -176,7 +179,13 @@ class DiscordReconciler:
         """
         await self._zone_room.flush()
         await self._inventory.flush()
+        await self._skills.flush()
         await self._permissions.flush()
+
+    @property
+    def skills(self) -> SkillsReconciler:
+        """Access the skills sub-reconciler directly."""
+        return self._skills
 
     def get_inventory_forum_stats(self) -> dict[str, int]:
         """Get accumulated inventory forum sync stats."""

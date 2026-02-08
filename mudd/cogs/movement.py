@@ -11,7 +11,12 @@ from discord.ext import commands
 
 from mudd.events import InventorySyncEvent, UserLeftEvent, UserSyncEvent
 from mudd.models.user import User
-from mudd.observers import DiscordReconciler, RoomChannelCache, build_observers
+from mudd.observers import (
+    DiscordReconciler,
+    RoomChannelCache,
+    build_observers,
+    flush_all,
+)
 
 if TYPE_CHECKING:
     from mudd.caches.user import UserCache
@@ -183,8 +188,7 @@ class Movement(commands.Cog):
             await interaction.response.defer(ephemeral=True)
 
             # Flush all observers (syncs permissions + rebuilds caches)
-            for observer in observers:
-                await observer.flush()
+            await flush_all(observers)
 
             # Send followup (user now has access to target channel)
             await interaction.followup.send(
