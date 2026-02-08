@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 class XPResult:
     """Result of an XP grant operation."""
 
-    skill: str
+    skill: Skill
     old_level: int
     new_level: int
     old_xp: int
@@ -173,7 +173,7 @@ class UserSkill:
         )
 
         return XPResult(
-            skill=skill,
+            skill=Skill(skill),
             old_level=old_level,
             new_level=new_level,
             old_xp=old_xp,

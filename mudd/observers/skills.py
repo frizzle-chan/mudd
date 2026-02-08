@@ -39,7 +39,7 @@ class SkillsObserver:
     _pool: asyncpg.Pool
     _user_id: int
     _room_id: str
-    _queued_grants: list[tuple[str, int]] = field(default_factory=list)
+    _queued_grants: list[tuple[Skill, int]] = field(default_factory=list)
     _results: list[XPResult] = field(default_factory=list)
 
     def notify(self, event: GameEvent) -> None:

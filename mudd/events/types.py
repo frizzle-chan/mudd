@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from mudd.skills.registry import Skill
+
 if TYPE_CHECKING:
     from mudd.models.entity import EntityInstance
 
@@ -62,7 +64,7 @@ class DestroySignal:
 class GrantXPSignal:
     """Signal from template effects to grant XP in a skill."""
 
-    skill: str
+    skill: Skill
     amount: int
 
 
@@ -153,7 +155,7 @@ class XPGainedEvent:
     """Fact: XP was gained by a user in a skill."""
 
     user_id: int
-    skill: str
+    skill: Skill
     old_level: int
     new_level: int
     old_xp: int
@@ -165,7 +167,7 @@ class LevelUpEvent:
     """Fact: user leveled up in a skill."""
 
     user_id: int
-    skill: str
+    skill: Skill
     new_level: int
     room_id: str
 

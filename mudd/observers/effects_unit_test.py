@@ -15,6 +15,7 @@ from mudd.events import (
     PickupSignal,
 )
 from mudd.observers import EffectsObserver
+from mudd.skills.registry import Skill
 
 
 class TestEffectsObserverNotify:
@@ -83,20 +84,20 @@ class TestEffectsObserverNotify:
         """GrantXPSignal is collected in xp_grants list."""
         observer = EffectsObserver()
         assert observer.has_xp_grants is False
-        observer.notify(GrantXPSignal(skill="vitality", amount=100))
-        assert observer.xp_grants == [("vitality", 100)]
+        observer.notify(GrantXPSignal(skill=Skill.VITALITY, amount=100))
+        assert observer.xp_grants == [(Skill.VITALITY, 100)]
         assert observer.has_xp_grants is True
 
     def test_multiple_xp_grants_collected(self):
         """Multiple GrantXPSignal events are collected in order."""
         observer = EffectsObserver()
-        observer.notify(GrantXPSignal(skill="vitality", amount=100))
-        observer.notify(GrantXPSignal(skill="agility", amount=50))
-        observer.notify(GrantXPSignal(skill="vitality", amount=25))
+        observer.notify(GrantXPSignal(skill=Skill.VITALITY, amount=100))
+        observer.notify(GrantXPSignal(skill=Skill.AGILITY, amount=50))
+        observer.notify(GrantXPSignal(skill=Skill.VITALITY, amount=25))
         assert observer.xp_grants == [
-            ("vitality", 100),
-            ("agility", 50),
-            ("vitality", 25),
+            (Skill.VITALITY, 100),
+            (Skill.AGILITY, 50),
+            (Skill.VITALITY, 25),
         ]
 
 
@@ -208,7 +209,7 @@ class TestEffectsCollector:
         collector = EffectsCollector(observer)
         result = collector.grant_xp("vitality", 100)
         assert result == ""
-        assert observer.xp_grants == [("vitality", 100)]
+        assert observer.xp_grants == [(Skill.VITALITY, 100)]
 
     def test_grant_xp_ignores_zero_amount(self):
         """grant_xp() ignores zero amounts."""
@@ -229,6 +230,14 @@ class TestEffectsCollector:
         observer = EffectsObserver()
         collector = EffectsCollector(observer)
         collector.grant_xp("", 100)
+        assert observer.xp_grants == []
+
+    def test_grant_xp_ignores_invalid_skill(self):
+        """grant_xp() ignores invalid skill names and logs a warning."""
+        observer = EffectsObserver()
+        collector = EffectsCollector(observer)
+        result = collector.grant_xp("atack", 100)
+        assert result == ""
         assert observer.xp_grants == []
 
 

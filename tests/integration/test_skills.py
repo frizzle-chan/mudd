@@ -85,12 +85,12 @@ async def test_food_grants_vitality_xp(test_db, clean_user_state):
 
     # Verify effects observed the XP grant signal
     assert result.effects.has_xp_grants
-    assert result.effects.xp_grants == [("vitality", 100)]
+    assert result.effects.xp_grants == [(Skill.VITALITY, 100)]
 
     # SkillsObserver should have processed the XP grant during flush
     assert len(result.skills.results) == 1
     xp_result = result.skills.results[0]
-    assert xp_result.skill == "vitality"
+    assert xp_result.skill == Skill.VITALITY
     assert xp_result.old_xp == 0
     assert xp_result.new_xp == 100
     assert xp_result.old_level == 1
@@ -303,7 +303,7 @@ async def test_attack_destroy_grants_attack_xp(test_db, clean_user_state):
 
     # Verify effects observed the XP grant signal from template
     assert result.effects.has_xp_grants
-    assert result.effects.xp_grants == [("attack", 25)]
+    assert result.effects.xp_grants == [(Skill.ATTACK, 25)]
 
     # SkillsObserver should have processed the XP grant during flush
     assert len(result.skills.results) == 1

@@ -11,7 +11,7 @@ from mudd.skills.formatting import (
     format_skills_message,
     get_milestone_role,
 )
-from mudd.skills.registry import SKILL_COUNT
+from mudd.skills.registry import SKILL_COUNT, Skill
 from mudd.skills.xp import MAX_LEVEL
 from mudd.utils.progress_bar import SHADED
 
@@ -137,11 +137,13 @@ class TestGetMilestoneRole:
 
 class TestFormatLevelUpMessage:
     def test_basic_format(self) -> None:
-        msg = format_level_up_message("Alice", "agility", 5)
+        msg = format_level_up_message("Alice", Skill.AGILITY, 5)
         assert "**Alice**" in msg
         assert "**⚡ Agility**" in msg
         assert "level 5" in msg
 
-    def test_unknown_skill_capitalized(self) -> None:
-        msg = format_level_up_message("Bob", "unknown", 3)
-        assert "Unknown" in msg
+    def test_all_skills_format(self) -> None:
+        for skill in Skill:
+            msg = format_level_up_message("Bob", skill, 3)
+            assert "**Bob**" in msg
+            assert "level 3" in msg

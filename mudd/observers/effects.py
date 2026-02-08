@@ -19,6 +19,7 @@ from mudd.events.types import (
     PickupSignal,
     SetFocusSignal,
 )
+from mudd.skills.registry import Skill
 
 
 @dataclass
@@ -47,7 +48,7 @@ class EffectsObserver:
     _grants: list[str] = field(default_factory=list)
     _grant_randoms: list[str] = field(default_factory=list)
     _currency_grants: list[int] = field(default_factory=list)
-    _xp_grants: list[tuple[str, int]] = field(default_factory=list)
+    _xp_grants: list[tuple[Skill, int]] = field(default_factory=list)
     _pickup_signaled: bool = False
     _drop_signaled: bool = False
     _destroy_signaled: bool = False
@@ -115,7 +116,7 @@ class EffectsObserver:
         return self._currency_grants
 
     @property
-    def xp_grants(self) -> list[tuple[str, int]]:
+    def xp_grants(self) -> list[tuple[Skill, int]]:
         """XP grants as (skill, amount) tuples."""
         return self._xp_grants
 

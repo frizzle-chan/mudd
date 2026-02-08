@@ -134,24 +134,18 @@ def get_milestone_role(total_level: int) -> str | None:
 
 def format_level_up_message(
     display_name: str,
-    skill: str,
+    skill: Skill,
     new_level: int,
 ) -> str:
     """Format a level-up announcement message.
 
     Args:
         display_name: User's display name
-        skill: Skill name
+        skill: Skill enum value
         new_level: New level achieved
 
     Returns:
         Formatted announcement string
     """
-    # Get display name from Skill enum if possible
-    try:
-        skill_view = ViewSkill(Skill(skill))
-    except ValueError:
-        fallback = skill.capitalize()
-        return f"**{display_name}** advanced **{fallback}** to level {new_level}!"
-
+    skill_view = ViewSkill(skill)
     return f"**{display_name}** advanced {skill_view} to level {new_level}!"

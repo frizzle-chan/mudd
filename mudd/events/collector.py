@@ -1,5 +1,7 @@
 """EffectsCollector provides the template-facing API for emitting events."""
 
+import logging
+
 from mudd.events.observer import Observer
 from mudd.events.types import (
     BroadcastEvent,
@@ -14,6 +16,9 @@ from mudd.events.types import (
     PickupSignal,
     SetFocusSignal,
 )
+from mudd.skills.registry import Skill
+
+logger = logging.getLogger(__name__)
 
 
 class EffectsCollector:
@@ -118,14 +123,19 @@ class EffectsCollector:
         """Queue granting XP in a skill to the user.
 
         Args:
-            skill: The skill to grant XP in
+            skill: The skill to grant XP in (validated against Skill enum)
             amount: Amount of XP to grant
 
         Returns:
             Empty string (allows inline use in templates)
         """
         if skill and amount > 0:
-            self._observer.notify(GrantXPSignal(skill=skill, amount=amount))
+            try:
+                validated = Skill(skill)
+            except ValueError:
+                logger.warning("Invalid skill name in grant_xp: %r", skill)
+                return ""
+            self._observer.notify(GrantXPSignal(skill=validated, amount=amount))
         return ""
 
     def dispense(self) -> str:

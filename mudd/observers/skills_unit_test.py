@@ -70,20 +70,24 @@ class TestNotify:
 class TestGrantXPSignal:
     def test_grant_xp_signal_adds_to_grants(self) -> None:
         obs = _make_observer()
-        obs.notify(GrantXPSignal(skill="vitality", amount=100))
-        assert obs._queued_grants == [("vitality", 100)]
+        obs.notify(GrantXPSignal(skill=Skill.VITALITY, amount=100))
+        assert obs._queued_grants == [(Skill.VITALITY, 100)]
 
     def test_multiple_signals(self) -> None:
         obs = _make_observer()
-        obs.notify(GrantXPSignal(skill="vitality", amount=100))
-        obs.notify(GrantXPSignal(skill="speech", amount=50))
+        obs.notify(GrantXPSignal(skill=Skill.VITALITY, amount=100))
+        obs.notify(GrantXPSignal(skill=Skill.SPEECH, amount=50))
         assert len(obs._queued_grants) == 2
 
 
 # -- XPResult fixtures for event tests --
 
-_NO_LEVELUP = XPResult(skill="agility", old_level=1, new_level=1, old_xp=0, new_xp=28)
-_LEVELUP = XPResult(skill="vitality", old_level=1, new_level=2, old_xp=0, new_xp=100)
+_NO_LEVELUP = XPResult(
+    skill=Skill.AGILITY, old_level=1, new_level=1, old_xp=0, new_xp=28
+)
+_LEVELUP = XPResult(
+    skill=Skill.VITALITY, old_level=1, new_level=2, old_xp=0, new_xp=100
+)
 
 
 class TestGetXPEvents:
@@ -99,7 +103,7 @@ class TestGetXPEvents:
         obs._results = [_LEVELUP]
         event = obs.get_xp_events()[0]
         assert event.user_id == 123
-        assert event.skill == "vitality"
+        assert event.skill == Skill.VITALITY
         assert event.old_level == 1
         assert event.new_level == 2
         assert event.old_xp == 0
@@ -117,7 +121,7 @@ class TestGetLevelUpEvents:
         events = obs.get_level_up_events()
         assert len(events) == 1
         assert isinstance(events[0], LevelUpEvent)
-        assert events[0].skill == "vitality"
+        assert events[0].skill == Skill.VITALITY
 
     def test_includes_room_id(self) -> None:
         obs = _make_observer()
