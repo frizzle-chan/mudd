@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from mudd.cogs.speech import SPEECH_XP_PER_MESSAGE
 from mudd.commands import LookCommand, UseCommand
 from mudd.models import RoomEntityInstance
 from mudd.models.skills import UserSkill
@@ -35,6 +36,31 @@ async def test_agility_xp_grant(test_db, clean_user_state):
     # Verify persisted
     skill_after = await UserSkill.get(test_db, user.id, Skill.AGILITY)
     assert skill_after.xp == 28
+    assert skill_after.level == 1
+
+
+async def test_speech_xp_grant(test_db, clean_user_state):
+    """UserSkill.grant_xp correctly grants Speech XP and persists it."""
+    user = await create_test_user(test_db, room_id="foyer")
+
+    # Check initial speech XP
+    skill_before = await UserSkill.get(test_db, user.id, Skill.SPEECH)
+    assert skill_before.xp == 0
+    assert skill_before.level == 1
+
+    # Grant speech XP (same amount as a chat message would grant)
+    result = await UserSkill.grant_xp(
+        test_db, user.id, Skill.SPEECH, SPEECH_XP_PER_MESSAGE
+    )
+    assert result.old_xp == 0
+    assert result.new_xp == SPEECH_XP_PER_MESSAGE
+    assert result.old_level == 1
+    assert result.new_level == 1
+    assert result.leveled_up is False
+
+    # Verify persisted
+    skill_after = await UserSkill.get(test_db, user.id, Skill.SPEECH)
+    assert skill_after.xp == SPEECH_XP_PER_MESSAGE
     assert skill_after.level == 1
 
 
