@@ -69,10 +69,11 @@ async def test_new_player_explores_the_world(test_db, clean_user_state):
 
     # === MOVE TO STORE ROOM ===
 
-    reconciler = await move(test_db, user.id, "store-room", guild_id=GUILD_ID)
+    move_result = await move(test_db, user.id, "store-room", guild_id=GUILD_ID)
 
-    assert any(isinstance(e, UserMovedEvent) for e in reconciler.events)
-    assert any(isinstance(e, UserLocationSyncEvent) for e in reconciler.events)
+    events = move_result.reconciler.events
+    assert any(isinstance(e, UserMovedEvent) for e in events)
+    assert any(isinstance(e, UserLocationSyncEvent) for e in events)
 
     # === STORE ROOM: LOOK AROUND ===
 
