@@ -220,12 +220,12 @@ Consumable items (food, drinks) must follow a specific handler pattern to integr
 | Skill | Trigger | Mechanism | XP |
 |-------|---------|-----------|-----|
 | Vitality | Eating/drinking (`OnUse`) | `effects.grant_xp("vitality", 100)` + `effects.destroy()` | 100 |
-| Attack | Destroying entities (`OnAttack`) | Implicit (observer-driven, no template call needed) | 100 |
+| Attack | Destroying entities (`OnAttack`) | `effects.grant_xp("attack", amount)` + `effects.destroy()` | 25-400 |
 | Agility | Room movement | Implicit (observer-driven) | 28 |
 | Speech | Chatting in room channels | Implicit (Discord event handler) | 17 |
 | Fishing | Catching fish (`OnTake` on fish) | `effects.grant_xp("fishing", amount)` | 25-800 |
 
-**Implicit vs Explicit:** Attack, Agility, and Speech XP are awarded automatically by observers -- no template call needed. Vitality and Fishing use explicit `effects.grant_xp()` calls in handlers, allowing different items to grant different amounts.
+**Implicit vs Explicit:** Agility and Speech XP are awarded automatically by observers -- no template call needed. Attack, Vitality, and Fishing use explicit `effects.grant_xp()` calls in handlers, with rarity sub-prototypes (e.g., `beverage_rare`, `painting_epic`) providing scaled amounts.
 
 **Beverage prototype example:**
 
