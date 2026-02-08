@@ -54,6 +54,18 @@ class TestNotify:
         obs.notify(event)
         assert obs._queued_grants == []
 
+    def test_user_moved_updates_room_id(self) -> None:
+        obs = _make_observer()
+        assert obs._room_id == "foyer"
+        event = UserMovedEvent(
+            user_id=123,
+            from_room="foyer",
+            to_room="hallway",
+            guild_id=1,
+        )
+        obs.notify(event)
+        assert obs._room_id == "hallway"
+
     def test_unrelated_event_ignored(self) -> None:
         obs = _make_observer()
         obs.notify(BroadcastEvent(message="hello"))
@@ -134,8 +146,16 @@ class TestGetLevelUpEvents:
 
     def test_includes_room_id(self) -> None:
         obs = _make_observer()
+        obs.notify(
+            UserMovedEvent(
+                user_id=123,
+                from_room="foyer",
+                to_room="hallway",
+                guild_id=1,
+            )
+        )
         obs._results = [_LEVELUP]
-        assert obs.get_level_up_events()[0].room_id == "foyer"
+        assert obs.get_level_up_events()[0].room_id == "hallway"
 
     def test_empty_when_no_levelups(self) -> None:
         obs = _make_observer()

@@ -49,8 +49,9 @@ class SkillsObserver:
             event: The game event to process
         """
         match event:
-            case UserMovedEvent(user_id=uid) if uid == self._user_id:
+            case UserMovedEvent(user_id=uid, to_room=to_room) if uid == self._user_id:
                 self._queued_grants.append((Skill.AGILITY, AGILITY_XP_PER_MOVE))
+                self._room_id = to_room
             case GrantXPSignal(skill=skill, amount=amount):
                 self._queued_grants.append((skill, amount))
 
