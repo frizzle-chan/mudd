@@ -5,6 +5,7 @@ from __future__ import annotations
 from mudd.events.types import (
     BroadcastEvent,
     EntityDestroyedEvent,
+    GrantXPSignal,
     UserMovedEvent,
 )
 from mudd.observers.skills import (
@@ -52,16 +53,16 @@ class TestNotify:
         assert obs._queued_grants == []
 
 
-class TestQueueXP:
-    def test_queue_xp_adds_to_grants(self) -> None:
+class TestGrantXPSignal:
+    def test_grant_xp_signal_adds_to_grants(self) -> None:
         obs = _make_observer()
-        obs.queue_xp("vitality", 100)
+        obs.notify(GrantXPSignal(skill="vitality", amount=100))
         assert obs._queued_grants == [("vitality", 100)]
 
-    def test_queue_multiple(self) -> None:
+    def test_multiple_signals(self) -> None:
         obs = _make_observer()
-        obs.queue_xp("vitality", 100)
-        obs.queue_xp("speech", 50)
+        obs.notify(GrantXPSignal(skill="vitality", amount=100))
+        obs.notify(GrantXPSignal(skill="speech", amount=50))
         assert len(obs._queued_grants) == 2
 
 

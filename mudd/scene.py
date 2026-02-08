@@ -9,7 +9,7 @@ import discord
 from discord import Interaction
 
 from mudd.commands import ActionCommand, ActionResult, TakeCommand
-from mudd.events import Observer
+from mudd.events import GrantXPSignal, Observer
 from mudd.models.entity import EntityInstance, ResolvedEntity
 from mudd.models.interfaces import IReadableEntity, IRoom
 from mudd.models.room import EntityModal, InventoryThread, Room
@@ -77,9 +77,9 @@ class Scene:
                 _pool=pool,
                 _user_id=scene.user.id,
                 _room_id=scene.user.current_room,
-                _downstream=(skills_reconciler,),
+                _reconciler=skills_reconciler,
             )
-            scene = scene.with_observers(effects, skills, skills_reconciler, reconciler)
+            scene = scene.with_observers(effects, skills, reconciler)
         else:
             skills = SkillsObserver(
                 _pool=pool,
@@ -295,11 +295,11 @@ class Scene:
                 amount, memo=f"Picked up from {view.name}"
             )
 
-        # XP grants: queue for SkillsObserver to process during flush
-        skills_observer = self.get_observer(SkillsObserver)
-        if skills_observer:
-            for skill, amount in effects.xp_grants:
-                skills_observer.queue_xp(skill, amount)
+        # XP grants: broadcast GrantXPSignal to all observers except effects
+        for skill, amount in effects.xp_grants:
+            for obs in self._observers:
+                if obs is not effects:
+                    obs.notify(GrantXPSignal(skill=skill, amount=amount))
 
         # Grant specific items → create in room, then _take_item runs on_take
         # (currency items destroy themselves + credit balance, normal items pick up)
