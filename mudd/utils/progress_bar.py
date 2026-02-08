@@ -14,8 +14,8 @@ def shaded_bar(percent: float, size: int = DEFAULT_SIZE) -> str:
     """Generate a shaded Unicode progress bar.
 
     Uses sub-character resolution: each character position can show one of
-    four shade levels (░▒▓█), giving ``size * 3`` distinct visual steps
-    instead of just ``size``.
+    four shade levels (░▒▓█), providing much smoother visual feedback than
+    a simple binary filled/unfilled bar.
 
     Args:
         percent: Fill percentage (0-100), clamped to valid range.
@@ -45,9 +45,9 @@ def shaded_bar(percent: float, size: int = DEFAULT_SIZE) -> str:
         return (full * su_floor).ljust(size, empty)
 
     # Otherwise, add a partial character based on the fractional value
-    middlepiece = int(fractional * b_len)
-    if middlepiece == 0:
-        middlepiece = 1  # Ensure at least light shade for any fractional value
+    shade_index = int(fractional * b_len)
+    if shade_index == 0:
+        shade_index = 1  # Ensure at least light shade for any fractional value
 
-    partial = SHADED[middlepiece]
+    partial = SHADED[shade_index]
     return (full * su_floor + partial).ljust(size, empty)
