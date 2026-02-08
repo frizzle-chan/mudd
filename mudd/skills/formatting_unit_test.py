@@ -77,6 +77,19 @@ class TestFormatNickname:
         nick = format_nickname("A" * 26, 5)
         assert len(nick) <= 32
 
+    def test_strips_existing_suffix(self) -> None:
+        assert format_nickname("Player (LV5)", 6) == "Player (LV6)"
+
+    def test_strips_suffix_long_name(self) -> None:
+        long_name = "A" * 26 + " (LV5)"
+        nick = format_nickname(long_name, 10)
+        assert len(nick) <= 32
+        assert nick.endswith("(LV10)")
+        assert "(LV5)" not in nick
+
+    def test_no_suffix_unchanged(self) -> None:
+        assert format_nickname("Player", 5) == "Player (LV5)"
+
 
 class TestGetMilestoneRole:
     def test_below_minimum_returns_none(self) -> None:
