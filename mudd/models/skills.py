@@ -126,23 +126,40 @@ class UserSkill:
         if amount <= 0:
             raise ValueError(f"XP amount must be positive, got {amount}")
 
-        # Ensure the skill row exists
-        current = await cls.get(pool, user_id, skill)
-        old_xp = current.xp
-        old_level = current.level
+        async with pool.acquire() as conn, conn.transaction():
+            # Ensure the skill row exists
+            await conn.execute(
+                """INSERT INTO user_skills (user_id, skill, xp, level)
+                   VALUES ($1, $2, 0, 1)
+                   ON CONFLICT (user_id, skill) DO NOTHING""",
+                user_id,
+                skill,
+            )
 
-        new_xp = min(old_xp + amount, MAX_XP)
-        new_level = level_for_xp(new_xp)
+            # Lock the row to prevent concurrent read-then-write races
+            row = await conn.fetchrow(
+                """SELECT xp, level FROM user_skills
+                   WHERE user_id = $1 AND skill = $2
+                   FOR UPDATE""",
+                user_id,
+                skill,
+            )
+            assert row is not None  # We just inserted if missing
 
-        await pool.execute(
-            """UPDATE user_skills
-               SET xp = $3, level = $4
-               WHERE user_id = $1 AND skill = $2""",
-            user_id,
-            skill,
-            new_xp,
-            new_level,
-        )
+            old_xp = int(row["xp"])
+            old_level = int(row["level"])
+            new_xp = min(old_xp + amount, MAX_XP)
+            new_level = level_for_xp(new_xp)
+
+            await conn.execute(
+                """UPDATE user_skills
+                   SET xp = $3, level = $4
+                   WHERE user_id = $1 AND skill = $2""",
+                user_id,
+                skill,
+                new_xp,
+                new_level,
+            )
 
         logger.info(
             "Granted %d XP to user %d skill %s: %d->%d XP, level %d->%d",
