@@ -63,7 +63,7 @@ class InventoryReconciler:
         self._inventory_sync_events: list[InventorySyncEvent] = []
         self._balance_changed_events: list[BalanceChangedEvent] = []
         self._user_left_events: list[UserLeftEvent] = []
-        self._entity_drop_events: list[EntityInstance] = []
+        self._entity_drop_events: list[tuple[EntityInstance, int | None]] = []
         # Cache category ID per guild to avoid repeated lookups
         self._category_cache: dict[int, int] = {}
         # Stats for inventory forum sync
@@ -86,9 +86,9 @@ class InventoryReconciler:
                         InventorySyncEvent(guild_id=0, user_id=instance.owner_id)
                     )
             case EntityDroppedEvent(instance=instance):
-                self._entity_drop_events.append(instance)
-            case EntityDestroyedEvent(instance=instance):
-                self._entity_drop_events.append(instance)
+                self._entity_drop_events.append((instance, None))
+            case EntityDestroyedEvent(instance=instance, thread_id=thread_id):
+                self._entity_drop_events.append((instance, thread_id))
             case BalanceChangedEvent() as evt:
                 self._balance_changed_events.append(evt)
                 self._inventory_sync_events.append(
@@ -136,9 +136,9 @@ class InventoryReconciler:
                 await self._handle_user_left(guild, evt)
 
         # Process entity drop/destroy events
-        for instance in entity_drop_events:
+        for instance, thread_id in entity_drop_events:
             guild = self.bot.guilds[0]  # Single-guild bot
-            await self._delete_inventory_thread(guild, instance)
+            await self._delete_inventory_thread(guild, instance, thread_id=thread_id)
 
     def get_inventory_forum_stats(self) -> dict[str, int]:
         """Get accumulated inventory forum sync stats."""
@@ -224,10 +224,17 @@ class InventoryReconciler:
         return category
 
     async def _delete_inventory_thread(
-        self, guild: discord.Guild, instance: EntityInstance
+        self,
+        guild: discord.Guild,
+        instance: EntityInstance,
+        *,
+        thread_id: int | None = None,
     ) -> None:
         """Idempotent: delete inventory thread for a dropped/destroyed item."""
-        thread_id = await EntityInstance.get_thread_id(self.pool, instance.instance_id)
+        if thread_id is None:
+            thread_id = await EntityInstance.get_thread_id(
+                self.pool, instance.instance_id
+            )
         if thread_id is None:
             return
 

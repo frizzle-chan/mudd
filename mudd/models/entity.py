@@ -743,9 +743,12 @@ class EntityInstance:
         """Delete this instance from the database.
 
         Notifies observers with "destroyed" event before deletion.
+        Pre-fetches thread_id so observers can clean up Discord threads
+        after the row is deleted.
         """
+        thread_id = await EntityInstance.get_thread_id(self._pool, self.instance_id)
         for observer in self._observers:
-            observer.notify(EntityDestroyedEvent(instance=self))
+            observer.notify(EntityDestroyedEvent(instance=self, thread_id=thread_id))
         await self._pool.execute(
             "DELETE FROM entity_instances WHERE id = $1",
             self.instance_id,
