@@ -31,6 +31,7 @@ def _make_entity(name: str, rarity: Rarity = "common") -> ResolvedEntity:
         on_open=None,
         on_close=None,
         on_drop=None,
+        on_fish=None,
         contents_visible=False,
         rarity=rarity,
     )
