@@ -79,15 +79,22 @@ async def flush_all(
             but not sent. The caller must call
             DiscordReconciler.post_skill_announcements() to send them.
     """
+    effects: EffectsObserver | None = None
     skills: SkillsObserver | None = None
     reconciler: DiscordReconciler | None = None
     for obs in observers:
-        if isinstance(obs, SkillsObserver):
+        if isinstance(obs, EffectsObserver):
+            effects = obs
+        elif isinstance(obs, SkillsObserver):
             skills = obs
         elif isinstance(obs, DiscordReconciler):
             reconciler = obs
 
-    # Phase 1: Flush SkillsObserver (writes XP to DB, stores results)
+    # Phase 1: Flush EffectsObserver (forwards XP grants to SkillsObserver)
+    if effects is not None:
+        await effects.flush()
+
+    # Phase 2: Flush SkillsObserver (writes XP to DB, stores results)
     if skills is not None:
         await skills.flush()
         if reconciler is not None:
@@ -103,9 +110,9 @@ async def flush_all(
             for event in level_up_events:
                 reconciler.notify(event)
 
-    # Phase 2: Flush all other observers
+    # Phase 3: Flush all other observers
     for obs in observers:
-        if obs is not skills:
+        if obs is not effects and obs is not skills:
             if isinstance(obs, DiscordReconciler):
                 await obs.flush(defer_announcements=defer_announcements)
             else:

@@ -245,15 +245,51 @@ class TestEffectsObserverFlush:
     """Tests for EffectsObserver.flush()."""
 
     @pytest.mark.asyncio
-    async def test_flush_is_noop(self):
-        """flush() is a no-op (cog handles side effects)."""
+    async def test_flush_preserves_state(self):
+        """flush() preserves collected state after forwarding."""
         observer = EffectsObserver()
         observer.notify(BroadcastEvent(message="Hello"))
         observer.notify(PickupSignal())
 
-        # flush() should not raise and should not clear state
         await observer.flush()
 
         # State should be preserved
         assert observer.broadcasts == ["Hello"]
         assert observer.has_pickup is True
+
+    @pytest.mark.asyncio
+    async def test_flush_forwards_xp_grants(self):
+        """flush() forwards collected XP grants to forward targets."""
+        from mudd.events.types import GameEvent
+
+        received: list[GameEvent] = []
+
+        class Recorder:
+            def notify(self, event: GameEvent) -> None:
+                received.append(event)
+
+            async def flush(self) -> None:
+                pass
+
+        recorder = Recorder()
+        observer = EffectsObserver(_forward_targets=(recorder,))
+        observer.notify(GrantXPSignal(skill=Skill.VITALITY, amount=100))
+        observer.notify(GrantXPSignal(skill=Skill.AGILITY, amount=50))
+
+        await observer.flush()
+
+        assert len(received) == 2
+        assert received[0] == GrantXPSignal(skill=Skill.VITALITY, amount=100)
+        assert received[1] == GrantXPSignal(skill=Skill.AGILITY, amount=50)
+        # XP grants preserved after flush
+        assert observer.xp_grants == [(Skill.VITALITY, 100), (Skill.AGILITY, 50)]
+
+    @pytest.mark.asyncio
+    async def test_flush_no_forward_targets(self):
+        """flush() with no forward targets does not error."""
+        observer = EffectsObserver()
+        observer.notify(GrantXPSignal(skill=Skill.VITALITY, amount=100))
+
+        await observer.flush()
+
+        assert observer.xp_grants == [(Skill.VITALITY, 100)]

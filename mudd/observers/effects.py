@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass, field
 
+from mudd.events.observer import Observer
 from mudd.events.types import (
     BroadcastEvent,
     ClearFocusSignal,
@@ -44,6 +45,7 @@ class EffectsObserver:
             await move_to_inventory(...)
     """
 
+    _forward_targets: tuple[Observer, ...] = ()
     _broadcasts: list[str] = field(default_factory=list)
     _grants: list[str] = field(default_factory=list)
     _grant_randoms: list[str] = field(default_factory=list)
@@ -89,11 +91,15 @@ class EffectsObserver:
                 pass  # Model events - handled by DiscordReconciler
 
     async def flush(self) -> None:
-        """Flush pending operations (no-op for EffectsObserver).
+        """Forward collected XP grants to other observers.
 
-        The cog handles the actual side effects; this observer just collects.
+        Iterates _xp_grants and notifies each forward target so that
+        SkillsObserver (and others) receive GrantXPSignal without
+        Scene.execute() reaching into observer state.
         """
-        pass
+        for skill, amount in self._xp_grants:
+            for target in self._forward_targets:
+                target.notify(GrantXPSignal(skill=skill, amount=amount))
 
     @property
     def broadcasts(self) -> list[str]:

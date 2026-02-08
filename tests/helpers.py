@@ -70,7 +70,6 @@ async def act(
     """Execute one game interaction. Fresh scene per call."""
     scene = await Scene.from_user(pool, user_id)
 
-    effects = EffectsObserver()
     reconciler = NullReconciler()
     skills = SkillsObserver(
         _pool=pool,
@@ -82,6 +81,7 @@ async def act(
         extra.append(entity_cache.create_invalidator(pool, scene.user.current_room))
     if user_cache is not None:
         extra.append(user_cache.create_invalidator(pool))
+    effects = EffectsObserver(_forward_targets=(skills, reconciler, *extra))
     scene = scene.with_observers(effects, skills, reconciler, *extra)
 
     entity = await resolve_entity(pool, scene, entity_query)

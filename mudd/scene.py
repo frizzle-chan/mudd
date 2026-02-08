@@ -9,7 +9,7 @@ import discord
 from discord import Interaction
 
 from mudd.commands import ActionCommand, ActionResult, TakeCommand
-from mudd.events import GrantXPSignal, Observer
+from mudd.events import Observer
 from mudd.models.entity import EntityInstance, ResolvedEntity
 from mudd.models.interfaces import IReadableEntity, IRoom
 from mudd.models.room import EntityModal, InventoryThread, Room
@@ -64,11 +64,11 @@ class Scene:
         Returns:
             Scene with observers attached
         """
-        effects = EffectsObserver()
         scene = await cls.from_interaction(pool, interaction)
         observers = build_observers(
             pool, scene.user.id, scene.user.current_room, bot=bot
         )
+        effects = EffectsObserver(_forward_targets=tuple(observers))
         scene = scene.with_observers(effects, *observers)
         return scene
 
@@ -207,8 +207,9 @@ class Scene:
 
         result = await sub_scene.execute(TakeCommand(), item)
 
-        # Merge broadcasts back so the cog can send them
+        # Merge broadcasts and XP grants back so the parent can process them
         parent_effects._broadcasts.extend(sub_effects.broadcasts)
+        parent_effects._xp_grants.extend(sub_effects._xp_grants)
 
         return result
 
@@ -276,12 +277,6 @@ class Scene:
             await self.user.credit_from_house(
                 amount, memo=f"Picked up from {view.name}"
             )
-
-        # XP grants: broadcast GrantXPSignal to all observers except effects
-        for skill, amount in effects.xp_grants:
-            for obs in self._observers:
-                if obs is not effects:
-                    obs.notify(GrantXPSignal(skill=skill, amount=amount))
 
         # Grant specific items → create in room, then _take_item runs on_take
         # (currency items destroy themselves + credit balance, normal items pick up)
