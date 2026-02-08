@@ -4,21 +4,19 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
 
 import asyncpg
 
 from mudd.events.types import (
     GameEvent,
+    GrantXPSignal,
     LevelUpEvent,
     UserMovedEvent,
     XPGainedEvent,
 )
 from mudd.models.skills import UserSkill, XPResult
+from mudd.observers.skills_reconciler import SkillsReconciler
 from mudd.skills.registry import Skill
-
-if TYPE_CHECKING:
-    from mudd.events.observer import Observer
 
 logger = logging.getLogger(__name__)
 
@@ -30,23 +28,23 @@ AGILITY_XP_PER_MOVE: int = 28
 class SkillsObserver:
     """Observer that awards implicit XP from game events.
 
-    Listens for game events and queues implicit XP grants:
-    - UserMovedEvent -> Agility XP
+    Listens for game events and queues XP grants:
+    - UserMovedEvent -> Agility XP (implicit)
+    - GrantXPSignal -> explicit XP from template effects
 
-    Also accepts explicit XP grants via queue_xp() (from template effects).
     During flush(), processes all queued grants via UserSkill.grant_xp()
-    and emits XPGainedEvent/LevelUpEvent to downstream observers.
+    and emits XPGainedEvent/LevelUpEvent to the reconciler.
     """
 
     _pool: asyncpg.Pool
     _user_id: int
     _room_id: str
-    _downstream: tuple[Observer, ...] = ()
+    _reconciler: SkillsReconciler | None = None
     _queued_grants: list[tuple[str, int]] = field(default_factory=list)
     _results: list[XPResult] = field(default_factory=list)
 
     def notify(self, event: GameEvent) -> None:
-        """Receive an event and queue implicit XP grants.
+        """Receive an event and queue XP grants.
 
         Args:
             event: The game event to process
@@ -54,22 +52,15 @@ class SkillsObserver:
         match event:
             case UserMovedEvent(user_id=uid) if uid == self._user_id:
                 self._queued_grants.append((Skill.AGILITY, AGILITY_XP_PER_MOVE))
-
-    def queue_xp(self, skill: str, amount: int) -> None:
-        """Queue an XP grant for processing during flush.
-
-        Args:
-            skill: Skill name to grant XP in
-            amount: Amount of XP to grant
-        """
-        self._queued_grants.append((skill, amount))
+            case GrantXPSignal(skill=skill, amount=amount):
+                self._queued_grants.append((skill, amount))
 
     async def flush(self) -> None:
         """Process all queued XP grants.
 
         Calls UserSkill.grant_xp() for each queued grant,
         collects the results, and emits XPGainedEvent/LevelUpEvent
-        to downstream observers (e.g., SkillsReconciler).
+        to the reconciler.
         """
         for skill, amount in self._queued_grants:
             try:
@@ -86,13 +77,13 @@ class SkillsObserver:
                 )
         self._queued_grants.clear()
 
-        # Emit events to downstream observers
-        for event in self.get_xp_events():
-            for obs in self._downstream:
-                obs.notify(event)
-        for event in self.get_level_up_events():
-            for obs in self._downstream:
-                obs.notify(event)
+        # Emit events to reconciler
+        if self._reconciler:
+            for event in self.get_xp_events():
+                self._reconciler.notify(event)
+            for event in self.get_level_up_events():
+                self._reconciler.notify(event)
+            await self._reconciler.flush()
 
     @property
     def results(self) -> list[XPResult]:
