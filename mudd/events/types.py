@@ -59,6 +59,14 @@ class DestroySignal:
 
 
 @dataclass(frozen=True, slots=True)
+class GrantXPSignal:
+    """Signal from template effects to grant XP in a skill."""
+
+    skill: str
+    amount: int
+
+
+@dataclass(frozen=True, slots=True)
 class DispenseSignal:
     """Signal that an item should be dispensed from this container."""
 
@@ -137,6 +145,28 @@ class OrphanChannelDetectedEvent:
     guild_id: int
     channel_name: str
     category_name: str
+
+
+@dataclass(frozen=True, slots=True)
+class XPGainedEvent:
+    """Fact: XP was gained by a user in a skill."""
+
+    user_id: int
+    skill: str
+    old_level: int
+    new_level: int
+    old_xp: int
+    new_xp: int
+
+
+@dataclass(frozen=True, slots=True)
+class LevelUpEvent:
+    """Fact: user leveled up in a skill."""
+
+    user_id: int
+    skill: str
+    new_level: int
+    room_id: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -231,6 +261,7 @@ type GameEvent = (
     | GrantEvent
     | GrantRandomEvent
     | GrantCurrencyEvent
+    | GrantXPSignal
     | PickupSignal
     | DropSignal
     | DestroySignal
@@ -241,6 +272,8 @@ type GameEvent = (
     | EntityDroppedEvent
     | EntityDestroyedEvent
     | FocusChangedEvent
+    | XPGainedEvent
+    | LevelUpEvent
     | ZoneSyncedEvent
     | RoomSyncedEvent
     | OrphanChannelDetectedEvent

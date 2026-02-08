@@ -11,6 +11,7 @@ from mudd.events import (
     GrantCurrencyEvent,
     GrantEvent,
     GrantRandomEvent,
+    GrantXPSignal,
     PickupSignal,
 )
 from mudd.observers import EffectsObserver
@@ -77,6 +78,26 @@ class TestEffectsObserverNotify:
         assert observer.has_dispense is False
         observer.notify(DispenseSignal())
         assert observer.has_dispense is True
+
+    def test_grant_xp_signal_collected(self):
+        """GrantXPSignal is collected in xp_grants list."""
+        observer = EffectsObserver()
+        assert observer.has_xp_grants is False
+        observer.notify(GrantXPSignal(skill="vitality", amount=100))
+        assert observer.xp_grants == [("vitality", 100)]
+        assert observer.has_xp_grants is True
+
+    def test_multiple_xp_grants_collected(self):
+        """Multiple GrantXPSignal events are collected in order."""
+        observer = EffectsObserver()
+        observer.notify(GrantXPSignal(skill="vitality", amount=100))
+        observer.notify(GrantXPSignal(skill="agility", amount=50))
+        observer.notify(GrantXPSignal(skill="vitality", amount=25))
+        assert observer.xp_grants == [
+            ("vitality", 100),
+            ("agility", 50),
+            ("vitality", 25),
+        ]
 
 
 class TestEffectsCollector:
@@ -180,6 +201,35 @@ class TestEffectsCollector:
         result = collector.dispense()
         assert result == ""
         assert observer.has_dispense is True
+
+    def test_grant_xp_returns_empty_string(self):
+        """grant_xp() returns empty string for inline template use."""
+        observer = EffectsObserver()
+        collector = EffectsCollector(observer)
+        result = collector.grant_xp("vitality", 100)
+        assert result == ""
+        assert observer.xp_grants == [("vitality", 100)]
+
+    def test_grant_xp_ignores_zero_amount(self):
+        """grant_xp() ignores zero amounts."""
+        observer = EffectsObserver()
+        collector = EffectsCollector(observer)
+        collector.grant_xp("vitality", 0)
+        assert observer.xp_grants == []
+
+    def test_grant_xp_ignores_negative_amount(self):
+        """grant_xp() ignores negative amounts."""
+        observer = EffectsObserver()
+        collector = EffectsCollector(observer)
+        collector.grant_xp("vitality", -50)
+        assert observer.xp_grants == []
+
+    def test_grant_xp_ignores_empty_skill(self):
+        """grant_xp() ignores empty skill names."""
+        observer = EffectsObserver()
+        collector = EffectsCollector(observer)
+        collector.grant_xp("", 100)
+        assert observer.xp_grants == []
 
 
 class TestEffectsObserverFlush:

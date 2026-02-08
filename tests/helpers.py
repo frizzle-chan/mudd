@@ -21,6 +21,7 @@ from mudd.events import Observer
 from mudd.events.types import GameEvent
 from mudd.models import EntityInstance, Room, RoomEntityInstance, User
 from mudd.observers import EffectsObserver
+from mudd.observers.skills import SkillsObserver
 from mudd.scene import Scene
 
 # Module-level cache holders, wired by the session-scoped autouse fixture
@@ -49,6 +50,7 @@ class ActResult:
     output: str
     effects: EffectsObserver
     reconciler: NullReconciler
+    skills: SkillsObserver
 
 
 async def act(
@@ -62,12 +64,17 @@ async def act(
 
     effects = EffectsObserver()
     reconciler = NullReconciler()
+    skills = SkillsObserver(
+        _pool=pool,
+        _user_id=user_id,
+        _room_id=scene.user.current_room,
+    )
     extra: list[Observer] = []
     if entity_cache is not None:
         extra.append(entity_cache.create_invalidator(pool, scene.user.current_room))
     if user_cache is not None:
         extra.append(user_cache.create_invalidator(pool))
-    scene = scene.with_observers(effects, reconciler, *extra)
+    scene = scene.with_observers(effects, skills, reconciler, *extra)
 
     entity = await resolve_entity(pool, scene, entity_query)
     if entity is None:
@@ -76,7 +83,9 @@ async def act(
     result = await scene.execute(command, entity)
     await scene.flush_observers()
 
-    return ActResult(output=result.output, effects=effects, reconciler=reconciler)
+    return ActResult(
+        output=result.output, effects=effects, reconciler=reconciler, skills=skills
+    )
 
 
 async def autocomplete(

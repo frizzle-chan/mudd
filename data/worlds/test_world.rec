@@ -383,6 +383,20 @@ DescriptionLong: A glass object used for testing destruction effects.
 OnAttack: {{ effects.destroy() }}{{ effects.broadcast("**" ~ user ~ "** smashes the " ~ e.name ~ "!") }}TEST_SMASH_RESPONSE - You smash it! Shards scatter everywhere.{{ effects.grant_random("test_loot") }}
 
 # ----------------------------------------------------------------------------
+# Skills XP test fixtures
+# ----------------------------------------------------------------------------
+
+Id: test_apple
+Name: Test Apple
+Prototype: object
+Room: store-room
+Rarity: common
+Tags: test_apple_spawn
+DescriptionShort: a {{ e.name }}
+DescriptionLong: A test apple for skills XP testing.
+OnUse: {{ effects.grant_xp("vitality", 100) }}{{ effects.destroy() }}You eat the {{ e.name }}. Delicious!
+
+# ----------------------------------------------------------------------------
 # Fishing test fixtures
 # ----------------------------------------------------------------------------
 
@@ -542,6 +556,12 @@ TagQuery: test_painting_spawn
 MaxCount: 2
 RespawnIntervalMinutes: 1
 NoDuplicates: yes
+
+Id: test_apple_pool
+Room: store-room
+TagQuery: test_apple_spawn
+MaxCount: 1
+RespawnIntervalMinutes: 1
 
 Id: test_basin_fish_pool
 Room: store-room

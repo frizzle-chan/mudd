@@ -198,7 +198,7 @@ OnDrop: {% if container %}You put the {{ e.name }} into the *{{ container.name }
 Id: beverage
 Name: beverage
 Prototype: item
-OnUse: You crack open the {{ e.name }} and take a refreshing sip. It restores health.
+OnUse: {{ effects.grant_xp("vitality", 100) }}You crack open the {{ e.name }} and take a refreshing sip. It restores health.
 OnTake: {{ effects.pickup() }}{{ effects.broadcast(user ~ " grabs " ~ e ~ ".") }}You grab a {{ e.name }}.
 
 Id: wallet
@@ -1185,7 +1185,7 @@ Room: lounge
 DescriptionShort: An oversized {{ e.name }} sits in the corner.
 DescriptionLong: A vintage wooden globe on a brass stand. You can __open__ the northern hemisphere to reveal the minibar inside.
 ContentsVisible: no
-OnUse: You swing open the globe and pour yourself a drink. It restores health.
+OnUse: {{ effects.grant_xp("vitality", 100) }}You swing open the globe and pour yourself a drink. It restores health.
 OnOpen: {{ effects.set_focus() }}You swing open the northern hemisphere.{% if e.contents %} Inside:{{ e.contents }}{% else %} It's empty.{% endif %}
 OnClose: {{ effects.clear_focus() }}You swing the globe closed.
 
@@ -1341,7 +1341,7 @@ Rarity: uncommon
 Tags: beverage globe_minibar_liquor
 DescriptionShort: a bottle of {{ e.name }}
 DescriptionLong: A bottle of Maker's Mark Kentucky Straight Bourbon Whisky. The iconic red wax seal drips down the neck.
-OnUse: You pour yourself a glass of {{ e.name }}. The caramel and vanilla notes warm your throat. It restores health.
+OnUse: {{ effects.grant_xp("vitality", 100) }}You pour yourself a glass of {{ e.name }}. The caramel and vanilla notes warm your throat. It restores health.
 
 Id: lounge_yamazaki_12
 Name: Yamazaki 12 Year
@@ -1350,7 +1350,7 @@ Rarity: rare
 Tags: beverage globe_minibar_liquor
 DescriptionShort: a bottle of {{ e.name }}
 DescriptionLong: A bottle of Suntory Yamazaki 12 Year Single Malt Japanese Whisky. Aged in a combination of American, Spanish, and Japanese oak casks.
-OnUse: You pour yourself a dram of {{ e.name }}. Delicate notes of peach, vanilla, and Mizunara oak. It restores health.
+OnUse: {{ effects.grant_xp("vitality", 100) }}You pour yourself a dram of {{ e.name }}. Delicate notes of peach, vanilla, and Mizunara oak. It restores health.
 
 Id: lounge_nikka_yoichi_20
 Name: Nikka Yoichi 20-Year Limited Edition
@@ -1359,7 +1359,7 @@ Rarity: legendary
 Tags: beverage globe_minibar_liquor
 DescriptionShort: a bottle of {{ e.name }}
 DescriptionLong: A bottle of Nikka Yoichi Limited Edition Final Version 20-Year-Old Single Malt Japanese Whisky. One of the last bottles ever produced before the age-statement line was discontinued. Peated barley, coastal air, decades of patience.
-OnUse: You pour yourself a reverent measure of {{ e.name }}. Smoke, sea salt, dried fruit, and a finish that lasts forever. You feel blessed. It restores health.
+OnUse: {{ effects.grant_xp("vitality", 100) }}You pour yourself a reverent measure of {{ e.name }}. Smoke, sea salt, dried fruit, and a finish that lasts forever. You feel blessed. It restores health.
 
 # ----------------------------------------------------------------------------
 # Kitchen entities
