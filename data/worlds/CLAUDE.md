@@ -188,4 +188,4 @@ If a template has syntax errors or undefined variables, the system:
 ## Prototypes vs Instances
 
 - **Prototypes**: Entities without a `Room` field are templates (e.g., `object`, `furniture`)
-- **Instances**: Entities with a `Room` field spawn in that room
+- **Instances**: Entities with a `Room` field are static entities that spawn in that room by default
