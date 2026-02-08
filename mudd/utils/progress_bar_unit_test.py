@@ -30,12 +30,11 @@ class TestShadedBar:
 
     def test_50_percent_half_filled(self) -> None:
         bar = shaded_bar(50)
-        # First ~10 chars should be full blocks, rest empty
+        # Exactly 50% should have 10 full blocks and 10 empty, no partial
         full_count = bar.count("█")
         empty_count = bar.count("░")
         assert full_count == 10
-        # 1 partial char + 9 empty
-        assert empty_count == 9
+        assert empty_count == 10
 
     def test_small_percent_shows_partial(self) -> None:
         bar = shaded_bar(1)

@@ -39,8 +39,15 @@ def shaded_bar(percent: float, size: int = DEFAULT_SIZE) -> str:
     segment_unit = (percent / 100) * size
     su_floor = int(segment_unit)
     fractional = segment_unit - su_floor
-    middlepiece = max(1, int(fractional * b_len))
 
-    # su_floor full chars + 1 partial char, then pad with empty
+    # If there's no fractional part, no partial character needed
+    if fractional == 0:
+        return (full * su_floor).ljust(size, empty)
+
+    # Otherwise, add a partial character based on the fractional value
+    middlepiece = int(fractional * b_len)
+    if middlepiece == 0:
+        middlepiece = 1  # Ensure at least light shade for any fractional value
+
     partial = SHADED[middlepiece]
     return (full * su_floor + partial).ljust(size, empty)
