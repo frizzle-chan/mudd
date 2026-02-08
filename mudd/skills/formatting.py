@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 from mudd.models.skills import UserSkill
 from mudd.skills.registry import SKILL_COUNT, Skill
 from mudd.skills.xp import MAX_LEVEL, xp_for_level
@@ -28,6 +30,7 @@ MILESTONE_ROLE_NAMES: list[str] = [name for name, _ in MILESTONE_ROLES]
 # Nickname format
 MAX_NICK_LENGTH = 32
 NICK_SUFFIX_TEMPLATE = " (LV{})"
+_LEVEL_SUFFIX_RE = re.compile(r"\s*\(LV\d+\)$")
 
 
 def format_progress_bar(current_xp: int, level: int) -> str:
@@ -100,6 +103,7 @@ def format_nickname(display_name: str, total_level: int) -> str:
     Returns:
         Formatted nickname string
     """
+    display_name = _LEVEL_SUFFIX_RE.sub("", display_name)
     suffix = NICK_SUFFIX_TEMPLATE.format(total_level)
     max_name_len = MAX_NICK_LENGTH - len(suffix)
 
