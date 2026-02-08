@@ -7,9 +7,10 @@ import pytest
 from mudd.commands import LookCommand, UseCommand
 from mudd.models import RoomEntityInstance
 from mudd.models.skills import UserSkill
+from mudd.observers.skills import AGILITY_XP_PER_MOVE
 from mudd.skills.registry import SKILL_COUNT, Skill
 from mudd.skills.xp import MAX_XP, xp_for_level
-from tests.helpers import act, autocomplete, create_test_user
+from tests.helpers import act, autocomplete, create_test_user, move
 
 pytestmark = pytest.mark.asyncio(loop_scope="session")
 
@@ -223,3 +224,29 @@ async def test_level_boundary_exact(test_db, clean_user_state):
     result = await UserSkill.grant_xp(test_db, user.id, Skill.VITALITY, 1)
     assert result.new_level == 3
     assert result.leveled_up is True
+
+
+async def test_movement_grants_agility_xp(test_db, clean_user_state):
+    """Moving to a new room grants agility XP via the full observer chain."""
+    user = await create_test_user(test_db, room_id="foyer")
+
+    # Verify no agility XP before moving
+    skill_before = await UserSkill.get(test_db, user.id, Skill.AGILITY)
+    assert skill_before.xp == 0
+    assert skill_before.level == 1
+
+    # Move to a different room
+    move_result = await move(test_db, user.id, "store-room")
+
+    # SkillsObserver should have processed the agility XP grant
+    assert len(move_result.skills.results) == 1
+    xp_result = move_result.skills.results[0]
+    assert xp_result.skill == Skill.AGILITY
+    assert xp_result.old_xp == 0
+    assert xp_result.new_xp == AGILITY_XP_PER_MOVE
+    assert xp_result.old_level == 1
+
+    # Verify agility XP persisted in the database
+    skill_after = await UserSkill.get(test_db, user.id, Skill.AGILITY)
+    assert skill_after.xp == AGILITY_XP_PER_MOVE
+    assert skill_after.level == 1

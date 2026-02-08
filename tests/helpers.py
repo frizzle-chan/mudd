@@ -53,6 +53,14 @@ class ActResult:
     skills: SkillsObserver
 
 
+@dataclass(frozen=True, slots=True)
+class MoveResult:
+    """Result from move() helper."""
+
+    reconciler: NullReconciler
+    skills: SkillsObserver
+
+
 async def act(
     pool: asyncpg.Pool,
     user_id: int,
@@ -161,14 +169,19 @@ async def move(
     user_id: int,
     room_id: str,
     guild_id: int = 12345,
-) -> NullReconciler:
+) -> MoveResult:
     """Move a user to a room with cache invalidation (mirrors movement cog)."""
     fresh = await User.get(pool, user_id)
     if fresh is None:
         raise ValueError(f"User {user_id} not found")
 
     reconciler = NullReconciler()
-    observers: list[Observer] = [reconciler]
+    skills = SkillsObserver(
+        _pool=pool,
+        _user_id=user_id,
+        _room_id=fresh.current_room,
+    )
+    observers: list[Observer] = [skills, reconciler]
     if user_cache is not None:
         observers.append(user_cache.create_invalidator(pool))
     if entity_cache is not None:
@@ -179,4 +192,4 @@ async def move(
     for obs in observers:
         await obs.flush()
 
-    return reconciler
+    return MoveResult(reconciler=reconciler, skills=skills)
