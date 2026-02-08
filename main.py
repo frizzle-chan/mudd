@@ -7,6 +7,8 @@ import discord
 from dotenv import load_dotenv
 
 from mudd.bot import MuddBot
+from mudd.caches.entity_autocomplete import EntityAutocompleteCache
+from mudd.caches.user import UserCache
 from mudd.cogs.economy import Economy
 from mudd.cogs.interact import Interact
 from mudd.cogs.look import Look
@@ -21,7 +23,7 @@ discord.VoiceClient.warn_nacl = False
 
 load_dotenv()
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO").upper())
 logger = logging.getLogger(__name__)
 
 # Default world file for backwards compatibility
@@ -59,15 +61,17 @@ async def setup_hook():
     # Get database pool
     pool = await get_pool()
 
-    # Create shared room cache (rebuilt by Sync cog on startup)
+    # Create shared caches (rebuilt by Sync cog on startup)
     room_cache = RoomChannelCache(pool)
+    autocomplete_cache = EntityAutocompleteCache()
+    user_cache = UserCache()
 
     # Create cogs with explicit dependencies
-    await bot.add_cog(Look(bot, pool))
-    await bot.add_cog(Interact(bot, pool))
+    await bot.add_cog(Look(bot, pool, autocomplete_cache, user_cache))
+    await bot.add_cog(Interact(bot, pool, autocomplete_cache, user_cache))
     await bot.add_cog(Ping(bot))
-    await bot.add_cog(Movement(bot, pool, room_cache))
-    await bot.add_cog(Sync(bot, pool, room_cache))
+    await bot.add_cog(Movement(bot, pool, room_cache, user_cache))
+    await bot.add_cog(Sync(bot, pool, room_cache, autocomplete_cache, user_cache))
     await bot.add_cog(Economy(bot, pool))
 
 

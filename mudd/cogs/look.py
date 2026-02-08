@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import logging
 from functools import partial
+from typing import TYPE_CHECKING
 
 import asyncpg
+import discord
 from discord import Interaction, app_commands
 from discord.ext import commands
 
@@ -13,6 +15,10 @@ from mudd.cogs.shared import entity_instance_id_autocomplete, resolve_entity
 from mudd.commands import LookCommand
 from mudd.observers import EffectsObserver
 from mudd.scene import Scene
+
+if TYPE_CHECKING:
+    from mudd.caches.entity_autocomplete import EntityAutocompleteCache
+    from mudd.caches.user import UserCache
 
 logger = logging.getLogger(__name__)
 
@@ -22,15 +28,31 @@ class Look(commands.Cog):
         self,
         bot: commands.Bot | None,
         pool: asyncpg.Pool,
+        autocomplete_cache: EntityAutocompleteCache | None = None,
+        user_cache: UserCache | None = None,
     ) -> None:
         self.bot = bot
         self._pool = pool
+        self._autocomplete_cache = autocomplete_cache
+        self._user_cache = user_cache
 
     async def entity_instance_id_autocomplete(
         self, interaction: Interaction, current: str
     ) -> list[app_commands.Choice[str]]:
         """Autocomplete for entity instance IDs the user can see."""
-        return await entity_instance_id_autocomplete(self._pool, interaction, current)
+        thread_id = (
+            interaction.channel.id
+            if isinstance(interaction.channel, discord.Thread)
+            else None
+        )
+        return await entity_instance_id_autocomplete(
+            self._pool,
+            interaction.user.id,
+            current,
+            thread_id=thread_id,
+            entity_cache=self._autocomplete_cache,
+            user_cache=self._user_cache,
+        )
 
     @app_commands.command(name="look", description="View surroundings or examine item")
     @app_commands.describe(entity_instance_query="Thing to examine")
@@ -41,10 +63,19 @@ class Look(commands.Cog):
         # Build a scene from the interaction that includes the user, entities, etc.
         # If it's a UUID, query directly. Otherwise, use autocomplete to resolve.
 
-        # Build scene with effects observer
+        # Build scene with effects observer + cache invalidators
         effects = EffectsObserver()
         scene = await Scene.from_interaction(self._pool, interaction)
-        scene = scene.with_observers(effects)
+        extra_observers = []
+        if self._autocomplete_cache is not None:
+            extra_observers.append(
+                self._autocomplete_cache.create_invalidator(
+                    self._pool, scene.user.current_room
+                )
+            )
+        if self._user_cache is not None:
+            extra_observers.append(self._user_cache.create_invalidator(self._pool))
+        scene = scene.with_observers(effects, *extra_observers)
 
         entity_instance = await resolve_entity(
             self._pool,

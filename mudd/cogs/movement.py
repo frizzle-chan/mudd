@@ -2,7 +2,7 @@
 
 import logging
 import re
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 import asyncpg
 import discord
@@ -12,6 +12,9 @@ from discord.ext import commands
 from mudd.events import InventorySyncEvent, UserLeftEvent, UserSyncEvent
 from mudd.models.user import User
 from mudd.observers import DiscordReconciler, RoomChannelCache
+
+if TYPE_CHECKING:
+    from mudd.caches.user import UserCache
 
 logger = logging.getLogger(__name__)
 
@@ -69,10 +72,12 @@ class Movement(commands.Cog):
         bot: commands.Bot | None,
         pool: asyncpg.Pool,
         room_cache: RoomChannelCache,
+        user_cache: UserCache | None = None,
     ) -> None:
         self.bot = bot
         self._pool = pool
         self.room_cache = room_cache
+        self._user_cache = user_cache
 
     async def destination_autocomplete(
         self, interaction: Interaction, current: str
@@ -166,8 +171,11 @@ class Movement(commands.Cog):
                 room_cache=self.room_cache,
             )
 
-            # Attach observer and move (move_to clears focus internally)
-            user_with_observers = user.with_observers(reconciler)
+            # Attach observers and move (move_to clears focus internally)
+            observers = [reconciler]
+            if self._user_cache is not None:
+                observers.append(self._user_cache.create_invalidator(self._pool))
+            user_with_observers = user.with_observers(*observers)
             await user_with_observers.move_to(
                 target_room, guild_id=interaction.guild.id
             )
@@ -175,8 +183,9 @@ class Movement(commands.Cog):
             # Defer response to give us time for permission sync
             await interaction.response.defer(ephemeral=True)
 
-            # Flush observer (syncs permissions)
-            await reconciler.flush()
+            # Flush all observers (syncs permissions + rebuilds caches)
+            for observer in observers:
+                await observer.flush()
 
             # Send followup (user now has access to target channel)
             await interaction.followup.send(

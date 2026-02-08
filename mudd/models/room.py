@@ -132,22 +132,40 @@ class Room:
         """Get visible entities (top-level + visible container contents).
 
         Returns top-level entities plus contents of containers with
-        contents_visible=True.
+        contents_visible=True. Uses a single query via get_entities().
 
         Returns:
             List of EntityInstance objects visible in the room
         """
-        top_level = await EntityInstance.get_top_level_by_room(self._pool, self)
+        all_entities = await self.get_entities()
+
+        top_level: list[EntityInstance] = []
+        contents_by_container: dict[str, list[EntityInstance]] = {}
+        for e in all_entities:
+            if e.container_entity_id is None:
+                top_level.append(e)
+            else:
+                contents_by_container.setdefault(e.container_entity_id, []).append(e)
 
         result: list[EntityInstance] = []
-        for instance in top_level:
-            result.append(instance)
+        for entity in top_level:
+            result.append(entity)
+            if entity.entity.contents_visible:
+                result.extend(contents_by_container.get(entity.entity.id, []))
 
-            # Add contents of visible containers
-            if instance.entity.contents_visible:
-                contents = await instance.get_contents()
-                result.extend(contents)
+        return result
 
+    async def get_entities_by_container(self) -> dict[str, list[EntityInstance]]:
+        """Get contained entities grouped by their container entity ID.
+
+        Returns:
+            Dict mapping container entity ID to list of contained EntityInstances
+        """
+        all_entities = await self.get_entities()
+        result: dict[str, list[EntityInstance]] = {}
+        for e in all_entities:
+            if e.container_entity_id is not None:
+                result.setdefault(e.container_entity_id, []).append(e)
         return result
 
     @property
@@ -165,6 +183,28 @@ class Room:
     def allows_pickup(self, entity: IReadableEntity) -> bool:
         """Check if picking up the given entity is allowed."""
         return True
+
+    @classmethod
+    async def get_all(cls, pool: asyncpg.Pool) -> list[Room]:
+        """Get all rooms.
+
+        Args:
+            pool: Database connection pool
+
+        Returns:
+            List of all Room instances
+        """
+        rows = await pool.fetch("SELECT id, name, description, zone_id FROM rooms")
+        return [
+            cls(
+                id=row["id"],
+                name=row["name"],
+                description=row["description"],
+                zone_id=row["zone_id"],
+                _pool=pool,
+            )
+            for row in rows
+        ]
 
     @classmethod
     async def get_all_zone_mappings(cls, pool: asyncpg.Pool) -> dict[str, str]:

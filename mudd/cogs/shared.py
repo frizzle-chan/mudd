@@ -1,19 +1,27 @@
 """Shared utilities for cogs."""
 
+from __future__ import annotations
+
 import asyncio
 import logging
 from collections.abc import Awaitable, Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 import asyncpg
-from discord import Interaction, app_commands
+from discord import app_commands
 from rapidfuzz import fuzz
 
+from mudd.caches.entity_autocomplete import entities_to_choices
 from mudd.models import EntityInstance, Room
 from mudd.models.room import RoomEntityInstance
+from mudd.models.user import User
 from mudd.scene import Scene
 from mudd.views import ViewEntity
+
+if TYPE_CHECKING:
+    from mudd.caches.entity_autocomplete import EntityAutocompleteCache
+    from mudd.caches.user import UserCache
 
 logger = logging.getLogger(__name__)
 
@@ -99,10 +107,27 @@ async def resolve_entity(
     return options[0] if len(options) == 1 else None
 
 
+def _lookup_entity_choices(
+    cache: EntityAutocompleteCache,
+    room_id: str,
+    focus_id: UUID | None,
+) -> list[app_commands.Choice[str]] | None:
+    """Try the entity cache for a room+focus pair."""
+    if focus_id is not None:
+        return cache.get_focus_choices(room_id, focus_id)
+    return cache.get_room_choices(room_id)
+
+
 async def entity_instance_id_autocomplete(
-    pool: asyncpg.Pool, interaction: Interaction, current: str
+    pool: asyncpg.Pool,
+    user_id: int,
+    current: str,
+    *,
+    thread_id: int | None = None,
+    entity_cache: EntityAutocompleteCache | None = None,
+    user_cache: UserCache | None = None,
 ) -> list[app_commands.Choice[str]]:
-    """Autocomplete callback for at parameter.
+    """Autocomplete callback for entity instance selection.
 
     Suggests entity names from the current room, excluding entities
     inside containers with contents_visible=False. When a user has an
@@ -114,18 +139,45 @@ async def entity_instance_id_autocomplete(
     Values use scheme-based format:
     - entity://{uuid} for database entities
     - room://{room_id} for virtual room entities
+
+    When both caches are provided and the user has typed nothing yet,
+    returns precomputed choices with zero database queries.
     """
+    # Fast path: thread context (inventory threads show exactly one entity)
+    if current == "" and entity_cache is not None and thread_id is not None:
+        choices = entity_cache.get_thread_choices(thread_id)
+        if choices is not None:
+            logger.debug("Autocomplete thread cache hit thread=%s", thread_id)
+            return choices
+
+    # Fast path: no input, not in a thread, caches available
+    if current == "" and entity_cache is not None and thread_id is None:
+        room_id: str | None = None
+        focus_id: UUID | None = None
+
+        # Try fully cached path (zero queries) via user cache
+        if user_cache is not None:
+            state = user_cache.get(user_id)
+            if state is not None:
+                room_id = state.current_room
+                focus_id = state.focus_id
+
+        # Fallback: resolve from DB
+        if room_id is None:
+            logger.debug("Autocomplete user cache miss user=%s", user_id)
+            room_id = await User.get_current_room(pool, user_id)
+            if room_id is not None:
+                focus_id = await User.get_active_focus_id(pool, user_id, room_id)
+
+        if room_id is not None:
+            choices = _lookup_entity_choices(entity_cache, room_id, focus_id)
+            if choices is not None:
+                logger.debug("Autocomplete cache hit user=%s room=%s", user_id, room_id)
+                return choices
+
+    # Slow path: build scene and query entities
+    logger.debug("Autocomplete cache miss (slow path) user=%s", user_id)
     entities = await autocomplete_entities(
-        await Scene.from_interaction(pool, interaction), current
+        await Scene.from_user(pool, user_id, thread_id=thread_id), current
     )
-    return [
-        app_commands.Choice(
-            name=ViewEntity(e).display_name,
-            value=(
-                e.instance_id
-                if isinstance(e, RoomEntityInstance)
-                else f"entity://{e.instance_id}"
-            ),
-        )
-        for e in entities
-    ][:25]  # Discord limits to 25 options
+    return entities_to_choices(entities)

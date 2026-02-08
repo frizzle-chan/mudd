@@ -76,23 +76,33 @@ class Scene:
         return scene
 
     @classmethod
-    async def from_interaction(
-        cls, pool: asyncpg.Pool, interaction: Interaction
+    async def from_user(
+        cls, pool: asyncpg.Pool, user_id: int, *, thread_id: int | None = None
     ) -> Scene:
-        user = await User.get(pool, interaction.user.id)
+        """Build a Scene from database state without a Discord Interaction.
+
+        Args:
+            pool: Database connection pool
+            user_id: Discord user ID
+            thread_id: Discord thread ID (enables InventoryThread context)
+
+        Returns:
+            Scene for the user's current context
+        """
+        user = await User.get(pool, user_id)
         if not user:
             raise ValueError("User not found")
 
-        if isinstance(interaction.channel, discord.Thread) and (
+        if thread_id is not None and (
             inventory_entity := await EntityInstance.get_by_inventory_thread_id(
-                pool, interaction.channel.id
+                pool, thread_id
             )
         ):
             if inventory_entity.owner_id != user.id:
                 raise ValueError("User does not own this inventory thread")
             room = InventoryThread(
                 _pool=pool,
-                id=str(interaction.channel.id),
+                id=str(thread_id),
                 entity_instance=inventory_entity,
                 owner=user,
             )
@@ -109,6 +119,17 @@ class Scene:
             if not room:
                 raise ValueError("User is in an invalid room")
         return cls(_pool=pool, user=user, room=room)
+
+    @classmethod
+    async def from_interaction(
+        cls, pool: asyncpg.Pool, interaction: Interaction
+    ) -> Scene:
+        thread_id = (
+            interaction.channel.id
+            if isinstance(interaction.channel, discord.Thread)
+            else None
+        )
+        return await cls.from_user(pool, interaction.user.id, thread_id=thread_id)
 
     async def contains(self, entity: IReadableEntity) -> bool:
         """Check if the scene contains the given entity instance."""

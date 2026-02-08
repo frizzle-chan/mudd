@@ -177,6 +177,18 @@ class InstanceThreadInfo:
     msg_id: int | None
 
 
+@dataclass(frozen=True, slots=True)
+class ThreadEntityInfo:
+    """Entity instance paired with its Discord thread ID.
+
+    Used by the autocomplete cache to build thread-keyed choice lists
+    without loading full EntityInstance objects.
+    """
+
+    thread_id: int
+    entity: EntityInstance
+
+
 @dataclass(frozen=True)
 class EntityInstance:
     """Entity instance with location, resolved properties, and mutation methods.
@@ -353,6 +365,34 @@ class EntityInstance:
 
         entity = ResolvedEntity._from_row(entity_row)
         return cls._from_row(instance_row, entity, pool)
+
+    @classmethod
+    async def get_all_with_threads(cls, pool: asyncpg.Pool) -> list[ThreadEntityInfo]:
+        """Get all entity instances that have a Discord thread ID.
+
+        Returns lightweight ThreadEntityInfo projections for cache building.
+        """
+        rows = await pool.fetch(
+            """
+            SELECT ei.id AS instance_id, ei.room, ei.owner_id,
+                   ei.container_entity_id, ei.discord_thread_id, r.*
+            FROM entity_instances ei
+            CROSS JOIN LATERAL resolve_entity(ei.entity_id) r
+            WHERE ei.discord_thread_id IS NOT NULL
+            """,
+        )
+
+        results: list[ThreadEntityInfo] = []
+        for row in rows:
+            entity = ResolvedEntity._from_row(row)
+            instance = cls._from_row(row, entity, pool)
+            results.append(
+                ThreadEntityInfo(
+                    thread_id=row["discord_thread_id"],
+                    entity=instance,
+                )
+            )
+        return results
 
     @classmethod
     async def get_by_owner(

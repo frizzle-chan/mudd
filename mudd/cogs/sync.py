@@ -17,6 +17,8 @@ from discord.ext import commands, tasks
 
 if TYPE_CHECKING:
     from mudd.bot import MuddBot
+    from mudd.caches.entity_autocomplete import EntityAutocompleteCache
+    from mudd.caches.user import UserCache
 
 from mudd.events import (
     InventorySyncEvent,
@@ -54,10 +56,14 @@ class Sync(commands.Cog):
         bot: MuddBot,
         pool: asyncpg.Pool,
         room_cache: RoomChannelCache,
+        autocomplete_cache: EntityAutocompleteCache | None = None,
+        user_cache: UserCache | None = None,
     ) -> None:
         self.bot = bot
         self._pool = pool
         self.room_cache = room_cache
+        self._autocomplete_cache = autocomplete_cache
+        self._user_cache = user_cache
         self._seen_orphans: set[tuple[int, str, str]] = set()
         self._console_channel = os.environ.get("MUDD_CONSOLE_CHANNEL", "console")
         self._first_sync_done = False
@@ -158,6 +164,23 @@ class Sync(commands.Cog):
             logger.exception("Failed to sync entities")
             if fail_fast:
                 raise
+
+        # Rebuild caches after entities are synced
+        if self._autocomplete_cache is not None:
+            try:
+                await self._autocomplete_cache.rebuild(pool)
+            except Exception:
+                logger.exception("Failed to rebuild autocomplete cache")
+                if fail_fast:
+                    raise
+
+        if self._user_cache is not None:
+            try:
+                await self._user_cache.rebuild(pool)
+            except Exception:
+                logger.exception("Failed to rebuild user cache")
+                if fail_fast:
+                    raise
 
         # Flush reconciler to sync Discord state (idempotent)
         try:
@@ -329,11 +352,13 @@ class Sync(commands.Cog):
         pools = await SpawningPool.get_all_with_counts(self._pool)
 
         spawned = 0
+        affected_rooms: set[str] = set()
         for sp in pools:
             instance = await sp.try_spawn(now)
 
             if instance is not None:
                 spawned += 1
+                affected_rooms.add(sp.room)
                 logger.debug(
                     "Spawned '%s' in room '%s' from pool '%s'",
                     instance.entity.name,
@@ -343,6 +368,13 @@ class Sync(commands.Cog):
 
         if spawned > 0:
             logger.info(f"Spawned {spawned} items from spawning pools")
+
+        # Invalidate + rebuild autocomplete cache for rooms where items spawned
+        if affected_rooms and self._autocomplete_cache is not None:
+            for room_id in affected_rooms:
+                self._autocomplete_cache.invalidate_room(room_id)
+            for room_id in affected_rooms:
+                await self._autocomplete_cache.rebuild_room(self._pool, room_id)
 
     def _detect_orphan_channels(
         self,

@@ -6,6 +6,10 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
+from mudd.caches import EntityAutocompleteCache
+from mudd.cogs.shared import (
+    entity_instance_id_autocomplete as raw_autocomplete,
+)
 from mudd.commands import (
     AttackCommand,
     CloseCommand,
@@ -26,15 +30,16 @@ from mudd.events import (
     UserLocationSyncEvent,
     UserMovedEvent,
 )
-from mudd.models import RoomEntityInstance, User
+from mudd.models import EntityInstance, RoomEntityInstance, User
 from mudd.models.spawning_pool import SpawningPool
 from mudd.models.user import TransferError
+from mudd.scene import Scene
 from tests.helpers import (
     NullReconciler,
-    _build_scene,
     act,
     autocomplete,
     create_test_user,
+    move,
 )
 
 # All tests share the session event loop with the session-scoped test_db pool
@@ -64,11 +69,7 @@ async def test_new_player_explores_the_world(test_db, clean_user_state):
 
     # === MOVE TO STORE ROOM ===
 
-    reconciler = NullReconciler()
-    fresh_user = await User.get(test_db, user.id)
-    assert fresh_user is not None
-    user_with_obs = fresh_user.with_observers(reconciler)
-    await user_with_obs.move_to("store-room", guild_id=GUILD_ID)
+    reconciler = await move(test_db, user.id, "store-room", guild_id=GUILD_ID)
 
     assert any(isinstance(e, UserMovedEvent) for e in reconciler.events)
     assert any(isinstance(e, UserLocationSyncEvent) for e in reconciler.events)
@@ -333,9 +334,7 @@ async def test_currency_system(test_db, clean_user_state):
     player_b = await create_test_user(test_db, user_id=2002, room_id="store-room")
 
     # Move player A to store room
-    user_a = await User.get(test_db, player_a.id)
-    assert user_a is not None
-    await user_a.move_to("store-room", guild_id=GUILD_ID)
+    await move(test_db, player_a.id, "store-room", guild_id=GUILD_ID)
 
     # Create currency accounts
     await User.create_currency_account(test_db, player_a.id, 500)
@@ -395,9 +394,7 @@ async def test_payment_broadcast_and_mentions(test_db, clean_user_state):
     player_b = await create_test_user(test_db, user_id=3002, room_id="store-room")
 
     # Move player A to store room
-    user_a = await User.get(test_db, player_a.id)
-    assert user_a is not None
-    await user_a.move_to("store-room", guild_id=1234567890)
+    await move(test_db, player_a.id, "store-room", guild_id=1234567890)
 
     # Create currency accounts
     await User.create_currency_account(test_db, player_a.id, 500)
@@ -405,6 +402,8 @@ async def test_payment_broadcast_and_mentions(test_db, clean_user_state):
 
     # Transfer with observer to capture events
     reconciler = NullReconciler()
+    user_a = await User.get(test_db, player_a.id)
+    assert user_a is not None
     user_a = user_a.with_observers(reconciler)
     user_b = await User.get(test_db, player_b.id)
     assert user_b is not None
@@ -549,9 +548,7 @@ async def test_move_back_to_foyer_clears_focus(test_db, clean_user_state):
     await act(test_db, user.id, OpenCommand(), f"entity://{box.instance_id}")
 
     # Move -- focus should clear
-    u = await User.get(test_db, user.id)
-    assert u is not None
-    await u.move_to("foyer", guild_id=GUILD_ID)
+    await move(test_db, user.id, "foyer", guild_id=GUILD_ID)
 
     refreshed = await User.get(test_db, user.id)
     assert refreshed is not None
@@ -753,7 +750,7 @@ async def test_other_players_in_room(test_db, clean_user_state):
     user_a = await create_test_user(test_db, user_id=4001, room_id="store-room")
     user_b = await create_test_user(test_db, user_id=4002, room_id="store-room")
 
-    scene = await _build_scene(test_db, user_a.id)
+    scene = await Scene.from_user(test_db, user_a.id)
     others = await scene.other_players()
 
     other_ids = [u.id for u in others]
@@ -795,3 +792,95 @@ async def test_beverage_prototype_chain(test_db, clean_user_state):
         test_db, user.id, UseCommand(), f"entity://{beverage.instance_id}"
     )
     assert "refreshing sip" in result.output.lower()
+
+
+async def test_autocomplete_db_fallback_no_user_cache(
+    test_db, entity_cache, clean_user_state
+):
+    """Autocomplete falls back to DB when user_cache is not provided."""
+    user = await create_test_user(test_db, room_id="store-room")
+
+    choices = await raw_autocomplete(
+        test_db, user.id, "", entity_cache=entity_cache, user_cache=None
+    )
+
+    assert len(choices) > 0
+    assert any(c.value.startswith("room://") for c in choices)
+
+
+async def test_autocomplete_db_fallback_user_not_in_cache(
+    test_db, entity_cache, user_cache, clean_user_state
+):
+    """Autocomplete falls back to DB when user is absent from user_cache."""
+    # Create user directly (bypasses user_cache.rebuild_user in create_test_user)
+    user_id = 888_888
+    await User.create_if_not_exists(test_db, user_id, "store-room")
+
+    choices = await raw_autocomplete(
+        test_db, user_id, "", entity_cache=entity_cache, user_cache=user_cache
+    )
+
+    assert len(choices) > 0
+    assert any(c.value.startswith("room://") for c in choices)
+
+
+async def test_autocomplete_slow_path_entity_cache_miss(
+    test_db, user_cache, clean_user_state
+):
+    """Autocomplete uses slow path when entity_cache has no data for the room."""
+    user = await create_test_user(test_db, room_id="store-room")
+
+    # Empty entity cache — get_room_choices returns None for every room
+    empty_entity_cache = EntityAutocompleteCache()
+
+    choices = await raw_autocomplete(
+        test_db,
+        user.id,
+        "",
+        entity_cache=empty_entity_cache,
+        user_cache=user_cache,
+    )
+
+    assert len(choices) > 0
+    assert any(c.value.startswith("room://") for c in choices)
+
+
+async def test_autocomplete_thread_cache_hit(test_db, entity_cache, clean_user_state):
+    """Autocomplete returns cached thread choices for inventory threads."""
+    user = await create_test_user(test_db, room_id="store-room")
+
+    # Take an item so we have an owned entity instance
+    box = next(
+        o
+        for o in await autocomplete(test_db, user.id, "Cardboard Box")
+        if not isinstance(o, RoomEntityInstance)
+    )
+    await act(test_db, user.id, OpenCommand(), f"entity://{box.instance_id}")
+    takeable = next(
+        o
+        for o in await autocomplete(test_db, user.id, "")
+        if not isinstance(o, RoomEntityInstance) and o.entity.name == "Test Takeable"
+    )
+    await act(test_db, user.id, TakeCommand(), f"entity://{takeable.instance_id}")
+
+    # Simulate Discord thread creation by setting thread IDs
+    thread_id = 777_777_777
+    await EntityInstance.update_thread_ids(
+        test_db, takeable.instance_id, thread_id, msg_id=888_888_888
+    )
+
+    # Rebuild entity cache so thread choices are populated
+    await entity_cache.rebuild(test_db)
+
+    # Autocomplete with thread_id should hit the thread cache
+    choices = await raw_autocomplete(
+        test_db,
+        user.id,
+        "",
+        thread_id=thread_id,
+        entity_cache=entity_cache,
+    )
+
+    assert len(choices) == 1
+    assert choices[0].value == f"entity://{takeable.instance_id}"
+    assert "Test Takeable" in choices[0].name

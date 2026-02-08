@@ -1,7 +1,10 @@
 """Interact command for entity interactions."""
 
+from __future__ import annotations
+
 import logging
 from functools import partial
+from typing import TYPE_CHECKING
 
 import asyncpg
 import discord
@@ -14,18 +17,42 @@ from mudd.matching.verb_matcher import match_verb
 from mudd.observers import EffectsObserver
 from mudd.scene import Scene
 
+if TYPE_CHECKING:
+    from mudd.caches.entity_autocomplete import EntityAutocompleteCache
+    from mudd.caches.user import UserCache
+
 logger = logging.getLogger(__name__)
 
 
 class Interact(commands.Cog):
-    def __init__(self, bot: commands.Bot | None, pool: asyncpg.Pool) -> None:
+    def __init__(
+        self,
+        bot: commands.Bot | None,
+        pool: asyncpg.Pool,
+        autocomplete_cache: EntityAutocompleteCache | None = None,
+        user_cache: UserCache | None = None,
+    ) -> None:
         self.bot = bot
         self._pool = pool
+        self._autocomplete_cache = autocomplete_cache
+        self._user_cache = user_cache
 
     async def target_autocomplete(
         self, interaction: Interaction, current: str
     ) -> list[app_commands.Choice[str]]:
-        return await entity_instance_id_autocomplete(self._pool, interaction, current)
+        thread_id = (
+            interaction.channel.id
+            if isinstance(interaction.channel, discord.Thread)
+            else None
+        )
+        return await entity_instance_id_autocomplete(
+            self._pool,
+            interaction.user.id,
+            current,
+            thread_id=thread_id,
+            entity_cache=self._autocomplete_cache,
+            user_cache=self._user_cache,
+        )
 
     @app_commands.command(name="interact", description="Interact with things")
     @app_commands.describe(
@@ -43,8 +70,19 @@ class Interact(commands.Cog):
             )
             return
 
-        # 2. Build scene with observers
+        # 2. Build scene with observers (including cache invalidators)
         scene = await Scene.build(self._pool, interaction, self.bot)
+        extra_observers = []
+        if self._autocomplete_cache is not None:
+            extra_observers.append(
+                self._autocomplete_cache.create_invalidator(
+                    self._pool, scene.user.current_room
+                )
+            )
+        if self._user_cache is not None:
+            extra_observers.append(self._user_cache.create_invalidator(self._pool))
+        if extra_observers:
+            scene = scene.with_observers(*extra_observers)
 
         # 3. Resolve target entity
         entity = await resolve_entity(
