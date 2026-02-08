@@ -133,13 +133,15 @@ async def test_total_level_calculation(test_db, clean_user_state):
     user = await create_test_user(test_db, room_id="store-room")
 
     # All skills start at level 1
-    total = await UserSkill.get_total_level(test_db, user.id)
+    skills = await UserSkill.get_all(test_db, user.id)
+    total = sum(s.level for s in skills)
     assert total == SKILL_COUNT  # 5 skills * level 1 = 5
 
     # Level up attack to 5 (requires 388 XP)
     await UserSkill.grant_xp(test_db, user.id, Skill.ATTACK, xp_for_level(5))
 
-    total = await UserSkill.get_total_level(test_db, user.id)
+    skills = await UserSkill.get_all(test_db, user.id)
+    total = sum(s.level for s in skills)
     # 4 skills at level 1 + attack at level 5 = 9
     assert total == SKILL_COUNT - 1 + 5
 
