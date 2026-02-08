@@ -39,8 +39,8 @@ class SkillsObserver:
     _pool: asyncpg.Pool
     _user_id: int
     _room_id: str
-    _queued_grants: list[tuple[Skill, int]] = field(default_factory=list)
-    _results: list[XPResult] = field(default_factory=list)
+    _queued_grants: list[tuple[Skill, int, str]] = field(default_factory=list)
+    _results: list[tuple[XPResult, str]] = field(default_factory=list)
 
     def notify(self, event: GameEvent) -> None:
         """Receive an event and queue XP grants.
@@ -50,10 +50,11 @@ class SkillsObserver:
         """
         match event:
             case UserMovedEvent(user_id=uid, to_room=to_room) if uid == self._user_id:
-                self._queued_grants.append((Skill.AGILITY, AGILITY_XP_PER_MOVE))
-                self._room_id = to_room
+                self._queued_grants.append(
+                    (Skill.AGILITY, AGILITY_XP_PER_MOVE, to_room)
+                )
             case GrantXPSignal(skill=skill, amount=amount):
-                self._queued_grants.append((skill, amount))
+                self._queued_grants.append((skill, amount, self._room_id))
 
     async def flush(self) -> None:
         """Process all queued XP grants.
@@ -62,12 +63,12 @@ class SkillsObserver:
         collects the results. Event forwarding to DiscordReconciler
         is handled externally by flush_all().
         """
-        for skill, amount in self._queued_grants:
+        for skill, amount, room_id in self._queued_grants:
             try:
                 result = await UserSkill.grant_xp(
                     self._pool, self._user_id, skill, amount
                 )
-                self._results.append(result)
+                self._results.append((result, room_id))
             except Exception:
                 logger.exception(
                     "Failed to grant %d %s XP to user %d",
@@ -80,12 +81,12 @@ class SkillsObserver:
     @property
     def results(self) -> list[XPResult]:
         """XP grant results from the last flush."""
-        return self._results
+        return [r for r, _ in self._results]
 
     @property
     def level_ups(self) -> list[XPResult]:
         """Results where the user leveled up."""
-        return [r for r in self._results if r.leveled_up]
+        return [r for r, _ in self._results if r.leveled_up]
 
     def get_xp_events(self) -> list[XPGainedEvent]:
         """Build XPGainedEvent for each result."""
@@ -98,7 +99,7 @@ class SkillsObserver:
                 old_xp=r.old_xp,
                 new_xp=r.new_xp,
             )
-            for r in self._results
+            for r, _room_id in self._results
         ]
 
     def get_level_up_events(self) -> list[LevelUpEvent]:
@@ -108,8 +109,8 @@ class SkillsObserver:
                 user_id=self._user_id,
                 skill=r.skill,
                 new_level=r.new_level,
-                room_id=self._room_id,
+                room_id=room_id,
             )
-            for r in self._results
+            for r, room_id in self._results
             if r.leveled_up
         ]
