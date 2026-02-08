@@ -60,13 +60,32 @@ class SkillsReconciler:
         for evt in self._level_up_events:
             user_ids.add(evt.user_id)
 
-        # Update skills channels for affected users
+        # Fetch skills once per user and run all updates
         for user_id in user_ids:
+            skills = await UserSkill.get_all(self._pool, user_id)
+            total_level = sum(s.level for s in skills)
+
             try:
-                await self._update_skills_channel(user_id)
+                await self._update_skills_channel(user_id, skills, total_level)
             except Exception:
                 logger.exception(
                     "Failed to update skills channel for user %d",
+                    user_id,
+                )
+
+            try:
+                await self._update_nickname(user_id, total_level)
+            except Exception:
+                logger.exception(
+                    "Failed to update nickname for user %d",
+                    user_id,
+                )
+
+            try:
+                await self._update_milestone_role(user_id, total_level)
+            except Exception:
+                logger.exception(
+                    "Failed to update milestone role for user %d",
                     user_id,
                 )
 
@@ -78,26 +97,6 @@ class SkillsReconciler:
                 logger.exception(
                     "Failed to announce level-up for user %d",
                     evt.user_id,
-                )
-
-        # Update nicknames for affected users
-        for user_id in user_ids:
-            try:
-                await self._update_nickname(user_id)
-            except Exception:
-                logger.exception(
-                    "Failed to update nickname for user %d",
-                    user_id,
-                )
-
-        # Update milestone roles
-        for user_id in user_ids:
-            try:
-                await self._update_milestone_role(user_id)
-            except Exception:
-                logger.exception(
-                    "Failed to update milestone role for user %d",
-                    user_id,
                 )
 
         self._xp_events.clear()
@@ -113,9 +112,12 @@ class SkillsReconciler:
             member: Guild member to sync
         """
         user_id = member.id
+        skills = await UserSkill.get_all(self._pool, user_id)
+        total_level = sum(s.level for s in skills)
+
         try:
             await self._ensure_skills_channel(guild, user_id)
-            await self._update_skills_channel(user_id)
+            await self._update_skills_channel(user_id, skills, total_level)
         except Exception:
             logger.exception(
                 "Failed to sync skills channel for user %d",
@@ -123,12 +125,12 @@ class SkillsReconciler:
             )
 
         try:
-            await self._update_nickname(user_id)
+            await self._update_nickname(user_id, total_level)
         except Exception:
             logger.exception("Failed to sync nickname for user %d", user_id)
 
         try:
-            await self._update_milestone_role(user_id)
+            await self._update_milestone_role(user_id, total_level)
         except Exception:
             logger.exception(
                 "Failed to sync milestone role for user %d",
@@ -242,11 +244,18 @@ class SkillsReconciler:
         )
         return channel.id
 
-    async def _update_skills_channel(self, user_id: int) -> None:
+    async def _update_skills_channel(
+        self,
+        user_id: int,
+        skills: list[UserSkill],
+        total_level: int,
+    ) -> None:
         """Update the skills overview message in the user's channel.
 
         Args:
             user_id: Discord user ID
+            skills: Pre-fetched list of user skills
+            total_level: Pre-computed total level
         """
         record = await UserSkillsChannel.get(self._pool, user_id)
         if record is None:
@@ -261,9 +270,7 @@ class SkillsReconciler:
             return
 
         # Build message content
-        skills = await UserSkill.get_all(self._pool, user_id)
-        total = await UserSkill.get_total_level(self._pool, user_id)
-        content = format_skills_message(skills, total)
+        content = format_skills_message(skills, total_level)
 
         if message_id is not None:
             # Try to edit existing message
@@ -301,20 +308,20 @@ class SkillsReconciler:
                     await channel.send(message)
                     return
 
-    async def _update_nickname(self, user_id: int) -> None:
+    async def _update_nickname(self, user_id: int, total_level: int) -> None:
         """Update user's nickname with total level.
 
         Args:
             user_id: Discord user ID
+            total_level: Pre-computed total level
         """
-        total = await UserSkill.get_total_level(self._pool, user_id)
 
         for guild in self._bot.guilds:
             member = guild.get_member(user_id)
             if member is None:
                 continue
 
-            nick = format_nickname(member.display_name, total)
+            nick = format_nickname(member.display_name, total_level)
             try:
                 await member.edit(nick=nick)
             except discord.Forbidden:
@@ -323,16 +330,16 @@ class SkillsReconciler:
                     member.display_name,
                 )
 
-    async def _update_milestone_role(self, user_id: int) -> None:
+    async def _update_milestone_role(self, user_id: int, total_level: int) -> None:
         """Update milestone role for a user.
 
         Removes old milestone roles and assigns the new one.
 
         Args:
             user_id: Discord user ID
+            total_level: Pre-computed total level
         """
-        total = await UserSkill.get_total_level(self._pool, user_id)
-        target_role_name = get_milestone_role(total)
+        target_role_name = get_milestone_role(total_level)
 
         for guild in self._bot.guilds:
             member = guild.get_member(user_id)

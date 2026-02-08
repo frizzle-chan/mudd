@@ -181,27 +181,6 @@ class UserSkill:
         )
 
     @classmethod
-    async def get_total_level(cls, pool: asyncpg.Pool, user_id: int) -> int:
-        """Get the sum of all skill levels for a user.
-
-        Args:
-            pool: Database connection pool
-            user_id: Discord user ID
-
-        Returns:
-            Total level across all skills (minimum is SKILL_COUNT if all at level 1)
-        """
-        await cls.create_defaults(pool, user_id)
-        row = await pool.fetchrow(
-            """SELECT COALESCE(SUM(level), 0) AS total
-               FROM user_skills
-               WHERE user_id = $1""",
-            user_id,
-        )
-        assert row is not None
-        return int(row["total"])
-
-    @classmethod
     async def create_defaults(cls, pool: asyncpg.Pool, user_id: int) -> None:
         """Insert missing skill rows at level 1 for all registered skills.
 
