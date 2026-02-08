@@ -2,14 +2,22 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import asyncpg
 
 
+@dataclass(frozen=True, slots=True)
 class UserSkillsChannel:
-    """Lightweight model for the user_skills_channels table."""
+    """Model for the user_skills_channels table."""
+
+    user_id: int
+    channel_id: int
+    category_id: int
+    message_id: int | None
 
     @classmethod
-    async def get(cls, pool: asyncpg.Pool, user_id: int) -> dict[str, int] | None:
+    async def get(cls, pool: asyncpg.Pool, user_id: int) -> UserSkillsChannel | None:
         """Get the skills channel record for a user.
 
         Args:
@@ -17,21 +25,22 @@ class UserSkillsChannel:
             user_id: Discord user ID
 
         Returns:
-            Dict with channel_id, category_id, message_id or None
+            UserSkillsChannel or None if not found
         """
         row = await pool.fetchrow(
-            """SELECT channel_id, category_id, message_id
+            """SELECT user_id, channel_id, category_id, message_id
                FROM user_skills_channels
                WHERE user_id = $1""",
             user_id,
         )
         if row is None:
             return None
-        return {
-            "channel_id": row["channel_id"],
-            "category_id": row["category_id"],
-            "message_id": row["message_id"],
-        }
+        return cls(
+            user_id=row["user_id"],
+            channel_id=row["channel_id"],
+            category_id=row["category_id"],
+            message_id=row["message_id"],
+        )
 
     @classmethod
     async def create_or_update(
