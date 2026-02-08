@@ -6,6 +6,7 @@ and reconcile external state (e.g., Discord threads, game effects).
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Iterable
 
 import asyncpg
@@ -16,6 +17,8 @@ from mudd.observers.cache import CacheInvalidationObserver
 from mudd.observers.discord import DiscordReconciler, RoomChannelCache
 from mudd.observers.effects import EffectsObserver
 from mudd.observers.skills import SkillsObserver
+
+logger = logging.getLogger(__name__)
 
 __all__ = [
     "CacheInvalidationObserver",
@@ -58,13 +61,23 @@ def build_observers(
     return observers
 
 
-async def flush_all(observers: Iterable[Observer]) -> None:
+async def flush_all(
+    observers: Iterable[Observer],
+    *,
+    defer_announcements: bool = False,
+) -> None:
     """Flush observers with SkillsObserver -> DiscordReconciler event forwarding.
 
     Ensures flush ordering:
     1. SkillsObserver flushes first (writes XP to database)
     2. XP/level-up events are forwarded to DiscordReconciler
     3. All remaining observers flush (DiscordReconciler processes skills events)
+
+    Args:
+        observers: Observers to flush
+        defer_announcements: If True, level-up announcements are prepared
+            but not sent. The caller must call
+            DiscordReconciler.post_skill_announcements() to send them.
     """
     skills: SkillsObserver | None = None
     reconciler: DiscordReconciler | None = None
@@ -78,12 +91,22 @@ async def flush_all(observers: Iterable[Observer]) -> None:
     if skills is not None:
         await skills.flush()
         if reconciler is not None:
-            for event in skills.get_xp_events():
+            xp_events = skills.get_xp_events()
+            level_up_events = skills.get_level_up_events()
+            logger.info(
+                "flush_all forwarding %d XP events, %d level-up events",
+                len(xp_events),
+                len(level_up_events),
+            )
+            for event in xp_events:
                 reconciler.notify(event)
-            for event in skills.get_level_up_events():
+            for event in level_up_events:
                 reconciler.notify(event)
 
     # Phase 2: Flush all other observers
     for obs in observers:
         if obs is not skills:
-            await obs.flush()
+            if isinstance(obs, DiscordReconciler):
+                await obs.flush(defer_announcements=defer_announcements)
+            else:
+                await obs.flush()
