@@ -116,8 +116,23 @@ class SkillsReconciler:
         total_level = sum(s.level for s in skills)
 
         try:
-            await self._ensure_skills_channel(guild, user_id)
+            channel_id = await self._ensure_skills_channel(guild, user_id)
             await self._update_skills_channel(user_id, skills, total_level)
+
+            # Repair thread/command permissions on existing channels
+            channel = guild.get_channel(channel_id)
+            if isinstance(channel, discord.TextChannel):
+                overwrites = channel.overwrites_for(member)
+                if overwrites.create_public_threads is not False:
+                    await channel.set_permissions(
+                        member,
+                        view_channel=True,
+                        send_messages=False,
+                        create_public_threads=False,
+                        create_private_threads=False,
+                        send_messages_in_threads=False,
+                        use_application_commands=False,
+                    )
         except Exception:
             logger.exception(
                 "Failed to sync skills channel for user %d",
@@ -216,6 +231,10 @@ class SkillsReconciler:
             member: discord.PermissionOverwrite(
                 view_channel=True,
                 send_messages=False,
+                create_public_threads=False,
+                create_private_threads=False,
+                send_messages_in_threads=False,
+                use_application_commands=False,
             ),
             guild.me: discord.PermissionOverwrite(
                 view_channel=True,
