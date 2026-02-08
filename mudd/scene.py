@@ -14,9 +14,7 @@ from mudd.models.entity import EntityInstance, ResolvedEntity
 from mudd.models.interfaces import IReadableEntity, IRoom
 from mudd.models.room import EntityModal, InventoryThread, Room
 from mudd.models.user import User
-from mudd.observers import EffectsObserver
-from mudd.observers.skills import SkillsObserver
-from mudd.observers.skills_reconciler import SkillsReconciler
+from mudd.observers import EffectsObserver, build_observers
 from mudd.views import ViewEntity
 
 logger = logging.getLogger(__name__)
@@ -68,25 +66,10 @@ class Scene:
         """
         effects = EffectsObserver()
         scene = await cls.from_interaction(pool, interaction)
-        if bot is not None:
-            from mudd.observers.discord import DiscordReconciler
-
-            reconciler = DiscordReconciler(bot, pool)
-            skills_reconciler = SkillsReconciler(bot, pool)
-            skills = SkillsObserver(
-                _pool=pool,
-                _user_id=scene.user.id,
-                _room_id=scene.user.current_room,
-                _reconciler=skills_reconciler,
-            )
-            scene = scene.with_observers(effects, skills, reconciler)
-        else:
-            skills = SkillsObserver(
-                _pool=pool,
-                _user_id=scene.user.id,
-                _room_id=scene.user.current_room,
-            )
-            scene = scene.with_observers(effects, skills)
+        observers = build_observers(
+            pool, scene.user.id, scene.user.current_room, bot=bot
+        )
+        scene = scene.with_observers(effects, *observers)
         return scene
 
     @classmethod
