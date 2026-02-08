@@ -4,9 +4,6 @@ from __future__ import annotations
 
 from mudd.models.skills import UserSkill
 from mudd.skills.formatting import (
-    BAR_EMPTY,
-    BAR_FILLED,
-    BAR_LENGTH,
     MILESTONE_ROLE_NAMES,
     format_level_up_message,
     format_nickname,
@@ -16,25 +13,35 @@ from mudd.skills.formatting import (
 )
 from mudd.skills.registry import SKILL_COUNT
 from mudd.skills.xp import MAX_LEVEL
+from mudd.utils.progress_bar import SHADED
 
 
 class TestFormatProgressBar:
     def test_zero_xp_level_1(self) -> None:
         bar = format_progress_bar(0, 1)
-        assert BAR_EMPTY * BAR_LENGTH in bar
+        assert "░" in bar
         assert "0/83 XP" in bar
+        # Bar wrapped in backticks
+        assert "`" in bar
 
     def test_max_level_shows_max(self) -> None:
         bar = format_progress_bar(13_034_431, MAX_LEVEL)
         assert "MAX" in bar
-        assert BAR_FILLED * BAR_LENGTH in bar
+        assert "█" in bar
 
     def test_partial_progress(self) -> None:
         # Level 1 needs 83 XP to get to level 2
         bar = format_progress_bar(41, 1)
-        assert BAR_FILLED in bar
-        assert BAR_EMPTY in bar
+        # Should contain some filled and some empty shading
+        assert any(c in bar for c in SHADED[1:])  # at least one non-empty shade
+        assert "░" in bar  # some empty portion
         assert "41/83 XP" in bar
+
+    def test_bar_wrapped_in_backticks(self) -> None:
+        bar = format_progress_bar(0, 1)
+        # Bar portion should be wrapped in inline code
+        assert bar.startswith("`")
+        assert "`" in bar[1:]
 
 
 class TestFormatSkillsMessage:
@@ -52,47 +59,31 @@ class TestFormatSkillsMessage:
 
     def test_contains_all_skills(self) -> None:
         msg = format_skills_message(self._skills, 5)
-        # Each skill name appears at least once across the options
-        assert "Agility" in msg
-        assert "Attack" in msg
-        assert "Speech" in msg
-        assert "Vitality" in msg
-        assert "Fishing" in msg
+        assert "**Agility**" in msg
+        assert "**Attack**" in msg
+        assert "**Speech**" in msg
+        assert "**Vitality**" in msg
+        assert "**Fishing**" in msg
 
-    def test_contains_all_option_headers(self) -> None:
+    def test_two_line_layout(self) -> None:
         msg = format_skills_message(self._skills, 5)
-        assert "Option A" in msg
-        assert "Option B" in msg
-        assert "Option C" in msg
-        assert "Option D" in msg
-
-    def test_option_a_in_code_block(self) -> None:
-        msg = format_skills_message(self._skills, 5)
-        assert "```" in msg
-
-    def test_option_b_has_separator_lines(self) -> None:
-        msg = format_skills_message(self._skills, 5)
-        # Option B uses em-dash separator between name and level
+        # Each skill has an em-dash separator line
         assert "\u2014 Lv." in msg
 
-    def test_option_c_compact_no_blank_lines(self) -> None:
+    def test_compact_no_blank_lines_between_skills(self) -> None:
         msg = format_skills_message(self._skills, 5)
-        # Extract just the Option C skill lines (after header, before next header)
-        start = msg.index("Option C")
-        end = msg.index("Option D")
-        section_c = msg[start:end]
-        lines = section_c.split("\n")
-        # The skill content lines (1 through 10) should have no blanks between them
-        skill_lines = lines[1:11]  # 5 skills * 2 lines each
+        # After the header + blank line, the rest should be compact
+        lines = msg.split("\n")
+        skill_lines = lines[2:]  # skip "**Total Level: 5**" and blank line
         assert all(line.strip() for line in skill_lines)
 
-    def test_option_d_has_inline_code_xp(self) -> None:
+    def test_progress_bars_in_inline_code(self) -> None:
         msg = format_skills_message(self._skills, 5)
-        # Option D wraps XP in backticks
-        start = msg.index("Option D")
-        section_d = msg[start:]
-        assert "`" in section_d
-        assert "XP`" in section_d
+        # Each progress bar line should contain backtick-wrapped bar
+        lines = msg.split("\n")
+        bar_lines = [line for line in lines if "XP" in line]
+        for line in bar_lines:
+            assert "`" in line
 
 
 class TestFormatNickname:
