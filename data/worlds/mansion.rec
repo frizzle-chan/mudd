@@ -751,27 +751,6 @@ OnOpen: You lift the toilet lid. It's a toilet. What did you expect?
 OnClose: You close the toilet lid with a satisfying clunk.
 OnFish: {% if e.contents %}{{ effects.dispense() }}{{ effects.broadcast("**" ~ user ~ "** is fishing in the toilet...") }}You cast your line into the toilet bowl and wait...{% else %}You cast into the toilet but nothing is biting.{% endif %}
 
-Id: restroom_toilet_paper
-Name: Toilet Paper Roll
-Prototype: item
-Tags: restroom_toilet_paper_spawn
-Rarity: common
-DescriptionShort: a nearly empty {{ e.name }}
-DescriptionLong: A sad, thin toilet paper roll clinging to life. Single-ply, of course.
-OnTouch: You spin the roll. It makes a satisfying whirring sound.
-OnUse: You grab some toilet paper. It's scratchy and thin. At least there's some left.
-OnTake: {{ effects.pickup() }}{{ effects.broadcast(user ~ " yanks " ~ e ~ " off the holder.") }}You yank the {{ e.name }} off the holder.
-OnDrop: {% if container %}You stuff the {{ e.name }} into the *{{ container.name }}*.{% else %}You set the {{ e.name }} down on the floor. Gross.{% endif %}{{ effects.drop() }}{{ effects.broadcast(user ~ " drops " ~ e ~ ".") }}
-
-Id: restroom_hand_dryer
-Name: Hand Dryer
-Prototype: object
-Room: restroom
-DescriptionShort: A wall-mounted {{ e.name }} hangs near the exit.
-DescriptionLong: A Dyson Airblade hand dryer. The chrome surface is covered in water spots and fingerprints.
-OnUse: {{ effects.broadcast("**VROOOOOOM** - " ~ user ~ " uses the hand dryer.") }}You insert your hands into the Airblade. The jet of air is surprisingly violent and incredibly loud. Your hands are now dry but your ears are ringing.
-OnTouch: The surface is slightly warm from the heating element.
-
 Id: restroom_trash_can
 Name: Trash Can
 Prototype: chest
