@@ -11,7 +11,7 @@ from discord.ext import commands
 
 from mudd.events import InventorySyncEvent, UserLeftEvent, UserSyncEvent
 from mudd.models.user import User
-from mudd.observers import DiscordReconciler, RoomChannelCache
+from mudd.observers import DiscordReconciler, RoomChannelCache, build_observers
 
 if TYPE_CHECKING:
     from mudd.caches.user import UserCache
@@ -164,15 +164,14 @@ class Movement(commands.Cog):
         )
 
         try:
-            # Create observer for Discord sync
-            reconciler = DiscordReconciler(
-                cast(discord.Client, self.bot),
+            # Build standard observers (DiscordReconciler + SkillsObserver)
+            observers = build_observers(
                 self._pool,
+                user.id,
+                user.current_room,
+                bot=cast(discord.Client, self.bot),
                 room_cache=self.room_cache,
             )
-
-            # Attach observers and move (move_to clears focus internally)
-            observers = [reconciler]
             if self._user_cache is not None:
                 observers.append(self._user_cache.create_invalidator(self._pool))
             user_with_observers = user.with_observers(*observers)

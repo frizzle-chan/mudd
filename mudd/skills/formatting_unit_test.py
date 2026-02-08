@@ -53,12 +53,12 @@ class TestFormatSkillsMessage:
         UserSkill(user_id=1, skill="fishing", xp=0, level=1),
     ]
 
-    def test_contains_total_level(self) -> None:
-        msg = format_skills_message(self._skills, 5)
-        assert "**Total Level: 5**" in msg
+    def test_contains_heading(self) -> None:
+        msg = format_skills_message(self._skills, 5, "Alice")
+        assert msg.startswith("# Alice\n")
 
     def test_contains_all_skills(self) -> None:
-        msg = format_skills_message(self._skills, 5)
+        msg = format_skills_message(self._skills, 5, "Alice")
         assert "**Agility**" in msg
         assert "**Attack**" in msg
         assert "**Speech**" in msg
@@ -66,19 +66,21 @@ class TestFormatSkillsMessage:
         assert "**Fishing**" in msg
 
     def test_two_line_layout(self) -> None:
-        msg = format_skills_message(self._skills, 5)
-        # Each skill has an em-dash separator line
-        assert "\u2014 Lv." in msg
+        msg = format_skills_message(self._skills, 5, "Alice")
+        # Each skill uses "LV" prefix for level
+        assert "LV1" in msg
 
-    def test_compact_no_blank_lines_between_skills(self) -> None:
-        msg = format_skills_message(self._skills, 5)
-        # After the header + blank line, the rest should be compact
+    def test_skills_separated_by_blank_lines(self) -> None:
+        msg = format_skills_message(self._skills, 5, "Alice")
+        # Skills are separated by blank lines for readability
         lines = msg.split("\n")
-        skill_lines = lines[2:]  # skip "**Total Level: 5**" and blank line
-        assert all(line.strip() for line in skill_lines)
+        skill_blocks = [i for i, line in enumerate(lines) if line.startswith("**")]
+        # Each skill block should have a blank line after its progress bar
+        for idx in skill_blocks[:-1]:
+            assert lines[idx + 2] == ""
 
     def test_progress_bars_in_inline_code(self) -> None:
-        msg = format_skills_message(self._skills, 5)
+        msg = format_skills_message(self._skills, 5, "Alice")
         # Each progress bar line should contain backtick-wrapped bar
         lines = msg.split("\n")
         bar_lines = [line for line in lines if "XP" in line]

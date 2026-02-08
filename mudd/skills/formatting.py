@@ -53,7 +53,9 @@ def format_progress_bar(current_xp: int, level: int) -> str:
     return f"`{bar}` {xp_in_level}/{xp_needed} XP"
 
 
-def format_skills_message(skills: list[UserSkill], total_level: int) -> str:
+def format_skills_message(
+    skills: list[UserSkill], total_level: int, display_name: str
+) -> str:
     """Format the full skills overview message.
 
     Uses a compact two-line layout per skill with a shaded progress bar
@@ -62,11 +64,12 @@ def format_skills_message(skills: list[UserSkill], total_level: int) -> str:
     Args:
         skills: List of UserSkill instances
         total_level: Sum of all skill levels
+        display_name: Player's display name
 
     Returns:
         Formatted Discord message string
     """
-    lines = [f"**Total Level: {total_level}**", ""]
+    lines = [f"# {display_name}", ""]
 
     skill_map = {s.skill: s for s in skills}
 
@@ -81,10 +84,12 @@ def format_skills_message(skills: list[UserSkill], total_level: int) -> str:
 
         bar = format_progress_bar(xp, level)
         display = skill_enum.display_name
-        lines.append(f"**{display}** \u2014 Lv. {level}")
+        lines.append(f"**{display}** LV{level}")
         lines.append(bar)
+        lines.append("")
 
-    return "\n".join(lines)
+    # newline at end to (edited) goes to bottom
+    return "\n".join(lines) + "\n-# -ˋˏ ༻❁༺ ˎˊ-"
 
 
 def format_nickname(display_name: str, total_level: int) -> str:

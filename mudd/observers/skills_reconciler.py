@@ -289,7 +289,9 @@ class SkillsReconciler:
             return
 
         # Build message content
-        content = format_skills_message(skills, total_level)
+        member = channel.guild.get_member(user_id)
+        display_name = member.display_name if member else str(user_id)
+        content = format_skills_message(skills, total_level, display_name)
 
         if message_id is not None:
             # Try to edit existing message
