@@ -54,7 +54,7 @@ class UserSkill:
         Returns:
             List of UserSkill instances for all registered skills
         """
-        await cls.ensure_all_skills(pool, user_id)
+        await cls.create_defaults(pool, user_id)
         rows = await pool.fetch(
             """SELECT user_id, skill, xp, level
                FROM user_skills
@@ -191,7 +191,7 @@ class UserSkill:
         Returns:
             Total level across all skills (minimum is SKILL_COUNT if all at level 1)
         """
-        await cls.ensure_all_skills(pool, user_id)
+        await cls.create_defaults(pool, user_id)
         row = await pool.fetchrow(
             """SELECT COALESCE(SUM(level), 0) AS total
                FROM user_skills
@@ -202,18 +202,18 @@ class UserSkill:
         return int(row["total"])
 
     @classmethod
-    async def ensure_all_skills(cls, pool: asyncpg.Pool, user_id: int) -> None:
+    async def create_defaults(cls, pool: asyncpg.Pool, user_id: int) -> None:
         """Insert missing skill rows at level 1 for all registered skills.
 
         Args:
             pool: Database connection pool
             user_id: Discord user ID
         """
-        for skill in Skill:
-            await pool.execute(
-                """INSERT INTO user_skills (user_id, skill, xp, level)
-                   VALUES ($1, $2, 0, 1)
-                   ON CONFLICT (user_id, skill) DO NOTHING""",
-                user_id,
-                str(skill),
-            )
+        skill_names = [str(s) for s in Skill]
+        await pool.execute(
+            """INSERT INTO user_skills (user_id, skill, xp, level)
+               SELECT $1, unnest($2::text[]), 0, 1
+               ON CONFLICT (user_id, skill) DO NOTHING""",
+            user_id,
+            skill_names,
+        )
