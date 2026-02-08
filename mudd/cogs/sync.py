@@ -13,6 +13,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 import asyncpg
+import discord
 from discord.ext import commands, tasks
 
 if TYPE_CHECKING:
@@ -259,7 +260,7 @@ class Sync(commands.Cog):
         if fail_fast:
             logger.info("Initial sync complete")
 
-    async def _sync_skills(self, guild, pool: asyncpg.Pool) -> None:
+    async def _sync_skills(self, guild: discord.Guild, pool: asyncpg.Pool) -> None:
         """Sync skills channels, nicknames, and milestone roles.
 
         Args:
