@@ -87,6 +87,7 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 | `on_open` | TEXT | Handler response for open action (NULL = inherit from prototype) |
 | `on_close` | TEXT | Handler response for close action (NULL = inherit from prototype) |
 | `on_drop` | TEXT | Handler response for drop action (NULL = inherit from prototype) |
+| `on_fish` | TEXT | Handler response for fish action (NULL = inherit from prototype) |
 | `contents_visible` | BOOLEAN | Whether child entities appear in room descriptions (NULL = inherit, TRUE = auto-list, FALSE = hidden until examined) |
 | `rarity` | rarity NOT NULL DEFAULT 'none' | Item rarity affecting name display and pickup behavior |
 
@@ -301,7 +302,7 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 | `verb` | TEXT (PK) | The verb word (e.g., 'smash', 'look') |
 | `action` | verb_action NOT NULL | The action handler type to invoke |
 
-**Verb Action Enum:** `on_look`, `on_touch`, `on_attack`, `on_use`, `on_take`, `on_open`, `on_close`, `on_drop`
+**Verb Action Enum:** `on_look`, `on_touch`, `on_attack`, `on_use`, `on_take`, `on_open`, `on_close`, `on_drop`, `on_fish`
 
 **Indexes:**
 - Primary key on `verb`
@@ -319,7 +320,7 @@ The `resolve_entity(target_id TEXT)` function resolves entity properties by walk
 - First non-NULL value wins for each property
 - Supports up to 10 levels of inheritance depth (prevents infinite loops from circular references)
 - Used to materialize the final entity state including inherited properties
-- Returns: `id`, `name`, `description_short`, `description_long`, `on_*` handlers (including `on_open`, `on_close`), `contents_visible`, `rarity`
+- Returns: `id`, `name`, `description_short`, `description_long`, `on_*` handlers (including `on_open`, `on_close`, `on_fish`), `contents_visible`, `rarity`
 
 ## Sync System
 
@@ -510,6 +511,7 @@ Abstract base class with:
 | `DropCommand` | `on_drop` |
 | `OpenCommand` | `on_open` |
 | `CloseCommand` | `on_close` |
+| `FishCommand` | `on_fish` |
 
 ### Factory
 
@@ -553,7 +555,7 @@ Syncs Discord state when entities change:
 
 ## Template Rendering
 
-Entity action handlers (`on_look`, `on_touch`, `on_attack`, `on_use`, `on_take`, `on_open`, `on_close`) are Jinja2 templates rendered at runtime.
+Entity action handlers (`on_look`, `on_touch`, `on_attack`, `on_use`, `on_take`, `on_open`, `on_close`, `on_fish`) are Jinja2 templates rendered at runtime.
 
 ### Template Context
 

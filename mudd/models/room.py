@@ -115,6 +115,7 @@ class Room:
             on_open=on_look,
             on_close=on_look,
             on_drop=on_look,
+            on_fish=on_look,
             contents_visible=True,
             rarity="none",
         )

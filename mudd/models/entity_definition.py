@@ -38,6 +38,7 @@ class EntityDefinition:
     on_open: str | None
     on_close: str | None
     on_drop: str | None
+    on_fish: str | None
     contents_visible: bool | None
     rarity: str
     tags: list[str] | None
@@ -268,10 +269,10 @@ class EntityDefinition:
                         id, name, prototype_id,
                         description_short, description_long,
                         on_look, on_touch, on_attack, on_use, on_take,
-                        on_open, on_close, on_drop,
+                        on_open, on_close, on_drop, on_fish,
                         contents_visible, rarity
                     ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
-                              $13, $14, $15::rarity)
+                              $13, $14, $15, $16::rarity)
                     ON CONFLICT (id) DO UPDATE SET
                         name = $2,
                         prototype_id = $3,
@@ -285,8 +286,9 @@ class EntityDefinition:
                         on_open = $11,
                         on_close = $12,
                         on_drop = $13,
-                        contents_visible = $14,
-                        rarity = $15::rarity
+                        on_fish = $14,
+                        contents_visible = $15,
+                        rarity = $16::rarity
                     """,
                     entity.id,
                     entity.name,
@@ -301,6 +303,7 @@ class EntityDefinition:
                     entity.on_open,
                     entity.on_close,
                     entity.on_drop,
+                    entity.on_fish,
                     entity.contents_visible,
                     entity.rarity,
                 )
