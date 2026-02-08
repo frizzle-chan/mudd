@@ -386,6 +386,16 @@ OnAttack: {{ effects.destroy() }}{{ effects.broadcast("**" ~ user ~ "** smashes 
 # Skills XP test fixtures
 # ----------------------------------------------------------------------------
 
+Id: test_target_dummy
+Name: Test Target Dummy
+Prototype: object
+Room: store-room
+Rarity: common
+Tags: test_target_dummy_spawn
+DescriptionShort: a battered {{ e.name }}
+DescriptionLong: A training dummy for testing attack destruction.
+OnAttack: {{ effects.destroy() }}You smash the {{ e.name }} to pieces!
+
 Id: test_apple
 Name: Test Apple
 Prototype: object
@@ -556,6 +566,12 @@ TagQuery: test_painting_spawn
 MaxCount: 2
 RespawnIntervalMinutes: 1
 NoDuplicates: yes
+
+Id: test_target_dummy_pool
+Room: store-room
+TagQuery: test_target_dummy_spawn
+MaxCount: 1
+RespawnIntervalMinutes: 1
 
 Id: test_apple_pool
 Room: store-room

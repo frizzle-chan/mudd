@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 
 # Implicit XP amounts
 AGILITY_XP_PER_MOVE: int = 28
+ATTACK_XP_PER_DESTROY: int = 100
 
 
 @dataclass

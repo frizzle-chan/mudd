@@ -8,6 +8,7 @@ from mudd.models.skills import UserSkill
 from mudd.skills.registry import SKILL_COUNT, Skill
 from mudd.skills.xp import MAX_LEVEL, xp_for_level
 from mudd.utils.progress_bar import DEFAULT_SIZE, shaded_bar
+from mudd.views import ViewSkill
 
 # Milestone role names and thresholds
 MILESTONE_ROLES: list[tuple[str, int]] = [
@@ -83,8 +84,7 @@ def format_skills_message(
             xp = user_skill.xp
 
         bar = format_progress_bar(xp, level)
-        display = skill_enum.display_name
-        lines.append(f"**{display}** LV{level}")
+        lines.append(f"{ViewSkill(skill_enum)} LV{level}")
         lines.append(bar)
         lines.append("")
 
@@ -149,8 +149,9 @@ def format_level_up_message(
     """
     # Get display name from Skill enum if possible
     try:
-        skill_display = Skill(skill).display_name
+        skill_view = ViewSkill(Skill(skill))
     except ValueError:
-        skill_display = skill.capitalize()
+        fallback = skill.capitalize()
+        return f"**{display_name}** advanced **{fallback}** to level {new_level}!"
 
-    return f"**{display_name}** advanced **{skill_display}** to level {new_level}!"
+    return f"**{display_name}** advanced {skill_view} to level {new_level}!"

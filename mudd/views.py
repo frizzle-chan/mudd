@@ -7,6 +7,7 @@ from typing import Any
 
 from mudd.events import EffectsCollector
 from mudd.models import IReadableEntity, IUser
+from mudd.skills.registry import SKILL_EMOJI, Skill
 from mudd.utils import async_cached_property
 from mudd.utils.text import RARITY_EMOJI
 
@@ -50,6 +51,29 @@ class ViewEntity:
             return ""
         wrapped = [ViewEntity(item) for item in contents]
         return "\n".join(f"- {item.name}" for item in wrapped)
+
+
+class ViewSkill:
+    """View-friendly wrapper for Skill that formats output for display."""
+
+    def __init__(self, skill: Skill):
+        self._skill = skill
+
+    def __str__(self) -> str:
+        """String representation: name with emoji and markdown bold."""
+        return self.name
+
+    @property
+    def name(self) -> str:
+        """Skill name formatted with emoji and markdown bold."""
+        return f"**{self.display_name}**"
+
+    @property
+    def display_name(self) -> str:
+        """Skill name formatted with emoji prefix."""
+        emoji = SKILL_EMOJI.get(self._skill, "")
+        name = self._skill.display_name
+        return f"{emoji} {name}" if emoji else name
 
 
 class ViewUser:
