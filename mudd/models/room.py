@@ -449,7 +449,14 @@ class EntityModal(_DefaultVisibleEntities):
         Returns:
             List of EntityInstance objects in the room
         """
-        return [self.entity_instance, *await self.entity_instance.get_contents()]
+        contents = await self.entity_instance.get_contents()
+        logger.debug(
+            "EntityModal.get_entities() for container=%s returned %d items: %s",
+            self.entity_instance.entity.id,
+            len(contents),
+            [e.entity.name for e in contents]
+        )
+        return [self.entity_instance, *contents]
 
     async def get_drop_target(self) -> EntityModal:
         """Return the room where dropped items should land."""
