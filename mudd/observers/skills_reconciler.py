@@ -137,6 +137,7 @@ class SkillsReconciler:
             member: Guild member to sync
         """
         user_id = member.id
+        await UserSkill.create_defaults(self._pool, user_id)
         skills = await UserSkill.get_all(self._pool, user_id)
         total_level = sum(s.level for s in skills)
 

@@ -45,7 +45,7 @@ class UserSkill:
 
     @classmethod
     async def get_all(cls, pool: asyncpg.Pool, user_id: int) -> list[UserSkill]:
-        """Get all skills for a user, inserting defaults for missing skills.
+        """Get all skills for a user.
 
         Args:
             pool: Database connection pool
@@ -54,7 +54,6 @@ class UserSkill:
         Returns:
             List of UserSkill instances for all registered skills
         """
-        await cls.create_defaults(pool, user_id)
         rows = await pool.fetch(
             """SELECT user_id, skill, xp, level
                FROM user_skills
@@ -73,8 +72,10 @@ class UserSkill:
         ]
 
     @classmethod
-    async def get(cls, pool: asyncpg.Pool, user_id: int, skill: str) -> UserSkill:
-        """Get a single skill for a user, inserting default if missing.
+    async def get(
+        cls, pool: asyncpg.Pool, user_id: int, skill: str
+    ) -> UserSkill | None:
+        """Get a single skill for a user.
 
         Args:
             pool: Database connection pool
@@ -82,15 +83,8 @@ class UserSkill:
             skill: Skill name
 
         Returns:
-            UserSkill instance
+            UserSkill instance, or None if not found
         """
-        await pool.execute(
-            """INSERT INTO user_skills (user_id, skill, xp, level)
-               VALUES ($1, $2, 0, 1)
-               ON CONFLICT (user_id, skill) DO NOTHING""",
-            user_id,
-            skill,
-        )
         row = await pool.fetchrow(
             """SELECT user_id, skill, xp, level
                FROM user_skills
@@ -98,7 +92,8 @@ class UserSkill:
             user_id,
             skill,
         )
-        assert row is not None  # We just inserted if missing
+        if row is None:
+            return None
         return cls(
             user_id=row["user_id"],
             skill=row["skill"],
@@ -127,15 +122,6 @@ class UserSkill:
             raise ValueError(f"XP amount must be positive, got {amount}")
 
         async with pool.acquire() as conn, conn.transaction():
-            # Ensure the skill row exists
-            await conn.execute(
-                """INSERT INTO user_skills (user_id, skill, xp, level)
-                   VALUES ($1, $2, 0, 1)
-                   ON CONFLICT (user_id, skill) DO NOTHING""",
-                user_id,
-                skill,
-            )
-
             # Lock the row to prevent concurrent read-then-write races
             row = await conn.fetchrow(
                 """SELECT xp, level FROM user_skills
@@ -144,7 +130,7 @@ class UserSkill:
                 user_id,
                 skill,
             )
-            assert row is not None  # We just inserted if missing
+            assert row is not None  # Skill rows created at user creation time
 
             old_xp = int(row["xp"])
             old_level = int(row["level"])

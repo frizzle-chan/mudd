@@ -20,6 +20,7 @@ from mudd.events import (
 )
 from mudd.models.entity import EntityInstance
 from mudd.models.room import Room
+from mudd.models.skills import UserSkill
 
 FOCUS_TIMEOUT_MINUTES = 5
 STARTING_BALANCE = 1000
@@ -152,8 +153,11 @@ class User:
             default.id,
         )
 
+        user_id = row["id"]
+        await UserSkill.create_defaults(pool, user_id)
+
         return cls(
-            id=row["id"],
+            id=user_id,
             current_room=row["current_room"],
             display_name=row["display_name"],
             _pool=pool,
@@ -192,8 +196,11 @@ class User:
         # row can't be None here since we're doing an INSERT with RETURNING
         assert row is not None
 
+        user_id = row["id"]
+        await UserSkill.create_defaults(pool, user_id)
+
         return cls(
-            id=row["id"],
+            id=user_id,
             current_room=row["current_room"],
             display_name=row["display_name"],
             _pool=pool,
@@ -486,6 +493,7 @@ class User:
             user_id,
             default_room,
         )
+        await UserSkill.create_defaults(pool, user_id)
 
     @classmethod
     async def get_current_room(cls, pool: asyncpg.Pool, user_id: int) -> str | None:

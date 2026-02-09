@@ -22,6 +22,7 @@ async def test_agility_xp_grant(test_db, clean_user_state):
 
     # Check initial agility XP
     skill_before = await UserSkill.get(test_db, user.id, Skill.AGILITY)
+    assert skill_before is not None
     assert skill_before.xp == 0
     assert skill_before.level == 1
 
@@ -35,6 +36,7 @@ async def test_agility_xp_grant(test_db, clean_user_state):
 
     # Verify persisted
     skill_after = await UserSkill.get(test_db, user.id, Skill.AGILITY)
+    assert skill_after is not None
     assert skill_after.xp == 28
     assert skill_after.level == 1
 
@@ -45,6 +47,7 @@ async def test_speech_xp_grant(test_db, clean_user_state):
 
     # Check initial speech XP
     skill_before = await UserSkill.get(test_db, user.id, Skill.SPEECH)
+    assert skill_before is not None
     assert skill_before.xp == 0
     assert skill_before.level == 1
 
@@ -60,6 +63,7 @@ async def test_speech_xp_grant(test_db, clean_user_state):
 
     # Verify persisted
     skill_after = await UserSkill.get(test_db, user.id, Skill.SPEECH)
+    assert skill_after is not None
     assert skill_after.xp == SPEECH_XP_PER_MESSAGE
     assert skill_after.level == 1
 
@@ -77,6 +81,7 @@ async def test_food_grants_vitality_xp(test_db, clean_user_state):
 
     # Check initial vitality XP
     skill_before = await UserSkill.get(test_db, user.id, Skill.VITALITY)
+    assert skill_before is not None
     assert skill_before.xp == 0
 
     # Use the apple (triggers grant_xp via template effect)
@@ -99,6 +104,7 @@ async def test_food_grants_vitality_xp(test_db, clean_user_state):
 
     # Verify XP persisted in database
     skill_after = await UserSkill.get(test_db, user.id, Skill.VITALITY)
+    assert skill_after is not None
     assert skill_after.xp == 100
     assert skill_after.level == 2
 
@@ -116,6 +122,7 @@ async def test_level_up_detection(test_db, clean_user_state):
 
     # Verify in database
     skill = await UserSkill.get(test_db, user.id, Skill.ATTACK)
+    assert skill is not None
     assert skill.level == 2
     assert skill.xp == 83
 
@@ -134,6 +141,7 @@ async def test_multiple_level_ups(test_db, clean_user_state):
 
     # Verify in database
     skill = await UserSkill.get(test_db, user.id, Skill.SPEECH)
+    assert skill is not None
     assert skill.level == 10
     assert skill.xp == xp_for_10
 
@@ -151,6 +159,7 @@ async def test_xp_cap_enforcement(test_db, clean_user_state):
 
     # Verify in database
     skill = await UserSkill.get(test_db, user.id, Skill.FISHING)
+    assert skill is not None
     assert skill.xp == MAX_XP
     assert skill.level == 99
 
@@ -198,6 +207,7 @@ async def test_xp_persists_across_actions(test_db, clean_user_state):
 
     # Verify XP still there
     skill = await UserSkill.get(test_db, user.id, Skill.AGILITY)
+    assert skill is not None
     assert skill.xp == 50
 
 
@@ -226,6 +236,7 @@ async def test_cumulative_xp_from_multiple_actions(test_db, clean_user_state):
     await UserSkill.grant_xp(test_db, user.id, Skill.AGILITY, 28)
 
     skill = await UserSkill.get(test_db, user.id, Skill.AGILITY)
+    assert skill is not None
     assert skill.xp == 56
 
 
@@ -258,6 +269,7 @@ async def test_movement_grants_agility_xp(test_db, clean_user_state):
 
     # Verify no agility XP before moving
     skill_before = await UserSkill.get(test_db, user.id, Skill.AGILITY)
+    assert skill_before is not None
     assert skill_before.xp == 0
     assert skill_before.level == 1
 
@@ -274,6 +286,7 @@ async def test_movement_grants_agility_xp(test_db, clean_user_state):
 
     # Verify agility XP persisted in the database
     skill_after = await UserSkill.get(test_db, user.id, Skill.AGILITY)
+    assert skill_after is not None
     assert skill_after.xp == AGILITY_XP_PER_MOVE
     assert skill_after.level == 1
 
@@ -292,6 +305,7 @@ async def test_attack_destroy_grants_attack_xp(test_db, clean_user_state):
 
     # Check initial attack XP
     skill_before = await UserSkill.get(test_db, user.id, Skill.ATTACK)
+    assert skill_before is not None
     assert skill_before.xp == 0
     assert skill_before.level == 1
 
@@ -317,5 +331,6 @@ async def test_attack_destroy_grants_attack_xp(test_db, clean_user_state):
 
     # Verify XP persisted in database
     skill_after = await UserSkill.get(test_db, user.id, Skill.ATTACK)
+    assert skill_after is not None
     assert skill_after.xp == 25
     assert skill_after.level == 1
