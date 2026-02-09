@@ -7,5 +7,6 @@
 !main.py
 !mudd/
 !migrations/
+!data/horses/
 !data/verbs/
 !data/worlds/
