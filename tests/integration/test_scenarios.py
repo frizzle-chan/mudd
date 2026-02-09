@@ -524,6 +524,25 @@ async def test_painting_visible_on_table_and_destroyable(test_db, clean_user_sta
     assert not any(e.entity.name == "Test Painting" for e in inv)
 
 
+async def test_room_look_nests_visible_container_contents(test_db, clean_user_state):
+    """Looking at a room shows container contents indented under the container."""
+    user = await create_test_user(test_db, room_id="store-room")
+
+    # Look at the room
+    result = await act(test_db, user.id, LookCommand(), "room://store-room")
+
+    # Test Table (contents_visible=yes) should have Test Painting nested under it
+    assert "- **Test Table**\n  - **Test Painting \U0001f7e2**" in result.output
+
+    # Top-level entities should NOT be indented
+    assert "- **Cardboard Box**" in result.output
+
+    # Painting should only appear nested, not as a top-level entry
+    lines = result.output.split("\n")
+    painting_lines = [line for line in lines if "Test Painting" in line]
+    assert all(line.startswith("  ") for line in painting_lines)
+
+
 async def test_empty_crate(test_db, clean_user_state):
     """Opening an empty container shows 'empty' message."""
     user = await create_test_user(test_db, room_id="store-room")
