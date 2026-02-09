@@ -20,7 +20,7 @@ from mudd.commands import ActionCommand
 from mudd.events import Observer
 from mudd.events.types import GameEvent
 from mudd.models import EntityInstance, Room, RoomEntityInstance, User
-from mudd.observers import EffectsObserver
+from mudd.observers import EffectsObserver, flush_all
 from mudd.observers.skills import SkillsObserver
 from mudd.scene import Scene
 
@@ -193,7 +193,6 @@ async def move(
 
     user_with_obs = fresh.with_observers(*observers)
     await user_with_obs.move_to(room_id, guild_id=guild_id)
-    for obs in observers:
-        await obs.flush()
+    await flush_all(observers)
 
     return MoveResult(reconciler=reconciler, skills=skills)
