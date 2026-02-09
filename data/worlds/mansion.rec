@@ -815,9 +815,9 @@ Room: restroom
 ContentsVisible: no
 DescriptionShort: A metal {{ e.name }} sits in the corner.
 DescriptionLong: A stainless steel trash can with a swinging lid. It's overflowing with crumpled paper towels.
-OnOpen: You peer into the {{ e.name }}, pushing aside damp paper towels.{% if e.contents %} You spot:
+OnOpen: {{ effects.set_focus() }}You peer into the {{ e.name }}, pushing aside damp paper towels.{% if e.contents %} You spot:
 + {{ e.contents }}{% else %} Nothing but garbage.{% endif %}
-OnClose: You let the lid swing shut.
+OnClose: {{ effects.clear_focus() }}You let the lid swing shut.
 OnTouch: The metal is cold and slightly damp.
 
 # ----------------------------------------------------------------------------
