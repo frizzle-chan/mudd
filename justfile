@@ -1,4 +1,4 @@
-default: lint format types entities verbs squawk vulture
+default: lint format types entities horses verbs squawk vulture
 
 test:
     uv run pytest
@@ -30,6 +30,10 @@ entities:
         recfix --check "$file"
         uv run scripts/validate_world.py "$file"
     done
+
+horses:
+    cat data/horses/*.rec | recfix --check
+    uv run scripts/validate_horses.py
 
 verbs:
     uv run scripts/validate_verbs.py

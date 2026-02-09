@@ -59,6 +59,11 @@ jobs:
             uv run scripts/validate_world.py "$file"
           done
 
+      - name: Validate horse definitions
+        run: |
+          cat data/horses/*.rec | recfix --check
+          uv run scripts/validate_horses.py
+
       - name: Validate verb word lists
         run: uv run scripts/validate_verbs.py
 

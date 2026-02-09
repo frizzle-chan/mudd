@@ -22,6 +22,10 @@ pre-commit:
       glob: "migrations/*.sql"
       run: uv run squawk {staged_files}
 
+    - name: horse definitions check
+      glob: "data/horses/*.rec"
+      run: just horses
+
     - name: verb duplicates check
       glob: "data/verbs/*.txt"
       run: just verbs
