@@ -115,6 +115,44 @@ class PermissionReconciler:
                 f"permissions for {member.id}: {e}"
             )
 
+    async def _revoke_stale_permissions(
+        self,
+        guild: discord.Guild,
+        member: discord.Member,
+        current_room: str,
+    ) -> None:
+        """Revoke view_channel from all MUD rooms except the current one."""
+        if self.room_cache is None:
+            return
+        for channel in self.room_cache.get_mud_locations(guild):
+            room_name = self.room_cache.get_room_for_channel(channel.id)
+            if room_name == current_room:
+                continue
+
+            overwrites = channel.overwrites_for(member)
+            if overwrites.view_channel is True:
+                try:
+                    await channel.set_permissions(
+                        member,
+                        overwrite=None,
+                        reason="MUDD sync - revoking stale permission",
+                    )
+                    logger.debug(
+                        f"Revoked stale permission for {member.id} on {channel.name}"
+                    )
+                except discord.HTTPException as e:
+                    logger.error(
+                        f"Failed to revoke stale permissions on {channel.id}: {e}"
+                    )
+
+                await self._set_voice_permissions(
+                    channel,
+                    member,
+                    overwrite=None,
+                    reason="MUDD sync - revoking stale permission",
+                    disconnect_if_leaving=True,
+                )
+
     async def _sync_user_location(
         self, guild: discord.Guild, event: UserLocationSyncEvent
     ) -> None:
@@ -140,35 +178,7 @@ class PermissionReconciler:
         # Phase 1: Revoke stale permissions
         if event.from_room is None:
             # Full sync mode: revoke permissions from ALL rooms except current
-            for channel in self.room_cache.get_mud_locations(guild):
-                room_name = self.room_cache.get_room_for_channel(channel.id)
-                if room_name == event.to_room:
-                    continue
-
-                overwrites = channel.overwrites_for(member)
-                if overwrites.view_channel is True:
-                    try:
-                        await channel.set_permissions(
-                            member,
-                            overwrite=None,
-                            reason="MUDD sync - revoking stale permission",
-                        )
-                        logger.debug(
-                            f"Revoked stale permission for {member.id} "
-                            f"on {channel.name}"
-                        )
-                    except discord.HTTPException as e:
-                        logger.error(
-                            f"Failed to revoke stale permissions on {channel.id}: {e}"
-                        )
-
-                    await self._set_voice_permissions(
-                        channel,
-                        member,
-                        overwrite=None,
-                        reason="MUDD sync - revoking stale permission",
-                        disconnect_if_leaving=True,
-                    )
+            await self._revoke_stale_permissions(guild, member, event.to_room)
         else:
             # Normal movement: just revoke from old channel
             old_channel_id = self.room_cache.get_channel_for_room(event.from_room)
@@ -268,6 +278,9 @@ class PermissionReconciler:
                         ),
                         reason="MUDD - user sync",
                     )
+
+        # Revoke stale permissions from rooms user is no longer in
+        await self._revoke_stale_permissions(guild, member, user.current_room)
 
         logger.debug(
             f"Synced user {event.user_id} (display_name={event.display_name}) "

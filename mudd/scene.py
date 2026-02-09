@@ -14,7 +14,7 @@ from mudd.models.entity import EntityInstance, ResolvedEntity
 from mudd.models.interfaces import IReadableEntity, IRoom
 from mudd.models.room import EntityModal, InventoryThread, Room
 from mudd.models.user import User
-from mudd.observers import EffectsObserver
+from mudd.observers import EffectsObserver, build_observers, flush_all, post_flush_all
 from mudd.views import ViewEntity
 
 logger = logging.getLogger(__name__)
@@ -64,15 +64,12 @@ class Scene:
         Returns:
             Scene with observers attached
         """
-        effects = EffectsObserver()
         scene = await cls.from_interaction(pool, interaction)
-        if bot is not None:
-            from mudd.observers.discord import DiscordReconciler
-
-            reconciler = DiscordReconciler(bot, pool)
-            scene = scene.with_observers(effects, reconciler)
-        else:
-            scene = scene.with_observers(effects)
+        observers = build_observers(
+            pool, scene.user.id, scene.user.current_room, bot=bot
+        )
+        effects = EffectsObserver(_forward_targets=tuple(observers))
+        scene = scene.with_observers(effects, *observers)
         return scene
 
     @classmethod
@@ -179,8 +176,8 @@ class Scene:
         Call this after the response is sent to execute any pending
         side effects collected during command execution.
         """
-        for observer in self._observers:
-            await observer.flush()
+        await flush_all(self._observers)
+        await post_flush_all(self._observers)
 
     async def _take_item(self, item: IReadableEntity) -> ActionResult:
         """Execute TakeCommand on an item using a sub-scene.
@@ -211,8 +208,9 @@ class Scene:
 
         result = await sub_scene.execute(TakeCommand(), item)
 
-        # Merge broadcasts back so the cog can send them
+        # Merge broadcasts and XP grants back so the parent can process them
         parent_effects._broadcasts.extend(sub_effects.broadcasts)
+        parent_effects._xp_grants.extend(sub_effects._xp_grants)
 
         return result
 

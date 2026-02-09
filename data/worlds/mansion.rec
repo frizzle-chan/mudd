@@ -203,8 +203,27 @@ OnDrop: {% if container %}You put the {{ e.name }} into the *{{ container.name }
 Id: beverage
 Name: beverage
 Prototype: item
-OnUse: You crack open the {{ e.name }} and take a refreshing sip. It restores health.
+OnUse: {{ effects.grant_xp("vitality", 100) }}{{ effects.destroy() }}{{ effects.broadcast(user ~ " drinks " ~ e ~ ".") }}You crack open the {{ e.name }} and take a refreshing sip. It restores health.
+OnAttack: {{ effects.grant_xp("attack", 25) }}{{ effects.destroy() }}{{ effects.broadcast(user ~ " smashes " ~ e ~ "!") }}You smash the {{ e.name }}. Liquid goes everywhere.
 OnTake: {{ effects.pickup() }}{{ effects.broadcast(user ~ " grabs " ~ e ~ ".") }}You grab a {{ e.name }}.
+
+Id: beverage_uncommon
+Name: beverage (uncommon)
+Prototype: beverage
+Rarity: uncommon
+OnAttack: {{ effects.grant_xp("attack", 50) }}{{ effects.destroy() }}{{ effects.broadcast(user ~ " chucks " ~ e ~ " at the wall!") }}You chuck the {{ e.name }} at the wall. It pops on impact.
+
+Id: beverage_rare
+Name: beverage (rare)
+Prototype: beverage
+Rarity: rare
+OnAttack: {{ effects.grant_xp("attack", 100) }}{{ effects.destroy() }}{{ effects.broadcast(user ~ " smashes " ~ e ~ " on the floor!") }}You smash the {{ e.name }} on the floor. Liquid and glass everywhere. That was a good one, too.
+
+Id: beverage_legendary
+Name: beverage (legendary)
+Prototype: beverage
+Rarity: legendary
+OnAttack: {{ effects.grant_xp("attack", 400) }}{{ effects.destroy() }}{{ effects.broadcast(user ~ " smashes " ~ e ~ "! It was really expensive.") }}You smash the {{ e.name }}. The liquid pools on the floor. That was really, really expensive.
 
 Id: wallet
 Name: Wallet
@@ -353,8 +372,38 @@ Name: fish
 Prototype: item
 Rarity: common
 OnTouch: The {{ e.name }} flops against your hand. It's slimy.
-OnTake: {{ effects.pickup() }}{{ effects.broadcast("**" ~ user ~ "** catches " ~ e ~ "!") }}You pull the {{ e.name }} out. Got it!
+OnTake: {{ effects.grant_xp("fishing", 25) }}{{ effects.pickup() }}{{ effects.broadcast("**" ~ user ~ "** catches " ~ e ~ "!") }}You pull the {{ e.name }} out. Got it!
 OnDrop: {% if container %}You toss the {{ e.name }} into the *{{ container.name }}*.{% else %}You set the {{ e.name }} down. It flops around.{% endif %}{{ effects.drop() }}{{ effects.broadcast(user ~ " drops " ~ e ~ ".") }}
+
+Id: fish_uncommon
+Name: fish (uncommon)
+Prototype: fish
+Rarity: uncommon
+OnTake: {{ effects.grant_xp("fishing", 50) }}{{ effects.pickup() }}{{ effects.broadcast("**" ~ user ~ "** catches " ~ e ~ "!") }}You pull the {{ e.name }} out. Got it!
+
+Id: fish_rare
+Name: fish (rare)
+Prototype: fish
+Rarity: rare
+OnTake: {{ effects.grant_xp("fishing", 100) }}{{ effects.pickup() }}{{ effects.broadcast("**" ~ user ~ "** catches " ~ e ~ "!") }}You pull the {{ e.name }} out. Got it!
+
+Id: fish_epic
+Name: fish (epic)
+Prototype: fish
+Rarity: epic
+OnTake: {{ effects.grant_xp("fishing", 200) }}{{ effects.pickup() }}{{ effects.broadcast("**" ~ user ~ "** catches " ~ e ~ "!") }}You pull the {{ e.name }} out. Got it!
+
+Id: fish_legendary
+Name: fish (legendary)
+Prototype: fish
+Rarity: legendary
+OnTake: {{ effects.grant_xp("fishing", 400) }}{{ effects.pickup() }}{{ effects.broadcast("**" ~ user ~ "** catches " ~ e ~ "!") }}You pull the {{ e.name }} out. Got it!
+
+Id: fish_mythic
+Name: fish (mythic)
+Prototype: fish
+Rarity: mythic
+OnTake: {{ effects.grant_xp("fishing", 800) }}{{ effects.pickup() }}{{ effects.broadcast("**" ~ user ~ "** catches " ~ e ~ "!") }}You pull the {{ e.name }} out. Got it!
 
 Id: fish_nothing
 Name: a tug on the line
@@ -470,7 +519,7 @@ DescriptionLong: A small pond smelt. Smells faintly of cucumber.
 
 Id: fish_rainbow_trout
 Name: Rainbow Trout
-Prototype: fish
+Prototype: fish_uncommon
 Tags: toilet_fish size_large location_river time_all_day
 Rarity: uncommon
 DescriptionShort: a colorful {{ e.name }}
@@ -478,7 +527,7 @@ DescriptionLong: A large rainbow trout with iridescent scales.
 
 Id: fish_salmon
 Name: Salmon
-Prototype: fish
+Prototype: fish_uncommon
 Tags: toilet_fish size_large location_river_mouth time_all_day
 Rarity: uncommon
 DescriptionShort: a powerful {{ e.name }}
@@ -486,7 +535,7 @@ DescriptionLong: A large salmon. Must have swum a long way to get here.
 
 Id: fish_bitterling
 Name: Bitterling
-Prototype: fish
+Prototype: fish_uncommon
 Tags: toilet_fish urinal_fish sink_fish size_tiny location_river time_all_day
 Rarity: uncommon
 DescriptionShort: a shimmering {{ e.name }}
@@ -494,7 +543,7 @@ DescriptionLong: A tiny bitterling with vibrant colors.
 
 Id: fish_sweetfish
 Name: Sweetfish
-Prototype: fish
+Prototype: fish_uncommon
 Tags: toilet_fish urinal_fish size_medium location_river time_all_day
 Rarity: uncommon
 DescriptionShort: a {{ e.name }}
@@ -502,7 +551,7 @@ DescriptionLong: A medium-sized sweetfish, also known as ayu. Smells faintly of 
 
 Id: fish_cherry_salmon
 Name: Cherry Salmon
-Prototype: fish
+Prototype: fish_uncommon
 Tags: urinal_fish size_medium location_river time_all_day
 Rarity: uncommon
 DescriptionShort: a spotted {{ e.name }}
@@ -510,7 +559,7 @@ DescriptionLong: A medium-sized cherry salmon with pinkish spotted markings.
 
 Id: fish_goldfish
 Name: Goldfish
-Prototype: fish
+Prototype: fish_uncommon
 Tags: urinal_fish sink_fish kitchen_sink_fish size_tiny location_river time_day
 Rarity: uncommon
 DescriptionShort: a bright {{ e.name }}
@@ -518,7 +567,7 @@ DescriptionLong: A tiny, bright orange goldfish.
 
 Id: fish_popeyed_goldfish
 Name: Popeyed Goldfish
-Prototype: fish
+Prototype: fish_uncommon
 Tags: kitchen_sink_fish size_tiny location_river time_day
 Rarity: uncommon
 DescriptionShort: a bug-eyed {{ e.name }}
@@ -526,7 +575,7 @@ DescriptionLong: A tiny goldfish with enormous, protruding eyes.
 
 Id: fish_guppy
 Name: Guppy
-Prototype: fish
+Prototype: fish_uncommon
 Tags: urinal_fish sink_fish size_tiny location_river time_day
 Rarity: uncommon
 DescriptionShort: a colorful {{ e.name }}
@@ -534,7 +583,7 @@ DescriptionLong: A tiny, vibrantly colored guppy with a fan-shaped tail.
 
 Id: fish_koi
 Name: Koi
-Prototype: fish
+Prototype: fish_rare
 Tags: toilet_fish urinal_fish size_medium location_river time_night
 Rarity: rare
 DescriptionShort: a {{ e.name }} with orange and white scales
@@ -542,7 +591,7 @@ DescriptionLong: A medium-sized koi with orange and white scales.
 
 Id: fish_eel
 Name: Eel
-Prototype: fish
+Prototype: fish_rare
 Tags: toilet_fish size_large location_river time_night
 Rarity: rare
 DescriptionShort: a slithery {{ e.name }}
@@ -550,7 +599,7 @@ DescriptionLong: A long, sinuous eel.
 
 Id: fish_giant_catfish
 Name: Giant Catfish
-Prototype: fish
+Prototype: fish_rare
 Tags: toilet_fish size_very_large location_lake time_all_day
 Rarity: rare
 DescriptionShort: an enormous {{ e.name }}
@@ -558,7 +607,7 @@ DescriptionLong: A very large catfish with whiskers as thick as fingers.
 
 Id: fish_large_bass
 Name: Large Bass
-Prototype: fish
+Prototype: fish_rare
 Tags: toilet_fish size_very_large location_river time_all_day
 Rarity: rare
 DescriptionShort: a massive {{ e.name }}
@@ -566,7 +615,7 @@ DescriptionLong: A very large bass.
 
 Id: fish_angelfish
 Name: Angelfish
-Prototype: fish
+Prototype: fish_rare
 Tags: urinal_fish sink_fish size_small location_river time_night
 Rarity: rare
 DescriptionShort: a graceful {{ e.name }}
@@ -574,7 +623,7 @@ DescriptionLong: A small angelfish with flowing fins.
 
 Id: fish_giant_snakehead
 Name: Giant Snakehead
-Prototype: fish
+Prototype: fish_epic
 Tags: toilet_fish size_very_large location_lake time_day
 Rarity: epic
 DescriptionShort: a fearsome {{ e.name }}
@@ -583,7 +632,7 @@ OnTouch: The {{ e.name }} snaps at your hand.
 
 Id: fish_piranha
 Name: Piranha
-Prototype: fish
+Prototype: fish_epic
 Tags: toilet_fish urinal_fish size_small location_river time_day
 Rarity: epic
 DescriptionShort: a razor-toothed {{ e.name }}
@@ -592,7 +641,7 @@ OnTouch: The {{ e.name }} bites your finger.
 
 Id: fish_large_char
 Name: Large Char
-Prototype: fish
+Prototype: fish_legendary
 Tags: toilet_fish size_large location_waterfall time_all_day
 Rarity: legendary
 DescriptionShort: a spotted {{ e.name }}
@@ -600,7 +649,7 @@ DescriptionLong: A large char with spotted markings. Usually found in mountain s
 
 Id: fish_arowana
 Name: Arowana
-Prototype: fish
+Prototype: fish_legendary
 Tags: toilet_fish size_large location_river time_night
 Rarity: legendary
 DescriptionShort: a {{ e.name }} gleaming like polished metal
@@ -608,7 +657,7 @@ DescriptionLong: A large arowana with metallic scales. Known as the "dragon fish
 
 Id: fish_stringfish
 Name: Stringfish
-Prototype: fish
+Prototype: fish_mythic
 Tags: toilet_fish size_very_large location_river time_night
 Rarity: mythic
 DescriptionShort: a {{ e.name }}
@@ -616,7 +665,7 @@ DescriptionLong: A very large stringfish. One of the rarest freshwater fish in e
 
 Id: fish_coelacanth
 Name: Coelacanth
-Prototype: fish
+Prototype: fish_mythic
 Tags: toilet_fish size_very_large location_sea time_night
 Rarity: mythic
 DescriptionShort: an ancient {{ e.name }}
@@ -644,7 +693,7 @@ Tags: foyer_vase
 Rarity: common
 DescriptionShort: A teal {{ e.name }} with yellow roses in it
 DescriptionLong: a teal ceramic vase with gold trim around the lip. A couple yellow roses sit inside.
-OnAttack: {{ effects.destroy() }}{{ effects.broadcast("**" ~ user ~ "** smashes the " ~ e.name ~ "!") }}You momentarily give in to your impulses and strike the {{ e.name }} as hard as you can with your fist. Shards of teal ceramic scatter across the floor. Among the debris, you notice something...{{ effects.grant_random("foyer_vase_loot") }}
+OnAttack: {{ effects.grant_xp("attack", 25) }}{{ effects.destroy() }}{{ effects.broadcast("**" ~ user ~ "** smashes the " ~ e.name ~ "!") }}You momentarily give in to your impulses and strike the {{ e.name }} as hard as you can with your fist. Shards of teal ceramic scatter across the floor. Among the debris, you notice something...{{ effects.grant_random("foyer_vase_loot") }}
 
 Id: foyer_yellow_rose
 Name: Yellow Rose
@@ -654,7 +703,7 @@ Rarity: common
 DescriptionShort: a {{ e.name }}
 DescriptionLong: A single yellow rose, slightly crushed but still vibrant.
 OnTouch: You gently touch the petals, they are soft. You touch the stem, it's thorny. You can't figure out if you are an optimist or a pessimist.
-OnAttack: {{ effects.destroy() }}{{ effects.broadcast("**" ~ user ~ "** drops a " ~ e.name ~ " on the floor and crushes it underfoot") }}You feel animosity towards the rose for some reason.
+OnAttack: {{ effects.grant_xp("attack", 25) }}{{ effects.destroy() }}{{ effects.broadcast("**" ~ user ~ "** drops a " ~ e.name ~ " on the floor and crushes it underfoot") }}You feel animosity towards the rose for some reason.
 OnUse: You smell the rose. It smells lovely! You feel a bit better now.
 
 Id: foyer_yellow_rose_exquisite
@@ -665,7 +714,7 @@ Rarity: rare
 DescriptionShort: an {{ e.name }}
 DescriptionLong: A single yellow rose of uncanny beauty. It looks like something you'd see in a magazine.
 OnTouch: You gently stroke the petals, careful not to upset the beautiful symmetry of them. They are soft and slightly cold to the touch. You touch the stem, it's covered in extremely sharp thorns. The thorns are there to protect the beautiful flower from being picked, but I guess they failed.
-OnAttack: {{ effects.destroy() }}{{ effects.broadcast("**" ~ user ~ "** drops an " ~ e.name ~ " on the floor and crushes it underfoot") }}You feel like you have to destroy something beautiful.
+OnAttack: {{ effects.grant_xp("attack", 100) }}{{ effects.destroy() }}{{ effects.broadcast("**" ~ user ~ "** drops an " ~ e.name ~ " on the floor and crushes it underfoot") }}You feel like you have to destroy something beautiful.
 OnUse: You smell the rose. It reminds you of an expensive perfume but way more pleasant. You feel better now.
 
 Id: foyer_plaque
@@ -687,7 +736,7 @@ DescriptionLong: A crumpled piece of paper with scribbled instructions. It reads
 +> "Hey! New here? The **/interact** command is your friend! Use it like **/interact** with:**item** action:**verb**. For example: **/interact Treasure take** or **/interact Crate open**.\
  Try experimenting with different verbs to get surprising results. Most items respond to the same basic actions, you'll figure it out!"
 OnTouch: You run your fingers over the crumpled paper. The ink is slightly smudged, as if someone wrote it in a hurry. It feels like regular notebook paper. Try to __use__ it for something?
-OnAttack: {{ effects.destroy() }}{{ effects.broadcast("**" ~ user ~ "** tears up " ~ e ~ "!") }}You crumple the {{ e.name }} into a tiny ball and tear it to shreds. The paper confetti scatters across the table. Well, that's one way to interact with it! You could have also tried __opening__ it or __taking__ it, but destruction works too.
+OnAttack: {{ effects.grant_xp("attack", 25) }}{{ effects.destroy() }}{{ effects.broadcast("**" ~ user ~ "** tears up " ~ e ~ "!") }}You crumple the {{ e.name }} into a tiny ball and tear it to shreds. The paper confetti scatters across the table. Well, that's one way to interact with it! You could have also tried __opening__ it or __taking__ it, but destruction works too.
 OnUse: You flip the {{ e.name }} over, looking for more information. The back is blank except for a small doodle of a smiling face. Not particularly useful, but cute! Have you tried __opening__ it or __taking__ it yet?
 OnTake: {{ effects.pickup() }}{{ effects.broadcast(user ~ " pockets " ~ e ~ ".") }}You fold the {{ e.name }} and tuck it into your pocket. Now you have a handy reference! Most items in the mansion respond to common verbs like look, touch, attack, use, take, open, close, and drop. Try __dropping__ it later to put it back.
 OnOpen: You unfold the {{ e.name }} and flatten it out on the table. The creases make it a bit easier to read now. It's the same instructions about /interact, but now you can see a small footnote: "P.S. - Try __closing__ things after you __open__ them. Some containers have surprises inside!"
@@ -1046,11 +1095,35 @@ DescriptionShort: a {{ e.name }}
 OnTake: {{ effects.pickup() }}You carefully lift the {{ e.name }} from its hook.{{ effects.broadcast(user ~ " takes " ~ e ~ " from the wall.") }}
 OnDrop: {% if container %}You hang the {{ e.name }} on the *{{ container.name }}*.{% else %}You set the {{ e.name }} down, leaning it against the wall.{% endif %}{{ effects.drop() }}{{ effects.broadcast(user ~ " places " ~ e ~ ".") }}
 OnTouch: You run your fingers along the frame. The paint is dry and textured.
-OnAttack: {{ effects.destroy() }}{{ effects.broadcast("**" ~ user ~ "** slashes " ~ e ~ " with a knife!") }}You drag your blade across the canvas. The painting is ruined.
+OnAttack: {{ effects.grant_xp("attack", 25) }}{{ effects.destroy() }}{{ effects.broadcast("**" ~ user ~ "** slashes " ~ e ~ " with a knife!") }}You drag your blade across the canvas. The painting is ruined.
+
+Id: painting_uncommon
+Name: painting (uncommon)
+Prototype: painting
+Rarity: uncommon
+OnAttack: {{ effects.grant_xp("attack", 50) }}{{ effects.destroy() }}{{ effects.broadcast("**" ~ user ~ "** cuts up " ~ e ~ "!") }}You cut a long line through the canvas. It curls open like a wound. The painting is done for.
+
+Id: painting_rare
+Name: painting (rare)
+Prototype: painting
+Rarity: rare
+OnAttack: {{ effects.grant_xp("attack", 100) }}{{ effects.destroy() }}{{ effects.broadcast("**" ~ user ~ "** hacks " ~ e ~ " apart!") }}You hack the canvas apart. Strips of it hang off the frame like streamers. That one was pretty nice, actually.
+
+Id: painting_epic
+Name: painting (epic)
+Prototype: painting
+Rarity: epic
+OnAttack: {{ effects.grant_xp("attack", 200) }}{{ effects.destroy() }}{{ effects.broadcast("**" ~ user ~ "** shreds " ~ e ~ "!") }}You shred the canvas. The frame clatters to the floor. That was definitely worth something.
+
+Id: painting_legendary
+Name: painting (legendary)
+Prototype: painting
+Rarity: legendary
+OnAttack: {{ effects.grant_xp("attack", 400) }}{{ effects.destroy() }}{{ effects.broadcast("**" ~ user ~ "** destroys " ~ e ~ ". It was one of a kind.") }}You slash the painting to pieces. The frame snaps in half. That was one of a kind. Oh well.
 
 Id: frizzle_artsylyds_the_scream_png
 Name: The Scream Painting
-Prototype: painting
+Prototype: painting_uncommon
 Tags: gallery_painting
 Rarity: uncommon
 DescriptionShort: {{ e.name }} (artsylyds)
@@ -1066,7 +1139,7 @@ DescriptionLong: Art by tattie. [It's Frizzle Painting](https://img.frizzle.dev/
 
 Id: frizzle_nebula_nyafriz_png
 Name: Frizzle on the Phone Painting
-Prototype: painting
+Prototype: painting_uncommon
 Tags: gallery_painting
 Rarity: uncommon
 DescriptionShort: {{ e.name }} (nebula)
@@ -1074,7 +1147,7 @@ DescriptionLong: Art by nebula. [Frizzle on the Phone Painting](https://img.friz
 
 Id: frizzle_applekouhai_chair_jpg
 Name: Frizzle Chair Painting
-Prototype: painting
+Prototype: painting_uncommon
 Tags: gallery_painting
 Rarity: uncommon
 DescriptionShort: {{ e.name }} (applekouhai)
@@ -1090,7 +1163,7 @@ DescriptionLong: Art by nebula. [Maid Portrait](https://img.frizzle.dev/mudd/fri
 
 Id: frizzle_nebula_maid_shiny_gif
 Name: Maid Portrait (Holographic)
-Prototype: painting
+Prototype: painting_rare
 Tags: gallery_painting
 Rarity: rare
 DescriptionShort: {{ e.name }} (nebula)
@@ -1099,7 +1172,7 @@ OnTouch: The surface shimmers under your fingertips, the glitter catching the li
 
 Id: frizzle_nebula_maid_all4s_png
 Name: Maid on All Fours Painting
-Prototype: painting
+Prototype: painting_rare
 Tags: gallery_painting
 Rarity: rare
 DescriptionShort: {{ e.name }} (nebula)
@@ -1107,7 +1180,7 @@ DescriptionLong: Art by nebula. [Maid on All Fours Painting](https://img.frizzle
 
 Id: frizzle_nebula_maid_all4s_shiny_gif
 Name: Maid on All Fours Painting (Holographic)
-Prototype: painting
+Prototype: painting_epic
 Tags: gallery_painting
 Rarity: epic
 DescriptionShort: {{ e.name }} (nebula)
@@ -1117,7 +1190,7 @@ OnLook: {{ e.description_long }} It's mesmerizing.
 
 Id: frizzle_applekouhai_kon_png
 Name: Kyoani Frizzle Painting
-Prototype: painting
+Prototype: painting_uncommon
 Tags: gallery_painting
 Rarity: uncommon
 DescriptionShort: {{ e.name }} (applekouhai)
@@ -1125,7 +1198,7 @@ DescriptionLong: Art by applekouhai. [Kyoani Frizzle Painting](https://img.frizz
 
 Id: frizzle_neomory_painting_png
 Name: Sunset with Ruby Painting
-Prototype: painting
+Prototype: painting_uncommon
 Tags: gallery_painting
 Rarity: uncommon
 DescriptionShort: {{ e.name }} (neomory)
@@ -1133,7 +1206,7 @@ DescriptionLong: Art by neomory. [Sunset with Ruby Painting](https://img.frizzle
 
 Id: frizzle_been_drool_jpg
 Name: Seltzer Pour Painting
-Prototype: painting
+Prototype: painting_rare
 Tags: gallery_painting
 Rarity: rare
 DescriptionShort: {{ e.name }} (been)
@@ -1141,7 +1214,7 @@ DescriptionLong: Art by been. [Seltzer Pour Painting](https://img.frizzle.dev/mu
 
 Id: frizzle_sanamaru1827_png
 Name: Frizzle Jump Painting
-Prototype: painting
+Prototype: painting_epic
 Tags: gallery_painting
 Rarity: epic
 DescriptionShort: {{ e.name }} (sanamaru1827)
@@ -1149,7 +1222,7 @@ DescriptionLong: Art by sanamaru1827. [Frizzle Jump Painting](https://img.frizzl
 
 Id: frizzle_applekouhai_garfield_jpg
 Name: Garfield Frizzle Painting
-Prototype: painting
+Prototype: painting_legendary
 Tags: gallery_painting
 Rarity: legendary
 DescriptionShort: {{ e.name }} (applekouhai)
@@ -1176,7 +1249,8 @@ Room: lounge
 DescriptionShort: An oversized {{ e.name }} sits in the corner.
 DescriptionLong: A vintage wooden globe on a brass stand. You can __open__ the northern hemisphere to reveal the minibar inside.
 ContentsVisible: no
-OnUse: You swing open the globe and pour yourself a drink. It restores health.
+OnUse: {{ effects.set_focus() }}You swing open the northern hemisphere.{% if e.contents %} Inside:
++ {{ e.contents }}{% else %} It's empty.{% endif %}
 OnOpen: {{ effects.set_focus() }}You swing open the northern hemisphere.{% if e.contents %} Inside:
 + {{ e.contents }}{% else %} It's empty.{% endif %}
 OnClose: {{ effects.clear_focus() }}You swing the globe closed.
@@ -1281,7 +1355,7 @@ OnUse: You lick the Ring Pop. Watermelon.
 
 Id: lounge_white_claw_mango
 Name: White Claw Mango
-Prototype: beverage
+Prototype: beverage_rare
 Rarity: rare
 Tags: beverage lounge_drink foyer_vase_loot slot_prize
 DescriptionShort: a chilled {{ e.name }}
@@ -1313,7 +1387,7 @@ DescriptionLong: A 16oz can of Lone Star, the National Beer of Texas. It's cheap
 
 Id: lounge_shiner_bock
 Name: Shiner Bock
-Prototype: beverage
+Prototype: beverage_rare
 Rarity: rare
 Tags: beverage lounge_drink
 DescriptionShort: a frosty {{ e.name }}
@@ -1329,30 +1403,30 @@ DescriptionLong: A glass bottle of Topo Chico mineral water. The bubbles are agg
 
 Id: lounge_makers_mark
 Name: Maker's Mark Bourbon
-Prototype: beverage
+Prototype: beverage_uncommon
 Rarity: uncommon
 Tags: beverage globe_minibar_liquor
 DescriptionShort: a bottle of {{ e.name }}
 DescriptionLong: A bottle of Maker's Mark Kentucky Straight Bourbon Whisky. The iconic red wax seal drips down the neck.
-OnUse: You pour yourself a glass of {{ e.name }}. The caramel and vanilla notes warm your throat. It restores health.
+OnUse: {{ effects.grant_xp("vitality", 100) }}{{ effects.destroy() }}{{ effects.broadcast(user ~ " drinks " ~ e ~ ".") }}You pour yourself a glass of {{ e.name }}. The caramel and vanilla notes warm your throat. It restores health.
 
 Id: lounge_yamazaki_12
 Name: Yamazaki 12 Year
-Prototype: beverage
+Prototype: beverage_rare
 Rarity: rare
 Tags: beverage globe_minibar_liquor
 DescriptionShort: a bottle of {{ e.name }}
 DescriptionLong: A bottle of Suntory Yamazaki 12 Year Single Malt Japanese Whisky. Aged in a combination of American, Spanish, and Japanese oak casks.
-OnUse: You pour yourself a dram of {{ e.name }}. Delicate notes of peach, vanilla, and Mizunara oak. It restores health.
+OnUse: {{ effects.grant_xp("vitality", 100) }}{{ effects.destroy() }}{{ effects.broadcast(user ~ " drinks " ~ e ~ ".") }}You pour yourself a dram of {{ e.name }}. Delicate notes of peach, vanilla, and Mizunara oak. It restores health.
 
 Id: lounge_nikka_yoichi_20
 Name: Nikka Yoichi 20-Year Limited Edition
-Prototype: beverage
+Prototype: beverage_legendary
 Rarity: legendary
 Tags: beverage globe_minibar_liquor
 DescriptionShort: a bottle of {{ e.name }}
 DescriptionLong: A bottle of Nikka Yoichi Limited Edition Final Version 20-Year-Old Single Malt Japanese Whisky. One of the last bottles ever produced before the age-statement line was discontinued. Peated barley, coastal air, decades of patience.
-OnUse: You pour yourself a reverent measure of {{ e.name }}. Smoke, sea salt, dried fruit, and a finish that lasts forever. You feel blessed. It restores health.
+OnUse: {{ effects.grant_xp("vitality", 100) }}{{ effects.destroy() }}{{ effects.broadcast(user ~ " drinks " ~ e ~ ".") }}You pour yourself a reverent measure of {{ e.name }}. Smoke, sea salt, dried fruit, and a finish that lasts forever. You feel blessed. It restores health.
 
 # ----------------------------------------------------------------------------
 # Kitchen entities

@@ -20,7 +20,8 @@ from mudd.commands import ActionCommand
 from mudd.events import Observer
 from mudd.events.types import GameEvent
 from mudd.models import EntityInstance, Room, RoomEntityInstance, User
-from mudd.observers import EffectsObserver
+from mudd.observers import EffectsObserver, flush_all
+from mudd.observers.skills import SkillsObserver
 from mudd.scene import Scene
 
 # Module-level cache holders, wired by the session-scoped autouse fixture
@@ -33,12 +34,16 @@ user_cache: UserCache | None = None
 class NullReconciler:
     """Test double for DiscordReconciler. Satisfies Observer protocol."""
 
+    flush_priority: int = 0
     events: list[GameEvent] = field(default_factory=list)
 
     def notify(self, event: GameEvent) -> None:
         self.events.append(event)
 
-    async def flush(self) -> None:
+    async def flush(self) -> list[GameEvent]:
+        return []
+
+    async def post_flush(self) -> None:
         pass
 
 
@@ -49,6 +54,15 @@ class ActResult:
     output: str
     effects: EffectsObserver
     reconciler: NullReconciler
+    skills: SkillsObserver
+
+
+@dataclass(frozen=True, slots=True)
+class MoveResult:
+    """Result from move() helper."""
+
+    reconciler: NullReconciler
+    skills: SkillsObserver
 
 
 async def act(
@@ -60,14 +74,19 @@ async def act(
     """Execute one game interaction. Fresh scene per call."""
     scene = await Scene.from_user(pool, user_id)
 
-    effects = EffectsObserver()
     reconciler = NullReconciler()
+    skills = SkillsObserver(
+        _pool=pool,
+        _user_id=user_id,
+        _room_id=scene.user.current_room,
+    )
     extra: list[Observer] = []
     if entity_cache is not None:
         extra.append(entity_cache.create_invalidator(pool, scene.user.current_room))
     if user_cache is not None:
         extra.append(user_cache.create_invalidator(pool))
-    scene = scene.with_observers(effects, reconciler, *extra)
+    effects = EffectsObserver(_forward_targets=(skills, reconciler, *extra))
+    scene = scene.with_observers(effects, skills, reconciler, *extra)
 
     entity = await resolve_entity(pool, scene, entity_query)
     if entity is None:
@@ -76,7 +95,9 @@ async def act(
     result = await scene.execute(command, entity)
     await scene.flush_observers()
 
-    return ActResult(output=result.output, effects=effects, reconciler=reconciler)
+    return ActResult(
+        output=result.output, effects=effects, reconciler=reconciler, skills=skills
+    )
 
 
 async def autocomplete(
@@ -152,14 +173,19 @@ async def move(
     user_id: int,
     room_id: str,
     guild_id: int = 12345,
-) -> NullReconciler:
+) -> MoveResult:
     """Move a user to a room with cache invalidation (mirrors movement cog)."""
     fresh = await User.get(pool, user_id)
     if fresh is None:
         raise ValueError(f"User {user_id} not found")
 
     reconciler = NullReconciler()
-    observers: list[Observer] = [reconciler]
+    skills = SkillsObserver(
+        _pool=pool,
+        _user_id=user_id,
+        _room_id=fresh.current_room,
+    )
+    observers: list[Observer] = [skills, reconciler]
     if user_cache is not None:
         observers.append(user_cache.create_invalidator(pool))
     if entity_cache is not None:
@@ -167,7 +193,6 @@ async def move(
 
     user_with_obs = fresh.with_observers(*observers)
     await user_with_obs.move_to(room_id, guild_id=guild_id)
-    for obs in observers:
-        await obs.flush()
+    await flush_all(observers)
 
-    return reconciler
+    return MoveResult(reconciler=reconciler, skills=skills)

@@ -28,6 +28,8 @@ async def clean_user_state(test_db, entity_cache, user_cache):
         await conn.execute("DELETE FROM currency_ledger")
         await conn.execute("DELETE FROM currency_transactions")
         await conn.execute("DELETE FROM currency_accounts WHERE user_id != 0")
+        await conn.execute("DELETE FROM user_skills")
+        await conn.execute("DELETE FROM user_skills_channels")
         await conn.execute("DELETE FROM user_inventory_forums")
         await conn.execute("DELETE FROM entity_instances WHERE owner_id IS NOT NULL")
         await conn.execute("DELETE FROM users")
