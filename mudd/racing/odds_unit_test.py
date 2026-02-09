@@ -16,13 +16,14 @@ from mudd.racing.odds import (
 class TestBaseStrength:
     def test_flash_stats(self) -> None:
         # Flash: speed=90, stamina=70, consistency=75, luck=55
+        # Weights: speed*0.35 + stamina*0.35 + luck*0.25 + consistency*0.05
         result = base_strength(speed=90, stamina=70, luck=55, consistency=75)
-        assert result == pytest.approx(79.0)
+        assert result == pytest.approx(73.5)
 
     def test_glue_stats(self) -> None:
         # Glue: speed=30, stamina=55, consistency=90, luck=20
         result = base_strength(speed=30, stamina=55, luck=20, consistency=90)
-        assert result == pytest.approx(42.5)
+        assert result == pytest.approx(39.25)
 
     def test_all_equal(self) -> None:
         result = base_strength(speed=50, stamina=50, luck=50, consistency=50)

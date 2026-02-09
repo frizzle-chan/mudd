@@ -20,8 +20,9 @@ class RaceConfig:
     burst_surge_mult: float = 1.5
     burst_stumble_mult: float = 0.5
     fatigue_onset: float = 0.6
-    fatigue_severity: float = 0.3
-    noise_factor: float = 0.1
+    fatigue_severity: float = 0.15
+    noise_factor: float = 0.3
+    form_variance: float = 1.0
     progress_scale: float = 2.0
 
 
