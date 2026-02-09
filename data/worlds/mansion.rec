@@ -1491,9 +1491,9 @@ Room: library
 DescriptionShort: A {{ e.name }} sits in the southern half of the room.
 DescriptionLong: An antique writing desk with a worn leather top. There's a drawer you can __open__.
 ContentsVisible: no
-OnOpen: You pull open the drawer.{% if e.contents %} Inside:
+OnOpen: {{ effects.set_focus() }}You pull open the drawer.{% if e.contents %} Inside:
 + {{ e.contents }}{% else %} It's empty.{% endif %}
-OnClose: You slide the drawer shut.
+OnClose: {{ effects.clear_focus() }}You slide the drawer shut.
 
 Id: library_side_table
 Name: Side Table
