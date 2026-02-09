@@ -13,6 +13,7 @@ graze
 grope
 handle
 hug
+inhale
 knead
 massage
 nudge
@@ -24,9 +25,12 @@ poke
 prod
 rub
 scratch
+smell
+sniff
 squeeze
 stroke
 tap
 tickle
 touch
 trace
+whiff
