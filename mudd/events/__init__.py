@@ -10,6 +10,7 @@ from mudd.events.observer import Observer
 from mudd.events.types import (
     BalanceChangedEvent,
     BroadcastEvent,
+    ChargeCurrencySignal,
     ClearFocusSignal,
     DestroySignal,
     DispenseSignal,
@@ -49,6 +50,7 @@ __all__ = [
     "GrantEvent",
     "GrantRandomEvent",
     "GrantCurrencyEvent",
+    "ChargeCurrencySignal",
     "GrantXPSignal",
     "PickupSignal",
     "DropSignal",

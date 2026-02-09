@@ -5,6 +5,7 @@ import logging
 from mudd.events.observer import Observer
 from mudd.events.types import (
     BroadcastEvent,
+    ChargeCurrencySignal,
     ClearFocusSignal,
     DestroySignal,
     DispenseSignal,
@@ -117,6 +118,19 @@ class EffectsCollector:
         """
         if amount > 0:
             self._observer.notify(GrantCurrencyEvent(amount=amount))
+        return ""
+
+    def charge(self, amount: int) -> str:
+        """Queue a currency charge (debit) from the user.
+
+        Args:
+            amount: Amount of yen to charge (debited to house account)
+
+        Returns:
+            Empty string (allows inline use in templates)
+        """
+        if amount > 0:
+            self._observer.notify(ChargeCurrencySignal(amount=amount))
         return ""
 
     def grant_xp(self, skill: str, amount: int) -> str:

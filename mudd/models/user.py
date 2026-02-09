@@ -27,6 +27,15 @@ STARTING_BALANCE = 1000
 HOUSE_ACCOUNT_ID = 0
 
 
+class InsufficientFundsError(Exception):
+    """Raised when a user's balance is too low for a debit."""
+
+    def __init__(self, balance: int, amount: int) -> None:
+        self.balance = balance
+        self.amount = amount
+        super().__init__(f"Insufficient funds: balance={balance}, amount={amount}")
+
+
 class TransferError(Enum):
     """Error types for currency transfer operations."""
 
@@ -466,6 +475,79 @@ class User:
         # Emit event (outside transaction)
         for observer in self._observers:
             observer.notify(BalanceChangedEvent(self.id, new_balance, amount, memo))
+
+        return new_balance
+
+    async def debit_to_house(self, amount: int, memo: str) -> int:
+        """Debit currency from this user to the house account.
+
+        Uses double-entry ledger: debit player, credit house (user_id=0).
+
+        Args:
+            amount: Amount to debit (must be positive)
+            memo: Transaction memo
+
+        Returns:
+            New balance after debit
+
+        Raises:
+            ValueError: If amount is not positive or accounts don't exist
+            InsufficientFundsError: If player balance is too low
+        """
+        if amount <= 0:
+            raise ValueError("Amount must be positive")
+
+        async with self._pool.acquire() as conn, conn.transaction():
+            # Lock accounts in sorted order (house=0 always first)
+            house_row = await conn.fetchrow(
+                "SELECT balance FROM currency_accounts WHERE user_id = $1 FOR UPDATE",
+                HOUSE_ACCOUNT_ID,
+            )
+            player_row = await conn.fetchrow(
+                "SELECT balance FROM currency_accounts WHERE user_id = $1 FOR UPDATE",
+                self.id,
+            )
+
+            if house_row is None:
+                raise ValueError("House account does not exist")
+            if player_row is None:
+                raise InsufficientFundsError(0, amount)
+            if player_row["balance"] < amount:
+                raise InsufficientFundsError(player_row["balance"], amount)
+
+            # Create transaction + ledger entries
+            tx_row = await conn.fetchrow(
+                "INSERT INTO currency_transactions (memo) VALUES ($1) RETURNING id",
+                memo,
+            )
+            await conn.execute(
+                """
+                INSERT INTO currency_ledger (transaction_id, account_id, amount)
+                VALUES ($1, $2, $3), ($1, $4, $5)
+                """,
+                tx_row["id"],
+                self.id,
+                -amount,
+                HOUSE_ACCOUNT_ID,
+                amount,
+            )
+
+            # Update balances
+            new_balance = player_row["balance"] - amount
+            await conn.execute(
+                "UPDATE currency_accounts SET balance = $1 WHERE user_id = $2",
+                new_balance,
+                self.id,
+            )
+            await conn.execute(
+                "UPDATE currency_accounts SET balance = $1 WHERE user_id = $2",
+                house_row["balance"] + amount,
+                HOUSE_ACCOUNT_ID,
+            )
+
+        # Emit event (outside transaction)
+        for observer in self._observers:
+            observer.notify(BalanceChangedEvent(self.id, new_balance, -amount, memo))
 
         return new_balance
 
