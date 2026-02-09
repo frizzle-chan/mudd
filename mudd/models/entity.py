@@ -67,6 +67,19 @@ class ResolvedEntity:
     contents_visible: bool
     rarity: Rarity
 
+    @property
+    def is_searchable(self) -> bool:
+        """Whether this entity is a searchable container.
+
+        A searchable container has hidden contents (contents_visible=False)
+        and sets focus when opened (effects.set_focus in on_open).
+        """
+        return (
+            not self.contents_visible
+            and self.on_open is not None
+            and "effects.set_focus" in self.on_open
+        )
+
     @classmethod
     def _from_row(cls, row: asyncpg.Record) -> ResolvedEntity:
         """Construct ResolvedEntity from asyncpg.Record."""

@@ -29,9 +29,12 @@ class ViewEntity:
 
     @property
     def display_name(self) -> str:
-        """Entity name formatted with rarity emoji"""
+        """Entity name formatted with rarity emoji and search indicator."""
         emoji = RARITY_EMOJI[self._entity.rarity]
-        return f"{self._entity.name} {emoji}" if emoji else self._entity.name
+        name = f"{self._entity.name} {emoji}" if emoji else self._entity.name
+        if self._entity.entity.is_searchable:
+            return f"\U0001f50d {name}"
+        return name
 
     @property
     def description_long(self) -> str | None:
