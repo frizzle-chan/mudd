@@ -191,7 +191,14 @@ class DiscordReconciler:
         return []
 
     async def post_flush(self) -> None:
-        """Send deferred level-up announcements."""
+        """Flush re-broadcast events and send deferred level-up announcements.
+
+        XPGainedEvent/LevelUpEvent arrive at SkillsReconciler during
+        flush_all()'s re-broadcast phase — after DiscordReconciler.flush()
+        has already run. This second flush processes those queued events
+        (updating the Discord skills channel) before sending announcements.
+        """
+        await self._skills.flush()
         await self._skills.post_announcements()
 
     async def post_skill_announcements(self) -> None:
