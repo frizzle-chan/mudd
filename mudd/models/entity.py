@@ -773,7 +773,8 @@ class EntityInstance:
         """
         if self.room_id is None:
             logger.debug(
-                "EntityInstance.get_contents() for %s: room_id is None, returning empty",
+                "EntityInstance.get_contents() for %s: room_id is None, "
+                "returning empty",
                 self.entity.id
             )
             return []
