@@ -53,8 +53,8 @@ Skills gain XP through two distinct mechanisms:
 | Skill | Source | Mechanism | XP per Event | First Level-Up After |
 |-------|--------|-----------|-------------|---------------------|
 | Agility | Room transitions | Implicit: skills observer listens to movement events | 28 | 3 moves |
-| Attack | Attacking entities | Implicit: skills observer listens to entity destroyed events triggered by the attack verb | 100 | 1 action |
-| Speech | Sending messages | Implicit: Discord event handler on messages in room channels | 17 | 5 messages |
+| Attack | Attacking entities | Explicit: attack handlers call `grant_xp` effect with rarity-based amounts | 25-400 | 4 actions (common) |
+| Speech | Sending messages | Implicit: Discord event handler on messages in room channels | 15 | 6 messages |
 | Vitality | Eating/drinking | Explicit: food/drink handlers call `grant_xp` effect, then destroy the item | 100 | 1 action |
 | Fishing | Catching fish | TBD: future fishing minigame | TBD | TBD |
 
@@ -62,13 +62,13 @@ XP amounts are calibrated against the level 2 threshold of 83 XP. Combat-oriente
 
 **Implicit vs. Explicit Trade-offs:**
 
-Implicit XP is simpler for content authors (it just happens) but can't distinguish context — every entity destruction via attack grants the same Attack XP. Explicit XP requires content authors to add the effect call to handlers, but allows fine-grained control: different food items could grant different amounts of Vitality XP, or a special item could grant XP to an unexpected skill.
+Implicit XP is simpler for content authors (it just happens) but can't distinguish context — every room movement grants the same Agility XP. Explicit XP requires content authors to add the effect call to handlers, but allows fine-grained control: different items can grant different amounts based on rarity, or a special item could grant XP to an unexpected skill. Attack, Vitality, and Fishing all use explicit XP, with rarity sub-prototypes (e.g., `beverage_rare`, `painting_epic`) providing scaled amounts so content authors only need to set the correct prototype.
 
 The `grant_xp` template effect follows the same pattern as existing effects (`grant_currency`, `broadcast`, etc.) — it emits an event that the skills observer processes during flush.
 
 **Attack vs. Consume Distinction:**
 
-Destroying an entity via the attack verb grants Attack XP. Consuming an entity (food/drink via use) grants Vitality XP through the explicit `grant_xp` effect, and the item is destroyed via the existing `destroy` effect. These are separate paths — attack-destroy and consume-destroy don't overlap.
+Both attack-destroy and consume-destroy use explicit `grant_xp` template effects with rarity-scaled amounts. Attacking an entity triggers `grant_xp("attack", amount)` in the OnAttack handler; consuming an entity triggers `grant_xp("vitality", amount)` in the OnUse handler. Both destroy the item via the `destroy` effect. These are separate paths — attack-destroy and consume-destroy don't overlap.
 
 **Speech as Discord Event:**
 

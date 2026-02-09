@@ -13,6 +13,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 import asyncpg
+import discord
 from discord.ext import commands, tasks
 
 if TYPE_CHECKING:
@@ -35,6 +36,7 @@ from mudd.loaders.zone_loader import (
 )
 from mudd.models import Room, Zone
 from mudd.observers import DiscordReconciler, RoomChannelCache
+from mudd.observers.skills_reconciler import ensure_category, ensure_roles
 
 logger = logging.getLogger(__name__)
 
@@ -249,8 +251,44 @@ class Sync(commands.Cog):
             except Exception:
                 logger.exception(f"Failed inventory sync for {guild.name}")
 
+            # Skills sync: channels, nicknames, milestone roles
+            try:
+                await self._sync_skills(guild, pool)
+            except Exception:
+                logger.exception(f"Failed skills sync for {guild.name}")
+
         if fail_fast:
             logger.info("Initial sync complete")
+
+    async def _sync_skills(self, guild: discord.Guild, pool: asyncpg.Pool) -> None:
+        """Sync skills channels, nicknames, and milestone roles.
+
+        Args:
+            guild: Discord guild
+            pool: Database connection pool
+        """
+        reconciler = DiscordReconciler(self.bot, pool)
+
+        # Ensure milestone roles and skills category exist
+        await ensure_roles(guild)
+        await ensure_category(guild)
+
+        # Sync each non-bot member
+        synced = 0
+        for member in guild.members:
+            if member.bot:
+                continue
+            try:
+                await reconciler.skills.sync_user(guild, member)
+                synced += 1
+            except Exception:
+                logger.exception("Failed to sync skills for user %d", member.id)
+
+        # Prune orphan skills channels not tracked in DB
+        pruned = await reconciler.skills.prune_orphan_channels(guild)
+        logger.info(
+            f"Skills sync for {guild.name}: {synced} users, {pruned} orphans pruned"
+        )
 
     async def _sync_user_visibility(
         self, guild, reconciler: DiscordReconciler

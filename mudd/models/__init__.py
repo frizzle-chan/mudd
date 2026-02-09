@@ -12,6 +12,7 @@ from mudd.models.entity_definition import EntityDefinition
 from mudd.models.interfaces import IEntityInstance, IReadableEntity, IRoom, IUser
 from mudd.models.inventory_forum import UserInventoryForum
 from mudd.models.room import EntityModal, InventoryThread, Room, RoomEntityInstance
+from mudd.models.skills import UserSkill, XPResult
 from mudd.models.spawning_pool import SpawningPool
 from mudd.models.user import FocusContext, TransferError, TransferResult, User
 from mudd.models.zone import SyncStats, Zone
@@ -36,6 +37,9 @@ __all__ = [
     "RoomEntityInstance",
     "EntityModal",
     "InventoryThread",
+    # Skills model
+    "UserSkill",
+    "XPResult",
     # Zone model
     "Zone",
     "SyncStats",

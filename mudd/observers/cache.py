@@ -26,6 +26,8 @@ class CacheInvalidationObserver[K: Hashable]:
     Type parameter ``K`` is the cache key type (e.g., ``str`` for room IDs).
     """
 
+    flush_priority: int = 0
+
     def __init__(
         self,
         extractors: dict[type, Callable[[Any], K | None]],
@@ -51,8 +53,12 @@ class CacheInvalidationObserver[K: Hashable]:
         self._on_invalidate(key)
         self._dirty.add(key)
 
-    async def flush(self) -> None:
-        """Rebuild all dirty cache keys."""
+    async def flush(self) -> list[GameEvent]:
+        """Rebuild all dirty cache keys.
+
+        Returns:
+            Empty list (no new events produced).
+        """
         keys = self._dirty.copy()
         self._dirty.clear()
         for key in keys:
@@ -61,3 +67,7 @@ class CacheInvalidationObserver[K: Hashable]:
             except Exception:
                 self._dirty.add(key)
                 raise
+        return []
+
+    async def post_flush(self) -> None:
+        """No-op — CacheInvalidationObserver has no post-flush work."""

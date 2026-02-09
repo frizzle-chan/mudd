@@ -80,15 +80,29 @@ The codebase uses an MVC + events architecture:
 - Every 15 minutes: Full zone/room sync (recreates deleted channels, fixes topics) + permission sync
 - Tracks orphan channels and only reports NEW ones to #console
 
-**RoomChannelCache** (`mudd/observers/discord.py`): Shared cache mapping room names to Discord channel IDs. Created in `main.py`, passed to cogs. Rebuilt by Sync cog after channel creation.
+**RoomChannelCache** (`mudd/observers/discord.py`): Shared cache mapping room names to Discord channel IDs. Created in `main.py`, passed to cogs. Rebuilt by Sync cog after channel creation. Always use `RoomChannelCache` for room→channel lookups — never linearly scan `guild.text_channels` by name.
 
 **Observer pattern in models**: `User` and `EntityInstance` support observers via `_observers` field and `with_observers()` method. Mutation methods (e.g., `move_to()`) emit events to attached observers. Always flush observers after the response is sent. Other models (`Zone`, `Room`, `SpawningPool`) pass observers as function parameters to `sync_all()` instead.
+
+**Observer design rules**:
+- Keep observers to the `Observer` protocol (`notify` + `flush`). No side-channel methods (e.g., `queue_xp()`); route everything through `notify()` with signal/event types.
+- Cross-observer communication happens via `flush()` return values (events to broadcast) or callbacks — never by having Scene reach into observer internals.
+- Flush methods should swap-and-clear input queues at the start (re-entrancy safe). Output accumulators read after flush are exempt from swap pattern.
+- New reconcilers that touch Discord belong as sub-reconcilers of `DiscordReconciler` (like `PermissionReconciler`, `InventoryReconciler`). Don't wire standalone reconcilers with special-case code.
 
 **Event separation**: Game logic events (e.g., `UserMovedEvent`) and infrastructure events (e.g., `UserLocationSyncEvent`) are separate. Game events trigger gameplay observers (focus clearing). Infrastructure events trigger Discord reconciliation (permission sync).
 
 **Adding new events**: Update `mudd/events/types.py` (add dataclass, update `GameEvent` union), `mudd/events/__init__.py` (import and export), and the observer that handles the event (e.g., `DiscordReconciler`). Prefer model class methods for database logic over inline SQL in observers.
 
-**Model classmethod naming**: Use Rails-style CRUD names: `get` / `get_by_*` (read), `create` (insert), `get_or_create` / `create_or_update` (upsert), `update_*` (field mutation), `clear_*` (nullify fields), `delete` / `delete_by_*` (remove). Avoid `ensure_*`, `set_*`, or `upsert` as method names.
+**Model classmethod naming**: Use Rails-style CRUD names: `get` / `get_by_*` (read), `create` (insert), `get_or_create` / `create_or_update` (upsert), `update_*` (field mutation), `clear_*` (nullify fields), `delete` / `delete_by_*` (remove). Avoid `ensure_*`, `set_*`, or `upsert` as method names. Methods named `get` must be pure reads (return `| None`); if they upsert, rename to `get_or_create`.
+
+**Model return types**: Model `get`/`create` methods must return typed dataclass instances, never raw `dict`. Use attribute access, not key indexing.
+
+**Database concurrency**: Use `SELECT ... FOR UPDATE` inside a transaction for read-then-write mutations on the same row. See `User.credit_from_house()` for the pattern.
+
+**Batch operations**: Avoid loops that issue one query per iteration (N+1). Use `unnest()` array unpacking or multi-row `INSERT ... VALUES` for bulk operations.
+
+**Type safety at boundaries**: Validate and convert `str` inputs to rich types (e.g., `Skill` enum) at the entry point (e.g., `EffectsCollector`), then propagate the typed value through the entire pipeline. Never pass raw strings through internal layers when an enum or dataclass exists.
 
 **Default room**: Use `Room.get_default(pool)` to find the default spawn room. Do not inline `SELECT ... WHERE is_default = TRUE` queries.
 
@@ -99,6 +113,10 @@ The codebase uses an MVC + events architecture:
 **Entity resolution**: When querying entity fields that support prototype inheritance (like `on_close`, `contents_visible`, etc.), use the `resolve_entity()` SQL function instead of joining directly to the `entities` table. Direct joins return NULL for inherited values, while `resolve_entity()` follows the prototype chain and applies defaults.
 
 **Entity display names**: When formatting entity names in user-facing text (memos, Discord messages, notifications), wrap with `ViewEntity(entity)` from `mudd/views.py`. Use `.name` for bold+emoji (`**Treasure Chest 🔵**`) or `.display_name` for emoji only. Never use `entity.name` directly in player-visible strings.
+
+**Discord permission gotchas**:
+- Thread creation permissions (`create_public_threads`, `create_private_threads`, `send_messages_in_threads`) are independent of `send_messages`. Deny each one explicitly for read-only channels.
+- The bot cannot edit the server owner's nickname. Check `member.id == guild.owner_id` before calling `member.edit(nick=...)` to avoid error spam.
 
 **Docker**: The `.dockerignore` uses an allowlist pattern (starts with `*`, then `!` to include specific paths). **When adding new top-level directories needed at runtime, you must add them to `.dockerignore`.**
 
@@ -140,6 +158,10 @@ The codebase uses an MVC + events architecture:
 - Use `Self` return type for methods that return their own class (e.g., `with_observers()`)
 - Use `@override` on methods that override a base class method
 
+**Idempotent formatting**: Functions that format strings for repeated application (e.g., nickname suffixes, display labels) must strip previous formatting before applying. Assume the input may already contain the old format.
+
+**Colocate data with its type**: When an enum has associated data (emoji, display name, multiplier), store it as a property on the enum using `match` (no wildcard — forces handling new members). Don't use separate dicts that can go out of sync.
+
 ## PR Reviews
 
 PR reviews are written to `review.md` (gitignored). When working with reviews:
@@ -160,6 +182,8 @@ pytest mudd/                     # Run only colocated unit tests
 ```
 
 **Unit test convention**: Pure unit tests live alongside source files with the `_unit_test.py` suffix (e.g., `mudd/utils/text_unit_test.py` tests `mudd/utils/text.py`). No `unittest.mock` in unit tests — if it needs mocks, write an integration test instead.
+
+**Test helpers must mirror production**: When test helpers (e.g., `move()`, `interact()`) construct observers or flush pipelines, they must use the same observer list and `flush_all()` path as production cogs. Divergence masks integration bugs.
 
 ## Devcontainer Setup
 

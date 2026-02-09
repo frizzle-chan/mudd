@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass, field
 
+from mudd.events.observer import Observer
 from mudd.events.types import (
     BroadcastEvent,
     ClearFocusSignal,
@@ -15,9 +16,11 @@ from mudd.events.types import (
     GrantCurrencyEvent,
     GrantEvent,
     GrantRandomEvent,
+    GrantXPSignal,
     PickupSignal,
     SetFocusSignal,
 )
+from mudd.skills.registry import Skill
 
 
 @dataclass
@@ -27,8 +30,9 @@ class EffectsObserver:
     The observer collects events synchronously during rendering and provides
     properties for the cog to check and process after sending the response.
 
-    The flush() method is a no-op since the cog handles the actual side effects
-    (sending broadcasts, processing grants, etc.).
+    flush() forwards collected XP grants to other observers and returns
+    no new events. The cog handles the actual side effects (sending
+    broadcasts, processing grants, etc.).
 
     Usage:
         effects = EffectsObserver()
@@ -42,10 +46,13 @@ class EffectsObserver:
             await move_to_inventory(...)
     """
 
+    flush_priority: int = 20
+    _forward_targets: tuple[Observer, ...] = ()
     _broadcasts: list[str] = field(default_factory=list)
     _grants: list[str] = field(default_factory=list)
     _grant_randoms: list[str] = field(default_factory=list)
     _currency_grants: list[int] = field(default_factory=list)
+    _xp_grants: list[tuple[Skill, int]] = field(default_factory=list)
     _pickup_signaled: bool = False
     _drop_signaled: bool = False
     _destroy_signaled: bool = False
@@ -68,6 +75,8 @@ class EffectsObserver:
                 self._grant_randoms.append(tag)
             case GrantCurrencyEvent(amount=amount):
                 self._currency_grants.append(amount)
+            case GrantXPSignal(skill=skill, amount=amount):
+                self._xp_grants.append((skill, amount))
             case PickupSignal():
                 self._pickup_signaled = True
             case DropSignal():
@@ -83,12 +92,23 @@ class EffectsObserver:
             case EntityPickedUpEvent() | EntityDroppedEvent() | EntityDestroyedEvent():
                 pass  # Model events - handled by DiscordReconciler
 
-    async def flush(self) -> None:
-        """Flush pending operations (no-op for EffectsObserver).
+    async def flush(self) -> list[GameEvent]:
+        """Forward collected XP grants to other observers.
 
-        The cog handles the actual side effects; this observer just collects.
+        Iterates _xp_grants and notifies each forward target so that
+        SkillsObserver (and others) receive GrantXPSignal without
+        Scene.execute() reaching into observer state.
+
+        Returns:
+            Empty list (no new events produced).
         """
-        pass
+        for skill, amount in self._xp_grants:
+            for target in self._forward_targets:
+                target.notify(GrantXPSignal(skill=skill, amount=amount))
+        return []
+
+    async def post_flush(self) -> None:
+        """No-op — EffectsObserver has no post-flush work."""
 
     @property
     def broadcasts(self) -> list[str]:
@@ -109,6 +129,16 @@ class EffectsObserver:
     def currency_grants(self) -> list[int]:
         """Amounts of currency to grant."""
         return self._currency_grants
+
+    @property
+    def xp_grants(self) -> list[tuple[Skill, int]]:
+        """XP grants as (skill, amount) tuples."""
+        return self._xp_grants
+
+    @property
+    def has_xp_grants(self) -> bool:
+        """Whether any XP grants were signaled during template rendering."""
+        return len(self._xp_grants) > 0
 
     @property
     def has_pickup(self) -> bool:
