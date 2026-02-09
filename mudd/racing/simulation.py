@@ -86,9 +86,31 @@ def simulate_race(
     snapshots: list[list[float]] = [list(positions)]
     events: list[BurstEvent] = []
 
+    # Per-phase form factors: how each horse performs in each race phase.
+    # Three independent draws create natural lead changes — a horse can
+    # start strong then fade, or come from behind in the final stretch.
+    # Form variance is uniform across horses (race-day luck). Consistency
+    # only affects per-tick noise, not race-day form.
+    form_per_phase = [
+        (
+            rng.gauss(0, config.form_variance),
+            rng.gauss(0, config.form_variance),
+            rng.gauss(0, config.form_variance),
+        )
+        for _ in horses
+    ]
+
     for tick in range(1, config.num_ticks + 1):
         phase = tick / config.num_ticks
         w_speed, w_stamina, w_luck = _phase_weights(phase)
+
+        # Select form bonus for current phase
+        if phase <= 0.2:
+            phase_idx = 0
+        elif phase <= 0.7:
+            phase_idx = 1
+        else:
+            phase_idx = 2
 
         avg_pos = sum(positions) / n
 
@@ -98,10 +120,13 @@ def simulate_race(
                 (h.speed / 100.0) * w_speed
                 + (h.stamina / 100.0) * w_stamina
                 + (h.luck / 100.0) * w_luck
+                + form_per_phase[i][phase_idx]
             )
 
-            # Gaussian noise scaled by inconsistency
-            noise = rng.gauss(0, (100 - h.consistency) / 100.0 * config.noise_factor)
+            # Gaussian noise scaled by inconsistency (floor of 0.2 prevents
+            # high-consistency horses from being perfectly deterministic)
+            noise_scale = max(0.2, (100 - h.consistency) / 100.0)
+            noise = rng.gauss(0, noise_scale * config.noise_factor)
 
             # Clamp base + noise to >= 0
             progress = max(0.0, base + noise)
@@ -113,10 +138,6 @@ def simulate_race(
                 )
                 fatigue = config.fatigue_severity * fatigue_pct * (1 - h.stamina / 100)
                 progress *= 1.0 - fatigue
-
-            # Rubber-banding
-            rubber_band = (avg_pos - positions[i]) * config.rubber_band_factor
-            progress += rubber_band
 
             # Burst events
             if rng.random() < config.burst_chance:
@@ -132,6 +153,10 @@ def simulate_race(
 
             # Scale by progress_scale / num_ticks
             progress *= config.progress_scale / config.num_ticks
+
+            # Rubber-banding (applied to scaled progress per spec)
+            rubber_band = (avg_pos - positions[i]) * config.rubber_band_factor
+            progress += rubber_band
 
             # No backward movement
             positions[i] = max(positions[i], positions[i] + progress)

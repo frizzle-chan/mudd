@@ -75,6 +75,31 @@ In the context of **maintaining per-horse performance counters for dynamic odds*
 
 In the context of **tuning race balance and writing reproducible tests**, facing **the need to control randomness in the simulation**, we decided to **accept a `Random` instance as an explicit parameter to the simulation function**, to achieve **fully reproducible race outcomes for any given seed while keeping the simulation pure and testable**, accepting **that callers must construct and pass the RNG explicitly**.
 
+### Rubber-Banding Placement
+
+In the context of **keeping races visually competitive**, facing **the choice of whether to apply rubber-banding before or after progress scaling**, we decided to **apply rubber-banding after the `progress_scale / num_ticks` multiplication**, to achieve **rubber-band forces that are proportional to actual position gaps rather than being diluted by the scaling step**, accepting **that the rubber-band factor needed recalibration from the original spec value**.
+
+With the original placement (before scaling), rubber-band forces computed from positions in the 0–1 range were added to unscaled progress values in the 0.3–0.8 range, then divided by ~30. The effect was negligible. After the fix, the rubber-band force and the progress value are in the same coordinate space.
+
+### Per-Phase Form Factors
+
+In the context of **creating spectator drama with lead changes**, facing **the problem that per-tick gaussian noise averages out over 60 ticks via the law of large numbers**, we decided to **draw three independent additive form bonuses per horse (one per race phase) from a uniform variance distribution**, to achieve **natural lead changes when phase transitions shift which horse has the best effective speed**, accepting **an additional tuning constant (`form_variance`) and a departure from the spec's noise-only variance model**.
+
+Key design choices:
+- Form variance is **uniform across horses** (not scaled by consistency). Consistency only controls per-tick noise. This prevents volatile horses from gaining a structural advantage in multi-horse races where wide variance distributions produce more extreme positive outcomes.
+- Form bonuses are **additive** to per-tick base progress, not multiplicative. This helps weaker horses more in absolute terms, giving even the weakest horse a realistic (if small) chance of winning.
+- Three **independent** draws per race (start, middle, final) create the dramatic arcs the spec calls for: a horse can surge early and fade, or come from behind in the final stretch.
+
+### Odds Formula Calibration
+
+In the context of **setting displayed betting odds that reflect actual win probabilities**, facing **a mismatch between the spec's base strength formula and the simulation's phase-weighted physics**, we decided to **calibrate the odds formula weights to match empirical simulation outcomes**, to achieve **displayed odds that are within 2% of actual win rates, well within the 10% house edge buffer**, accepting **that the odds weights differ from the original spec values**.
+
+The spec's original formula (`speed*0.5 + stamina*0.3 + luck*0.1 + consistency*0.1`) implied a simulation where speed dominates. The actual simulation weights luck heavily in the start phase (0.6 weight for 20% of ticks) and stamina in the final stretch (0.6 weight for 30% of ticks), producing effective weights closer to `speed*0.35 + stamina*0.35 + luck*0.25 + consistency*0.05`.
+
+### Noise Floor
+
+In the context of **preventing high-consistency horses from having zero variance**, facing **the problem that a consistency-100 horse would have zero noise and thus perfectly deterministic results**, we decided to **clamp the noise scale to a minimum of 0.2**, to achieve **some baseline unpredictability for all horses while preserving the relative advantage of high consistency**, accepting **that even the most consistent horse will occasionally stumble or surge**.
+
 ## Consequences
 
 ### Positive

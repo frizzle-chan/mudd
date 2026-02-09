@@ -40,9 +40,12 @@ class HorseOdds:
 def base_strength(speed: int, stamina: int, luck: int, consistency: int) -> float:
     """Compute static base strength from attributes.
 
-    Formula: speed*0.5 + stamina*0.3 + luck*0.1 + consistency*0.1
+    Weights are calibrated to match the simulation's phase-weighted
+    physics: luck has outsized influence in the start phase (20% of
+    ticks at 0.6 weight), and stamina dominates the final stretch
+    plus fatigue resistance.
     """
-    return speed * 0.5 + stamina * 0.3 + luck * 0.1 + consistency * 0.1
+    return speed * 0.35 + stamina * 0.35 + luck * 0.25 + consistency * 0.05
 
 
 def performance_modifier(
