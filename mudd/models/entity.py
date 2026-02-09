@@ -772,6 +772,11 @@ class EntityInstance:
             List of EntityInstance objects contained in this entity
         """
         if self.room_id is None:
+            logger.debug(
+                "EntityInstance.get_contents() for %s: room_id is None, "
+                "returning empty",
+                self.entity.id
+            )
             return []
 
         rows = await self._pool.fetch(
@@ -781,10 +786,23 @@ class EntityInstance:
             self.entity.id,
         )
 
+        logger.debug(
+            "EntityInstance.get_contents() for %s in room %s: found %d rows",
+            self.entity.id,
+            self.room_id,
+            len(rows)
+        )
+
         instances = []
         for row in rows:
             entity = ResolvedEntity._from_row(row)
             instances.append(
                 EntityInstance._from_row(row, entity, self._pool, self._observers)
             )
+        
+        logger.debug(
+            "EntityInstance.get_contents() for %s: returning %s",
+            self.entity.id,
+            [e.entity.name for e in instances]
+        )
         return instances
