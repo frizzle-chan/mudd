@@ -268,7 +268,7 @@ class Movement(commands.Cog):
                 UserLeftEvent(user_id=member.id, guild_id=member.guild.id)
             )
 
-            # Flush to delete inventory forum
+            # Flush to delete inventory forum and skills channel
             await reconciler.flush()
 
             # Delete user from database (CASCADE handles related records)

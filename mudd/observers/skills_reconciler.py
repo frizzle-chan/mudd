@@ -11,7 +11,7 @@ import discord
 if TYPE_CHECKING:
     from mudd.observers.discord import RoomChannelCache
 
-from mudd.events.types import GameEvent, LevelUpEvent, XPGainedEvent
+from mudd.events.types import GameEvent, LevelUpEvent, UserLeftEvent, XPGainedEvent
 from mudd.models.skills import UserSkill
 from mudd.models.skills_channel import UserSkillsChannel
 from mudd.observers.skills_announcements import SkillsAnnouncements
@@ -25,6 +25,11 @@ from mudd.skills.formatting import (
 logger = logging.getLogger(__name__)
 
 SKILLS_CATEGORY_NAME = "Skills"
+
+
+def _get_skills_channel_name(username: str) -> str:
+    """Get the channel name for a user's skills channel."""
+    return f"{username}-skills"
 
 
 async def ensure_roles(guild: discord.Guild) -> None:
@@ -101,6 +106,7 @@ class SkillsReconciler:
         self._announcements = SkillsAnnouncements(bot, room_cache)
         self._xp_events: list[XPGainedEvent] = []
         self._level_up_events: list[LevelUpEvent] = []
+        self._user_left_events: list[UserLeftEvent] = []
 
     def notify(self, event: GameEvent) -> None:
         """Queue XP and level-up events for processing."""
@@ -109,6 +115,8 @@ class SkillsReconciler:
                 self._xp_events.append(evt)
             case LevelUpEvent() as evt:
                 self._level_up_events.append(evt)
+            case UserLeftEvent() as evt:
+                self._user_left_events.append(evt)
 
     async def flush(self) -> None:
         """Process queued events, deferring announcements to post_announcements()."""
@@ -116,6 +124,8 @@ class SkillsReconciler:
         self._xp_events = []
         level_up_events = self._level_up_events
         self._level_up_events = []
+        user_left_events = self._user_left_events
+        self._user_left_events = []
 
         # Collect unique user IDs that need updates
         user_ids: set[int] = set()
@@ -152,6 +162,13 @@ class SkillsReconciler:
                     "Failed to update milestone role for user %d",
                     user_id,
                 )
+
+        # Handle user departures
+        for evt in user_left_events:
+            for guild in self._bot.guilds:
+                if evt.guild_id != guild.id:
+                    continue
+                await self._handle_user_left(guild, evt)
 
         # Prepare level-up announcements (sent later via post_announcements)
         logger.info(
@@ -192,6 +209,23 @@ class SkillsReconciler:
             # Repair thread/command permissions on existing channels
             channel = guild.get_channel(channel_id)
             if isinstance(channel, discord.TextChannel):
+                expected_name = _get_skills_channel_name(member.name)
+                if channel.name != expected_name:
+                    try:
+                        await channel.edit(name=expected_name)
+                        logger.info(
+                            "Renamed skills channel '%s' -> '%s' for user %d",
+                            channel.name,
+                            expected_name,
+                            user_id,
+                        )
+                    except discord.HTTPException as e:
+                        logger.error(
+                            "Failed to rename skills channel %d: %s",
+                            channel.id,
+                            e,
+                        )
+
                 overwrites = channel.overwrites_for(member)
                 if overwrites.create_public_threads is not False:
                     await channel.set_permissions(
@@ -238,13 +272,55 @@ class SkillsReconciler:
             channel = guild.get_channel(record.channel_id)
             if channel is not None:
                 return record.channel_id
+            # Channel was deleted from Discord, clear stale DB record
+            logger.info(
+                "Skills channel %d was deleted from Discord, "
+                "clearing DB record for user %d",
+                record.channel_id,
+                user_id,
+            )
+            await UserSkillsChannel.delete_by_user(self._pool, user_id)
 
-        # Create channel
+        # Look up member and expected name
         category = await ensure_category(guild)
         member = guild.get_member(user_id)
         if member is None:
             raise ValueError(f"Member {user_id} not in guild")
 
+        channel_name = _get_skills_channel_name(member.name)
+
+        # Try to recover existing channel by name (e.g. after DB reset)
+        matching = [
+            ch
+            for ch in category.channels
+            if isinstance(ch, discord.TextChannel) and ch.name == channel_name
+        ]
+        matching.sort(key=lambda ch: ch.id)
+
+        if matching:
+            recovered = matching[0]
+            # Delete duplicates
+            for dup in matching[1:]:
+                try:
+                    await dup.delete(
+                        reason="Duplicate skills channel cleanup during sync"
+                    )
+                    logger.info("Deleted duplicate skills channel (ID: %d)", dup.id)
+                except discord.HTTPException as e:
+                    logger.error("Failed to delete duplicate channel %d: %s", dup.id, e)
+
+            await UserSkillsChannel.create_or_update(
+                self._pool, user_id, recovered.id, category.id
+            )
+            logger.info(
+                "Recovered skills channel '%s' (ID: %d) for user %d",
+                recovered.name,
+                recovered.id,
+                user_id,
+            )
+            return recovered.id
+
+        # Create new channel
         overwrites = {
             guild.default_role: discord.PermissionOverwrite(view_channel=False),
             member: discord.PermissionOverwrite(
@@ -262,7 +338,7 @@ class SkillsReconciler:
             ),
         }
         channel = await guild.create_text_channel(
-            f"{member.display_name}-skills",
+            channel_name,
             category=category,
             overwrites=overwrites,
             reason="Per-user skills channel",
@@ -389,3 +465,65 @@ class SkillsReconciler:
 
             if target_role not in member.roles:
                 await member.add_roles(target_role)
+
+    async def _handle_user_left(
+        self, guild: discord.Guild, event: UserLeftEvent
+    ) -> None:
+        """Handle a user leaving: clean up their skills channel."""
+        record = await UserSkillsChannel.get(self._pool, event.user_id)
+        if record is None:
+            return
+        channel = guild.get_channel(record.channel_id)
+        if channel:
+            try:
+                await channel.delete()
+                logger.info(
+                    "Deleted skills channel for departing user %d",
+                    event.user_id,
+                )
+            except discord.HTTPException as e:
+                logger.error(
+                    "Failed to delete skills channel for %d: %s",
+                    event.user_id,
+                    e,
+                )
+
+    async def prune_orphan_channels(self, guild: discord.Guild) -> int:
+        """Delete skills channels not tracked in the database.
+
+        Args:
+            guild: Discord guild
+
+        Returns:
+            Number of channels pruned
+        """
+        category = None
+        for cat in guild.categories:
+            if cat.name == SKILLS_CATEGORY_NAME:
+                category = cat
+                break
+
+        if category is None:
+            return 0
+
+        valid_ids = await UserSkillsChannel.get_all_channel_ids(self._pool)
+        pruned = 0
+
+        for channel in list(category.channels):
+            if channel.id not in valid_ids:
+                try:
+                    await channel.delete(reason="Orphan skills channel pruning")
+                    logger.info(
+                        "Pruned orphan skills channel '%s' (ID: %d)",
+                        channel.name,
+                        channel.id,
+                    )
+                    pruned += 1
+                except discord.HTTPException as e:
+                    logger.error(
+                        "Failed to prune skills channel %d: %s",
+                        channel.id,
+                        e,
+                    )
+
+        return pruned

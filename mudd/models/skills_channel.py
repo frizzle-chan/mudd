@@ -95,3 +95,29 @@ class UserSkillsChannel:
             user_id,
             message_id,
         )
+
+    @classmethod
+    async def delete_by_user(cls, pool: asyncpg.Pool, user_id: int) -> None:
+        """Delete the skills channel record for a user.
+
+        Args:
+            pool: Database connection pool
+            user_id: Discord user ID
+        """
+        await pool.execute(
+            "DELETE FROM user_skills_channels WHERE user_id = $1",
+            user_id,
+        )
+
+    @classmethod
+    async def get_all_channel_ids(cls, pool: asyncpg.Pool) -> set[int]:
+        """Get all tracked skills channel IDs.
+
+        Args:
+            pool: Database connection pool
+
+        Returns:
+            Set of channel IDs
+        """
+        rows = await pool.fetch("SELECT channel_id FROM user_skills_channels")
+        return {row["channel_id"] for row in rows}

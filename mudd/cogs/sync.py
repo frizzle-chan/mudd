@@ -284,7 +284,11 @@ class Sync(commands.Cog):
             except Exception:
                 logger.exception("Failed to sync skills for user %d", member.id)
 
-        logger.info(f"Skills sync for {guild.name}: {synced} users")
+        # Prune orphan skills channels not tracked in DB
+        pruned = await reconciler.skills.prune_orphan_channels(guild)
+        logger.info(
+            f"Skills sync for {guild.name}: {synced} users, {pruned} orphans pruned"
+        )
 
     async def _sync_user_visibility(
         self, guild, reconciler: DiscordReconciler
