@@ -35,3 +35,15 @@ class TestSkill:
         skills = list(Skill)
         assert len(skills) == SKILL_COUNT
         assert Skill.AGILITY in skills
+
+    def test_emoji(self) -> None:
+        assert Skill.AGILITY.emoji == "⚡"
+        assert Skill.ATTACK.emoji == "⚔️"
+        assert Skill.SPEECH.emoji == "💬"
+        assert Skill.VITALITY.emoji == "❤️"
+        assert Skill.FISHING.emoji == "🎣"
+
+    def test_all_skills_have_emoji(self) -> None:
+        for skill in Skill:
+            assert isinstance(skill.emoji, str)
+            assert len(skill.emoji) > 0

@@ -7,7 +7,7 @@ from typing import Any
 
 from mudd.events import EffectsCollector
 from mudd.models import IReadableEntity, IUser
-from mudd.skills.registry import SKILL_EMOJI, Skill
+from mudd.skills.registry import Skill
 from mudd.utils import async_cached_property
 from mudd.utils.text import RARITY_EMOJI
 
@@ -71,9 +71,7 @@ class ViewSkill:
     @property
     def display_name(self) -> str:
         """Skill name formatted with emoji prefix."""
-        emoji = SKILL_EMOJI.get(self._skill, "")
-        name = self._skill.display_name
-        return f"{emoji} {name}" if emoji else name
+        return f"{self._skill.emoji} {self._skill.display_name}"
 
 
 class ViewUser:

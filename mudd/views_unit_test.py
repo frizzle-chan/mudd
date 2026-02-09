@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from mudd.skills.registry import SKILL_EMOJI, Skill
+from mudd.skills.registry import Skill
 from mudd.views import ViewSkill
 
 
@@ -21,7 +21,6 @@ class TestViewSkill:
 
     def test_all_skills_have_emoji(self) -> None:
         for skill in Skill:
-            assert skill in SKILL_EMOJI, f"Missing emoji for {skill}"
             view = ViewSkill(skill)
             assert view.display_name != skill.display_name
 

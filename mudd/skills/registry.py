@@ -19,13 +19,20 @@ class Skill(StrEnum):
         """Human-readable display name for this skill."""
         return self.value.capitalize()
 
+    @property
+    def emoji(self) -> str:
+        """Emoji icon for this skill."""
+        match self:
+            case Skill.AGILITY:
+                return "\u26a1"
+            case Skill.ATTACK:
+                return "\u2694\ufe0f"
+            case Skill.SPEECH:
+                return "\U0001f4ac"
+            case Skill.VITALITY:
+                return "\u2764\ufe0f"
+            case Skill.FISHING:
+                return "\U0001f3a3"
 
-SKILL_EMOJI: dict[Skill, str] = {
-    Skill.AGILITY: "\u26a1",
-    Skill.ATTACK: "\u2694\ufe0f",
-    Skill.SPEECH: "\U0001f4ac",
-    Skill.VITALITY: "\u2764\ufe0f",
-    Skill.FISHING: "\U0001f3a3",
-}
 
 SKILL_COUNT: int = len(Skill)
