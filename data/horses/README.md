@@ -12,6 +12,10 @@ Each horse is a [GNU recutils](https://www.gnu.org/software/recutils/) record wi
 - `<id>_race.png` — Sprite used in race playback frames (16×16 PNG).
 - `<id>_victory.png` — Image shown when the horse wins (recommended 128×128 PNG, flexible).
 
+## Art guidelines
+
+All horse image assets must be hand-drawn. AI-generated artwork will not be accepted.
+
 ## Adding a horse
 
 1. Create `<id>.rec`:
