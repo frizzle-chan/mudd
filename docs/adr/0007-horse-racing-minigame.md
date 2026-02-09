@@ -63,6 +63,18 @@ In the context of **rendering race playback frames**, facing **the need for a sm
 
 Victory images have no strict size constraint — they are displayed standalone in the win announcement embed. For pixel art, 128×128 is the recommended size.
 
+### Simulation Engine Placement
+
+In the context of **building a race simulation for both CLI tuning and Discord playback**, facing **the choice between embedding simulation logic in a script or a cog**, we decided to **place the simulation engine in a reusable `mudd/racing/` package**, to achieve **shared logic between the CLI tuning tool and the Discord cog without duplication**, accepting **an additional package boundary to maintain**.
+
+### Rolling-Window Counter Strategy
+
+In the context of **maintaining per-horse performance counters for dynamic odds**, facing **the choice between incremental counter updates and full recomputation from race results**, we decided to **recompute rolling-window counters from `race_results` after each race using batch SQL with window functions**, to achieve **simplicity and guaranteed correctness regardless of race deletions or counter drift**, accepting **slightly higher query cost per update compared to incremental maintenance**.
+
+### Simulation Determinism
+
+In the context of **tuning race balance and writing reproducible tests**, facing **the need to control randomness in the simulation**, we decided to **accept a `Random` instance as an explicit parameter to the simulation function**, to achieve **fully reproducible race outcomes for any given seed while keeping the simulation pure and testable**, accepting **that callers must construct and pass the RNG explicitly**.
+
 ## Consequences
 
 ### Positive
