@@ -815,9 +815,9 @@ Room: restroom
 ContentsVisible: no
 DescriptionShort: A metal {{ e.name }} sits in the corner.
 DescriptionLong: A stainless steel trash can with a swinging lid. It's overflowing with crumpled paper towels.
-OnOpen: You peer into the {{ e.name }}, pushing aside damp paper towels.{% if e.contents %} You spot:
+OnOpen: {{ effects.set_focus() }}You peer into the {{ e.name }}, pushing aside damp paper towels.{% if e.contents %} You spot:
 + {{ e.contents }}{% else %} Nothing but garbage.{% endif %}
-OnClose: You let the lid swing shut.
+OnClose: {{ effects.clear_focus() }}You let the lid swing shut.
 OnTouch: The metal is cold and slightly damp.
 
 # ----------------------------------------------------------------------------
@@ -1491,9 +1491,9 @@ Room: library
 DescriptionShort: A {{ e.name }} sits in the southern half of the room.
 DescriptionLong: An antique writing desk with a worn leather top. There's a drawer you can __open__.
 ContentsVisible: no
-OnOpen: You pull open the drawer.{% if e.contents %} Inside:
+OnOpen: {{ effects.set_focus() }}You pull open the drawer.{% if e.contents %} Inside:
 + {{ e.contents }}{% else %} It's empty.{% endif %}
-OnClose: You slide the drawer shut.
+OnClose: {{ effects.clear_focus() }}You slide the drawer shut.
 
 Id: library_side_table
 Name: Side Table
