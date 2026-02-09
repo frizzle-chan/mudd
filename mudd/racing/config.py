@@ -13,6 +13,7 @@ class RaceConfig:
     """
 
     house_edge: float = 0.10
+    odds_exponent: float = 2.0
     rolling_window: int = 20
     num_ticks: int = 60
     rubber_band_factor: float = 0.05

@@ -72,16 +72,19 @@ def compute_odds(
     """
     # Base strengths
     bases = [base_strength(h.speed, h.stamina, h.luck, h.consistency) for h in horses]
-    total_base = sum(bases)
 
-    # Performance modifiers
+    # Exponentiate to amplify differences between horses
+    powered = [b**config.odds_exponent for b in bases]
+    total_powered = sum(powered)
+
+    # Performance modifiers (use exponentiated values for expected win rate)
     modifiers = [
-        performance_modifier(b, total_base, h.recent_wins, h.recent_races)
-        for b, h in zip(bases, horses, strict=True)
+        performance_modifier(p, total_powered, h.recent_wins, h.recent_races)
+        for p, h in zip(powered, horses, strict=True)
     ]
 
     # Dynamic strengths
-    dynamics = [b * m for b, m in zip(bases, modifiers, strict=True)]
+    dynamics = [p * m for p, m in zip(powered, modifiers, strict=True)]
     total_dynamic = sum(dynamics)
 
     # True probabilities
