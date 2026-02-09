@@ -7,6 +7,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import sys
+from pathlib import Path
 from random import Random
 
 import asyncpg
@@ -27,6 +28,13 @@ async def run(args: argparse.Namespace) -> int:
         create_race,
         get_recent_results,
         update_rolling_counters,
+    )
+    from mudd.racing.rendering import (
+        RaceHorse,
+        fallback_sprite,
+        render_race,
+        sprite_from_bytes,
+        tile_frames,
     )
     from mudd.racing.simulation import BurstType, simulate_race
 
@@ -116,6 +124,30 @@ async def run(args: argparse.Namespace) -> int:
             )
             print(f"\nEvents: {surges} surges, {stumbles} stumbles")
 
+            # Render race image if requested
+            if args.render:
+                race_horses = [
+                    RaceHorse(
+                        name=names[h.id],
+                        sprite=(
+                            sprite_from_bytes(h.race_image)
+                            if h.race_image
+                            else fallback_sprite(i)
+                        ),
+                    )
+                    for i, h in enumerate(horses)
+                ]
+                frames = render_race(race_horses, result)
+                tiled = tile_frames(frames)
+
+                render_path = Path(args.render)
+                if args.count > 1:
+                    out = render_path.with_stem(f"{render_path.stem}_{race_num}")
+                else:
+                    out = render_path
+                tiled.save(out)
+                print(f"Rendered to {out}")
+
             # Track aggregate stats
             for rank, idx in enumerate(result.finishing_order):
                 hid = result.horse_ids[idx]
@@ -187,6 +219,9 @@ def main() -> int:
     )
     parser.add_argument(
         "-v", "--verbose", action="store_true", help="Show per-tick detail"
+    )
+    parser.add_argument(
+        "--render", type=str, default=None, help="Save tiled race image to PATH"
     )
     args = parser.parse_args()
     return asyncio.run(run(args))
