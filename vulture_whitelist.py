@@ -2,4 +2,8 @@
 # MuddBot is imported under TYPE_CHECKING in sync.py to avoid circular imports
 from main import MuddBot
 
+# RoomChannelCache is imported under TYPE_CHECKING in skills_reconciler.py
+from mudd.observers.discord import RoomChannelCache
+
 _ = MuddBot  # Mark as used
+_ = RoomChannelCache

@@ -165,7 +165,7 @@ class DiscordReconciler:
         self._zone_room = ZoneRoomReconciler(bot, pool, console_channel, seen_orphans)
         self._permissions = PermissionReconciler(bot, pool, room_cache)
         self._inventory = InventoryReconciler(bot, pool)
-        self._skills = SkillsReconciler(bot, pool)
+        self._skills = SkillsReconciler(bot, pool, room_cache)
 
     def notify(self, event: GameEvent) -> None:
         """Receive notification (sync). Delegate to sub-reconcilers."""

@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING
 
 import asyncpg
 import discord
+
+if TYPE_CHECKING:
+    from mudd.observers.discord import RoomChannelCache
 
 from mudd.events.types import GameEvent, LevelUpEvent, XPGainedEvent
 from mudd.models.skills import UserSkill
@@ -39,9 +43,11 @@ class SkillsReconciler:
         self,
         bot: discord.Client,
         pool: asyncpg.Pool,
+        room_cache: RoomChannelCache | None = None,
     ) -> None:
         self._bot = bot
         self._pool = pool
+        self._room_cache = room_cache
         self._xp_events: list[XPGainedEvent] = []
         self._level_up_events: list[LevelUpEvent] = []
         self._pending_announcements: list[tuple[discord.TextChannel, str]] = []
@@ -348,6 +354,31 @@ class SkillsReconciler:
             event.new_level,
             event.room_id,
         )
+
+        # Fast path: use RoomChannelCache for O(1) lookup
+        if self._room_cache is not None:
+            channel_id = self._room_cache.get_channel_for_room(event.room_id)
+            if channel_id is not None:
+                channel = self._bot.get_channel(channel_id)
+                if isinstance(channel, discord.TextChannel):
+                    member = channel.guild.get_member(event.user_id)
+                    if member is not None:
+                        message = format_level_up_message(
+                            member.mention,
+                            event.skill,
+                            event.new_level,
+                        )
+                        self._pending_announcements.append((channel, message))
+                        return
+
+            logger.warning(
+                "No channel found for level-up announcement: room_id='%s', user_id=%d",
+                event.room_id,
+                event.user_id,
+            )
+            return
+
+        # Fallback: linear scan when cache is not available
         for guild in self._bot.guilds:
             member = guild.get_member(event.user_id)
             if member is None:
