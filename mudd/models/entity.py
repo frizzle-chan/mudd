@@ -680,6 +680,12 @@ class EntityInstance:
         Returns:
             New EntityInstance with updated location
         """
+        from mudd.models.spawning_pool import SpawningPool
+
+        # Reset the spawning pool timer so a replacement doesn't spawn
+        # instantly (must run before spawning_pool_id is cleared below).
+        await SpawningPool.reset_timer(self._pool, self.instance_id)
+
         await self._pool.execute(
             """
             UPDATE entity_instances
@@ -746,6 +752,12 @@ class EntityInstance:
         Pre-fetches thread_id so observers can clean up Discord threads
         after the row is deleted.
         """
+        from mudd.models.spawning_pool import SpawningPool
+
+        # Reset the spawning pool timer so a replacement doesn't spawn
+        # instantly (must run before the row is deleted).
+        await SpawningPool.reset_timer(self._pool, self.instance_id)
+
         thread_id = await EntityInstance.get_thread_id(self._pool, self.instance_id)
         for observer in self._observers:
             observer.notify(EntityDestroyedEvent(instance=self, thread_id=thread_id))

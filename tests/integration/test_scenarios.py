@@ -696,13 +696,18 @@ async def test_spawning_pool_respawn(test_db, clean_user_state):
     pools = await SpawningPool.get_all_with_counts(test_db)
     smashable_pool = next(p for p in pools if p.id == "test_smashable_pool")
 
-    # Pool should detect the vacancy
+    # Pool should detect the vacancy but not spawn immediately —
+    # destroying the item resets the respawn timer.
     assert smashable_pool.current_count == 0
     now = datetime.now(UTC)
-    assert smashable_pool.can_spawn(now)
+    assert not smashable_pool.can_spawn(now)
+
+    # After the respawn interval elapses, the pool can spawn again.
+    future = now + timedelta(minutes=smashable_pool.respawn_interval_minutes)
+    assert smashable_pool.can_spawn(future)
 
     # Spawn a replacement
-    instance = await smashable_pool.try_spawn(now)
+    instance = await smashable_pool.try_spawn(future)
     assert instance is not None
     assert instance.entity.name == "Test Smashable"
     assert instance.room_id == "store-room"

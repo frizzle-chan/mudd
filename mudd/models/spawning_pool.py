@@ -6,6 +6,7 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import TYPE_CHECKING
+from uuid import UUID
 
 import asyncpg
 
@@ -121,6 +122,26 @@ class SpawningPool:
         )
 
         return instance
+
+    @classmethod
+    async def reset_timer(cls, pool: asyncpg.Pool, instance_id: UUID) -> None:
+        """Reset the respawn timer for the pool that owns this instance.
+
+        Called when an item is taken or destroyed so the pool waits the full
+        respawn interval before spawning a replacement.
+
+        No-op if the instance has no spawning_pool_id.
+        """
+        await pool.execute(
+            """
+            UPDATE spawning_pools SET last_spawn_at = NOW()
+            WHERE id = (
+                SELECT spawning_pool_id FROM entity_instances
+                WHERE id = $1 AND spawning_pool_id IS NOT NULL
+            )
+            """,
+            instance_id,
+        )
 
     @classmethod
     def _validate_pools(
