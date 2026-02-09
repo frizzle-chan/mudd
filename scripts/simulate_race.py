@@ -1,3 +1,5 @@
+#!/usr/bin/env -S uv run
+
 """Simulate horse races against the dev database for balance tuning."""
 
 from __future__ import annotations
