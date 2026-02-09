@@ -41,6 +41,7 @@ Zone: floor-1
 Description: A cozy sitting room.
 +
 + to your east is the #foyer
++ to your north is a door to the #gallery
 
 Id: hallway
 Name: Hallway
@@ -75,6 +76,7 @@ Description: A long room, walls laden with gilt-framed canvases. Impressive art 
 +
 + to the west is the #library
 + to the east is the #foyer
++ to the south is a door to the #sitting-room
 
 Id: library
 Name: Library
