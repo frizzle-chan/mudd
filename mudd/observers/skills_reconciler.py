@@ -22,6 +22,7 @@ from mudd.skills.formatting import (
     format_skills_message,
     get_milestone_role,
 )
+from mudd.skills.registry import Skill
 
 logger = logging.getLogger(__name__)
 
@@ -128,10 +129,13 @@ class SkillsReconciler:
         user_left_events = self._user_left_events
         self._user_left_events = []
 
-        # Collect unique user IDs that need updates
+        # Collect unique user IDs that need updates and aggregate deltas
         user_ids: set[int] = set()
+        user_deltas: dict[int, dict[Skill, int]] = {}
         for evt in xp_events:
             user_ids.add(evt.user_id)
+            deltas = user_deltas.setdefault(evt.user_id, {})
+            deltas[evt.skill] = deltas.get(evt.skill, 0) + (evt.new_xp - evt.old_xp)
         for evt in level_up_events:
             user_ids.add(evt.user_id)
 
@@ -139,9 +143,12 @@ class SkillsReconciler:
         for user_id in user_ids:
             skills = await UserSkill.get_all(self._pool, user_id)
             total_level = sum(s.level for s in skills)
+            deltas = user_deltas.get(user_id)
 
             try:
-                await self._update_skills_channel(user_id, skills, total_level)
+                await self._update_skills_channel(
+                    user_id, skills, total_level, deltas=deltas
+                )
             except Exception:
                 logger.exception(
                     "Failed to update skills channel for user %d",
@@ -364,6 +371,8 @@ class SkillsReconciler:
         user_id: int,
         skills: list[UserSkill],
         total_level: int,
+        *,
+        deltas: dict[Skill, int] | None = None,
     ) -> None:
         """Update the skills overview message in the user's channel.
 
@@ -371,6 +380,7 @@ class SkillsReconciler:
             user_id: Discord user ID
             skills: Pre-fetched list of user skills
             total_level: Pre-computed total level
+            deltas: Optional XP deltas per skill to show (+N) indicators
         """
         record = await UserSkillsChannel.get(self._pool, user_id)
         if record is None:
@@ -387,7 +397,7 @@ class SkillsReconciler:
         # Build message content
         member = channel.guild.get_member(user_id)
         display_name = member.display_name if member else str(user_id)
-        content = format_skills_message(skills, total_level, display_name)
+        content = format_skills_message(skills, total_level, display_name, deltas)
 
         if message_id is not None:
             # Try to edit existing message

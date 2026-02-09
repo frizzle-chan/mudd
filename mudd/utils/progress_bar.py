@@ -7,7 +7,7 @@ Unicode block shading characters ░▒▓█.
 from __future__ import annotations
 
 SHADED = "░▒▓█"
-DEFAULT_SIZE = 20
+DEFAULT_SIZE = 16
 
 
 def shaded_bar(percent: float, size: int = DEFAULT_SIZE) -> str:

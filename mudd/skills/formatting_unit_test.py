@@ -90,6 +90,50 @@ class TestFormatSkillsMessage:
             assert "`" in line
 
 
+class TestFormatSkillsMessageDeltas:
+    _skills = [
+        UserSkill(user_id=1, skill="agility", xp=0, level=1),
+        UserSkill(user_id=1, skill="attack", xp=25, level=1),
+        UserSkill(user_id=1, skill="speech", xp=0, level=1),
+        UserSkill(user_id=1, skill="vitality", xp=0, level=1),
+        UserSkill(user_id=1, skill="fishing", xp=0, level=1),
+    ]
+
+    def test_no_deltas_no_indicator(self) -> None:
+        msg = format_skills_message(self._skills, 5, "Alice")
+        assert "(+" not in msg
+
+    def test_none_deltas_no_indicator(self) -> None:
+        msg = format_skills_message(self._skills, 5, "Alice", deltas=None)
+        assert "(+" not in msg
+
+    def test_single_delta_shown(self) -> None:
+        msg = format_skills_message(self._skills, 5, "Alice", deltas={Skill.ATTACK: 25})
+        assert "(+25) \U0001f199" in msg
+
+    def test_delta_only_on_matching_skill(self) -> None:
+        msg = format_skills_message(self._skills, 5, "Alice", deltas={Skill.ATTACK: 25})
+        lines = msg.split("\n")
+        bar_lines = [line for line in lines if "XP" in line]
+        # Only the Attack bar line should have the indicator
+        lines_with_delta = [line for line in bar_lines if "(+25)" in line]
+        assert len(lines_with_delta) == 1
+
+    def test_multiple_deltas(self) -> None:
+        msg = format_skills_message(
+            self._skills,
+            5,
+            "Alice",
+            deltas={Skill.ATTACK: 25, Skill.AGILITY: 10},
+        )
+        assert "(+25) \U0001f199" in msg
+        assert "(+10) \U0001f199" in msg
+
+    def test_zero_delta_not_shown(self) -> None:
+        msg = format_skills_message(self._skills, 5, "Alice", deltas={Skill.ATTACK: 0})
+        assert "(+" not in msg
+
+
 class TestFormatNickname:
     def test_basic_format(self) -> None:
         assert format_nickname("Alice", 15) == "Alice (LV15)"

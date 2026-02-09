@@ -55,7 +55,10 @@ def format_progress_bar(current_xp: int, level: int) -> str:
 
 
 def format_skills_message(
-    skills: list[UserSkill], total_level: int, display_name: str
+    skills: list[UserSkill],
+    total_level: int,
+    display_name: str,
+    deltas: dict[Skill, int] | None = None,
 ) -> str:
     """Format the full skills overview message.
 
@@ -66,6 +69,7 @@ def format_skills_message(
         skills: List of UserSkill instances
         total_level: Sum of all skill levels
         display_name: Player's display name
+        deltas: Optional map of skill to XP gained, shown as (+N) indicator
 
     Returns:
         Formatted Discord message string
@@ -84,6 +88,9 @@ def format_skills_message(
             xp = user_skill.xp
 
         bar = format_progress_bar(xp, level)
+        delta = deltas.get(skill_enum, 0) if deltas else 0
+        if delta:
+            bar = f"{bar} (+{delta}) \U0001f199"
         lines.append(f"{ViewSkill(skill_enum)} LV{level}")
         lines.append(bar)
         lines.append("")
