@@ -14,9 +14,9 @@ if TYPE_CHECKING:
 from mudd.events.types import GameEvent, LevelUpEvent, XPGainedEvent
 from mudd.models.skills import UserSkill
 from mudd.models.skills_channel import UserSkillsChannel
+from mudd.observers.skills_announcements import SkillsAnnouncements
 from mudd.skills.formatting import (
     MILESTONE_ROLE_NAMES,
-    format_level_up_message,
     format_nickname,
     format_skills_message,
     get_milestone_role,
@@ -25,6 +25,57 @@ from mudd.skills.formatting import (
 logger = logging.getLogger(__name__)
 
 SKILLS_CATEGORY_NAME = "Skills"
+
+
+async def ensure_roles(guild: discord.Guild) -> None:
+    """Ensure all milestone roles exist in the guild.
+
+    Args:
+        guild: Discord guild
+    """
+    existing = {r.name for r in guild.roles}
+    for role_name in MILESTONE_ROLE_NAMES:
+        if role_name not in existing:
+            try:
+                await guild.create_role(name=role_name, reason="Skills milestone role")
+                logger.info(
+                    "Created milestone role '%s' in %s",
+                    role_name,
+                    guild.name,
+                )
+            except Exception:
+                logger.exception("Failed to create role '%s'", role_name)
+
+
+async def ensure_category(guild: discord.Guild) -> discord.CategoryChannel:
+    """Ensure the Skills category exists.
+
+    Args:
+        guild: Discord guild
+
+    Returns:
+        The Skills category channel
+    """
+    for cat in guild.categories:
+        if cat.name == SKILLS_CATEGORY_NAME:
+            return cat
+
+    # Create hidden category
+    overwrites = {
+        guild.default_role: discord.PermissionOverwrite(view_channel=False),
+        guild.me: discord.PermissionOverwrite(
+            view_channel=True,
+            send_messages=True,
+            manage_channels=True,
+        ),
+    }
+    category = await guild.create_category(
+        SKILLS_CATEGORY_NAME,
+        overwrites=overwrites,
+        reason="Skills progression system",
+    )
+    logger.info("Created Skills category in %s", guild.name)
+    return category
 
 
 class SkillsReconciler:
@@ -47,10 +98,9 @@ class SkillsReconciler:
     ) -> None:
         self._bot = bot
         self._pool = pool
-        self._room_cache = room_cache
+        self._announcements = SkillsAnnouncements(bot, room_cache)
         self._xp_events: list[XPGainedEvent] = []
         self._level_up_events: list[LevelUpEvent] = []
-        self._pending_announcements: list[tuple[discord.TextChannel, str]] = []
 
     def notify(self, event: GameEvent) -> None:
         """Queue XP and level-up events for processing."""
@@ -110,7 +160,7 @@ class SkillsReconciler:
         )
         for evt in level_up_events:
             try:
-                self._prepare_announcement(evt)
+                self._announcements.prepare(evt)
             except Exception:
                 logger.exception(
                     "Failed to prepare level-up announcement for user %d",
@@ -119,19 +169,7 @@ class SkillsReconciler:
 
     async def post_announcements(self) -> None:
         """Send all pending level-up announcements and clear them."""
-        for channel, message in self._pending_announcements:
-            try:
-                await channel.send(message)
-                logger.info(
-                    "Level-up announcement sent to #%s",
-                    channel.name,
-                )
-            except Exception:
-                logger.exception(
-                    "Failed to send level-up announcement to #%s",
-                    channel.name,
-                )
-        self._pending_announcements.clear()
+        await self._announcements.post_announcements()
 
     async def sync_user(self, guild: discord.Guild, member: discord.Member) -> None:
         """Full skills sync for a single user during periodic sync.
@@ -184,57 +222,6 @@ class SkillsReconciler:
                 user_id,
             )
 
-    async def ensure_roles(self, guild: discord.Guild) -> None:
-        """Ensure all milestone roles exist in the guild.
-
-        Args:
-            guild: Discord guild
-        """
-        existing = {r.name for r in guild.roles}
-        for role_name in MILESTONE_ROLE_NAMES:
-            if role_name not in existing:
-                try:
-                    await guild.create_role(
-                        name=role_name, reason="Skills milestone role"
-                    )
-                    logger.info(
-                        "Created milestone role '%s' in %s",
-                        role_name,
-                        guild.name,
-                    )
-                except Exception:
-                    logger.exception("Failed to create role '%s'", role_name)
-
-    async def ensure_category(self, guild: discord.Guild) -> discord.CategoryChannel:
-        """Ensure the Skills category exists.
-
-        Args:
-            guild: Discord guild
-
-        Returns:
-            The Skills category channel
-        """
-        for cat in guild.categories:
-            if cat.name == SKILLS_CATEGORY_NAME:
-                return cat
-
-        # Create hidden category
-        overwrites = {
-            guild.default_role: discord.PermissionOverwrite(view_channel=False),
-            guild.me: discord.PermissionOverwrite(
-                view_channel=True,
-                send_messages=True,
-                manage_channels=True,
-            ),
-        }
-        category = await guild.create_category(
-            SKILLS_CATEGORY_NAME,
-            overwrites=overwrites,
-            reason="Skills progression system",
-        )
-        logger.info("Created Skills category in %s", guild.name)
-        return category
-
     async def _ensure_skills_channel(self, guild: discord.Guild, user_id: int) -> int:
         """Ensure a per-user skills channel exists.
 
@@ -253,7 +240,7 @@ class SkillsReconciler:
                 return record.channel_id
 
         # Create channel
-        category = await self.ensure_category(guild)
+        category = await ensure_category(guild)
         member = guild.get_member(user_id)
         if member is None:
             raise ValueError(f"Member {user_id} not in guild")
@@ -337,68 +324,6 @@ class SkillsReconciler:
         # Send new message and store ID
         msg = await channel.send(content)
         await UserSkillsChannel.update_message_id(self._pool, user_id, msg.id)
-
-    def _prepare_announcement(self, event: LevelUpEvent) -> None:
-        """Prepare a level-up announcement for later sending.
-
-        Finds the target channel and formats the message, storing
-        them in _pending_announcements for post_announcements().
-
-        Args:
-            event: LevelUpEvent with user/skill/level info
-        """
-        logger.info(
-            "Preparing level-up: user %d, %s to level %d in '%s'",
-            event.user_id,
-            event.skill,
-            event.new_level,
-            event.room_id,
-        )
-
-        # Fast path: use RoomChannelCache for O(1) lookup
-        if self._room_cache is not None:
-            channel_id = self._room_cache.get_channel_for_room(event.room_id)
-            if channel_id is not None:
-                channel = self._bot.get_channel(channel_id)
-                if isinstance(channel, discord.TextChannel):
-                    member = channel.guild.get_member(event.user_id)
-                    if member is not None:
-                        message = format_level_up_message(
-                            member.mention,
-                            event.skill,
-                            event.new_level,
-                        )
-                        self._pending_announcements.append((channel, message))
-                        return
-
-            logger.warning(
-                "No channel found for level-up announcement: room_id='%s', user_id=%d",
-                event.room_id,
-                event.user_id,
-            )
-            return
-
-        # Fallback: linear scan when cache is not available
-        for guild in self._bot.guilds:
-            member = guild.get_member(event.user_id)
-            if member is None:
-                continue
-
-            for channel in guild.text_channels:
-                if channel.name == event.room_id:
-                    message = format_level_up_message(
-                        member.mention,
-                        event.skill,
-                        event.new_level,
-                    )
-                    self._pending_announcements.append((channel, message))
-                    return
-
-        logger.warning(
-            "No channel found for level-up announcement: room_id='%s', user_id=%d",
-            event.room_id,
-            event.user_id,
-        )
 
     async def _update_nickname(self, user_id: int, total_level: int) -> None:
         """Update user's nickname with total level.

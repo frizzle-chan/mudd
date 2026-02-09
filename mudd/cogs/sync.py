@@ -36,6 +36,7 @@ from mudd.loaders.zone_loader import (
 )
 from mudd.models import Room, Zone
 from mudd.observers import DiscordReconciler, RoomChannelCache
+from mudd.observers.skills_reconciler import ensure_category, ensure_roles
 
 logger = logging.getLogger(__name__)
 
@@ -269,8 +270,8 @@ class Sync(commands.Cog):
         reconciler = DiscordReconciler(self.bot, pool)
 
         # Ensure milestone roles and skills category exist
-        await reconciler.skills.ensure_roles(guild)
-        await reconciler.skills.ensure_category(guild)
+        await ensure_roles(guild)
+        await ensure_category(guild)
 
         # Sync each non-bot member
         synced = 0
