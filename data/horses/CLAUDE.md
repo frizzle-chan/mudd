@@ -51,15 +51,33 @@ just horses
 - `Luck` (required) - 1–100. Dominant at the start
 - `Active` (optional) - Boolean. Inactive horses are excluded from races. Default: true
 
+### Design Guidelines
+
+Every horse should feel like a distinct character with clear strengths and liabilities:
+
+- **Spike and dump**: At least one stat ≥ 75 (the identity) and at least one stat ≤ 35 (the weakness). Well-rounded generalists produce flat odds boards where every horse looks the same.
+- **Stat budget**: Target ~230 total stat points (sum of all four). Genuine longshots can go as low as 195; strong favorites can go up to 250. Avoid exceeding 250 — it crowds out tradeoffs.
+- **Distinct archetype**: Each horse should fill a unique competitive niche (sprinter, closer, wildcard, reliable plodder, etc.). Avoid duplicating an existing horse's spike/dump profile.
+
+#### How stats map to odds vs race performance
+
+The odds formula weights Speed and Stamina heavily (0.35 each), Luck moderately (0.25), and Consistency barely (0.05). This is intentional — it creates hidden value:
+
+- A **high-Consistency** horse will have mediocre odds but finish reliably near its expected position. Good betting value for place bets.
+- A **high-Luck** horse gets an outsized boost at the race start, often outperforming its odds in practice.
+- A **high-Speed/Stamina** horse will be the odds-board favorite but is priced accordingly — no hidden edge.
+
+Use `scripts/simulate_race.py --dry-run --count 100` to verify a new horse doesn't collapse the odds spread into a flat field.
+
 ### Example
 
 ```rec
 Id: flash
 Name: Flash
 Speed: 90
-Stamina: 70
-Consistency: 75
-Luck: 55
+Stamina: 60
+Consistency: 55
+Luck: 35
 ```
 
 Stats are fixed at creation. Dynamic odds are computed at runtime from attributes and recent race performance.
