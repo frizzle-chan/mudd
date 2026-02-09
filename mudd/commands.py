@@ -162,9 +162,11 @@ class DropCommand(ActionCommand):
         effects: EffectsObserver,
         entity: IReadableEntity,
     ) -> ActionResult:
-        """Execute drop command with capability validation."""
+        """Execute drop command with capability and inventory validation."""
         if not entity.can_drop:
             return ActionResult(output="You can't drop that.")
+        if entity.owner_id != user.id:
+            return ActionResult(output="You don't have that item.")
         return await super().execute(user, room, effects, entity)
 
 

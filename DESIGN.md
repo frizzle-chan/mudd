@@ -295,6 +295,47 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 - Index on `account_id` for balance history queries
 - Index on `transaction_id` for transaction details
 
+### User Skills Table
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `user_id` | BIGINT (PK, FK to users.id) | Discord user snowflake ID |
+| `skill` | TEXT (PK) | Skill name (e.g., "agility", "attack") |
+| `xp` | BIGINT NOT NULL DEFAULT 0 | Cumulative XP earned for this skill |
+| `level` | INT NOT NULL DEFAULT 1 | Current level for this skill |
+
+**Purpose:**
+- Tracks per-user skill XP and levels for the skills progression system (ADR 0006)
+- Uses OSRS-style XP curve (level 2 = 83 XP, level 99 ~13M XP)
+
+**Constraints:**
+- PK on `(user_id, skill)` (one entry per user per skill)
+- FK to users(id) with ON DELETE CASCADE
+- CHECK on `xp >= 0 AND xp <= 200000000`
+- CHECK on `level >= 1 AND level <= 99`
+
+**Indexes:**
+- Primary key on `(user_id, skill)`
+- Index on `user_id` for fast lookups of all skills for a user
+
+### User Skills Channels Table
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `user_id` | BIGINT (PK, FK to users.id) | Discord user snowflake ID |
+| `channel_id` | BIGINT NOT NULL | Discord channel snowflake for the user's skills display |
+| `category_id` | BIGINT NOT NULL | Discord category snowflake containing the skills channel |
+| `message_id` | BIGINT | Discord message snowflake for the skills overview message |
+| `created_at` | TIMESTAMPTZ NOT NULL | When the channel was created |
+
+**Purpose:**
+- Tracks per-user Discord skills channels for displaying skill progress
+- Each user gets a private channel showing their skill levels and XP progress bars
+
+**Constraints:**
+- PK on `user_id` (one channel per user)
+- FK to users(id) with ON DELETE CASCADE
+
 ### Verbs Table
 
 | Column | Type | Description |

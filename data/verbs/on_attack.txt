@@ -3,7 +3,6 @@ bash
 batter
 beat
 behead
-bite
 blast
 bludgeon
 bomb

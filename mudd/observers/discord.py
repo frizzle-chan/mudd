@@ -13,6 +13,7 @@ from mudd.models.user import User
 from mudd.models.zone import Zone
 from mudd.observers.inventory import InventoryReconciler
 from mudd.observers.permissions import PermissionReconciler
+from mudd.observers.skills_reconciler import SkillsReconciler
 from mudd.observers.zone_room import ZoneRoomReconciler
 
 logger = logging.getLogger(__name__)
@@ -151,6 +152,8 @@ class DiscordReconciler:
         await reconciler.flush()  # Idempotently reconciles Discord state
     """
 
+    flush_priority: int = 0
+
     def __init__(
         self,
         bot: discord.Client,
@@ -162,21 +165,54 @@ class DiscordReconciler:
         self._zone_room = ZoneRoomReconciler(bot, pool, console_channel, seen_orphans)
         self._permissions = PermissionReconciler(bot, pool, room_cache)
         self._inventory = InventoryReconciler(bot, pool)
+        self._skills = SkillsReconciler(bot, pool, room_cache)
 
     def notify(self, event: GameEvent) -> None:
         """Receive notification (sync). Delegate to sub-reconcilers."""
         self._zone_room.notify(event)
         self._permissions.notify(event)
         self._inventory.notify(event)
+        self._skills.notify(event)
 
-    async def flush(self) -> None:
+    async def flush(self) -> list[GameEvent]:
         """Process queued notifications. Call after response sent.
 
-        Preserves ordering: zones/rooms/orphans -> inventory -> permissions.
+        Preserves ordering: zones/rooms -> inventory -> permissions -> skills.
+        Skills flush last so level-up announcements are deferred to
+        post_flush() where they appear after movement messages.
+
+        Returns:
+            Empty list (no new events produced).
         """
         await self._zone_room.flush()
         await self._inventory.flush()
         await self._permissions.flush()
+        await self._skills.flush()
+        return []
+
+    async def post_flush(self) -> None:
+        """Flush re-broadcast events and send deferred level-up announcements.
+
+        XPGainedEvent/LevelUpEvent arrive at SkillsReconciler during
+        flush_all()'s re-broadcast phase — after DiscordReconciler.flush()
+        has already run. This second flush processes those queued events
+        (updating the Discord skills channel) before sending announcements.
+        """
+        await self._skills.flush()
+        await self._skills.post_announcements()
+
+    async def post_skill_announcements(self) -> None:
+        """Send deferred level-up announcements.
+
+        Public alias kept for callers that need manual control
+        (e.g. movement cog inserting messages before announcements).
+        """
+        await self._skills.post_announcements()
+
+    @property
+    def skills(self) -> SkillsReconciler:
+        """Access the skills sub-reconciler directly."""
+        return self._skills
 
     def get_inventory_forum_stats(self) -> dict[str, int]:
         """Get accumulated inventory forum sync stats."""

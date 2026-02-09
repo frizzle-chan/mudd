@@ -127,6 +127,22 @@ ContentsVisible: yes
 - When focused on a container, autocomplete shows only container contents
 - Focus clears automatically on room movement
 
+**Destroy Behavior:**
+- Items are destroyed when a handler calls `{{ effects.destroy() }}`
+- The item is deleted from the database after the response is sent
+- Destroyed items in spawning pools will respawn on schedule
+- Used by consumables (food/drink) in `OnUse` and by breakable objects in `OnAttack`
+
+**XP Grants:**
+- Handlers can award skill XP via `{{ effects.grant_xp("skill_name", amount) }}`
+- The player sees a level-up announcement in the room channel if they cross a threshold
+- Valid skills: `agility`, `attack`, `speech`, `vitality`, `fishing`
+
+**Broadcast:**
+- `{{ effects.broadcast("message") }}` sends a message to all other players in the room
+- Use for third-person narration (e.g., `{{ effects.broadcast(user ~ " drinks " ~ e ~ ".") }}`)
+- The broadcasting player sees the `OnUse`/`OnAttack`/etc. return text; everyone else sees the broadcast
+
 ### Templates
 
 The base `object` prototype's `OnLook` template is:
@@ -188,4 +204,53 @@ If a template has syntax errors or undefined variables, the system:
 ## Prototypes vs Instances
 
 - **Prototypes**: Entities without a `Room` field are templates (e.g., `object`, `furniture`)
-- **Instances**: Entities with a `Room` field spawn in that room
+- **Instances**: Entities with a `Room` field are static entities that spawn in that room by default
+
+## Consumable & Skill Patterns
+
+Consumable items (food, drinks) must follow a specific handler pattern to integrate with the skills system. The `OnUse` handler should:
+
+1. Grant XP to the appropriate skill
+2. Destroy the item
+3. Broadcast a third-person message to the room
+4. Return first-person flavor text
+
+**Skill-to-action mapping:**
+
+| Skill | Trigger | Mechanism | XP |
+|-------|---------|-----------|-----|
+| Vitality | Eating/drinking (`OnUse`) | `effects.grant_xp("vitality", 100)` + `effects.destroy()` | 100 |
+| Attack | Destroying entities (`OnAttack`) | `effects.grant_xp("attack", amount)` + `effects.destroy()` | 25-400 |
+| Agility | Room movement | Implicit (observer-driven) | 28 |
+| Speech | Chatting in room channels | Implicit (Discord event handler) | 15 |
+| Fishing | Catching fish (`OnTake` on fish) | `effects.grant_xp("fishing", amount)` | 25-800 |
+
+**Implicit vs Explicit:** Agility and Speech XP are awarded automatically by observers -- no template call needed. Attack, Vitality, and Fishing use explicit `effects.grant_xp()` calls in handlers, with rarity sub-prototypes (e.g., `beverage_rare`, `painting_epic`) providing scaled amounts.
+
+**Beverage prototype example:**
+
+The `beverage` prototype (`Prototype: item`) defines the standard consumable pattern:
+
+```rec
+Id: my_drink
+Name: Ginger Ale
+Prototype: beverage
+Rarity: common
+Tags: beverage lounge_drink
+DescriptionShort: a refreshing {{ e.name }}
+```
+
+Inheriting from `beverage` gives the item `OnUse` (grant vitality XP + destroy + broadcast), `OnAttack` (smash + destroy), and `OnTake` (pickup + broadcast) handlers automatically. Override any handler to customize behavior.
+
+## Available Prototypes
+
+| Prototype | Inherits | Use For |
+|-----------|----------|---------|
+| `object` | (base) | Static scenery, anything examinable |
+| `item` | `object` | Pickupable items with take/drop support |
+| `furniture` | `object` | Room fixtures (tables, chairs, beds) |
+| `chest` | `object` | Openable containers with focus support |
+| `beverage` | `item` | Drinks that grant Vitality XP and are consumed on use |
+| `fish` | `item` | Caught fish that grant Fishing XP on take |
+| `painting` | `item` | Art/loot with rarity and descriptions |
+| `record` | `furniture` | Playable music items |

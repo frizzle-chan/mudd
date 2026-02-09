@@ -1,0 +1,47 @@
+name: Copilot Setup Steps
+
+permissions:
+  contents: read
+
+on:
+  push:
+    paths:
+      - .github/workflows/copilot-setup-steps.yml
+  pull_request:
+    paths:
+      - .github/workflows/copilot-setup-steps.yml
+  workflow_dispatch:
+
+jobs:
+  copilot-setup-steps:
+    runs-on: ubuntu-latest
+    env:
+      DB_HOST: localhost
+    services:
+      postgres:
+        image: docker.io/library/postgres:18.1
+        env:
+          POSTGRES_USER: mudd
+          POSTGRES_PASSWORD: mudd
+          POSTGRES_DB: mudd
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U mudd -d mudd"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install recutils
+        run: sudo apt-get update && sudo apt-get install -y recutils
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@61cb8a9741eeb8a550a1b8544337180c0fc8476b # v7.2.0
+
+      - name: Set up Python
+        run: uv python install
+
+      - name: Install dependencies
+        run: uv sync --locked

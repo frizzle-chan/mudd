@@ -11,7 +11,13 @@ from discord.ext import commands
 
 from mudd.events import InventorySyncEvent, UserLeftEvent, UserSyncEvent
 from mudd.models.user import User
-from mudd.observers import DiscordReconciler, RoomChannelCache
+from mudd.observers import (
+    DiscordReconciler,
+    RoomChannelCache,
+    build_observers,
+    flush_all,
+    post_flush_all,
+)
 
 if TYPE_CHECKING:
     from mudd.caches.user import UserCache
@@ -164,15 +170,14 @@ class Movement(commands.Cog):
         )
 
         try:
-            # Create observer for Discord sync
-            reconciler = DiscordReconciler(
-                cast(discord.Client, self.bot),
+            # Build standard observers
+            observers = build_observers(
                 self._pool,
+                user.id,
+                user.current_room,
+                bot=cast(discord.Client, self.bot),
                 room_cache=self.room_cache,
             )
-
-            # Attach observers and move (move_to clears focus internally)
-            observers = [reconciler]
             if self._user_cache is not None:
                 observers.append(self._user_cache.create_invalidator(self._pool))
             user_with_observers = user.with_observers(*observers)
@@ -183,9 +188,9 @@ class Movement(commands.Cog):
             # Defer response to give us time for permission sync
             await interaction.response.defer(ephemeral=True)
 
-            # Flush all observers (syncs permissions + rebuilds caches)
-            for observer in observers:
-                await observer.flush()
+            # Flush observers (XP written, permissions synced,
+            # announcements deferred to post_flush)
+            await flush_all(observers)
 
             # Send followup (user now has access to target channel)
             await interaction.followup.send(
@@ -199,6 +204,9 @@ class Movement(commands.Cog):
                 )
 
             await target.send(f"{member.mention} entered")
+
+            # Post level-up announcements after "entered"
+            await post_flush_all(observers)
 
         except Exception:
             if not interaction.response.is_done():
@@ -260,7 +268,7 @@ class Movement(commands.Cog):
                 UserLeftEvent(user_id=member.id, guild_id=member.guild.id)
             )
 
-            # Flush to delete inventory forum
+            # Flush to delete inventory forum and skills channel
             await reconciler.flush()
 
             # Delete user from database (CASCADE handles related records)

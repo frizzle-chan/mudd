@@ -126,7 +126,7 @@ DescriptionShort: a {{ e.name }}
 OnTake: {{ effects.pickup() }}You carefully lift the {{ e.name }} from its hook.{{ effects.broadcast(user ~ " takes " ~ e ~ " from the wall.") }}
 OnDrop: {% if container %}You hang the {{ e.name }} on the *{{ container.name }}*.{% else %}You set the {{ e.name }} down, leaning it against the wall.{% endif %}{{ effects.drop() }}{{ effects.broadcast(user ~ " places " ~ e ~ ".") }}
 OnTouch: You run your fingers along the frame. The paint is dry and textured.
-OnAttack: {{ effects.destroy() }}{{ effects.broadcast("**" ~ user ~ "** slashes " ~ e ~ " with a knife!") }}You drag your blade across the canvas. The painting is ruined.
+OnAttack: {{ effects.grant_xp("attack", 50) }}{{ effects.destroy() }}{{ effects.broadcast("**" ~ user ~ "** slashes " ~ e ~ " with a knife!") }}You drag your blade across the canvas. The painting is ruined.
 
 Id: fish
 Name: fish
@@ -380,7 +380,31 @@ Tags: test_smashable_spawn
 Rarity: common
 DescriptionShort: a fragile {{ e.name }}
 DescriptionLong: A glass object used for testing destruction effects.
-OnAttack: {{ effects.destroy() }}{{ effects.broadcast("**" ~ user ~ "** smashes the " ~ e.name ~ "!") }}TEST_SMASH_RESPONSE - You smash it! Shards scatter everywhere.{{ effects.grant_random("test_loot") }}
+OnAttack: {{ effects.grant_xp("attack", 25) }}{{ effects.destroy() }}{{ effects.broadcast("**" ~ user ~ "** smashes the " ~ e.name ~ "!") }}TEST_SMASH_RESPONSE - You smash it! Shards scatter everywhere.{{ effects.grant_random("test_loot") }}
+
+# ----------------------------------------------------------------------------
+# Skills XP test fixtures
+# ----------------------------------------------------------------------------
+
+Id: test_target_dummy
+Name: Test Target Dummy
+Prototype: object
+Room: store-room
+Rarity: common
+Tags: test_target_dummy_spawn
+DescriptionShort: a battered {{ e.name }}
+DescriptionLong: A training dummy for testing attack destruction.
+OnAttack: {{ effects.grant_xp("attack", 25) }}{{ effects.destroy() }}You smash the {{ e.name }} to pieces!
+
+Id: test_apple
+Name: Test Apple
+Prototype: object
+Room: store-room
+Rarity: common
+Tags: test_apple_spawn
+DescriptionShort: a {{ e.name }}
+DescriptionLong: A test apple for skills XP testing.
+OnUse: {{ effects.grant_xp("vitality", 100) }}{{ effects.destroy() }}You eat the {{ e.name }}. Delicious!
 
 # ----------------------------------------------------------------------------
 # Fishing test fixtures
@@ -542,6 +566,18 @@ TagQuery: test_painting_spawn
 MaxCount: 2
 RespawnIntervalMinutes: 1
 NoDuplicates: yes
+
+Id: test_target_dummy_pool
+Room: store-room
+TagQuery: test_target_dummy_spawn
+MaxCount: 1
+RespawnIntervalMinutes: 1
+
+Id: test_apple_pool
+Room: store-room
+TagQuery: test_apple_spawn
+MaxCount: 1
+RespawnIntervalMinutes: 1
 
 Id: test_basin_fish_pool
 Room: store-room

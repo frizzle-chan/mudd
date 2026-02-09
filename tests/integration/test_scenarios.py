@@ -69,10 +69,11 @@ async def test_new_player_explores_the_world(test_db, clean_user_state):
 
     # === MOVE TO STORE ROOM ===
 
-    reconciler = await move(test_db, user.id, "store-room", guild_id=GUILD_ID)
+    move_result = await move(test_db, user.id, "store-room", guild_id=GUILD_ID)
 
-    assert any(isinstance(e, UserMovedEvent) for e in reconciler.events)
-    assert any(isinstance(e, UserLocationSyncEvent) for e in reconciler.events)
+    events = move_result.reconciler.events
+    assert any(isinstance(e, UserMovedEvent) for e in events)
+    assert any(isinstance(e, UserLocationSyncEvent) for e in events)
 
     # === STORE ROOM: LOOK AROUND ===
 
@@ -884,3 +885,44 @@ async def test_autocomplete_thread_cache_hit(test_db, entity_cache, clean_user_s
     assert len(choices) == 1
     assert choices[0].value == f"entity://{takeable.instance_id}"
     assert "Test Takeable" in choices[0].name
+
+
+async def test_cannot_drop_item_not_in_inventory(test_db, clean_user_state):
+    """Player cannot drop an item they don't have in inventory."""
+    user = await create_test_user(test_db, room_id="store-room")
+
+    # Find an item in the room (not in inventory)
+    options = await autocomplete(test_db, user.id, "Cardboard Box")
+    box = next(
+        o
+        for o in options
+        if not isinstance(o, RoomEntityInstance) and o.entity.name == "Cardboard Box"
+    )
+
+    # Open the box to see contents
+    await act(test_db, user.id, OpenCommand(), f"entity://{box.instance_id}")
+
+    # Find a takeable item inside (but don't take it)
+    options = await autocomplete(test_db, user.id, "")
+    takeable = next(
+        o
+        for o in options
+        if not isinstance(o, RoomEntityInstance) and o.entity.name == "Test Takeable"
+    )
+
+    # Try to drop an item that's NOT in inventory (it's in the box)
+    result = await act(
+        test_db, user.id, DropCommand(), f"entity://{takeable.instance_id}"
+    )
+    assert result.output == "You don't have that item."
+
+    # Verify no drop event was emitted
+    assert not any(isinstance(e, EntityDroppedEvent) for e in result.reconciler.events)
+
+    # Verify item is still in the box (not dropped)
+    options = await autocomplete(test_db, user.id, "")
+    assert any(
+        o.entity.name == "Test Takeable"
+        for o in options
+        if not isinstance(o, RoomEntityInstance)
+    )
