@@ -14,6 +14,7 @@ if TYPE_CHECKING:
 from mudd.events.types import GameEvent, LevelUpEvent, UserLeftEvent, XPGainedEvent
 from mudd.models.skills import UserSkill
 from mudd.models.skills_channel import UserSkillsChannel
+from mudd.models.user import User
 from mudd.observers.skills_announcements import SkillsAnnouncements
 from mudd.skills.formatting import (
     MILESTONE_ROLE_NAMES,
@@ -419,6 +420,7 @@ class SkillsReconciler:
             nick = format_nickname(member.display_name, total_level)
             try:
                 await member.edit(nick=nick)
+                await User.update_display_name(self._pool, user_id, nick)
             except discord.Forbidden:
                 logger.warning(
                     "Cannot edit nickname for %s (owner?)",

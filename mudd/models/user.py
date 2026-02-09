@@ -747,6 +747,23 @@ class User:
         )
 
     @classmethod
+    async def update_display_name(
+        cls, pool: asyncpg.Pool, user_id: int, display_name: str
+    ) -> None:
+        """Update a user's display name.
+
+        Args:
+            pool: Database connection pool
+            user_id: Discord user ID
+            display_name: New display name to persist
+        """
+        await pool.execute(
+            "UPDATE users SET display_name = $2 WHERE id = $1",
+            user_id,
+            display_name,
+        )
+
+    @classmethod
     async def delete(cls, pool: asyncpg.Pool, user_id: int) -> None:
         """Delete a user from the database.
 
