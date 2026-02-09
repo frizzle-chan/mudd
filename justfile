@@ -58,6 +58,10 @@ resetdb:
 migratedb:
     uv run python -c "import asyncio; from mudd.database import init_database; asyncio.run(init_database())"
 
+# Simulate a horse race against the dev database
+race:
+    uv run python scripts/simulate_race.py
+
 # Optimize images from img-src/ to img-dist/
 images:
     uv run scripts/optimize_images.py
