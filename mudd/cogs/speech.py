@@ -11,7 +11,7 @@ from discord.ext import commands
 
 from mudd.events.types import GrantXPSignal
 from mudd.models.user import User
-from mudd.observers import RoomChannelCache, build_observers, flush_all
+from mudd.observers import RoomChannelCache, build_observers, flush_all, post_flush_all
 from mudd.skills.registry import Skill
 
 logger = logging.getLogger(__name__)
@@ -76,5 +76,6 @@ class Speech(commands.Cog):
 
         try:
             await flush_all(observers)
+            await post_flush_all(observers)
         except Exception:
             logger.exception("Failed to grant speech XP to user %d", message.author.id)

@@ -265,10 +265,15 @@ class TestEffectsObserverFlush:
         received: list[GameEvent] = []
 
         class Recorder:
+            flush_priority: int = 0
+
             def notify(self, event: GameEvent) -> None:
                 received.append(event)
 
-            async def flush(self) -> None:
+            async def flush(self) -> list[GameEvent]:
+                return []
+
+            async def post_flush(self) -> None:
                 pass
 
         recorder = Recorder()

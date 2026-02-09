@@ -34,12 +34,16 @@ user_cache: UserCache | None = None
 class NullReconciler:
     """Test double for DiscordReconciler. Satisfies Observer protocol."""
 
+    flush_priority: int = 0
     events: list[GameEvent] = field(default_factory=list)
 
     def notify(self, event: GameEvent) -> None:
         self.events.append(event)
 
-    async def flush(self) -> None:
+    async def flush(self) -> list[GameEvent]:
+        return []
+
+    async def post_flush(self) -> None:
         pass
 
 

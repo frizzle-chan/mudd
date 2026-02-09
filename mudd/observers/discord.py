@@ -152,6 +152,8 @@ class DiscordReconciler:
         await reconciler.flush()  # Idempotently reconciles Discord state
     """
 
+    flush_priority: int = 0
+
     def __init__(
         self,
         bot: discord.Client,
@@ -172,24 +174,32 @@ class DiscordReconciler:
         self._inventory.notify(event)
         self._skills.notify(event)
 
-    async def flush(self, *, defer_announcements: bool = False) -> None:
+    async def flush(self) -> list[GameEvent]:
         """Process queued notifications. Call after response sent.
 
         Preserves ordering: zones/rooms -> inventory -> permissions -> skills.
-        Skills flush last so level-up announcements post after the user
-        has visibility into the destination room.
+        Skills flush last so level-up announcements are deferred to
+        post_flush() where they appear after movement messages.
 
-        Args:
-            defer_announcements: If True, prepare level-up announcements
-                but don't send them. Call post_skill_announcements() later.
+        Returns:
+            Empty list (no new events produced).
         """
         await self._zone_room.flush()
         await self._inventory.flush()
         await self._permissions.flush()
-        await self._skills.flush(defer_announcements=defer_announcements)
+        await self._skills.flush()
+        return []
+
+    async def post_flush(self) -> None:
+        """Send deferred level-up announcements."""
+        await self._skills.post_announcements()
 
     async def post_skill_announcements(self) -> None:
-        """Send deferred level-up announcements."""
+        """Send deferred level-up announcements.
+
+        Public alias kept for callers that need manual control
+        (e.g. movement cog inserting messages before announcements).
+        """
         await self._skills.post_announcements()
 
     @property

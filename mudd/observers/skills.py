@@ -32,13 +32,13 @@ class SkillsObserver:
     - GrantXPSignal -> explicit XP from template effects
 
     During flush(), processes all queued grants via UserSkill.grant_xp()
-    and stores results. Event forwarding to DiscordReconciler is handled
-    externally by flush_all().
+    and returns XP/level-up events for re-broadcast by flush_all().
     """
 
     _pool: asyncpg.Pool
     _user_id: int
     _room_id: str
+    flush_priority: int = 10
     _queued_grants: list[tuple[Skill, int, str]] = field(default_factory=list)
     _results: list[tuple[XPResult, str]] = field(default_factory=list)
 
@@ -56,12 +56,14 @@ class SkillsObserver:
             case GrantXPSignal(skill=skill, amount=amount):
                 self._queued_grants.append((skill, amount, self._room_id))
 
-    async def flush(self) -> None:
-        """Process all queued XP grants.
+    async def flush(self) -> list[GameEvent]:
+        """Process all queued XP grants and return resulting events.
 
-        Calls UserSkill.grant_xp() for each queued grant and
-        collects the results. Event forwarding to DiscordReconciler
-        is handled externally by flush_all().
+        Calls UserSkill.grant_xp() for each queued grant, collects
+        the results, and returns XP/level-up events for re-broadcast.
+
+        Returns:
+            XPGainedEvent and LevelUpEvent instances from this flush.
         """
         queued_grants = self._queued_grants
         self._queued_grants = []
@@ -78,6 +80,10 @@ class SkillsObserver:
                     skill,
                     self._user_id,
                 )
+        return [*self.get_xp_events(), *self.get_level_up_events()]
+
+    async def post_flush(self) -> None:
+        """No-op — SkillsObserver has no post-flush work."""
 
     @property
     def results(self) -> list[XPResult]:

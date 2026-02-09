@@ -31,8 +31,8 @@ class SkillsReconciler:
     - LevelUpEvent: Queues level-up announcement + nickname update
 
     During flush(), executes all queued Discord operations.
-    Announcements can be deferred via defer_announcements=True
-    so callers can control when they appear in the channel.
+    Announcements are always deferred — call post_announcements()
+    to send them after the caller is ready.
     """
 
     def __init__(
@@ -54,13 +54,8 @@ class SkillsReconciler:
             case LevelUpEvent() as evt:
                 self._level_up_events.append(evt)
 
-    async def flush(self, *, defer_announcements: bool = False) -> None:
-        """Process queued events.
-
-        Args:
-            defer_announcements: If True, prepare announcements but don't
-                send them. Call post_announcements() later to send.
-        """
+    async def flush(self) -> None:
+        """Process queued events, deferring announcements to post_announcements()."""
         xp_events = self._xp_events
         self._xp_events = []
         level_up_events = self._level_up_events
@@ -102,7 +97,7 @@ class SkillsReconciler:
                     user_id,
                 )
 
-        # Prepare level-up announcements
+        # Prepare level-up announcements (sent later via post_announcements)
         logger.info(
             "SkillsReconciler flushing %d level-up events",
             len(level_up_events),
@@ -115,9 +110,6 @@ class SkillsReconciler:
                     "Failed to prepare level-up announcement for user %d",
                     evt.user_id,
                 )
-
-        if not defer_announcements:
-            await self.post_announcements()
 
     async def post_announcements(self) -> None:
         """Send all pending level-up announcements and clear them."""

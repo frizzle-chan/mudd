@@ -13,6 +13,7 @@ import asyncpg
 import discord
 
 from mudd.events.observer import Observer
+from mudd.events.types import GameEvent
 from mudd.observers.cache import CacheInvalidationObserver
 from mudd.observers.discord import DiscordReconciler, RoomChannelCache
 from mudd.observers.effects import EffectsObserver
@@ -28,6 +29,7 @@ __all__ = [
     "SkillsObserver",
     "build_observers",
     "flush_all",
+    "post_flush_all",
 ]
 
 
@@ -61,59 +63,40 @@ def build_observers(
     return observers
 
 
-async def flush_all(
-    observers: Iterable[Observer],
-    *,
-    defer_announcements: bool = False,
-) -> None:
-    """Flush observers with SkillsObserver -> DiscordReconciler event forwarding.
+async def flush_all(observers: Iterable[Observer]) -> None:
+    """Sort observers by priority, flush each, and re-broadcast returned events.
 
-    Ensures flush ordering:
-    1. SkillsObserver flushes first (writes XP to database)
-    2. XP/level-up events are forwarded to DiscordReconciler
-    3. All remaining observers flush (DiscordReconciler processes skills events)
+    Higher flush_priority values flush first. Events returned by flush()
+    are re-broadcast to all observers via notify() after all flushes complete.
 
     Args:
         observers: Observers to flush
-        defer_announcements: If True, level-up announcements are prepared
-            but not sent. The caller must call
-            DiscordReconciler.post_skill_announcements() to send them.
     """
-    effects: EffectsObserver | None = None
-    skills: SkillsObserver | None = None
-    reconciler: DiscordReconciler | None = None
+    sorted_obs = sorted(
+        observers,
+        key=lambda o: getattr(o, "flush_priority", 0),
+        reverse=True,
+    )
+    new_events: list[GameEvent] = []
+    for obs in sorted_obs:
+        new_events.extend(await obs.flush())
+
+    if new_events:
+        logger.info("flush_all re-broadcasting %d events", len(new_events))
+    for event in new_events:
+        for obs in sorted_obs:
+            obs.notify(event)
+
+
+async def post_flush_all(observers: Iterable[Observer]) -> None:
+    """Call post_flush() on all observers.
+
+    Called after flush_all() and any caller-inserted messages (e.g.
+    movement announcements) so that deferred work like level-up
+    announcements appears last.
+
+    Args:
+        observers: Observers to post-flush
+    """
     for obs in observers:
-        if isinstance(obs, EffectsObserver):
-            effects = obs
-        elif isinstance(obs, SkillsObserver):
-            skills = obs
-        elif isinstance(obs, DiscordReconciler):
-            reconciler = obs
-
-    # Phase 1: Flush EffectsObserver (forwards XP grants to SkillsObserver)
-    if effects is not None:
-        await effects.flush()
-
-    # Phase 2: Flush SkillsObserver (writes XP to DB, stores results)
-    if skills is not None:
-        await skills.flush()
-        if reconciler is not None:
-            xp_events = skills.get_xp_events()
-            level_up_events = skills.get_level_up_events()
-            logger.info(
-                "flush_all forwarding %d XP events, %d level-up events",
-                len(xp_events),
-                len(level_up_events),
-            )
-            for event in xp_events:
-                reconciler.notify(event)
-            for event in level_up_events:
-                reconciler.notify(event)
-
-    # Phase 3: Flush all other observers
-    for obs in observers:
-        if obs is not effects and obs is not skills:
-            if isinstance(obs, DiscordReconciler):
-                await obs.flush(defer_announcements=defer_announcements)
-            else:
-                await obs.flush()
+        await obs.post_flush()

@@ -16,6 +16,7 @@ from mudd.observers import (
     RoomChannelCache,
     build_observers,
     flush_all,
+    post_flush_all,
 )
 
 if TYPE_CHECKING:
@@ -169,7 +170,7 @@ class Movement(commands.Cog):
         )
 
         try:
-            # Build standard observers (DiscordReconciler + SkillsObserver)
+            # Build standard observers
             observers = build_observers(
                 self._pool,
                 user.id,
@@ -187,9 +188,9 @@ class Movement(commands.Cog):
             # Defer response to give us time for permission sync
             await interaction.response.defer(ephemeral=True)
 
-            # Flush observers with deferred announcements so we can
-            # post "entered" before level-up announcements appear
-            await flush_all(observers, defer_announcements=True)
+            # Flush observers (XP written, permissions synced,
+            # announcements deferred to post_flush)
+            await flush_all(observers)
 
             # Send followup (user now has access to target channel)
             await interaction.followup.send(
@@ -205,11 +206,7 @@ class Movement(commands.Cog):
             await target.send(f"{member.mention} entered")
 
             # Post level-up announcements after "entered"
-            reconciler = next(
-                (o for o in observers if isinstance(o, DiscordReconciler)), None
-            )
-            if reconciler:
-                await reconciler.post_skill_announcements()
+            await post_flush_all(observers)
 
         except Exception:
             if not interaction.response.is_done():

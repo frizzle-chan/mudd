@@ -14,7 +14,7 @@ from mudd.models.entity import EntityInstance, ResolvedEntity
 from mudd.models.interfaces import IReadableEntity, IRoom
 from mudd.models.room import EntityModal, InventoryThread, Room
 from mudd.models.user import User
-from mudd.observers import EffectsObserver, build_observers, flush_all
+from mudd.observers import EffectsObserver, build_observers, flush_all, post_flush_all
 from mudd.views import ViewEntity
 
 logger = logging.getLogger(__name__)
@@ -177,6 +177,7 @@ class Scene:
         side effects collected during command execution.
         """
         await flush_all(self._observers)
+        await post_flush_all(self._observers)
 
     async def _take_item(self, item: IReadableEntity) -> ActionResult:
         """Execute TakeCommand on an item using a sub-scene.

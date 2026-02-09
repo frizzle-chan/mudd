@@ -30,8 +30,9 @@ class EffectsObserver:
     The observer collects events synchronously during rendering and provides
     properties for the cog to check and process after sending the response.
 
-    The flush() method is a no-op since the cog handles the actual side effects
-    (sending broadcasts, processing grants, etc.).
+    flush() forwards collected XP grants to other observers and returns
+    no new events. The cog handles the actual side effects (sending
+    broadcasts, processing grants, etc.).
 
     Usage:
         effects = EffectsObserver()
@@ -45,6 +46,7 @@ class EffectsObserver:
             await move_to_inventory(...)
     """
 
+    flush_priority: int = 20
     _forward_targets: tuple[Observer, ...] = ()
     _broadcasts: list[str] = field(default_factory=list)
     _grants: list[str] = field(default_factory=list)
@@ -90,16 +92,23 @@ class EffectsObserver:
             case EntityPickedUpEvent() | EntityDroppedEvent() | EntityDestroyedEvent():
                 pass  # Model events - handled by DiscordReconciler
 
-    async def flush(self) -> None:
+    async def flush(self) -> list[GameEvent]:
         """Forward collected XP grants to other observers.
 
         Iterates _xp_grants and notifies each forward target so that
         SkillsObserver (and others) receive GrantXPSignal without
         Scene.execute() reaching into observer state.
+
+        Returns:
+            Empty list (no new events produced).
         """
         for skill, amount in self._xp_grants:
             for target in self._forward_targets:
                 target.notify(GrantXPSignal(skill=skill, amount=amount))
+        return []
+
+    async def post_flush(self) -> None:
+        """No-op — EffectsObserver has no post-flush work."""
 
     @property
     def broadcasts(self) -> list[str]:
