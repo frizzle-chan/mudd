@@ -336,6 +336,92 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 - PK on `user_id` (one channel per user)
 - FK to users(id) with ON DELETE CASCADE
 
+### Horses Table
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | TEXT (PK) | Horse identifier, matches recfile `Id` field |
+| `name` | TEXT NOT NULL UNIQUE | Display name shown to players |
+| `speed` | INT NOT NULL | Speed stat (1–100), dominant in middle stretch |
+| `stamina` | INT NOT NULL | Stamina stat (1–100), dominant in final stretch |
+| `consistency` | INT NOT NULL | Consistency stat (1–100), controls variance |
+| `luck` | INT NOT NULL | Luck stat (1–100), dominant at start |
+| `recent_races` | INT NOT NULL DEFAULT 0 | Rolling-window race count |
+| `recent_wins` | INT NOT NULL DEFAULT 0 | Rolling-window win count |
+| `recent_places` | INT NOT NULL DEFAULT 0 | Rolling-window place count |
+| `active` | BOOLEAN NOT NULL DEFAULT TRUE | Whether horse is eligible for races |
+| `profile_image` | BYTEA | Portrait for the betting board (64x64 PNG) |
+| `race_image` | BYTEA | Sprite for race playback frames (16x16 PNG) |
+| `victory_image` | BYTEA | Image shown on win announcement |
+| `created_at` | TIMESTAMPTZ NOT NULL | When the record was created |
+
+**Constraints:**
+- PK on `id`
+- UNIQUE on `name`
+- CHECK on all four stats: `BETWEEN 1 AND 100`
+
+**Data Source:**
+- Horses are defined in `data/horses/*.rec` files
+- Stats are fixed at creation; rolling-window counters are updated after each race
+- Synced to database on bot startup and every 15 minutes
+
+### Races Table
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | INT IDENTITY (PK) | Auto-generated race identifier |
+| `status` | race_status NOT NULL DEFAULT 'open' | Race lifecycle status |
+| `horses` | JSONB | Horse IDs entered in this race |
+| `snapshots` | JSONB | Per-tick position snapshots for playback |
+| `events` | JSONB | Race events (surges, stumbles, lead changes) |
+| `finishing_order` | JSONB | Final positions of all horses |
+| `odds_snapshot` | JSONB | Odds at race lock time |
+| `created_at` | TIMESTAMPTZ NOT NULL | When the race was created |
+| `started_at` | TIMESTAMPTZ | When the race began running |
+| `finished_at` | TIMESTAMPTZ | When the race finished |
+
+**Race Status Enum:** `open`, `locked`, `running`, `finished`, `cancelled`
+
+### Race Results Table
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | INT IDENTITY (PK) | Auto-generated result identifier |
+| `race_id` | INT NOT NULL (FK to races.id) | Parent race |
+| `horse_id` | TEXT NOT NULL (FK to horses.id) | Horse that finished |
+| `position` | INT NOT NULL | Finishing position (1 = winner) |
+| `created_at` | TIMESTAMPTZ NOT NULL | When the result was recorded |
+
+**Indexes:**
+- Index on `race_id` for race-based queries
+- Index on `horse_id` for horse performance queries
+
+**Constraints:**
+- FK to races(id) with ON DELETE CASCADE
+- FK to horses(id) with ON DELETE CASCADE
+
+### Bets Table
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | INT IDENTITY (PK) | Auto-generated bet identifier |
+| `race_id` | INT NOT NULL (FK to races.id) | Race being bet on |
+| `horse_id` | TEXT NOT NULL (FK to horses.id) | Horse being bet on |
+| `user_id` | BIGINT NOT NULL | Discord user who placed the bet |
+| `amount` | INT NOT NULL | Bet amount in yen (must be > 0) |
+| `payout` | INT | Payout amount (NULL until race finishes) |
+| `created_at` | TIMESTAMPTZ NOT NULL | When the bet was placed |
+
+**Constraints:**
+- UNIQUE on `(race_id, user_id)` — one bet per user per race
+- CHECK on `amount > 0`
+- FK to races(id) with ON DELETE CASCADE
+- FK to horses(id) with ON DELETE CASCADE
+
+**Indexes:**
+- Index on `race_id` for race-based queries
+- Index on `user_id` for user bet history
+
 ### Verbs Table
 
 | Column | Type | Description |
@@ -385,6 +471,7 @@ periodic_sync() [FIRST ITERATION + EVERY 15 MINUTES]
     ├─ Zone.sync_all()       ─→ Sync zones to DB, emit ZoneSyncedEvent
     ├─ Room.sync_all()       ─→ Sync rooms to DB, emit RoomSyncedEvent
     ├─ sync_entities()       ─→ Sync entity definitions + instances
+    ├─ sync_horses()         ─→ Sync horse definitions from recfiles
     ├─ reconciler.flush()    ─→ Create Discord categories/channels, fix topics
     ├─ Detect orphan channels ─→ Report NEW orphans only
     │

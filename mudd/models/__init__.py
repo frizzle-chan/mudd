@@ -9,6 +9,7 @@ methods for mutations. Mutations return new instances (immutable pattern).
 
 from mudd.models.entity import EntityInstance, InstanceThreadInfo, ResolvedEntity
 from mudd.models.entity_definition import EntityDefinition
+from mudd.models.horse import Horse
 from mudd.models.interfaces import IEntityInstance, IReadableEntity, IRoom, IUser
 from mudd.models.inventory_forum import UserInventoryForum
 from mudd.models.room import EntityModal, InventoryThread, Room, RoomEntityInstance
@@ -20,6 +21,8 @@ from mudd.models.zone import SyncStats, Zone
 __all__ = [
     # Entity models
     "ResolvedEntity",
+    # Horse model
+    "Horse",
     "EntityInstance",
     "InstanceThreadInfo",
     "EntityDefinition",

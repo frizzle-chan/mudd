@@ -29,6 +29,22 @@ In the context of **authoring horse definitions**, facing **the need for a struc
 
 Each horse is a separate recfile containing a single record. A shared descriptor file defines the Horse record type (field types, constraints, allowed fields). Individual horse files are plain records with no embedded schema — the descriptor sorts first lexically and is concatenated ahead of data files for validation and bulk operations.
 
+### Horse ID Type
+
+In the context of **database schema for horse definitions**, facing **the choice between auto-incrementing integer IDs and text IDs**, we decided to **use TEXT primary keys matching the recfile `Id` field**, to achieve **consistency with the existing zone/room/entity convention where all file-sourced tables use text PKs**, accepting **that text PKs are slightly less efficient for joins than integers**.
+
+### Horse Image Storage
+
+In the context of **serving horse images for betting boards and race playback**, facing **the need to access images at runtime without filesystem dependencies**, we decided to **store images as BYTEA columns directly on the horses table**, to achieve **atomic sync of horse data and images in a single upsert, with no filesystem coupling at runtime**, accepting **that large images increase row size and backup volume**.
+
+### Racing Tables Grouping
+
+In the context of **database schema for the racing system**, facing **the question of how to organize migrations**, we decided to **create all four tables (horses, races, race_results, bets) in a single migration**, to achieve **atomic schema creation matching the currency system pattern**, accepting **that the migration file is larger than single-table migrations**.
+
+### Race Status Enum
+
+In the context of **tracking race lifecycle state**, facing **the choice between plain TEXT and a PostgreSQL enum**, we decided to **use a `race_status` enum type**, to achieve **database-level validation of status transitions matching the existing `verb_action` enum pattern**, accepting **that adding new statuses requires a migration**.
+
 ### Horse Attributes
 
 In the context of **determining race outcomes**, facing **the need to balance determinism with variety**, we decided to **use four integer attributes (speed, stamina, consistency, luck) ranging 1–100**, to achieve **a simple model where each attribute dominates a different race phase (luck at start, speed in the middle, stamina in the final stretch) and consistency controls variance**, accepting **that four attributes may not capture every desired personality trait**.

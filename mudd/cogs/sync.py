@@ -27,6 +27,7 @@ from mudd.events import (
     UserSyncEvent,
 )
 from mudd.loaders.entity_loader import sync_entities
+from mudd.loaders.horse_loader import sync_horses
 from mudd.loaders.verb_loader import sync_verbs
 from mudd.loaders.zone_loader import (
     ZoneData,
@@ -164,6 +165,14 @@ class Sync(commands.Cog):
             await sync_entities(pool, world_file)
         except Exception:
             logger.exception("Failed to sync entities")
+            if fail_fast:
+                raise
+
+        # Sync horse definitions from recfiles
+        try:
+            await sync_horses(pool)
+        except Exception:
+            logger.exception("Failed to sync horses")
             if fail_fast:
                 raise
 
