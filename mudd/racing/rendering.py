@@ -84,7 +84,10 @@ def _draw_text(
     img.paste(scaled, (x, y), scaled)
 
 
+# ---------------------------------------------------------------------------
 # Layout constants
+# ---------------------------------------------------------------------------
+
 CANVAS_WIDTH = 640
 NAME_MARGIN = 88
 TRACK_WIDTH = 530
@@ -92,7 +95,13 @@ FINISH_X = 620
 FRAME_WIDTH = FINISH_X + 2  # content width for race frames (up to finish line)
 LANE_HEIGHT = 24
 SPRITE_SIZE = 16
-LANE_PADDING = 8
+
+# Race frame layout
+NAME_TEXT_PAD = 4
+NAME_TRUNCATE = 10
+TRACK_START_PAD = 2
+FINISH_LINE_WIDTH = 2
+
 # Mac System 1 window chrome (shared between frames and announcement)
 WIN_BORDER_OUTER = 2  # outer border line width
 WIN_BORDER_GAP = 1  # gap between outer and inner border
@@ -106,6 +115,20 @@ WIN_TITLE_PAD = 8  # gap between title text and stripes
 WIN_STRIPE_MARGIN = 6  # margin from border to stripe start
 WIN_SEPARATOR_WIDTH = 1  # horizontal rule width
 
+# Announcement layout
+PROFILE_SIZE = 64
+ANNOUNCEMENT_ROW_HEIGHT = 80
+ANNOUNCEMENT_PADDING = 12
+WIN_INFOBAR_HEIGHT = 24  # column header bar height
+ANN_NAME_X = PROFILE_SIZE + 24
+ANN_ODDS_X = 300
+ANN_FORM_X = 380
+ANN_RATING_X = 480
+
+# Victory upscaling
+VICTORY_UPSCALE_THRESHOLD = 128
+VICTORY_UPSCALE_FACTOR = 3
+
 # Colors
 BG_COLOR = (35, 35, 45)
 TRACK_BG = (50, 55, 65)
@@ -117,7 +140,6 @@ MUTED_TEXT_COLOR = (140, 140, 155)
 HEADER_TEXT_COLOR = (90, 95, 105)
 CHECKER_DARK = BG_COLOR
 CHECKER_LIGHT = (50, 52, 62)
-ACCENT_COLOR = (180, 150, 50)
 
 # Fallback sprite palette
 _FALLBACK_COLORS = [
@@ -132,12 +154,31 @@ _FALLBACK_COLORS = [
 ]
 
 
+# ---------------------------------------------------------------------------
+# Data types
+# ---------------------------------------------------------------------------
+
+
 @dataclass(frozen=True, slots=True)
 class RaceHorse:
     """A horse with a name and sprite for rendering."""
 
     name: str
     sprite: Image.Image  # 16x16 RGBA
+
+
+@dataclass(frozen=True, slots=True)
+class AnnouncementHorse:
+    """A horse entry for the announcement image."""
+
+    horse_id: str
+    name: str
+    profile: Image.Image  # 64x64 RGBA
+
+
+# ---------------------------------------------------------------------------
+# Utility functions
+# ---------------------------------------------------------------------------
 
 
 def sample_frames(snapshots: list[list[float]], render_frames: int = 12) -> list[int]:
@@ -167,6 +208,39 @@ def fallback_sprite(index: int) -> Image.Image:
     color = _FALLBACK_COLORS[index % len(_FALLBACK_COLORS)]
     img = Image.new("RGBA", (SPRITE_SIZE, SPRITE_SIZE), (*color, 255))
     return img
+
+
+def profile_from_bytes(data: bytes) -> Image.Image:
+    """Convert BYTEA image data to a 64x64 RGBA PIL Image."""
+    img = Image.open(BytesIO(data))
+    img = img.convert("RGBA")
+    img = img.resize((PROFILE_SIZE, PROFILE_SIZE), Resampling.NEAREST)
+    return img
+
+
+# ---------------------------------------------------------------------------
+# Internal drawing helpers
+# ---------------------------------------------------------------------------
+
+
+def _vcenter(row_y: int, row_height: int, item_height: int) -> int:
+    """Return Y coordinate to vertically center an item in a row."""
+    return row_y + (row_height - item_height) // 2
+
+
+def _draw_separator(
+    draw: ImageDraw.ImageDraw,
+    y: int,
+    canvas_width: int,
+    *,
+    width: int = WIN_SEPARATOR_WIDTH,
+) -> None:
+    """Draw a horizontal separator line spanning the content area."""
+    draw.line(
+        [(WIN_BORDER_TOTAL, y), (canvas_width - 1 - WIN_BORDER_TOTAL, y)],
+        fill=LANE_DIVIDER,
+        width=width,
+    )
 
 
 def _fill_checker(
@@ -222,7 +296,7 @@ def _draw_titlebar(
     # Title text centered
     tw, th = _textsize(title, scale=2)
     title_x = canvas_width // 2
-    title_y = tb_top + (WIN_TITLEBAR_HEIGHT - th) // 2
+    title_y = _vcenter(tb_top, WIN_TITLEBAR_HEIGHT, th)
     _draw_text(img, (title_x, title_y), title, fill=FINISH_COLOR, scale=2, anchor="mt")
 
     # Stripes: 1px horizontal lines filling title bar on both sides of the title
@@ -240,12 +314,85 @@ def _draw_titlebar(
             draw.line([(title_right, y), (stripe_right, y)], fill=LANE_DIVIDER, width=1)
 
     # Separator below title bar
-    sep_y = tb_bottom
-    draw.line(
-        [(WIN_BORDER_TOTAL, sep_y), (canvas_width - 1 - WIN_BORDER_TOTAL, sep_y)],
-        fill=LANE_DIVIDER,
-        width=WIN_SEPARATOR_WIDTH,
+    _draw_separator(draw, tb_bottom, canvas_width)
+
+
+# ---------------------------------------------------------------------------
+# Chrome canvas factory
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class _ChromeCanvas:
+    """Canvas with Mac System 1 window chrome already drawn."""
+
+    img: Image.Image
+    draw: ImageDraw.ImageDraw
+    content_x: int  # left edge of content area
+    section_tops: list[int]  # Y of each section's top edge
+
+
+def _chrome_canvas(
+    content_width: int,
+    section_heights: list[int],
+    *,
+    title: str | None = None,
+    checker: bool = False,
+) -> _ChromeCanvas:
+    """Create a canvas with Mac System 1 window chrome.
+
+    Draws border, optional checker fill, optional titlebar, and separators
+    between sections. Returns the canvas with section_tops so callers know
+    where to draw content.
+    """
+    inset = WIN_FRAME_INSET if checker else WIN_BORDER_TOTAL
+    canvas_w = content_width + inset * 2
+
+    # Compute section tops and total height
+    y = WIN_BORDER_TOTAL + WIN_TITLEBAR_HEIGHT + WIN_SEPARATOR_WIDTH if title else inset
+
+    section_tops: list[int] = []
+    for i, h in enumerate(section_heights):
+        section_tops.append(y)
+        y += h
+        if i < len(section_heights) - 1:
+            y += WIN_SEPARATOR_WIDTH
+
+    canvas_h = y + (WIN_BORDER_TOTAL if title else inset)
+
+    img = Image.new("RGBA", (canvas_w, canvas_h), BG_COLOR + (255,))
+    draw = ImageDraw.Draw(img)
+
+    _draw_window_border(draw, canvas_w, canvas_h)
+
+    if checker:
+        _fill_checker(
+            img,
+            WIN_BORDER_TOTAL,
+            WIN_BORDER_TOTAL,
+            canvas_w - WIN_BORDER_TOTAL * 2,
+            canvas_h - WIN_BORDER_TOTAL * 2,
+        )
+
+    if title:
+        _draw_titlebar(img, draw, title, canvas_w)
+
+    # Separators between sections
+    for i in range(len(section_heights) - 1):
+        sep_y = section_tops[i] + section_heights[i]
+        _draw_separator(draw, sep_y, canvas_w)
+
+    return _ChromeCanvas(
+        img=img,
+        draw=draw,
+        content_x=inset,
+        section_tops=section_tops,
     )
+
+
+# ---------------------------------------------------------------------------
+# Race frame rendering
+# ---------------------------------------------------------------------------
 
 
 def render_frame(
@@ -271,23 +418,12 @@ def render_frame(
     """
     n = len(horses)
     content_h = n * LANE_HEIGHT
-    frame_width = FRAME_WIDTH + WIN_FRAME_INSET * 2
-    frame_height = content_h + WIN_FRAME_INSET * 2
-    img = Image.new("RGBA", (frame_width, frame_height), BG_COLOR + (255,))
-    draw = ImageDraw.Draw(img)
-    _draw_window_border(draw, frame_width, frame_height)
+    cc = _chrome_canvas(FRAME_WIDTH, [content_h], checker=True)
+    img, draw = cc.img, cc.draw
+    ox = cc.content_x
+    oy = cc.section_tops[0]
 
-    # Checker fill in margin between border and content
-    _fill_checker(
-        img,
-        WIN_BORDER_TOTAL,
-        WIN_BORDER_TOTAL,
-        frame_width - WIN_BORDER_TOTAL * 2,
-        frame_height - WIN_BORDER_TOTAL * 2,
-    )
-
-    # Origin offset for content area
-    ox, oy = WIN_FRAME_INSET, WIN_FRAME_INSET
+    # --- Background ---
 
     # Content background (covers checker in the content area)
     draw.rectangle(
@@ -296,7 +432,6 @@ def render_frame(
     )
 
     # Track background (alternating lane stripes, extending into name area)
-    track_h = content_h
     for i in range(n):
         lane_y = oy + i * LANE_HEIGHT
         fill = TRACK_BG if i % 2 == 0 else TRACK_BG_ALT
@@ -310,6 +445,8 @@ def render_frame(
             fill=fill,
         )
 
+    # --- Cross-cutting lines ---
+
     # Lane dividers
     for i in range(1, n):
         y = oy + i * LANE_HEIGHT
@@ -321,38 +458,41 @@ def render_frame(
 
     # Name/track border
     draw.line(
-        [(ox + NAME_MARGIN, oy), (ox + NAME_MARGIN, oy + track_h)],
+        [(ox + NAME_MARGIN, oy), (ox + NAME_MARGIN, oy + content_h)],
         fill=LANE_DIVIDER,
         width=1,
     )
 
-    # Finish line (2px wide)
+    # Finish line
     draw.line(
-        [(ox + FINISH_X, oy), (ox + FINISH_X, oy + track_h)],
+        [(ox + FINISH_X, oy), (ox + FINISH_X, oy + content_h)],
         fill=FINISH_COLOR,
-        width=2,
+        width=FINISH_LINE_WIDTH,
     )
 
-    # Horses
+    # --- Per-lane content ---
+
     for i, horse in enumerate(horses):
         lane_y = oy + i * LANE_HEIGHT
 
         # Name label
         _draw_text(
             img,
-            (ox + 4, lane_y + (LANE_HEIGHT - _NATIVE_FONT_SIZE) // 2),
-            horse.name[:10],
+            (ox + NAME_TEXT_PAD, _vcenter(lane_y, LANE_HEIGHT, _NATIVE_FONT_SIZE)),
+            horse.name[:NAME_TRUNCATE],
             fill=TEXT_COLOR,
         )
 
-        # Sprite position: map 0.0-1.0 to NAME_MARGIN+2 .. FINISH_X
+        # Sprite position: map 0.0-1.0 to NAME_MARGIN+TRACK_START_PAD .. FINISH_X
         x = (
             ox
             + NAME_MARGIN
-            + 2
-            + int(positions[i] * (FINISH_X - NAME_MARGIN - 2 - SPRITE_SIZE))
+            + TRACK_START_PAD
+            + int(
+                positions[i] * (FINISH_X - NAME_MARGIN - TRACK_START_PAD - SPRITE_SIZE)
+            )
         )
-        sprite_y = lane_y + (LANE_HEIGHT - SPRITE_SIZE) // 2
+        sprite_y = _vcenter(lane_y, LANE_HEIGHT, SPRITE_SIZE)
         img.paste(horse.sprite, (x, sprite_y), horse.sprite)
 
     # Tick label (debug only, bottom-right of content area, low contrast)
@@ -361,7 +501,7 @@ def render_frame(
         tw, th = _textsize(tick_text)
         _draw_text(
             img,
-            (ox + FRAME_WIDTH - tw - 4, oy + content_h - th - 2),
+            (ox + FRAME_WIDTH - tw - NAME_TEXT_PAD, oy + content_h - th - 2),
             tick_text,
             fill=HEADER_TEXT_COLOR,
         )
@@ -427,27 +567,44 @@ def tile_frames(frames: list[Image.Image], gap: int = 4) -> Image.Image:
 # Announcement image
 # ---------------------------------------------------------------------------
 
-PROFILE_SIZE = 64
-ANNOUNCEMENT_ROW_HEIGHT = 80
-ANNOUNCEMENT_PADDING = 12
-WIN_INFOBAR_HEIGHT = 24  # column header bar height
 
+def _draw_announcement_row(
+    img: Image.Image,
+    draw: ImageDraw.ImageDraw,
+    canvas_width: int,
+    row_y: int,
+    horse: AnnouncementHorse,
+    odd: float,
+    form: str,
+    star_rating: str,
+    *,
+    divider: bool = False,
+) -> None:
+    """Draw one row of the announcement table."""
+    if divider:
+        _draw_separator(draw, row_y, canvas_width)
 
-@dataclass(frozen=True, slots=True)
-class AnnouncementHorse:
-    """A horse entry for the announcement image."""
+    # Profile image
+    profile_y = _vcenter(row_y, ANNOUNCEMENT_ROW_HEIGHT, PROFILE_SIZE)
+    img.paste(
+        horse.profile,
+        (WIN_BORDER_TOTAL + ANNOUNCEMENT_PADDING, profile_y),
+        horse.profile,
+    )
 
-    horse_id: str
-    name: str
-    profile: Image.Image  # 64x64 RGBA
-
-
-def profile_from_bytes(data: bytes) -> Image.Image:
-    """Convert BYTEA image data to a 64x64 RGBA PIL Image."""
-    img = Image.open(BytesIO(data))
-    img = img.convert("RGBA")
-    img = img.resize((PROFILE_SIZE, PROFILE_SIZE), Resampling.NEAREST)
-    return img
+    # Text columns (vertically centered)
+    mid_y = row_y + ANNOUNCEMENT_ROW_HEIGHT // 2
+    _draw_text(img, (ANN_NAME_X, mid_y), horse.name, fill=TEXT_COLOR, anchor="lm")
+    _draw_text(img, (ANN_ODDS_X, mid_y), f"{odd:.1f}:1", fill=TEXT_COLOR, anchor="lm")
+    _draw_text(img, (ANN_FORM_X, mid_y), form, fill=TEXT_COLOR, anchor="lm")
+    _draw_text(
+        img,
+        (ANN_RATING_X, mid_y),
+        star_rating,
+        fill=FINISH_COLOR,
+        scale=2,
+        anchor="lm",
+    )
 
 
 def render_announcement(
@@ -470,84 +627,45 @@ def render_announcement(
         PNG image bytes.
     """
     n = len(horses)
-    chrome_top = WIN_BORDER_TOTAL + WIN_TITLEBAR_HEIGHT + WIN_SEPARATOR_WIDTH
-    info_top = chrome_top + WIN_INFOBAR_HEIGHT + WIN_SEPARATOR_WIDTH
-    height = info_top + n * ANNOUNCEMENT_ROW_HEIGHT + WIN_BORDER_TOTAL
-    img = Image.new("RGBA", (CANVAS_WIDTH, height), BG_COLOR + (255,))
-    draw = ImageDraw.Draw(img)
+    cc = _chrome_canvas(
+        CANVAS_WIDTH - WIN_BORDER_TOTAL * 2,
+        [WIN_INFOBAR_HEIGHT, n * ANNOUNCEMENT_ROW_HEIGHT],
+        title=f"Race #{race_number}",
+    )
 
-    # --- Double border + title bar ---
-    _draw_window_border(draw, CANVAS_WIDTH, height)
-    _draw_titlebar(img, draw, f"Race #{race_number}", CANVAS_WIDTH)
-
-    # --- Info bar (column headers) ---
-    ib_top = chrome_top
-    ib_mid_y = ib_top + WIN_INFOBAR_HEIGHT // 2
+    # Info bar (column headers)
+    ib_mid_y = cc.section_tops[0] + WIN_INFOBAR_HEIGHT // 2
     _draw_text(
-        img, (PROFILE_SIZE + 24, ib_mid_y), "Horse", fill=MUTED_TEXT_COLOR, anchor="lm"
+        cc.img, (ANN_NAME_X, ib_mid_y), "Horse", fill=MUTED_TEXT_COLOR, anchor="lm"
     )
-    _draw_text(img, (300, ib_mid_y), "Odds", fill=MUTED_TEXT_COLOR, anchor="lm")
-    _draw_text(img, (380, ib_mid_y), "Form", fill=MUTED_TEXT_COLOR, anchor="lm")
-    _draw_text(img, (480, ib_mid_y), "Rating", fill=MUTED_TEXT_COLOR, anchor="lm")
-
-    # --- Separator below info bar ---
-    sep2_y = ib_top + WIN_INFOBAR_HEIGHT
-    draw.line(
-        [(WIN_BORDER_TOTAL, sep2_y), (CANVAS_WIDTH - 1 - WIN_BORDER_TOTAL, sep2_y)],
-        fill=LANE_DIVIDER,
-        width=WIN_SEPARATOR_WIDTH,
+    _draw_text(
+        cc.img, (ANN_ODDS_X, ib_mid_y), "Odds", fill=MUTED_TEXT_COLOR, anchor="lm"
+    )
+    _draw_text(
+        cc.img, (ANN_FORM_X, ib_mid_y), "Form", fill=MUTED_TEXT_COLOR, anchor="lm"
+    )
+    _draw_text(
+        cc.img, (ANN_RATING_X, ib_mid_y), "Rating", fill=MUTED_TEXT_COLOR, anchor="lm"
     )
 
-    # --- Content rows ---
-    content_top = sep2_y + WIN_SEPARATOR_WIDTH
-
+    # Content rows
+    content_top = cc.section_tops[1]
     for i, horse in enumerate(horses):
         row_y = content_top + i * ANNOUNCEMENT_ROW_HEIGHT
-
-        # Divider line between rows
-        if i > 0:
-            draw.line(
-                [
-                    (WIN_BORDER_TOTAL, row_y),
-                    (CANVAS_WIDTH - 1 - WIN_BORDER_TOTAL, row_y),
-                ],
-                fill=LANE_DIVIDER,
-                width=1,
-            )
-
-        # Profile image
-        profile_y = row_y + (ANNOUNCEMENT_ROW_HEIGHT - PROFILE_SIZE) // 2
-        img.paste(
-            horse.profile,
-            (WIN_BORDER_TOTAL + ANNOUNCEMENT_PADDING, profile_y),
-            horse.profile,
-        )
-
-        # Vertical center of this row
-        mid_y = row_y + ANNOUNCEMENT_ROW_HEIGHT // 2
-
-        # Name
-        text_x = PROFILE_SIZE + 24
-        _draw_text(img, (text_x, mid_y), horse.name, fill=TEXT_COLOR, anchor="lm")
-
-        # Odds
-        _draw_text(img, (300, mid_y), f"{odds[i]:.1f}:1", fill=TEXT_COLOR, anchor="lm")
-
-        # Form
-        _draw_text(img, (380, mid_y), forms[i], fill=TEXT_COLOR, anchor="lm")
-
-        # Star rating
-        _draw_text(
-            img,
-            (480, mid_y),
+        _draw_announcement_row(
+            cc.img,
+            cc.draw,
+            cc.img.width,
+            row_y,
+            horse,
+            odds[i],
+            forms[i],
             star_ratings[i],
-            fill=FINISH_COLOR,
-            scale=2,
-            anchor="lm",
+            divider=i > 0,
         )
 
     buf = BytesIO()
-    img.save(buf, format="PNG")
+    cc.img.save(buf, format="PNG")
     return buf.getvalue()
 
 
@@ -573,52 +691,35 @@ def render_winner(
     """
     pic = Image.open(BytesIO(victory_image)).convert("RGBA")
 
-    # Scale up small images with nearest-neighbor (3x for crisp pixel art)
-    while pic.height <= 128:
-        pic = pic.resize((pic.width * 3, pic.height * 3), Resampling.NEAREST)
+    # Scale up small images with nearest-neighbor (crisp pixel art)
+    while pic.height <= VICTORY_UPSCALE_THRESHOLD:
+        pic = pic.resize(
+            (pic.width * VICTORY_UPSCALE_FACTOR, pic.height * VICTORY_UPSCALE_FACTOR),
+            Resampling.NEAREST,
+        )
 
-    chrome_top = WIN_BORDER_TOTAL + WIN_TITLEBAR_HEIGHT + WIN_SEPARATOR_WIDTH
-    canvas_w = pic.width + WIN_BORDER_TOTAL * 2
-    canvas_h = (
-        chrome_top
-        + pic.height
-        + WIN_SEPARATOR_WIDTH
-        + WIN_TITLEBAR_HEIGHT
-        + WIN_BORDER_TOTAL
+    cc = _chrome_canvas(
+        pic.width,
+        [pic.height, WIN_TITLEBAR_HEIGHT],
+        title=f"Race #{race_number} - WINNER",
     )
-
-    img = Image.new("RGBA", (canvas_w, canvas_h), BG_COLOR + (255,))
-    draw = ImageDraw.Draw(img)
-
-    # Border + title bar ("Race #N - WINNER")
-    _draw_window_border(draw, canvas_w, canvas_h)
-    _draw_titlebar(img, draw, f"Race #{race_number} - WINNER", canvas_w)
 
     # Victory image
-    img.paste(pic, (WIN_BORDER_TOTAL, chrome_top), pic)
-
-    # Separator below image
-    sep_y = chrome_top + pic.height
-    draw.line(
-        [(WIN_BORDER_TOTAL, sep_y), (canvas_w - 1 - WIN_BORDER_TOTAL, sep_y)],
-        fill=LANE_DIVIDER,
-        width=WIN_SEPARATOR_WIDTH,
-    )
+    cc.img.paste(pic, (cc.content_x, cc.section_tops[0]), pic)
 
     # Name bar — winner name centered (1x to accommodate long names)
-    name_top = sep_y + WIN_SEPARATOR_WIDTH
     _, nh = _textsize(winner_name)
-    name_y = name_top + (WIN_TITLEBAR_HEIGHT - nh) // 2
+    name_y = _vcenter(cc.section_tops[1], WIN_TITLEBAR_HEIGHT, nh)
     _draw_text(
-        img,
-        (canvas_w // 2, name_y),
+        cc.img,
+        (cc.img.width // 2, name_y),
         winner_name,
         fill=TEXT_COLOR,
         anchor="mt",
     )
 
     buf = BytesIO()
-    img.save(buf, format="PNG")
+    cc.img.save(buf, format="PNG")
     return buf.getvalue()
 
 
