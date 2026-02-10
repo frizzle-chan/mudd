@@ -18,12 +18,12 @@ from mudd.racing.simulation import BurstEvent, RaceResult
 _FONT_PATH = "/usr/share/fonts/truetype/unifontex/unifontex.ttf"
 
 
-def _load_font(size: int) -> ImageFont.FreeTypeFont:
+def _load_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
     """Load UnifontEX at the given size, falling back to default."""
     try:
         return ImageFont.truetype(_FONT_PATH, size)
     except OSError:
-        return _load_font(size)
+        return ImageFont.load_default()
 
 
 # Layout constants
