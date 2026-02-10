@@ -29,6 +29,8 @@ class HorseData:
     consistency: int
     luck: int
     active: bool
+    description: str | None
+    lore: str | None
     profile_image: bytes | None
     race_image: bytes | None
     victory_image: bytes | None
@@ -55,6 +57,8 @@ def _parse_horse_row(row: dict[str, str]) -> HorseData:
         consistency=int(row["Consistency"]),
         luck=int(row["Luck"]),
         active=active,
+        description=row.get("Description") or None,
+        lore=row.get("Lore") or None,
         profile_image=None,
         race_image=None,
         victory_image=None,
@@ -162,11 +166,13 @@ async def sync_horses(pool: asyncpg.Pool, horses_dir: Path = HORSES_DIR) -> int:
         await conn.execute(
             """INSERT INTO horses
                    (id, name, speed, stamina, consistency, luck, active,
+                    description, lore,
                     profile_image, race_image, victory_image)
                SELECT * FROM unnest(
                    $1::text[], $2::text[], $3::int[], $4::int[],
                    $5::int[], $6::int[], $7::bool[],
-                   $8::bytea[], $9::bytea[], $10::bytea[]
+                   $8::text[], $9::text[],
+                   $10::bytea[], $11::bytea[], $12::bytea[]
                )
                ON CONFLICT (id) DO UPDATE SET
                    name = EXCLUDED.name,
@@ -175,6 +181,8 @@ async def sync_horses(pool: asyncpg.Pool, horses_dir: Path = HORSES_DIR) -> int:
                    consistency = EXCLUDED.consistency,
                    luck = EXCLUDED.luck,
                    active = EXCLUDED.active,
+                   description = EXCLUDED.description,
+                   lore = EXCLUDED.lore,
                    profile_image = EXCLUDED.profile_image,
                    race_image = EXCLUDED.race_image,
                    victory_image = EXCLUDED.victory_image""",
@@ -185,6 +193,8 @@ async def sync_horses(pool: asyncpg.Pool, horses_dir: Path = HORSES_DIR) -> int:
             [h.consistency for h in horses],
             [h.luck for h in horses],
             [h.active for h in horses],
+            [h.description for h in horses],
+            [h.lore for h in horses],
             [h.profile_image for h in horses],
             [h.race_image for h in horses],
             [h.victory_image for h in horses],

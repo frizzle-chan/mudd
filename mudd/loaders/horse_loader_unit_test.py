@@ -24,6 +24,8 @@ class TestParseHorseRow:
             consistency=75,
             luck=55,
             active=True,
+            description=None,
+            lore=None,
             profile_image=None,
             race_image=None,
             victory_image=None,
@@ -81,3 +83,33 @@ class TestParseHorseRow:
         assert result.profile_image is None
         assert result.race_image is None
         assert result.victory_image is None
+
+    def test_description_and_lore_parsing(self) -> None:
+        """Test that description and lore fields are parsed correctly."""
+        row = {
+            "Id": "story",
+            "Name": "Story Horse",
+            "Speed": "60",
+            "Stamina": "65",
+            "Consistency": "70",
+            "Luck": "55",
+            "Description": "A beautiful horse with a white mane.",
+            "Lore": "Born in the mountains, this horse has traveled far.",
+        }
+        result = _parse_horse_row(row)
+        assert result.description == "A beautiful horse with a white mane."
+        assert result.lore == "Born in the mountains, this horse has traveled far."
+
+    def test_description_and_lore_absent(self) -> None:
+        """Test that missing description and lore default to None."""
+        row = {
+            "Id": "basic",
+            "Name": "Basic Horse",
+            "Speed": "50",
+            "Stamina": "50",
+            "Consistency": "50",
+            "Luck": "50",
+        }
+        result = _parse_horse_row(row)
+        assert result.description is None
+        assert result.lore is None

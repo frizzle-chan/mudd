@@ -14,5 +14,5 @@
 %type: Luck range 1 100
 %type: Active bool
 %mandatory: Id Name Speed Stamina Consistency Luck
-%allowed: Id Name Speed Stamina Consistency Luck Active
+%allowed: Id Name Speed Stamina Consistency Luck Active Description Lore
 

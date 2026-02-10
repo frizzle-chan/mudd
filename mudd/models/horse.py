@@ -27,6 +27,8 @@ class Horse:
     recent_wins: int
     recent_places: int
     active: bool
+    description: str | None
+    lore: str | None
     profile_image: bytes | None
     race_image: bytes | None
     victory_image: bytes | None
@@ -59,6 +61,7 @@ class Horse:
         row = await pool.fetchrow(
             """SELECT id, name, speed, stamina, consistency, luck,
                       recent_races, recent_wins, recent_places, active,
+                      description, lore,
                       profile_image, race_image, victory_image
                FROM horses WHERE id = $1""",
             horse_id,
@@ -76,6 +79,8 @@ class Horse:
             recent_wins=row["recent_wins"],
             recent_places=row["recent_places"],
             active=row["active"],
+            description=row["description"],
+            lore=row["lore"],
             profile_image=row["profile_image"],
             race_image=row["race_image"],
             victory_image=row["victory_image"],
@@ -95,6 +100,7 @@ class Horse:
         rows = await pool.fetch(
             """SELECT id, name, speed, stamina, consistency, luck,
                       recent_races, recent_wins, recent_places, active,
+                      description, lore,
                       profile_image, race_image, victory_image
                FROM horses WHERE active = TRUE ORDER BY name""",
         )
@@ -110,6 +116,8 @@ class Horse:
                 recent_wins=row["recent_wins"],
                 recent_places=row["recent_places"],
                 active=row["active"],
+                description=row["description"],
+                lore=row["lore"],
                 profile_image=row["profile_image"],
                 race_image=row["race_image"],
                 victory_image=row["victory_image"],
