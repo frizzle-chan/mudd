@@ -350,6 +350,8 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 | `recent_wins` | INT NOT NULL DEFAULT 0 | Rolling-window win count |
 | `recent_places` | INT NOT NULL DEFAULT 0 | Rolling-window place count |
 | `active` | BOOLEAN NOT NULL DEFAULT TRUE | Whether horse is eligible for races |
+| `description` | TEXT | Short description of the horse's appearance and characteristics |
+| `lore` | TEXT | Background story and narrative content about the horse |
 | `profile_image` | BYTEA | Portrait for the betting board (64x64 PNG) |
 | `race_image` | BYTEA | Sprite for race playback frames (16x16 PNG) |
 | `victory_image` | BYTEA | Image shown on win announcement |
@@ -363,6 +365,7 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 **Data Source:**
 - Horses are defined in `data/horses/*.rec` files
 - Stats are fixed at creation; rolling-window counters are updated after each race
+- Description and Lore fields are optional text fields for narrative content
 - Synced to database on bot startup and every 15 minutes
 
 ### Races Table
