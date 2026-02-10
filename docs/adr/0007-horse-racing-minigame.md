@@ -96,6 +96,12 @@ In the context of **setting displayed betting odds that reflect actual win proba
 
 The spec's original formula (`speed*0.5 + stamina*0.3 + luck*0.1 + consistency*0.1`) implied a simulation where speed dominates. The actual simulation weights luck heavily in the start phase (0.6 weight for 20% of ticks) and stamina in the final stretch (0.6 weight for 30% of ticks), producing effective weights closer to `speed*0.35 + stamina*0.35 + luck*0.25 + consistency*0.05`.
 
+### Progress Floor
+
+In the context of **preventing horses from visually freezing mid-race**, facing **the problem that negative per-phase form bonuses combined with the hard zero-clamp cause zero progress for many consecutive ticks**, we decided to **replace the zero clamp with a configurable minimum progress floor**, to achieve **guaranteed forward movement every tick while preserving all other race dynamics (fatigue, bursts, stamina differentiation)**, accepting **that the absolute worst-case deceleration is now bounded rather than unlimited**.
+
+The floor value is small relative to typical per-tick progress, so it only activates on ticks that would have been clamped to zero. Fatigue and burst multipliers still apply on top of the floor, keeping stamina strategically meaningful.
+
 ### Noise Floor
 
 In the context of **preventing high-consistency horses from having zero variance**, facing **the problem that a consistency-100 horse would have zero noise and thus perfectly deterministic results**, we decided to **clamp the noise scale to a minimum of 0.2**, to achieve **some baseline unpredictability for all horses while preserving the relative advantage of high consistency**, accepting **that even the most consistent horse will occasionally stumble or surge**.

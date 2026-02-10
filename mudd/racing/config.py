@@ -25,6 +25,7 @@ class RaceConfig:
     noise_factor: float = 0.3
     form_variance: float = 1.0
     progress_scale: float = 2.0
+    progress_floor: float = 0.1
 
 
 DEFAULT_CONFIG = RaceConfig()

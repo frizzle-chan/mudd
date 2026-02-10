@@ -20,8 +20,10 @@ async def run(args: argparse.Namespace) -> int:
     from mudd.models import Horse
     from mudd.racing.config import DEFAULT_CONFIG
     from mudd.racing.formatting import (
+        format_form,
         format_odds_board,
         format_results,
+        format_star_rating,
     )
     from mudd.racing.odds import HorseStats, compute_odds
     from mudd.racing.persistence import (
@@ -30,11 +32,15 @@ async def run(args: argparse.Namespace) -> int:
         update_rolling_counters,
     )
     from mudd.racing.rendering import (
+        AnnouncementHorse,
         RaceHorse,
         fallback_sprite,
-        render_race,
+        profile_from_bytes,
+        render_announcement,
+        render_frame,
+        render_race_gif,
+        sample_frames,
         sprite_from_bytes,
-        tile_frames,
     )
     from mudd.racing.simulation import BurstType, simulate_race
 
@@ -124,8 +130,13 @@ async def run(args: argparse.Namespace) -> int:
             )
             print(f"\nEvents: {surges} surges, {stumbles} stumbles")
 
-            # Render race image if requested
+            # Render all thread images to directory
             if args.render:
+                render_dir = Path(args.render)
+                if args.count > 1:
+                    render_dir = render_dir / f"race_{race_num}"
+                render_dir.mkdir(parents=True, exist_ok=True)
+
                 race_horses = [
                     RaceHorse(
                         name=names[h.id],
@@ -137,16 +148,68 @@ async def run(args: argparse.Namespace) -> int:
                     )
                     for i, h in enumerate(horses)
                 ]
-                frames = render_race(race_horses, result)
-                tiled = tile_frames(frames)
 
-                render_path = Path(args.render)
-                if args.count > 1:
-                    out = render_path.with_stem(f"{render_path.stem}_{race_num}")
-                else:
-                    out = render_path
-                tiled.save(out)
-                print(f"Rendered to {out}")
+                # Announcement image
+                announcement_horses = [
+                    AnnouncementHorse(
+                        horse_id=h.id,
+                        name=h.name,
+                        profile=(
+                            profile_from_bytes(h.profile_image)
+                            if h.profile_image
+                            else fallback_sprite(i).resize((64, 64))
+                        ),
+                    )
+                    for i, h in enumerate(horses)
+                ]
+                form_strings = [format_form(forms.get(h.id, [])) for h in horses]
+                star_strings = [format_star_rating(o.star_rating) for o in odds]
+                announcement_data = render_announcement(
+                    announcement_horses,
+                    [o.displayed_payout for o in odds],
+                    form_strings,
+                    star_strings,
+                    race_number=race_num,
+                )
+                (render_dir / "announcement.png").write_bytes(announcement_data)
+
+                # Race GIF batches
+                gif_render_frames = 24
+                frame_batches = [
+                    list(range(0, 6)),
+                    list(range(6, 12)),
+                    list(range(12, 18)),
+                    list(range(18, 24)),
+                ]
+                for batch_idx, batch in enumerate(frame_batches):
+                    gif_data = render_race_gif(
+                        race_horses,
+                        result,
+                        batch,
+                        render_frames=gif_render_frames,
+                    )
+                    path = render_dir / f"race_part{batch_idx + 1}.gif"
+                    path.write_bytes(gif_data)
+
+                # Photo finish (last sampled frame as static PNG)
+                sampled_ticks = sample_frames(result.snapshots, gif_render_frames)
+                last_tick = sampled_ticks[gif_render_frames]
+                finish_img = render_frame(
+                    race_horses,
+                    result.snapshots[last_tick],
+                    [e for e in result.events if e.tick == last_tick],
+                    last_tick,
+                    gif_render_frames,
+                    gif_render_frames + 1,
+                )
+                finish_img.save(render_dir / "photo_finish.png")
+
+                # Victory image
+                winner_horse = horses[result.finishing_order[0]]
+                if winner_horse.victory_image:
+                    (render_dir / "winner.png").write_bytes(winner_horse.victory_image)
+
+                print(f"Rendered to {render_dir}/")
 
             # Track aggregate stats
             for rank, idx in enumerate(result.finishing_order):
@@ -221,7 +284,7 @@ def main() -> int:
         "-v", "--verbose", action="store_true", help="Show per-tick detail"
     )
     parser.add_argument(
-        "--render", type=str, default=None, help="Save tiled race image to PATH"
+        "--render", type=str, default=None, help="Save all race images to DIR"
     )
     args = parser.parse_args()
     return asyncio.run(run(args))
