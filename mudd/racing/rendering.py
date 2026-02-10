@@ -31,10 +31,10 @@ def _load_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
 
 # Layout constants
 CANVAS_WIDTH = 640
-NAME_MARGIN = 80
-TRACK_WIDTH = 520
-FINISH_X = 600
-RIGHT_PADDING = 40
+NAME_MARGIN = 88
+TRACK_WIDTH = 530
+FINISH_X = 620
+RIGHT_PADDING = 20
 LANE_HEIGHT = 24
 SPRITE_SIZE = 16
 LANE_PADDING = 8
@@ -133,14 +133,14 @@ def render_frame(
     # Origin offset for content area
     ox, oy = MARGIN, MARGIN
 
-    # Track background (alternating lane stripes)
+    # Track background (alternating lane stripes, extending into name area)
     track_h = content_h
     for i in range(n):
         lane_y = oy + i * LANE_HEIGHT
         fill = TRACK_BG if i % 2 == 0 else TRACK_BG_ALT
         draw.rectangle(
             [
-                ox + NAME_MARGIN,
+                ox,
                 lane_y,
                 ox + NAME_MARGIN + TRACK_WIDTH,
                 lane_y + LANE_HEIGHT,
@@ -152,10 +152,17 @@ def render_frame(
     for i in range(1, n):
         y = oy + i * LANE_HEIGHT
         draw.line(
-            [(ox + NAME_MARGIN, y), (ox + NAME_MARGIN + TRACK_WIDTH, y)],
+            [(ox, y), (ox + NAME_MARGIN + TRACK_WIDTH, y)],
             fill=LANE_DIVIDER,
             width=1,
         )
+
+    # Name/track border
+    draw.line(
+        [(ox + NAME_MARGIN, oy), (ox + NAME_MARGIN, oy + track_h)],
+        fill=LANE_DIVIDER,
+        width=1,
+    )
 
     # Finish line (2px wide)
     draw.line(
@@ -176,11 +183,12 @@ def render_frame(
             font=name_font,
         )
 
-        # Sprite position: map 0.0-1.0 to NAME_MARGIN .. FINISH_X
+        # Sprite position: map 0.0-1.0 to NAME_MARGIN+2 .. FINISH_X
         x = (
             ox
             + NAME_MARGIN
-            + int(positions[i] * (FINISH_X - NAME_MARGIN - SPRITE_SIZE))
+            + 2
+            + int(positions[i] * (FINISH_X - NAME_MARGIN - 2 - SPRITE_SIZE))
         )
         sprite_y = lane_y + (LANE_HEIGHT - SPRITE_SIZE) // 2
         img.paste(horse.sprite, (x, sprite_y), horse.sprite)
