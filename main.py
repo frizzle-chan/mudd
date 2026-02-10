@@ -45,13 +45,12 @@ def parse_args() -> argparse.Namespace:
 
 intents = discord.Intents.default()
 intents.members = True
-# Enable message_content to suppress discord.py warning about prefix commands.
-# This bot uses slash commands only, but discord.py requires this intent when
-# a command_prefix is specified (even if not used).
 intents.message_content = True
 
 args = parse_args()
-bot = MuddBot(world_file=args.world, command_prefix="!", intents=intents)
+# Empty prefix tuple disables prefix command parsing — this bot
+# uses slash commands and on_message listeners only.
+bot = MuddBot(world_file=args.world, command_prefix=(), intents=intents)
 
 
 @bot.event
