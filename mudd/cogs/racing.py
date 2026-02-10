@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime as dt
 import logging
+import random
 from io import BytesIO
 
 import asyncpg
@@ -26,7 +27,6 @@ from mudd.racing import (
 )
 from mudd.racing.formatting import (
     format_form,
-    format_odds_board,
     format_results,
     format_star_rating,
 )
@@ -113,6 +113,75 @@ def _generate_commentary(
     return "\n".join(lines)
 
 
+def _generate_announcement_flavor(
+    horses: list[Horse],
+    forms: dict[str, list[int]],
+) -> str:
+    """Generate 1-2 lines of flavor text for the race announcement.
+
+    Examines recent form for winning/losing streaks and picks callout
+    lines accordingly, plus optional generic atmosphere text.
+    """
+    streak_lines: list[str] = []
+
+    for h in horses:
+        results = forms.get(h.id, [])
+        if len(results) < 2:
+            continue
+
+        # Winning streak: 2+ consecutive 1st-place finishes (newest first)
+        win_count = 0
+        for pos in results:
+            if pos == 1:
+                win_count += 1
+            else:
+                break
+        if win_count >= 2:
+            streak_lines.append(
+                random.choice(
+                    [
+                        f"**{h.name}** is on a {win_count}-race winning streak!",
+                        f"**{h.name}** has been red hot lately!",
+                    ]
+                )
+            )
+            continue
+
+        # Losing streak: 2+ consecutive finishes outside top 3
+        loss_count = 0
+        for pos in results:
+            if pos > 3:
+                loss_count += 1
+            else:
+                break
+        if loss_count >= 2:
+            streak_lines.append(
+                random.choice(
+                    [
+                        f"**{h.name}** is looking to bounce back after a rough patch",
+                        f"**{h.name}** has been struggling for form lately",
+                    ]
+                )
+            )
+
+    generic_lines = [
+        "The crowd is buzzing with anticipation!",
+        "It's a beautiful day at the track!",
+        "The jockeys are warming up in the paddock.",
+        "Punters are studying the form guide...",
+    ]
+
+    lines: list[str] = []
+    if streak_lines:
+        lines.append(random.choice(streak_lines))
+        if random.random() < 0.5:
+            lines.append(random.choice(generic_lines))
+    else:
+        lines = random.sample(generic_lines, k=random.randint(1, 2))
+
+    return "\n".join(lines)
+
+
 class Racing(commands.Cog):
     """Horse racing integration — triggers races and posts to Discord."""
 
@@ -154,6 +223,9 @@ class Racing(commands.Cog):
         if not has_role:
             return
 
+        # Acknowledge the command
+        await message.add_reaction("\U0001f40e")
+
         # Check for active race
         if await has_active_race(self._pool):
             await message.reply("A race is already in progress!")
@@ -193,8 +265,6 @@ class Racing(commands.Cog):
         odds = compute_odds(stats)
         horse_ids = [h.id for h in horses]
         forms = await get_recent_results(pool, horse_ids)
-        names = {h.id: h.name for h in horses}
-
         # 3. Simulate race
         result = simulate_race(stats)
 
@@ -246,7 +316,20 @@ class Racing(commands.Cog):
             )
             gif_batches.append(gif_data)
 
-        # 5b. Render photo finish (last sampled frame as static PNG)
+        # 5b. Render starting gate image (all horses at starting positions)
+        starting_frame = render_frame(
+            race_horses,
+            result.snapshots[0],
+            [],
+            0,
+            0,
+            GIF_RENDER_FRAMES + 1,
+        )
+        starting_buf = BytesIO()
+        starting_frame.save(starting_buf, format="PNG")
+        starting_gate_data = starting_buf.getvalue()
+
+        # 5c. Render photo finish (last sampled frame as static PNG)
         sampled_ticks = sample_frames(result.snapshots, GIF_RENDER_FRAMES)
         last_tick = sampled_ticks[GIF_RENDER_FRAMES]
         finish_frame = render_frame(
@@ -265,9 +348,6 @@ class Racing(commands.Cog):
         winner_idx = result.finishing_order[0]
         winner_horse = horses[winner_idx]
         victory_image = winner_horse.victory_image
-
-        # 7. Build odds board text
-        odds_board = format_odds_board(odds, forms, names)
 
         # 8. Build results text
         horse_names = [h.name for h in horses]
@@ -295,6 +375,11 @@ class Racing(commands.Cog):
 
         # 10. Compute timestamps
         now = dt.datetime.now(dt.UTC)
+        race_start_ts = int((now + dt.timedelta(seconds=45)).timestamp())
+        flavor = _generate_announcement_flavor(horses, forms)
+        announcement_text = (
+            f"Today's race is set to begin <t:{race_start_ts}:R>\n\n{flavor}"
+        )
         channel_id = getattr(channel, "id", 0)
 
         messages: list[RaceMessageInput] = []
@@ -304,7 +389,7 @@ class Racing(commands.Cog):
             RaceMessageInput(
                 sequence=0,
                 message_type="announcement",
-                content=f"```\n{odds_board}\n```",
+                content=announcement_text,
                 image_data=announcement_image,
                 image_name="announcement.png",
                 post_at=now,
@@ -323,62 +408,80 @@ class Racing(commands.Cog):
             )
         )
 
-        # Seq 2-5: Starting sequence (all at same offset)
-        starting_offset = dt.timedelta(seconds=35)
-        starting_messages = [
-            "Riders up!",
-            "They're approaching the starting gate...",
-            "They're all in the gate...",
-            "And they're off!",
-        ]
-        for i, text in enumerate(starting_messages):
-            messages.append(
-                RaceMessageInput(
-                    sequence=2 + i,
-                    message_type="thread",
-                    content=text,
-                    image_data=None,
-                    image_name=None,
-                    post_at=now + starting_offset,
-                )
+        # Seq 2-4: Starting sequence, staggered leading up to race start
+        messages.append(
+            RaceMessageInput(
+                sequence=2,
+                message_type="thread",
+                content="Riders up!",
+                image_data=None,
+                image_name=None,
+                post_at=now + dt.timedelta(seconds=20),
             )
+        )
+        messages.append(
+            RaceMessageInput(
+                sequence=3,
+                message_type="thread",
+                content="They're approaching the starting gate...",
+                image_data=None,
+                image_name=None,
+                post_at=now + dt.timedelta(seconds=25),
+            )
+        )
+        messages.append(
+            RaceMessageInput(
+                sequence=4,
+                message_type="thread",
+                content="They're all in the gate...",
+                image_data=starting_gate_data,
+                image_name="starting_gate.png",
+                post_at=now + dt.timedelta(seconds=30),
+            )
+        )
 
-        # Seq 6-9: Race progress (GIFs + commentary)
+        # Seq 5-8: Race progress (GIFs + commentary)
+        # First batch merges with "And they're off!" at race start time
         race_frames = zip(gif_batches, commentaries, strict=True)
         for i, (gif_data, commentary) in enumerate(race_frames):
-            offset = dt.timedelta(seconds=50 + i * 15)
+            if i == 0:
+                content = f"And they're off!\n\n{commentary}"
+                offset = dt.timedelta(seconds=45)
+            else:
+                content = commentary
+                offset = dt.timedelta(seconds=45 + i * 15)
             messages.append(
                 RaceMessageInput(
-                    sequence=6 + i,
+                    sequence=5 + i,
                     message_type="thread",
-                    content=commentary,
+                    content=content,
                     image_data=gif_data,
                     image_name=f"race_part{i + 1}.gif",
                     post_at=now + offset,
                 )
             )
 
-        # Seq 10: Photo finish (last frame as static image)
+        # Seq 9: Photo finish (last frame as static image)
         messages.append(
             RaceMessageInput(
-                sequence=10,
+                sequence=9,
                 message_type="thread",
                 content="Photo finish!",
                 image_data=photo_finish_data,
                 image_name="photo_finish.png",
-                post_at=now + dt.timedelta(seconds=110),
+                post_at=now + dt.timedelta(seconds=105),
             )
         )
 
-        # Seq 11: Results + winner
+        # Seq 10: Results + winner
         messages.append(
             RaceMessageInput(
-                sequence=11,
+                sequence=10,
                 message_type="thread",
                 content=f"**{winner_name} wins!**\n```\n{results_text}\n```",
                 image_data=victory_image,
                 image_name="winner.png" if victory_image else None,
-                post_at=now + dt.timedelta(seconds=120),
+                post_at=now + dt.timedelta(seconds=115),
             )
         )
 
@@ -398,7 +501,7 @@ class Racing(commands.Cog):
         messages[0] = RaceMessageInput(
             sequence=0,
             message_type="announcement",
-            content=f"```\n{odds_board}\n```",
+            content=announcement_text,
             image_data=announcement_image_final,
             image_name="announcement.png",
             post_at=now,
