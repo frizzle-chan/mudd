@@ -6,6 +6,7 @@ Produces PIL images from race simulation snapshots.
 
 from __future__ import annotations
 
+import functools
 import logging
 from dataclasses import dataclass
 from io import BytesIO
@@ -19,14 +20,68 @@ _log = logging.getLogger(__name__)
 
 # Font path — UnifontEX monospace installed in the Docker image
 _FONT_PATH = "/usr/share/fonts/truetype/unifontex/unifontex.ttf"
+_NATIVE_FONT_SIZE = 16
 
 
-def _load_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
-    """Load UnifontEX at the given size, falling back to default."""
+@functools.cache
+def _native_font() -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
+    """Load UnifontEX at its native 16px size, falling back to default."""
     try:
-        return ImageFont.truetype(_FONT_PATH, size)
+        return ImageFont.truetype(_FONT_PATH, _NATIVE_FONT_SIZE)
     except OSError:
         return ImageFont.load_default()
+
+
+def _textsize(text: str, scale: int = 1) -> tuple[int, int]:
+    """Return (width, height) of *text* at the given integer scale."""
+    font = _native_font()
+    bbox = font.getbbox(text)
+    w = int(bbox[2] - bbox[0])
+    h = int(bbox[3] - bbox[1])
+    return w * scale, h * scale
+
+
+def _draw_text(
+    img: Image.Image,
+    xy: tuple[int, int],
+    text: str,
+    fill: tuple[int, ...],
+    *,
+    scale: int = 1,
+    anchor: str | None = None,
+) -> None:
+    """Draw *text* at native 16px, optionally scaled up with nearest-neighbor.
+
+    For ``scale=1`` this is a thin wrapper around ``draw.text()``.
+    For ``scale>=2`` the text is rendered to a temporary image at 1x and
+    then resized with ``Resampling.NEAREST`` before being pasted onto *img*.
+    """
+    font = _native_font()
+    if scale == 1:
+        draw = ImageDraw.Draw(img)
+        draw.fontmode = "1"
+        draw.text(xy, text, fill=fill, font=font, anchor=anchor)
+        return
+
+    # Render at 1x to a tight temp image
+    bbox = font.getbbox(text)
+    w1x = int(bbox[2] - bbox[0])
+    h1x = int(bbox[3] - bbox[1])
+    tmp = Image.new("RGBA", (w1x, h1x), (0, 0, 0, 0))
+    tmp_draw = ImageDraw.Draw(tmp)
+    tmp_draw.fontmode = "1"
+    tmp_draw.text((-bbox[0], -bbox[1]), text, fill=fill, font=font)
+
+    scaled = tmp.resize((w1x * scale, h1x * scale), Resampling.NEAREST)
+
+    # Resolve anchor to top-left paste coordinates
+    sw, sh = scaled.size
+    x, y = xy
+    if anchor == "lm":
+        y = y - sh // 2
+    elif anchor == "mt":
+        x = x - sw // 2
+    img.paste(scaled, (x, y), scaled)
 
 
 # Layout constants
@@ -47,8 +102,10 @@ TRACK_BG_ALT = (47, 52, 62)
 LANE_DIVIDER = (65, 70, 80)
 FINISH_COLOR = (220, 180, 50)
 TEXT_COLOR = (200, 200, 210)
+MUTED_TEXT_COLOR = (140, 140, 155)
 HEADER_TEXT_COLOR = (90, 95, 105)
 PROGRESS_BAR_COLOR = (40, 40, 50)
+ACCENT_COLOR = (180, 150, 50)
 
 # Fallback sprite palette
 _FALLBACK_COLORS = [
@@ -128,8 +185,6 @@ def render_frame(
     img = Image.new("RGBA", (frame_width, frame_height), BG_COLOR + (255,))
     draw = ImageDraw.Draw(img)
 
-    name_font = _load_font(14)
-
     # Origin offset for content area
     ox, oy = MARGIN, MARGIN
 
@@ -176,11 +231,11 @@ def render_frame(
         lane_y = oy + i * LANE_HEIGHT
 
         # Name label
-        draw.text(
-            (ox + 4, lane_y + (LANE_HEIGHT - 14) // 2),
+        _draw_text(
+            img,
+            (ox + 4, lane_y + (LANE_HEIGHT - _NATIVE_FONT_SIZE) // 2),
             horse.name[:10],
             fill=TEXT_COLOR,
-            font=name_font,
         )
 
         # Sprite position: map 0.0-1.0 to NAME_MARGIN+2 .. FINISH_X
@@ -205,16 +260,13 @@ def render_frame(
 
     # Tick label (debug only, bottom-right margin, low contrast)
     if _log.isEnabledFor(logging.DEBUG):
-        tick_font = _load_font(13)
         tick_text = f"Tick {tick}  ({frame_index + 1}/{total_frames})"
-        bbox = draw.textbbox((0, 0), tick_text, font=tick_font)
-        tw = bbox[2] - bbox[0]
-        th = bbox[3] - bbox[1]
-        draw.text(
+        tw, th = _textsize(tick_text)
+        _draw_text(
+            img,
             (frame_width - tw - 4, frame_height - th - 2),
             tick_text,
             fill=HEADER_TEXT_COLOR,
-            font=tick_font,
         )
 
     return img
@@ -281,7 +333,7 @@ def tile_frames(frames: list[Image.Image], gap: int = 4) -> Image.Image:
 PROFILE_SIZE = 64
 ANNOUNCEMENT_ROW_HEIGHT = 80
 ANNOUNCEMENT_PADDING = 12
-ANNOUNCEMENT_HEADER_HEIGHT = 48
+ANNOUNCEMENT_HEADER_HEIGHT = 54
 
 
 @dataclass(frozen=True, slots=True)
@@ -327,27 +379,32 @@ def render_announcement(
     img = Image.new("RGBA", (CANVAS_WIDTH, height), BG_COLOR + (255,))
     draw = ImageDraw.Draw(img)
 
-    header_font = _load_font(20)
-    name_font = _load_font(16)
-    detail_font = _load_font(13)
-    star_font = _load_font(32)
-
     # Header
     header_text = f"Race #{race_number}"
-    draw.text(
+    _draw_text(
+        img,
         (CANVAS_WIDTH // 2, ANNOUNCEMENT_PADDING),
         header_text,
-        fill=FINISH_COLOR,
-        font=header_font,
+        fill=ACCENT_COLOR,
         anchor="mt",
     )
 
     # Column headers
-    col_y = ANNOUNCEMENT_HEADER_HEIGHT - 16
-    draw.text((PROFILE_SIZE + 24, col_y), "Horse", fill=TEXT_COLOR, font=detail_font)
-    draw.text((300, col_y), "Odds", fill=TEXT_COLOR, font=detail_font)
-    draw.text((380, col_y), "Form", fill=TEXT_COLOR, font=detail_font)
-    draw.text((480, col_y), "Rating", fill=TEXT_COLOR, font=detail_font)
+    col_y = ANNOUNCEMENT_HEADER_HEIGHT - 22
+    _draw_text(img, (PROFILE_SIZE + 24, col_y), "Horse", fill=MUTED_TEXT_COLOR)
+    _draw_text(img, (300, col_y), "Odds", fill=MUTED_TEXT_COLOR)
+    _draw_text(img, (380, col_y), "Form", fill=MUTED_TEXT_COLOR)
+    _draw_text(img, (480, col_y), "Rating", fill=MUTED_TEXT_COLOR)
+
+    # Header bottom border
+    draw.line(
+        [
+            (ANNOUNCEMENT_PADDING, ANNOUNCEMENT_HEADER_HEIGHT),
+            (CANVAS_WIDTH - ANNOUNCEMENT_PADDING, ANNOUNCEMENT_HEADER_HEIGHT),
+        ],
+        fill=FINISH_COLOR,
+        width=1,
+    )
 
     for i, horse in enumerate(horses):
         row_y = ANNOUNCEMENT_HEADER_HEIGHT + i * ANNOUNCEMENT_ROW_HEIGHT
@@ -370,38 +427,21 @@ def render_announcement(
 
         # Name
         text_x = PROFILE_SIZE + 24
-        draw.text(
-            (text_x, mid_y),
-            horse.name,
-            fill=TEXT_COLOR,
-            font=name_font,
-            anchor="lm",
-        )
+        _draw_text(img, (text_x, mid_y), horse.name, fill=TEXT_COLOR, anchor="lm")
 
         # Odds
-        draw.text(
-            (300, mid_y),
-            f"{odds[i]:.1f}:1",
-            fill=TEXT_COLOR,
-            font=detail_font,
-            anchor="lm",
-        )
+        _draw_text(img, (300, mid_y), f"{odds[i]:.1f}:1", fill=TEXT_COLOR, anchor="lm")
 
         # Form
-        draw.text(
-            (380, mid_y),
-            forms[i],
-            fill=TEXT_COLOR,
-            font=detail_font,
-            anchor="lm",
-        )
+        _draw_text(img, (380, mid_y), forms[i], fill=TEXT_COLOR, anchor="lm")
 
         # Star rating
-        draw.text(
+        _draw_text(
+            img,
             (480, mid_y),
             star_ratings[i],
             fill=FINISH_COLOR,
-            font=star_font,
+            scale=2,
             anchor="lm",
         )
 
