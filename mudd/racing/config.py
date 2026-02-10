@@ -23,7 +23,7 @@ class RaceConfig:
     fatigue_onset: float = 0.6
     fatigue_severity: float = 0.15
     noise_factor: float = 0.3
-    form_variance: float = 1.0
+    form_variance: float = 0.3
     progress_scale: float = 2.0
     progress_floor: float = 0.1
 
