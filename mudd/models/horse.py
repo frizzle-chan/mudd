@@ -6,6 +6,8 @@ from dataclasses import dataclass, field
 
 import asyncpg
 
+from mudd.racing.odds import HorseStats
+
 
 @dataclass(frozen=True)
 class Horse:
@@ -29,6 +31,19 @@ class Horse:
     race_image: bytes | None
     victory_image: bytes | None
     _pool: asyncpg.Pool = field(repr=False, compare=False)
+
+    def to_stats(self) -> HorseStats:
+        """Convert to a lightweight HorseStats projection for odds/simulation."""
+        return HorseStats(
+            horse_id=self.id,
+            speed=self.speed,
+            stamina=self.stamina,
+            consistency=self.consistency,
+            luck=self.luck,
+            recent_races=self.recent_races,
+            recent_wins=self.recent_wins,
+            recent_places=self.recent_places,
+        )
 
     @classmethod
     async def get(cls, pool: asyncpg.Pool, horse_id: str) -> Horse | None:

@@ -54,13 +54,21 @@ _MIDDLE_WEIGHTS = (0.6, 0.2, 0.2)
 _FINAL_WEIGHTS = (0.2, 0.6, 0.2)
 
 
+def _phase_index(phase: float) -> int:
+    """Return 0 (start), 1 (middle), or 2 (final) for the given phase fraction."""
+    if phase <= 0.2:
+        return 0
+    if phase <= 0.7:
+        return 1
+    return 2
+
+
+_PHASE_WEIGHTS = (_START_WEIGHTS, _MIDDLE_WEIGHTS, _FINAL_WEIGHTS)
+
+
 def _phase_weights(phase: float) -> tuple[float, float, float]:
     """Return (speed, stamina, luck) weights for the given phase fraction."""
-    if phase <= 0.2:
-        return _START_WEIGHTS
-    if phase <= 0.7:
-        return _MIDDLE_WEIGHTS
-    return _FINAL_WEIGHTS
+    return _PHASE_WEIGHTS[_phase_index(phase)]
 
 
 def simulate_race(
@@ -103,14 +111,7 @@ def simulate_race(
     for tick in range(1, config.num_ticks + 1):
         phase = tick / config.num_ticks
         w_speed, w_stamina, w_luck = _phase_weights(phase)
-
-        # Select form bonus for current phase
-        if phase <= 0.2:
-            phase_idx = 0
-        elif phase <= 0.7:
-            phase_idx = 1
-        else:
-            phase_idx = 2
+        phase_idx = _phase_index(phase)
 
         avg_pos = sum(positions) / n
 

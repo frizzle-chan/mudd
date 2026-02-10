@@ -25,7 +25,7 @@ async def run(args: argparse.Namespace) -> int:
         format_results,
         format_star_rating,
     )
-    from mudd.racing.odds import HorseStats, compute_odds
+    from mudd.racing.odds import compute_odds
     from mudd.racing.persistence import (
         create_race,
         get_recent_results,
@@ -69,19 +69,7 @@ async def run(args: argparse.Namespace) -> int:
             print(f"\n=== Race #{race_num} ===\n")
 
             # Build HorseStats from models
-            stats = [
-                HorseStats(
-                    horse_id=h.id,
-                    speed=h.speed,
-                    stamina=h.stamina,
-                    consistency=h.consistency,
-                    luck=h.luck,
-                    recent_races=h.recent_races,
-                    recent_wins=h.recent_wins,
-                    recent_places=h.recent_places,
-                )
-                for h in horses
-            ]
+            stats = [h.to_stats() for h in horses]
             names = {h.id: h.name for h in horses}
 
             # Fetch recent results for form display
@@ -235,19 +223,7 @@ async def run(args: argparse.Namespace) -> int:
             print(f"\n=== {args.count} Race Summary ===\n")
 
             # Compute expected percentages from final odds
-            stats = [
-                HorseStats(
-                    horse_id=h.id,
-                    speed=h.speed,
-                    stamina=h.stamina,
-                    consistency=h.consistency,
-                    luck=h.luck,
-                    recent_races=h.recent_races,
-                    recent_wins=h.recent_wins,
-                    recent_places=h.recent_places,
-                )
-                for h in horses
-            ]
+            stats = [h.to_stats() for h in horses]
             final_odds = compute_odds(stats, config)
             expected = {o.horse_id: o.true_probability * 100 for o in final_odds}
 
