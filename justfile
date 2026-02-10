@@ -60,8 +60,11 @@ migratedb:
 
 # Simulate a horse race against the dev database
 race:
-    uv run python scripts/simulate_race.py
+    rm -rf .tasks/race
+    mkdir -p .tasks/race
+    ./scripts/simulate_race.py --render=.tasks/race
 
 # Optimize images from img-src/ to img-dist/
 images:
     uv run scripts/optimize_images.py
+
