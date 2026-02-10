@@ -162,14 +162,8 @@ async def run(args: argparse.Namespace) -> int:
                 (render_dir / "announcement.png").write_bytes(announcement_data)
 
                 # Race GIF batches
-                gif_render_frames = 24
-                frame_batches = [
-                    list(range(0, 6)),
-                    list(range(6, 12)),
-                    list(range(12, 18)),
-                    list(range(18, 24)),
-                ]
-                for batch_idx, batch in enumerate(frame_batches):
+                gif_render_frames = config.total_render_frames
+                for batch_idx, batch in enumerate(config.frame_batches):
                     gif_data = render_race_gif(
                         race_horses,
                         result,

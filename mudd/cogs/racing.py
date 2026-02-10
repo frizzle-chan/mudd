@@ -25,6 +25,7 @@ from mudd.racing import (
     simulate_race,
     sprite_from_bytes,
 )
+from mudd.racing.config import DEFAULT_CONFIG, RaceConfig
 from mudd.racing.formatting import (
     format_form,
     format_results,
@@ -58,42 +59,63 @@ HORSE_ROLE_NAME = "horse"
 # Room where races can be triggered
 RACE_TRACK_ROOM = "race-track"
 
-# Total sampled frames for GIF rendering (25 ticks: 0-24)
-GIF_RENDER_FRAMES = 24
-
-# Frame batches for animated GIFs: indices into the sampled frames
-FRAME_BATCHES = [
-    list(range(0, 6)),
-    list(range(6, 12)),
-    list(range(12, 18)),
-    list(range(18, 24)),
-]
-
 
 def _generate_commentary(
     horse_names: list[str],
     result_events: list[tuple[int, int, str]],
     frame_batch_index: int,
+    num_batches: int,
 ) -> str:
     """Generate commentary text for a batch of race frames.
 
     Args:
         horse_names: Names aligned with horse indices.
         result_events: List of (tick, horse_index, burst_type) from the race.
-        frame_batch_index: Which batch (0-3) this is for.
+        frame_batch_index: Which batch this is for (0-indexed).
+        num_batches: Total number of GIF batches in this race.
 
     Returns:
         Commentary string for this section of the race.
     """
-    # Phase descriptions
-    phase_intros = [
-        "The early running!",
-        "Into the middle of the race!",
-        "The final stretch!",
-        "They're at the wire!",
-    ]
+    # Select phase-appropriate intro based on race progress
+    if frame_batch_index == 0:
+        intro = "The early running!"
+    elif frame_batch_index == num_batches - 1:
+        intro = "They're at the wire!"
+    else:
+        progress = frame_batch_index / (num_batches - 1)
+        if progress < 0.35:
+            intro = random.choice(
+                [
+                    "The early running!",
+                    "The pack is finding its rhythm!",
+                ]
+            )
+        elif progress <= 0.7:
+            intro = random.choice(
+                [
+                    "Into the middle of the race!",
+                    "The jockeys are settling in!",
+                ]
+            )
+        else:
+            intro = random.choice(
+                [
+                    "The final stretch!",
+                    "They're turning for home!",
+                ]
+            )
 
-    lines = [phase_intros[frame_batch_index]]
+    lines = [intro]
+
+    # Deduplicate by horse — keep latest event per horse
+    seen: dict[int, tuple[int, int, str]] = {}
+    for event in result_events:
+        seen[event[1]] = event
+    deduped = sorted(seen.values(), key=lambda e: e[0])
+
+    # Cap at 3 most recent events
+    result_events = deduped[-3:]
 
     # Find notable events for this batch
     for _tick, horse_idx, burst_type in result_events:
@@ -111,7 +133,7 @@ def _generate_commentary(
             "It's anyone's race!",
             "The crowd is on their feet!",
         ]
-        lines.append(fillers[frame_batch_index])
+        lines.append(random.choice(fillers))
 
     return "\n".join(lines)
 
@@ -125,10 +147,24 @@ def _generate_announcement_flavor(
     Examines recent form for winning/losing streaks and picks callout
     lines accordingly, plus optional generic atmosphere text.
     """
+    debut_lines: list[str] = []
     streak_lines: list[str] = []
 
     for h in horses:
         results = forms.get(h.id, [])
+
+        if not results and h.recent_races == 0:
+            debut_lines.append(
+                random.choice(
+                    [
+                        f"**{h.name}** makes their racing debut today!",
+                        f"All eyes on **{h.name}** — a first-time starter!",
+                        f"**{h.name}** steps onto the track for the very first time!",
+                    ]
+                )
+            )
+            continue
+
         if len(results) < 2:
             continue
 
@@ -174,13 +210,13 @@ def _generate_announcement_flavor(
         "Punters are studying the form guide...",
     ]
 
-    lines: list[str] = []
+    lines: list[str] = debut_lines.copy()
     if streak_lines:
         lines.append(random.choice(streak_lines))
         if random.random() < 0.5:
             lines.append(random.choice(generic_lines))
     else:
-        lines = random.sample(generic_lines, k=random.randint(1, 2))
+        lines.extend(random.sample(generic_lines, k=random.randint(1, 2)))
 
     return "\n".join(lines)
 
@@ -225,15 +261,17 @@ def _build_race_horses(
 def _render_race_images(
     race_horses: list[RaceHorse],
     result: RaceResult,
+    config: RaceConfig,
 ) -> _RaceImages:
     """Render GIF batches, starting gate, and photo finish images."""
+    total_frames = config.total_render_frames
     gif_batches: list[bytes] = []
-    for batch in FRAME_BATCHES:
+    for batch in config.frame_batches:
         gif_data = render_race_gif(
             race_horses,
             result,
             batch,
-            render_frames=GIF_RENDER_FRAMES,
+            render_frames=total_frames,
         )
         gif_batches.append(gif_data)
 
@@ -244,21 +282,21 @@ def _render_race_images(
         [],
         0,
         0,
-        GIF_RENDER_FRAMES + 1,
+        total_frames + 1,
     )
     starting_buf = BytesIO()
     starting_frame.save(starting_buf, format="PNG")
 
     # Photo finish (last sampled frame as static PNG)
-    sampled_ticks = sample_frames(result.snapshots, GIF_RENDER_FRAMES)
-    last_tick = sampled_ticks[GIF_RENDER_FRAMES]
+    sampled_ticks = sample_frames(result.snapshots, total_frames)
+    last_tick = sampled_ticks[total_frames]
     finish_frame = render_frame(
         race_horses,
         result.snapshots[last_tick],
         [e for e in result.events if e.tick == last_tick],
         last_tick,
-        GIF_RENDER_FRAMES,
-        GIF_RENDER_FRAMES + 1,
+        total_frames,
+        total_frames + 1,
     )
     finish_buf = BytesIO()
     finish_frame.save(finish_buf, format="PNG")
@@ -277,6 +315,7 @@ def _build_message_queue(
     forms: dict[str, list[int]],
     images: _RaceImages,
     channel_id: int,
+    config: RaceConfig,
 ) -> list[RaceMessageInput]:
     """Construct the full list of RaceMessageInputs with timings and commentary."""
     horse_names = [h.name for h in horses]
@@ -286,10 +325,13 @@ def _build_message_queue(
     victory_image = horses[winner_idx].victory_image
 
     # Generate commentary per GIF batch
-    sampled_ticks = sample_frames(result.snapshots, GIF_RENDER_FRAMES)
-    batch_events: list[list[tuple[int, int, str]]] = [[] for _ in FRAME_BATCHES]
+    total_frames = config.total_render_frames
+    frame_batches = config.frame_batches
+    num_batches = config.num_gifs
+    sampled_ticks = sample_frames(result.snapshots, total_frames)
+    batch_events: list[list[tuple[int, int, str]]] = [[] for _ in frame_batches]
     for event in result.events:
-        for batch_idx, batch_indices in enumerate(FRAME_BATCHES):
+        for batch_idx, batch_indices in enumerate(frame_batches):
             batch_tick_range = [sampled_ticks[i] for i in batch_indices]
             min_tick = min(batch_tick_range)
             max_tick = max(batch_tick_range)
@@ -300,8 +342,8 @@ def _build_message_queue(
                 break
 
     commentaries = [
-        _generate_commentary(horse_names, batch_events[i], i)
-        for i in range(len(FRAME_BATCHES))
+        _generate_commentary(horse_names, batch_events[i], i, num_batches)
+        for i in range(num_batches)
     ]
 
     # Compute timestamps
@@ -394,7 +436,8 @@ def _build_message_queue(
         )
     )
 
-    # Seq 5-8: Race progress (GIFs + commentary)
+    # Seq 5 through 5+N-1: Race progress (GIFs + commentary)
+    gif_interval = config.gif_interval_seconds
     race_frames = zip(images.gif_batches, commentaries, strict=True)
     for i, (gif_data, commentary) in enumerate(race_frames):
         if i == 0:
@@ -402,7 +445,7 @@ def _build_message_queue(
             offset = dt.timedelta(seconds=45)
         else:
             content = commentary
-            offset = dt.timedelta(seconds=45 + i * 15)
+            offset = dt.timedelta(seconds=45 + i * gif_interval)
         messages.append(
             RaceMessageInput(
                 sequence=5 + i,
@@ -414,27 +457,28 @@ def _build_message_queue(
             )
         )
 
-    # Seq 9: Photo finish
+    # Seq 5+N: Photo finish
+    photo_finish_offset = 45 + num_batches * gif_interval
     messages.append(
         RaceMessageInput(
-            sequence=9,
+            sequence=5 + num_batches,
             message_type=MessageType.THREAD,
             content="Photo finish!",
             image_data=images.photo_finish,
             image_name="photo_finish.png",
-            post_at=now + dt.timedelta(seconds=105),
+            post_at=now + dt.timedelta(seconds=photo_finish_offset),
         )
     )
 
-    # Seq 10: Results + winner
+    # Seq 5+N+1: Results + winner
     messages.append(
         RaceMessageInput(
-            sequence=10,
+            sequence=5 + num_batches + 1,
             message_type=MessageType.THREAD,
             content=f"**{winner_name} wins!**\n```\n{results_text}\n```",
             image_data=victory_image,
             image_name="winner.png" if victory_image else None,
-            post_at=now + dt.timedelta(seconds=115),
+            post_at=now + dt.timedelta(seconds=photo_finish_offset + 10),
         )
     )
 
@@ -508,6 +552,7 @@ class Racing(commands.Cog):
             return
 
         # 2. Build HorseStats, compute odds, simulate
+        config = DEFAULT_CONFIG
         stats = [h.to_stats() for h in horses]
         odds = compute_odds(stats)
         horse_ids = [h.id for h in horses]
@@ -516,11 +561,13 @@ class Racing(commands.Cog):
 
         # 3. Build visual assets
         race_horses, announcement_horses = _build_race_horses(horses)
-        images = _render_race_images(race_horses, result)
+        images = _render_race_images(race_horses, result, config)
 
         # 4. Build message queue
         channel_id = getattr(channel, "id", 0)
-        messages = _build_message_queue(result, odds, horses, forms, images, channel_id)
+        messages = _build_message_queue(
+            result, odds, horses, forms, images, channel_id, config
+        )
 
         # 5. Persist and finalize announcement with actual race_id
         await self._persist_race(
