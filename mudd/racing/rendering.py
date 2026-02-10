@@ -43,6 +43,7 @@ TRACK_BG = (50, 55, 65)
 LANE_DIVIDER = (65, 70, 80)
 FINISH_COLOR = (220, 180, 50)
 TEXT_COLOR = (200, 200, 210)
+HEADER_TEXT_COLOR = (90, 95, 105)
 
 # Fallback sprite palette
 _FALLBACK_COLORS = [
@@ -125,7 +126,7 @@ def render_frame(
 
     # Header
     header_text = f"Tick {tick}  ({frame_index + 1}/{total_frames})"
-    draw.text((4, 2), header_text, fill=TEXT_COLOR, font=header_font)
+    draw.text((4, 2), header_text, fill=HEADER_TEXT_COLOR, font=header_font)
 
     # Track background
     track_y = HEADER_HEIGHT
