@@ -333,7 +333,19 @@ def tile_frames(frames: list[Image.Image], gap: int = 4) -> Image.Image:
 PROFILE_SIZE = 64
 ANNOUNCEMENT_ROW_HEIGHT = 80
 ANNOUNCEMENT_PADDING = 12
-ANNOUNCEMENT_HEADER_HEIGHT = 54
+# Mac System 1 window chrome
+WIN_BORDER_OUTER = 2  # outer border line width
+WIN_BORDER_GAP = 1  # gap between outer and inner border
+WIN_BORDER_INNER = 1  # inner border line width
+WIN_BORDER_TOTAL = 4  # sum of the above
+
+WIN_TITLEBAR_HEIGHT = 40  # title bar height
+WIN_STRIPE_GAP = 3  # vertical pitch of title bar stripes
+WIN_TITLE_PAD = 8  # gap between title text and stripes
+WIN_STRIPE_MARGIN = 6  # margin from border to stripe start
+
+WIN_INFOBAR_HEIGHT = 24  # column header bar height
+WIN_SEPARATOR_WIDTH = 1  # horizontal rule width
 
 
 @dataclass(frozen=True, slots=True)
@@ -373,54 +385,106 @@ def render_announcement(
         PNG image bytes.
     """
     n = len(horses)
-    height = (
-        ANNOUNCEMENT_HEADER_HEIGHT + n * ANNOUNCEMENT_ROW_HEIGHT + ANNOUNCEMENT_PADDING
-    )
+    chrome_top = WIN_BORDER_TOTAL + WIN_TITLEBAR_HEIGHT + WIN_SEPARATOR_WIDTH
+    info_top = chrome_top + WIN_INFOBAR_HEIGHT + WIN_SEPARATOR_WIDTH
+    height = info_top + n * ANNOUNCEMENT_ROW_HEIGHT + WIN_BORDER_TOTAL
     img = Image.new("RGBA", (CANVAS_WIDTH, height), BG_COLOR + (255,))
     draw = ImageDraw.Draw(img)
 
-    # Header
-    header_text = f"Race #{race_number}"
+    # --- Double border ---
+    # Outer 2px rectangle
+    draw.rectangle(
+        [0, 0, CANVAS_WIDTH - 1, height - 1],
+        outline=LANE_DIVIDER,
+        width=WIN_BORDER_OUTER,
+    )
+    # Inner 1px rectangle (inset by outer + gap = 3px)
+    inset = WIN_BORDER_OUTER + WIN_BORDER_GAP
+    draw.rectangle(
+        [inset, inset, CANVAS_WIDTH - 1 - inset, height - 1 - inset],
+        outline=LANE_DIVIDER,
+        width=WIN_BORDER_INNER,
+    )
+
+    # --- Title bar ---
+    tb_top = WIN_BORDER_TOTAL
+    tb_bottom = tb_top + WIN_TITLEBAR_HEIGHT
+
+    # Title text centered
+    title_text = f"Race #{race_number}"
+    tw, th = _textsize(title_text, scale=2)
+    title_x = CANVAS_WIDTH // 2
+    title_y = tb_top + (WIN_TITLEBAR_HEIGHT - th) // 2
     _draw_text(
-        img,
-        (CANVAS_WIDTH // 2, ANNOUNCEMENT_PADDING),
-        header_text,
-        fill=ACCENT_COLOR,
-        anchor="mt",
+        img, (title_x, title_y), title_text, fill=FINISH_COLOR, scale=2, anchor="mt"
     )
 
-    # Column headers
-    col_y = ANNOUNCEMENT_HEADER_HEIGHT - 22
-    _draw_text(img, (PROFILE_SIZE + 24, col_y), "Horse", fill=MUTED_TEXT_COLOR)
-    _draw_text(img, (300, col_y), "Odds", fill=MUTED_TEXT_COLOR)
-    _draw_text(img, (380, col_y), "Form", fill=MUTED_TEXT_COLOR)
-    _draw_text(img, (480, col_y), "Rating", fill=MUTED_TEXT_COLOR)
+    # Stripes: 1px horizontal lines filling title bar on both sides of the title
+    stripe_left = WIN_BORDER_TOTAL + WIN_STRIPE_MARGIN
+    stripe_right = CANVAS_WIDTH - 1 - WIN_BORDER_TOTAL - WIN_STRIPE_MARGIN
+    title_left = title_x - tw // 2 - WIN_TITLE_PAD
+    title_right = title_x + tw // 2 + WIN_TITLE_PAD
 
-    # Header bottom border
+    all_stripes = list(range(tb_top + WIN_STRIPE_GAP, tb_bottom, WIN_STRIPE_GAP))
+    trimmed = all_stripes[2:-3] if len(all_stripes) > 5 else all_stripes
+    for y in trimmed:
+        # Left side stripes
+        if stripe_left < title_left:
+            draw.line([(stripe_left, y), (title_left, y)], fill=LANE_DIVIDER, width=1)
+        # Right side stripes
+        if title_right < stripe_right:
+            draw.line([(title_right, y), (stripe_right, y)], fill=LANE_DIVIDER, width=1)
+
+    # --- Separator below title bar ---
+    sep1_y = tb_bottom
     draw.line(
-        [
-            (ANNOUNCEMENT_PADDING, ANNOUNCEMENT_HEADER_HEIGHT),
-            (CANVAS_WIDTH - ANNOUNCEMENT_PADDING, ANNOUNCEMENT_HEADER_HEIGHT),
-        ],
-        fill=FINISH_COLOR,
-        width=1,
+        [(WIN_BORDER_TOTAL, sep1_y), (CANVAS_WIDTH - 1 - WIN_BORDER_TOTAL, sep1_y)],
+        fill=LANE_DIVIDER,
+        width=WIN_SEPARATOR_WIDTH,
     )
+
+    # --- Info bar (column headers) ---
+    ib_top = sep1_y + WIN_SEPARATOR_WIDTH
+    ib_mid_y = ib_top + WIN_INFOBAR_HEIGHT // 2
+    _draw_text(
+        img, (PROFILE_SIZE + 24, ib_mid_y), "Horse", fill=MUTED_TEXT_COLOR, anchor="lm"
+    )
+    _draw_text(img, (300, ib_mid_y), "Odds", fill=MUTED_TEXT_COLOR, anchor="lm")
+    _draw_text(img, (380, ib_mid_y), "Form", fill=MUTED_TEXT_COLOR, anchor="lm")
+    _draw_text(img, (480, ib_mid_y), "Rating", fill=MUTED_TEXT_COLOR, anchor="lm")
+
+    # --- Separator below info bar ---
+    sep2_y = ib_top + WIN_INFOBAR_HEIGHT
+    draw.line(
+        [(WIN_BORDER_TOTAL, sep2_y), (CANVAS_WIDTH - 1 - WIN_BORDER_TOTAL, sep2_y)],
+        fill=LANE_DIVIDER,
+        width=WIN_SEPARATOR_WIDTH,
+    )
+
+    # --- Content rows ---
+    content_top = sep2_y + WIN_SEPARATOR_WIDTH
 
     for i, horse in enumerate(horses):
-        row_y = ANNOUNCEMENT_HEADER_HEIGHT + i * ANNOUNCEMENT_ROW_HEIGHT
+        row_y = content_top + i * ANNOUNCEMENT_ROW_HEIGHT
 
-        # Divider line
+        # Divider line between rows
         if i > 0:
-            x_end = CANVAS_WIDTH - ANNOUNCEMENT_PADDING
             draw.line(
-                [(ANNOUNCEMENT_PADDING, row_y), (x_end, row_y)],
+                [
+                    (WIN_BORDER_TOTAL, row_y),
+                    (CANVAS_WIDTH - 1 - WIN_BORDER_TOTAL, row_y),
+                ],
                 fill=LANE_DIVIDER,
                 width=1,
             )
 
         # Profile image
         profile_y = row_y + (ANNOUNCEMENT_ROW_HEIGHT - PROFILE_SIZE) // 2
-        img.paste(horse.profile, (ANNOUNCEMENT_PADDING, profile_y), horse.profile)
+        img.paste(
+            horse.profile,
+            (WIN_BORDER_TOTAL + ANNOUNCEMENT_PADDING, profile_y),
+            horse.profile,
+        )
 
         # Vertical center of this row
         mid_y = row_y + ANNOUNCEMENT_ROW_HEIGHT // 2
