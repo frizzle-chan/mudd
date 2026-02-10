@@ -128,8 +128,8 @@ def simulate_race(
             noise_scale = max(0.2, (100 - h.consistency) / 100.0)
             noise = rng.gauss(0, noise_scale * config.noise_factor)
 
-            # Clamp base + noise to >= 0
-            progress = max(0.0, base + noise)
+            # Floor prevents stalling on bad form/noise draws
+            progress = max(config.progress_floor, base + noise)
 
             # Fatigue penalty after onset
             if phase > config.fatigue_onset:

@@ -281,7 +281,7 @@ def render_announcement(
     header_font = _load_font(20)
     name_font = _load_font(16)
     detail_font = _load_font(13)
-    star_font = _load_font(18)
+    star_font = _load_font(32)
 
     # Header
     header_text = f"Race #{race_number}"
@@ -316,34 +316,44 @@ def render_announcement(
         profile_y = row_y + (ANNOUNCEMENT_ROW_HEIGHT - PROFILE_SIZE) // 2
         img.paste(horse.profile, (ANNOUNCEMENT_PADDING, profile_y), horse.profile)
 
+        # Vertical center of this row
+        mid_y = row_y + ANNOUNCEMENT_ROW_HEIGHT // 2
+
         # Name
         text_x = PROFILE_SIZE + 24
-        name_y = row_y + ANNOUNCEMENT_ROW_HEIGHT // 2 - 10
-        draw.text((text_x, name_y), horse.name, fill=TEXT_COLOR, font=name_font)
+        draw.text(
+            (text_x, mid_y),
+            horse.name,
+            fill=TEXT_COLOR,
+            font=name_font,
+            anchor="lm",
+        )
 
         # Odds
-        detail_y = name_y + 2
         draw.text(
-            (300, detail_y),
+            (300, mid_y),
             f"{odds[i]:.1f}:1",
             fill=TEXT_COLOR,
             font=detail_font,
+            anchor="lm",
         )
 
         # Form
         draw.text(
-            (380, detail_y),
+            (380, mid_y),
             forms[i],
             fill=TEXT_COLOR,
             font=detail_font,
+            anchor="lm",
         )
 
         # Star rating
         draw.text(
-            (480, detail_y),
+            (480, mid_y),
             star_ratings[i],
             fill=FINISH_COLOR,
             font=star_font,
+            anchor="lm",
         )
 
     buf = BytesIO()

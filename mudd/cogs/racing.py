@@ -19,6 +19,7 @@ from mudd.racing import (
     compute_odds,
     profile_from_bytes,
     render_announcement,
+    render_frame,
     render_race_gif,
     simulate_race,
     sprite_from_bytes,
@@ -43,7 +44,7 @@ from mudd.racing.persistence import (
     set_race_thread,
     update_rolling_counters,
 )
-from mudd.racing.rendering import fallback_sprite
+from mudd.racing.rendering import fallback_sprite, sample_frames
 from mudd.racing.simulation import BurstType
 
 logger = logging.getLogger(__name__)
@@ -62,7 +63,7 @@ FRAME_BATCHES = [
     list(range(0, 6)),
     list(range(6, 12)),
     list(range(12, 18)),
-    list(range(18, 25)),
+    list(range(18, 24)),
 ]
 
 
@@ -245,6 +246,21 @@ class Racing(commands.Cog):
             )
             gif_batches.append(gif_data)
 
+        # 5b. Render photo finish (last sampled frame as static PNG)
+        sampled_ticks = sample_frames(result.snapshots, GIF_RENDER_FRAMES)
+        last_tick = sampled_ticks[GIF_RENDER_FRAMES]
+        finish_frame = render_frame(
+            race_horses,
+            result.snapshots[last_tick],
+            [e for e in result.events if e.tick == last_tick],
+            last_tick,
+            GIF_RENDER_FRAMES,
+            GIF_RENDER_FRAMES + 1,
+        )
+        finish_buf = BytesIO()
+        finish_frame.save(finish_buf, format="PNG")
+        photo_finish_data = finish_buf.getvalue()
+
         # 6. Get winner's victory image
         winner_idx = result.finishing_order[0]
         winner_horse = horses[winner_idx]
@@ -260,9 +276,6 @@ class Racing(commands.Cog):
 
         # 9. Generate commentary for each GIF batch
         # Collect events per batch by mapping tick ranges to batches
-        from mudd.racing.rendering import sample_frames
-
-        sampled_ticks = sample_frames(result.snapshots, GIF_RENDER_FRAMES)
         batch_events: list[list[tuple[int, int, str]]] = [[] for _ in FRAME_BATCHES]
         for event in result.events:
             for batch_idx, batch_indices in enumerate(FRAME_BATCHES):
@@ -334,28 +347,38 @@ class Racing(commands.Cog):
         race_frames = zip(gif_batches, commentaries, strict=True)
         for i, (gif_data, commentary) in enumerate(race_frames):
             offset = dt.timedelta(seconds=50 + i * 15)
-            is_final = i == len(gif_batches) - 1
-            content = "They're at the wire!" if is_final else commentary
             messages.append(
                 RaceMessageInput(
                     sequence=6 + i,
                     message_type="thread",
-                    content=content,
+                    content=commentary,
                     image_data=gif_data,
                     image_name=f"race_part{i + 1}.gif",
                     post_at=now + offset,
                 )
             )
 
-        # Seq 10: Results + winner
+        # Seq 10: Photo finish (last frame as static image)
         messages.append(
             RaceMessageInput(
                 sequence=10,
                 message_type="thread",
+                content="Photo finish!",
+                image_data=photo_finish_data,
+                image_name="photo_finish.png",
+                post_at=now + dt.timedelta(seconds=110),
+            )
+        )
+
+        # Seq 11: Results + winner
+        messages.append(
+            RaceMessageInput(
+                sequence=11,
+                message_type="thread",
                 content=f"**{winner_name} wins!**\n```\n{results_text}\n```",
                 image_data=victory_image,
                 image_name="winner.png" if victory_image else None,
-                post_at=now + dt.timedelta(seconds=105),
+                post_at=now + dt.timedelta(seconds=120),
             )
         )
 

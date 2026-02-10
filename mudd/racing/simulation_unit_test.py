@@ -128,3 +128,83 @@ class TestBurstEvents:
         horses = _make_horses()
         result = simulate_race(horses, rng=Random(42))
         assert result.horse_ids == [h.horse_id for h in horses]
+
+
+class TestProgressFloor:
+    def test_no_stalling_with_weak_horse(self) -> None:
+        """A horse with terrible stats still makes forward progress every tick.
+
+        Rubber-banding is disabled to isolate the floor behavior — rubber-banding
+        can legitimately produce zero-progress ticks when a horse is ahead of average.
+        """
+        config = RaceConfig(rubber_band_factor=0.0)
+        weak = [
+            HorseStats(
+                "slug",
+                speed=1,
+                stamina=1,
+                consistency=1,
+                luck=1,
+                recent_races=0,
+                recent_wins=0,
+                recent_places=0,
+            ),
+            # Need at least one other horse for a valid race
+            HorseStats(
+                "rival",
+                speed=90,
+                stamina=90,
+                consistency=90,
+                luck=90,
+                recent_races=0,
+                recent_wins=0,
+                recent_places=0,
+            ),
+        ]
+        # Try multiple seeds — at least one would trigger stalling without a floor
+        for seed in range(20):
+            result = simulate_race(weak, rng=Random(seed), config=config)
+            # Check the weak horse (index 0) never has consecutive identical positions
+            for t in range(len(result.snapshots) - 2):
+                pos_now = result.snapshots[t + 1][0]
+                pos_next = result.snapshots[t + 2][0]
+                assert pos_next > pos_now, (
+                    f"seed={seed}: horse stalled at tick {t + 2} (position {pos_now})"
+                )
+
+    def test_floor_zero_allows_stalling(self) -> None:
+        """With floor=0.0 (old behavior), a weak horse can stall."""
+        config = RaceConfig(progress_floor=0.0, rubber_band_factor=0.0)
+        weak = [
+            HorseStats(
+                "slug",
+                speed=1,
+                stamina=1,
+                consistency=1,
+                luck=1,
+                recent_races=0,
+                recent_wins=0,
+                recent_places=0,
+            ),
+            HorseStats(
+                "rival",
+                speed=90,
+                stamina=90,
+                consistency=90,
+                luck=90,
+                recent_races=0,
+                recent_wins=0,
+                recent_places=0,
+            ),
+        ]
+        # At least one seed out of 50 should produce a stall with floor=0
+        found_stall = False
+        for seed in range(50):
+            result = simulate_race(weak, rng=Random(seed), config=config)
+            for t in range(len(result.snapshots) - 2):
+                if result.snapshots[t + 2][0] == result.snapshots[t + 1][0]:
+                    found_stall = True
+                    break
+            if found_stall:
+                break
+        assert found_stall, "Expected at least one stall with floor=0.0"
