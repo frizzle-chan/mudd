@@ -96,6 +96,10 @@ In the context of **setting displayed betting odds that reflect actual win proba
 
 The spec's original formula (`speed*0.5 + stamina*0.3 + luck*0.1 + consistency*0.1`) implied a simulation where speed dominates. The actual simulation weights luck heavily in the start phase (0.6 weight for 20% of ticks) and stamina in the final stretch (0.6 weight for 30% of ticks), producing effective weights closer to `speed*0.35 + stamina*0.35 + luck*0.25 + consistency*0.05`.
 
+### Odds Exponentiation
+
+In the context of **generating meaningful odds spreads between horses**, facing **the problem that linear base strengths produce compressed probability ranges where even large stat differences result in similar odds**, we decided to **raise base strengths to a configurable power (default 2.5) before computing probabilities**, to achieve **wider odds spreads that give strong horses clearly shorter odds and weak horses clearly longer odds, matching player intuition about favorites vs. longshots**, accepting **that the exponent is an additional tuning constant and that the performance modifier now operates on exponentiated values rather than raw base strengths**.
+
 ### Progress Floor
 
 In the context of **preventing horses from visually freezing mid-race**, facing **two independent stalling sources — negative form bonuses zeroing out base progress and rubber-banding erasing the floored progress afterward**, we decided to **apply the progress floor after all modifiers (fatigue, bursts, scaling, and rubber-banding) rather than on the intermediate base+noise value**, to achieve **guaranteed forward movement every tick regardless of rubber-band forces**, accepting **that the absolute worst-case deceleration is now bounded rather than unlimited**.

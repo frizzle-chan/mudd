@@ -6,7 +6,7 @@ import csv
 import io
 import logging
 import subprocess
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import asyncpg
@@ -115,15 +115,8 @@ def load_horses_from_rec(horses_dir: Path = HORSES_DIR) -> list[HorseData]:
     reader = csv.DictReader(io.StringIO(result.stdout))
     for row in reader:
         horse = _parse_horse_row(row)
-        # Attach image data
-        horse = HorseData(
-            id=horse.id,
-            name=horse.name,
-            speed=horse.speed,
-            stamina=horse.stamina,
-            consistency=horse.consistency,
-            luck=horse.luck,
-            active=horse.active,
+        horse = replace(
+            horse,
             profile_image=_load_image(horses_dir, horse.id, "_profile.png"),
             race_image=_load_image(horses_dir, horse.id, "_race.png"),
             victory_image=_load_image(horses_dir, horse.id, "_victory.png"),
@@ -165,28 +158,37 @@ async def sync_horses(pool: asyncpg.Pool, horses_dir: Path = HORSES_DIR) -> int:
         if deleted != "DELETE 0":
             logger.info("Removed stale horses: %s", deleted)
 
-        # Upsert current horses (preserve rolling-window counters)
-        for horse in horses:
-            await conn.execute(
-                """INSERT INTO horses
-                       (id, name, speed, stamina, consistency, luck, active,
-                        profile_image, race_image, victory_image)
-                   VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-                   ON CONFLICT (id) DO UPDATE SET
-                       name = $2, speed = $3, stamina = $4, consistency = $5,
-                       luck = $6, active = $7,
-                       profile_image = $8, race_image = $9, victory_image = $10""",
-                horse.id,
-                horse.name,
-                horse.speed,
-                horse.stamina,
-                horse.consistency,
-                horse.luck,
-                horse.active,
-                horse.profile_image,
-                horse.race_image,
-                horse.victory_image,
-            )
+        # Batch upsert current horses (preserve rolling-window counters)
+        await conn.execute(
+            """INSERT INTO horses
+                   (id, name, speed, stamina, consistency, luck, active,
+                    profile_image, race_image, victory_image)
+               SELECT * FROM unnest(
+                   $1::text[], $2::text[], $3::int[], $4::int[],
+                   $5::int[], $6::int[], $7::bool[],
+                   $8::bytea[], $9::bytea[], $10::bytea[]
+               )
+               ON CONFLICT (id) DO UPDATE SET
+                   name = EXCLUDED.name,
+                   speed = EXCLUDED.speed,
+                   stamina = EXCLUDED.stamina,
+                   consistency = EXCLUDED.consistency,
+                   luck = EXCLUDED.luck,
+                   active = EXCLUDED.active,
+                   profile_image = EXCLUDED.profile_image,
+                   race_image = EXCLUDED.race_image,
+                   victory_image = EXCLUDED.victory_image""",
+            [h.id for h in horses],
+            [h.name for h in horses],
+            [h.speed for h in horses],
+            [h.stamina for h in horses],
+            [h.consistency for h in horses],
+            [h.luck for h in horses],
+            [h.active for h in horses],
+            [h.profile_image for h in horses],
+            [h.race_image for h in horses],
+            [h.victory_image for h in horses],
+        )
 
     logger.info("Synced %d horses", len(horses))
     return len(horses)

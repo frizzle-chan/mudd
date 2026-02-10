@@ -5,6 +5,7 @@ from __future__ import annotations
 import datetime as dt
 import logging
 import random
+from dataclasses import dataclass
 from io import BytesIO
 
 import asyncpg
@@ -15,7 +16,6 @@ from mudd.models.horse import Horse
 from mudd.observers import RoomChannelCache
 from mudd.racing import (
     AnnouncementHorse,
-    HorseStats,
     RaceHorse,
     compute_odds,
     profile_from_bytes,
@@ -30,9 +30,12 @@ from mudd.racing.formatting import (
     format_results,
     format_star_rating,
 )
+from mudd.racing.odds import HorseOdds
 from mudd.racing.persistence import (
+    MessageType,
     PendingMessage,
     RaceMessageInput,
+    RaceStatus,
     create_race,
     create_race_messages,
     delete_message,
@@ -45,7 +48,7 @@ from mudd.racing.persistence import (
     update_rolling_counters,
 )
 from mudd.racing.rendering import fallback_sprite, sample_frames
-from mudd.racing.simulation import BurstType
+from mudd.racing.simulation import BurstType, RaceResult
 
 logger = logging.getLogger(__name__)
 
@@ -182,6 +185,262 @@ def _generate_announcement_flavor(
     return "\n".join(lines)
 
 
+@dataclass(frozen=True, slots=True)
+class _RaceImages:
+    """Pre-rendered image assets for a race."""
+
+    gif_batches: list[bytes]
+    starting_gate: bytes
+    photo_finish: bytes
+
+
+def _build_race_horses(
+    horses: list[Horse],
+) -> tuple[list[RaceHorse], list[AnnouncementHorse]]:
+    """Convert Horse models to RaceHorse and AnnouncementHorse lists."""
+    race_horses = [
+        RaceHorse(
+            name=h.name,
+            sprite=(
+                sprite_from_bytes(h.race_image) if h.race_image else fallback_sprite(i)
+            ),
+        )
+        for i, h in enumerate(horses)
+    ]
+    announcement_horses = [
+        AnnouncementHorse(
+            horse_id=h.id,
+            name=h.name,
+            profile=(
+                profile_from_bytes(h.profile_image)
+                if h.profile_image
+                else fallback_sprite(i).resize((64, 64))
+            ),
+        )
+        for i, h in enumerate(horses)
+    ]
+    return race_horses, announcement_horses
+
+
+def _render_race_images(
+    race_horses: list[RaceHorse],
+    result: RaceResult,
+) -> _RaceImages:
+    """Render GIF batches, starting gate, and photo finish images."""
+    gif_batches: list[bytes] = []
+    for batch in FRAME_BATCHES:
+        gif_data = render_race_gif(
+            race_horses,
+            result,
+            batch,
+            render_frames=GIF_RENDER_FRAMES,
+        )
+        gif_batches.append(gif_data)
+
+    # Starting gate (all horses at starting positions)
+    starting_frame = render_frame(
+        race_horses,
+        result.snapshots[0],
+        [],
+        0,
+        0,
+        GIF_RENDER_FRAMES + 1,
+    )
+    starting_buf = BytesIO()
+    starting_frame.save(starting_buf, format="PNG")
+
+    # Photo finish (last sampled frame as static PNG)
+    sampled_ticks = sample_frames(result.snapshots, GIF_RENDER_FRAMES)
+    last_tick = sampled_ticks[GIF_RENDER_FRAMES]
+    finish_frame = render_frame(
+        race_horses,
+        result.snapshots[last_tick],
+        [e for e in result.events if e.tick == last_tick],
+        last_tick,
+        GIF_RENDER_FRAMES,
+        GIF_RENDER_FRAMES + 1,
+    )
+    finish_buf = BytesIO()
+    finish_frame.save(finish_buf, format="PNG")
+
+    return _RaceImages(
+        gif_batches=gif_batches,
+        starting_gate=starting_buf.getvalue(),
+        photo_finish=finish_buf.getvalue(),
+    )
+
+
+def _build_message_queue(
+    result: RaceResult,
+    odds: list[HorseOdds],
+    horses: list[Horse],
+    forms: dict[str, list[int]],
+    images: _RaceImages,
+    channel_id: int,
+) -> list[RaceMessageInput]:
+    """Construct the full list of RaceMessageInputs with timings and commentary."""
+    horse_names = [h.name for h in horses]
+    winner_idx = result.finishing_order[0]
+    winner_name = horse_names[winner_idx]
+    results_text = format_results(result.finishing_order, horse_names, odds)
+    victory_image = horses[winner_idx].victory_image
+
+    # Generate commentary per GIF batch
+    sampled_ticks = sample_frames(result.snapshots, GIF_RENDER_FRAMES)
+    batch_events: list[list[tuple[int, int, str]]] = [[] for _ in FRAME_BATCHES]
+    for event in result.events:
+        for batch_idx, batch_indices in enumerate(FRAME_BATCHES):
+            batch_tick_range = [sampled_ticks[i] for i in batch_indices]
+            min_tick = min(batch_tick_range)
+            max_tick = max(batch_tick_range)
+            if min_tick <= event.tick <= max_tick:
+                batch_events[batch_idx].append(
+                    (event.tick, event.horse_index, event.burst_type)
+                )
+                break
+
+    commentaries = [
+        _generate_commentary(horse_names, batch_events[i], i)
+        for i in range(len(FRAME_BATCHES))
+    ]
+
+    # Compute timestamps
+    now = dt.datetime.now(dt.UTC)
+    race_start_ts = int((now + dt.timedelta(seconds=45)).timestamp())
+    flavor = _generate_announcement_flavor(horses, forms)
+    announcement_text = (
+        f"Today's race is set to begin <t:{race_start_ts}:R>\n\n{flavor}"
+    )
+
+    # Render announcement with placeholder race number (re-rendered after insert)
+    announcement_horses_for_img = [
+        AnnouncementHorse(
+            horse_id=h.id,
+            name=h.name,
+            profile=(
+                profile_from_bytes(h.profile_image)
+                if h.profile_image
+                else fallback_sprite(i).resize((64, 64))
+            ),
+        )
+        for i, h in enumerate(horses)
+    ]
+    announcement_odds = [o.displayed_payout for o in odds]
+    announcement_forms = [format_form(forms.get(h.id, [])) for h in horses]
+    announcement_stars = [format_star_rating(o.star_rating) for o in odds]
+    announcement_image = render_announcement(
+        announcement_horses_for_img,
+        announcement_odds,
+        announcement_forms,
+        announcement_stars,
+        race_number=0,
+    )
+
+    messages: list[RaceMessageInput] = []
+
+    # Seq 0: Announcement (channel message)
+    messages.append(
+        RaceMessageInput(
+            sequence=0,
+            message_type=MessageType.ANNOUNCEMENT,
+            content=announcement_text,
+            image_data=announcement_image,
+            image_name="announcement.png",
+            post_at=now,
+        )
+    )
+
+    # Seq 1: Betting prompt (thread)
+    messages.append(
+        RaceMessageInput(
+            sequence=1,
+            message_type=MessageType.THREAD,
+            content="Place your bets! (Betting coming soon...)",
+            image_data=None,
+            image_name=None,
+            post_at=now + dt.timedelta(seconds=3),
+        )
+    )
+
+    # Seq 2-4: Starting sequence
+    messages.append(
+        RaceMessageInput(
+            sequence=2,
+            message_type=MessageType.THREAD,
+            content="Riders up!",
+            image_data=None,
+            image_name=None,
+            post_at=now + dt.timedelta(seconds=20),
+        )
+    )
+    messages.append(
+        RaceMessageInput(
+            sequence=3,
+            message_type=MessageType.THREAD,
+            content="They're approaching the starting gate...",
+            image_data=None,
+            image_name=None,
+            post_at=now + dt.timedelta(seconds=25),
+        )
+    )
+    messages.append(
+        RaceMessageInput(
+            sequence=4,
+            message_type=MessageType.THREAD,
+            content="They're all in the gate...",
+            image_data=images.starting_gate,
+            image_name="starting_gate.png",
+            post_at=now + dt.timedelta(seconds=30),
+        )
+    )
+
+    # Seq 5-8: Race progress (GIFs + commentary)
+    race_frames = zip(images.gif_batches, commentaries, strict=True)
+    for i, (gif_data, commentary) in enumerate(race_frames):
+        if i == 0:
+            content = f"And they're off!\n\n{commentary}"
+            offset = dt.timedelta(seconds=45)
+        else:
+            content = commentary
+            offset = dt.timedelta(seconds=45 + i * 15)
+        messages.append(
+            RaceMessageInput(
+                sequence=5 + i,
+                message_type=MessageType.THREAD,
+                content=content,
+                image_data=gif_data,
+                image_name=f"race_part{i + 1}.gif",
+                post_at=now + offset,
+            )
+        )
+
+    # Seq 9: Photo finish
+    messages.append(
+        RaceMessageInput(
+            sequence=9,
+            message_type=MessageType.THREAD,
+            content="Photo finish!",
+            image_data=images.photo_finish,
+            image_name="photo_finish.png",
+            post_at=now + dt.timedelta(seconds=105),
+        )
+    )
+
+    # Seq 10: Results + winner
+    messages.append(
+        RaceMessageInput(
+            sequence=10,
+            message_type=MessageType.THREAD,
+            content=f"**{winner_name} wins!**\n```\n{results_text}\n```",
+            image_data=victory_image,
+            image_name="winner.png" if victory_image else None,
+            post_at=now + dt.timedelta(seconds=115),
+        )
+    )
+
+    return messages
+
+
 class Racing(commands.Cog):
     """Horse racing integration — triggers races and posts to Discord."""
 
@@ -248,249 +507,47 @@ class Racing(commands.Cog):
                 await channel.send("Not enough horses to race! Need at least 2.")
             return
 
-        # 2. Build HorseStats and compute odds
-        stats = [
-            HorseStats(
-                horse_id=h.id,
-                speed=h.speed,
-                stamina=h.stamina,
-                consistency=h.consistency,
-                luck=h.luck,
-                recent_races=h.recent_races,
-                recent_wins=h.recent_wins,
-                recent_places=h.recent_places,
-            )
-            for h in horses
-        ]
+        # 2. Build HorseStats, compute odds, simulate
+        stats = [h.to_stats() for h in horses]
         odds = compute_odds(stats)
         horse_ids = [h.id for h in horses]
         forms = await get_recent_results(pool, horse_ids)
-        # 3. Simulate race
         result = simulate_race(stats)
 
-        # 4. Render announcement image
-        announcement_horses = [
-            AnnouncementHorse(
-                horse_id=h.id,
-                name=h.name,
-                profile=(
-                    profile_from_bytes(h.profile_image)
-                    if h.profile_image
-                    else fallback_sprite(i).resize((64, 64))
-                ),
-            )
-            for i, h in enumerate(horses)
-        ]
-        announcement_odds = [o.displayed_payout for o in odds]
-        announcement_forms = [format_form(forms.get(h.id, [])) for h in horses]
-        announcement_stars = [format_star_rating(o.star_rating) for o in odds]
+        # 3. Build visual assets
+        race_horses, announcement_horses = _build_race_horses(horses)
+        images = _render_race_images(race_horses, result)
 
-        announcement_image = render_announcement(
-            announcement_horses,
-            announcement_odds,
-            announcement_forms,
-            announcement_stars,
-            race_number=0,  # Will be replaced with actual race_id after insert
-        )
-
-        # 5. Render race GIFs
-        race_horses = [
-            RaceHorse(
-                name=h.name,
-                sprite=(
-                    sprite_from_bytes(h.race_image)
-                    if h.race_image
-                    else fallback_sprite(i)
-                ),
-            )
-            for i, h in enumerate(horses)
-        ]
-
-        gif_batches: list[bytes] = []
-        for batch in FRAME_BATCHES:
-            gif_data = render_race_gif(
-                race_horses,
-                result,
-                batch,
-                render_frames=GIF_RENDER_FRAMES,
-            )
-            gif_batches.append(gif_data)
-
-        # 5b. Render starting gate image (all horses at starting positions)
-        starting_frame = render_frame(
-            race_horses,
-            result.snapshots[0],
-            [],
-            0,
-            0,
-            GIF_RENDER_FRAMES + 1,
-        )
-        starting_buf = BytesIO()
-        starting_frame.save(starting_buf, format="PNG")
-        starting_gate_data = starting_buf.getvalue()
-
-        # 5c. Render photo finish (last sampled frame as static PNG)
-        sampled_ticks = sample_frames(result.snapshots, GIF_RENDER_FRAMES)
-        last_tick = sampled_ticks[GIF_RENDER_FRAMES]
-        finish_frame = render_frame(
-            race_horses,
-            result.snapshots[last_tick],
-            [e for e in result.events if e.tick == last_tick],
-            last_tick,
-            GIF_RENDER_FRAMES,
-            GIF_RENDER_FRAMES + 1,
-        )
-        finish_buf = BytesIO()
-        finish_frame.save(finish_buf, format="PNG")
-        photo_finish_data = finish_buf.getvalue()
-
-        # 6. Get winner's victory image
-        winner_idx = result.finishing_order[0]
-        winner_horse = horses[winner_idx]
-        victory_image = winner_horse.victory_image
-
-        # 8. Build results text
-        horse_names = [h.name for h in horses]
-        results_text = format_results(result.finishing_order, horse_names, odds)
-        winner_name = horse_names[winner_idx]
-
-        # 9. Generate commentary for each GIF batch
-        # Collect events per batch by mapping tick ranges to batches
-        batch_events: list[list[tuple[int, int, str]]] = [[] for _ in FRAME_BATCHES]
-        for event in result.events:
-            for batch_idx, batch_indices in enumerate(FRAME_BATCHES):
-                batch_tick_range = [sampled_ticks[i] for i in batch_indices]
-                min_tick = min(batch_tick_range)
-                max_tick = max(batch_tick_range)
-                if min_tick <= event.tick <= max_tick:
-                    batch_events[batch_idx].append(
-                        (event.tick, event.horse_index, event.burst_type)
-                    )
-                    break
-
-        commentaries = [
-            _generate_commentary(horse_names, batch_events[i], i)
-            for i in range(len(FRAME_BATCHES))
-        ]
-
-        # 10. Compute timestamps
-        now = dt.datetime.now(dt.UTC)
-        race_start_ts = int((now + dt.timedelta(seconds=45)).timestamp())
-        flavor = _generate_announcement_flavor(horses, forms)
-        announcement_text = (
-            f"Today's race is set to begin <t:{race_start_ts}:R>\n\n{flavor}"
-        )
+        # 4. Build message queue
         channel_id = getattr(channel, "id", 0)
+        messages = _build_message_queue(result, odds, horses, forms, images, channel_id)
 
-        messages: list[RaceMessageInput] = []
-
-        # Seq 0: Announcement (channel message)
-        messages.append(
-            RaceMessageInput(
-                sequence=0,
-                message_type="announcement",
-                content=announcement_text,
-                image_data=announcement_image,
-                image_name="announcement.png",
-                post_at=now,
-            )
+        # 5. Persist and finalize announcement with actual race_id
+        await self._persist_race(
+            pool, result, odds, messages, announcement_horses, forms, channel_id
         )
 
-        # Seq 1: Betting prompt (thread)
-        messages.append(
-            RaceMessageInput(
-                sequence=1,
-                message_type="thread",
-                content="Place your bets! (Betting coming soon...)",
-                image_data=None,
-                image_name=None,
-                post_at=now + dt.timedelta(seconds=3),
-            )
-        )
-
-        # Seq 2-4: Starting sequence, staggered leading up to race start
-        messages.append(
-            RaceMessageInput(
-                sequence=2,
-                message_type="thread",
-                content="Riders up!",
-                image_data=None,
-                image_name=None,
-                post_at=now + dt.timedelta(seconds=20),
-            )
-        )
-        messages.append(
-            RaceMessageInput(
-                sequence=3,
-                message_type="thread",
-                content="They're approaching the starting gate...",
-                image_data=None,
-                image_name=None,
-                post_at=now + dt.timedelta(seconds=25),
-            )
-        )
-        messages.append(
-            RaceMessageInput(
-                sequence=4,
-                message_type="thread",
-                content="They're all in the gate...",
-                image_data=starting_gate_data,
-                image_name="starting_gate.png",
-                post_at=now + dt.timedelta(seconds=30),
-            )
-        )
-
-        # Seq 5-8: Race progress (GIFs + commentary)
-        # First batch merges with "And they're off!" at race start time
-        race_frames = zip(gif_batches, commentaries, strict=True)
-        for i, (gif_data, commentary) in enumerate(race_frames):
-            if i == 0:
-                content = f"And they're off!\n\n{commentary}"
-                offset = dt.timedelta(seconds=45)
-            else:
-                content = commentary
-                offset = dt.timedelta(seconds=45 + i * 15)
-            messages.append(
-                RaceMessageInput(
-                    sequence=5 + i,
-                    message_type="thread",
-                    content=content,
-                    image_data=gif_data,
-                    image_name=f"race_part{i + 1}.gif",
-                    post_at=now + offset,
-                )
-            )
-
-        # Seq 9: Photo finish (last frame as static image)
-        messages.append(
-            RaceMessageInput(
-                sequence=9,
-                message_type="thread",
-                content="Photo finish!",
-                image_data=photo_finish_data,
-                image_name="photo_finish.png",
-                post_at=now + dt.timedelta(seconds=105),
-            )
-        )
-
-        # Seq 10: Results + winner
-        messages.append(
-            RaceMessageInput(
-                sequence=10,
-                message_type="thread",
-                content=f"**{winner_name} wins!**\n```\n{results_text}\n```",
-                image_data=victory_image,
-                image_name="winner.png" if victory_image else None,
-                post_at=now + dt.timedelta(seconds=115),
-            )
-        )
-
-        # 11. Persist race and messages
+    async def _persist_race(
+        self,
+        pool: asyncpg.Pool,
+        result: RaceResult,
+        odds: list[HorseOdds],
+        messages: list[RaceMessageInput],
+        announcement_horses: list[AnnouncementHorse],
+        forms: dict[str, list[int]],
+        channel_id: int,
+    ) -> None:
+        """Insert race, re-render announcement with actual race_id, insert messages."""
         race_id = await create_race(
-            pool, result, odds, status="running", channel_id=channel_id
+            pool, result, odds, status=RaceStatus.RUNNING, channel_id=channel_id
         )
 
-        # Update announcement with actual race number by re-rendering
+        # Re-render announcement image with actual race number
+        announcement_odds = [o.displayed_payout for o in odds]
+        announcement_forms = [
+            format_form(forms.get(h.horse_id, [])) for h in announcement_horses
+        ]
+        announcement_stars = [format_star_rating(o.star_rating) for o in odds]
         announcement_image_final = render_announcement(
             announcement_horses,
             announcement_odds,
@@ -498,13 +555,14 @@ class Racing(commands.Cog):
             announcement_stars,
             race_number=race_id,
         )
+        first = messages[0]
         messages[0] = RaceMessageInput(
-            sequence=0,
-            message_type="announcement",
-            content=announcement_text,
+            sequence=first.sequence,
+            message_type=first.message_type,
+            content=first.content,
             image_data=announcement_image_final,
-            image_name="announcement.png",
-            post_at=now,
+            image_name=first.image_name,
+            post_at=first.post_at,
         )
 
         await create_race_messages(pool, race_id, messages)
@@ -539,11 +597,12 @@ class Racing(commands.Cog):
 
         for msg in pending:
             try:
-                thread_id = await self._post_single_message(msg, batch_threads)
+                posted, thread_id = await self._post_single_message(msg, batch_threads)
                 if thread_id is not None:
                     batch_threads[msg.race_id] = thread_id
-                await delete_message(self._pool, msg.id)
-                races_with_posts.add(msg.race_id)
+                if posted:
+                    await delete_message(self._pool, msg.id)
+                    races_with_posts.add(msg.race_id)
             except Exception:
                 logger.exception(
                     "Failed to post race message %d (race %d, seq %d)",
@@ -566,12 +625,13 @@ class Racing(commands.Cog):
         self,
         msg: PendingMessage,
         batch_threads: dict[int, int],
-    ) -> int | None:
+    ) -> tuple[bool, int | None]:
         """Post a single race message to Discord.
 
         Returns:
-            The new thread ID if an announcement created one,
-            otherwise None.
+            (posted, thread_id) — posted is True if the message was sent
+            successfully (and should be deleted from the queue). thread_id
+            is set when an announcement created a new thread.
         """
         # Build send kwargs — only include file if present so
         # the type checker sees a matching overload.
@@ -584,15 +644,17 @@ class Racing(commands.Cog):
         guild = self.bot.guilds[0] if self.bot.guilds else None
         if guild is None:
             logger.warning("No guild available for race message")
-            return None
+            return False, None
 
-        if msg.message_type == "announcement":
-            return await self._post_announcement(msg, kwargs, guild)
+        if msg.message_type == MessageType.ANNOUNCEMENT:
+            thread_id = await self._post_announcement(msg, kwargs, guild)
+            return True, thread_id
 
-        if msg.message_type == "thread":
-            await self._post_to_thread(msg, kwargs, guild, batch_threads)
+        if msg.message_type == MessageType.THREAD:
+            posted = await self._post_to_thread(msg, kwargs, guild, batch_threads)
+            return posted, None
 
-        return None
+        return False, None
 
     async def _post_announcement(
         self,
@@ -634,8 +696,12 @@ class Racing(commands.Cog):
         kwargs: dict[str, object],
         guild: discord.Guild,
         batch_threads: dict[int, int],
-    ) -> None:
-        """Post a message to the race's thread."""
+    ) -> bool:
+        """Post a message to the race's thread.
+
+        Returns True if the message was posted, False if the thread
+        isn't available yet (will retry next cycle).
+        """
         # Use in-memory thread ID from this batch if the fetched
         # row predates thread creation.
         thread_id = msg.thread_id or batch_threads.get(msg.race_id)
@@ -645,7 +711,7 @@ class Racing(commands.Cog):
                 msg.race_id,
                 msg.sequence,
             )
-            raise _ThreadNotReady
+            return False
 
         thread = guild.get_thread(thread_id)
         if thread is None:
@@ -657,11 +723,9 @@ class Racing(commands.Cog):
                     thread_id,
                     msg.race_id,
                 )
-                return
+                return True  # Don't retry — thread is gone
 
         if isinstance(thread, discord.Thread):
             await thread.send(**kwargs)  # type: ignore[arg-type]
 
-
-class _ThreadNotReady(Exception):
-    """Thread message can't post because thread isn't created."""
+        return True

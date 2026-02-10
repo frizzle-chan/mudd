@@ -8,11 +8,29 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from datetime import datetime
+from enum import StrEnum
 
 import asyncpg
 
 from mudd.racing.odds import HorseOdds
 from mudd.racing.simulation import RaceResult
+
+
+class MessageType(StrEnum):
+    """PostgreSQL race_message_type enum."""
+
+    ANNOUNCEMENT = "announcement"
+    THREAD = "thread"
+
+
+class RaceStatus(StrEnum):
+    """PostgreSQL race_status enum."""
+
+    OPEN = "open"
+    LOCKED = "locked"
+    RUNNING = "running"
+    FINISHED = "finished"
+    CANCELLED = "cancelled"
 
 
 @dataclass(frozen=True, slots=True)
@@ -22,7 +40,7 @@ class PendingMessage:
     id: int
     race_id: int
     sequence: int
-    message_type: str
+    message_type: MessageType
     content: str | None
     image_data: bytes | None
     image_name: str | None
@@ -35,7 +53,7 @@ async def create_race(
     result: RaceResult,
     odds: list[HorseOdds],
     *,
-    status: str = "finished",
+    status: RaceStatus = RaceStatus.FINISHED,
     channel_id: int | None = None,
 ) -> int:
     """Persist a race and its results.
@@ -75,7 +93,7 @@ async def create_race(
         ]
     )
 
-    finished_at = "NOW()" if status == "finished" else "NULL"
+    finished_at = "NOW()" if status == RaceStatus.FINISHED else "NULL"
 
     async with pool.acquire() as conn, conn.transaction():
         race_id: int = await conn.fetchval(
@@ -119,7 +137,7 @@ class RaceMessageInput:
     """Input for a single race message to enqueue."""
 
     sequence: int
-    message_type: str
+    message_type: MessageType
     content: str | None
     image_data: bytes | None
     image_name: str | None
