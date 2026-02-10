@@ -382,6 +382,34 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 
 **Race Status Enum:** `open`, `locked`, `running`, `finished`, `cancelled`
 
+**Additional Columns (Discord state):**
+- `channel_id BIGINT` - Discord channel where the announcement was posted
+- `thread_id BIGINT` - Discord thread created from the announcement
+
+### Race Messages Table
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | INT IDENTITY (PK) | Auto-generated message identifier |
+| `race_id` | INT NOT NULL (FK to races.id) | Which race this message belongs to |
+| `sequence` | INT NOT NULL | Ordering within the race (0, 1, 2...) |
+| `message_type` | race_message_type NOT NULL | Channel announcement vs thread message |
+| `content` | TEXT | Message text (nullable for image-only) |
+| `image_data` | BYTEA | Pre-rendered image bytes (nullable for text-only) |
+| `image_name` | TEXT | Filename for discord.File (e.g. "announcement.png") |
+| `post_at` | TIMESTAMPTZ NOT NULL | When to post this message |
+
+**Race Message Type Enum:** `announcement`, `thread`
+
+**Indexes:**
+- Index on `post_at` for poller queries
+- Index on `race_id` for race-based queries
+
+**Lifecycle:**
+- Messages are created when a race is prepared (all at once, with future timestamps)
+- Rows are deleted immediately after successful posting to avoid BYTEA accumulation
+- The `races` table retains all race metadata; only the delivery queue is ephemeral
+
 ### Race Results Table
 
 | Column | Type | Description |

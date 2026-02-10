@@ -7,15 +7,20 @@ Imported by both the CLI tool and the Discord cog.
 from mudd.racing.config import DEFAULT_CONFIG, RaceConfig
 from mudd.racing.odds import HorseOdds, HorseStats, compute_odds
 from mudd.racing.rendering import (
+    AnnouncementHorse,
     RaceHorse,
+    profile_from_bytes,
+    render_announcement,
     render_frame,
     render_race,
+    render_race_gif,
     sprite_from_bytes,
     tile_frames,
 )
 from mudd.racing.simulation import BurstEvent, BurstType, RaceResult, simulate_race
 
 __all__ = [
+    "AnnouncementHorse",
     "BurstEvent",
     "BurstType",
     "DEFAULT_CONFIG",
@@ -25,8 +30,11 @@ __all__ = [
     "RaceHorse",
     "RaceResult",
     "compute_odds",
+    "profile_from_bytes",
+    "render_announcement",
     "render_frame",
     "render_race",
+    "render_race_gif",
     "simulate_race",
     "sprite_from_bytes",
     "tile_frames",
