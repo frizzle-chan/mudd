@@ -155,6 +155,14 @@ In the context of **posting pre-computed race messages at scheduled times**, fac
 
 In the context of **managing pre-computed race messages that include large image data**, facing **the risk of BYTEA image data accumulating in the database**, we decided to **delete each message row immediately after successful posting**, to achieve **bounded storage usage where only the current in-flight race's images exist in the database at any time**, accepting **that message delivery is at-most-once (a crash between posting and deletion could skip that message on restart)**.
 
+### Debut Announcements
+
+In the context of **generating pre-race flavor text**, facing **the gap where first-time runners are silently skipped because they have no form history for streak detection**, we decided to **guarantee a debut callout line for every horse with zero prior races**, to achieve **narrative flavor for a horse's first appearance and a signal to bettors that the horse is unproven**, accepting **that races with multiple debutants will have multiple debut lines, making the announcement block longer**.
+
+### Parameterized Race Duration
+
+In the context of **tuning race pacing and duration**, facing **all timing values being hardcoded across multiple files**, we decided to **introduce a single `race_duration_minutes` parameter that drives all timing derivations**, to achieve **one-knob tuning of race length while keeping the inter-GIF posting rate fixed**, accepting **that `num_ticks` becomes auto-derived (though still overridable for tests)**.
+
 ### Animated GIF Race Progress
 
 In the context of **showing race progress in Discord threads**, facing **the choice between static tiled images and animated content**, we decided to **group sampled race frames into short animated GIFs (3-4 frames each, ~800ms per frame) that Discord auto-plays inline**, to achieve **a natural animation of the race progressing without requiring any client-side player or embed**, accepting **larger file sizes compared to static PNGs and the limitation of GIF's 256-color palette**.
