@@ -20,12 +20,17 @@ Enabled: yes
 Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
 EOF
 RUN apt-get update \
- && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends locales \
+ && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends curl locales \
  && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends -t trixie-backports recutils \
  && sed -i '/en_US.UTF-8/s/^# //g' /etc/locale.gen \
  && locale-gen \
  && apt-get clean \
  && rm -rf /var/lib/apt/lists/*
+
+RUN mkdir -p /usr/share/fonts/truetype/unifontex \
+ && curl -sSL \
+    -o /usr/share/fonts/truetype/unifontex/unifontex.ttf \
+    https://github.com/stgiga/UnifontEX/releases/download/15.1jan23morePona/UnifontExMono.ttf
 
 USER mudd
 
