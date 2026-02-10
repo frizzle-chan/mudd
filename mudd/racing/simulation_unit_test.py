@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from random import Random
 
+import pytest
+
 from mudd.racing.config import RaceConfig
 from mudd.racing.odds import HorseStats
 from mudd.racing.simulation import BurstType, simulate_race
@@ -75,7 +77,7 @@ class TestSnapshotProperties:
     def test_winner_finishes_at_one(self) -> None:
         result = simulate_race(_make_horses(), rng=Random(42))
         final = result.snapshots[-1]
-        assert max(final) == 1.0
+        assert max(final) == pytest.approx(1.0)
 
     def test_first_snapshot_all_zeros(self) -> None:
         result = simulate_race(_make_horses(), rng=Random(42))
@@ -134,10 +136,10 @@ class TestProgressFloor:
     def test_no_stalling_with_weak_horse(self) -> None:
         """A horse with terrible stats still makes forward progress every tick.
 
-        Rubber-banding is disabled to isolate the floor behavior — rubber-banding
-        can legitimately produce zero-progress ticks when a horse is ahead of average.
+        The progress floor is applied after rubber-banding, so even a weak horse
+        behind the pack makes visible forward movement every tick.
         """
-        config = RaceConfig(rubber_band_factor=0.0)
+        config = RaceConfig()
         weak = [
             HorseStats(
                 "slug",
@@ -173,8 +175,8 @@ class TestProgressFloor:
                 )
 
     def test_floor_zero_allows_stalling(self) -> None:
-        """With floor=0.0 (old behavior), a weak horse can stall."""
-        config = RaceConfig(progress_floor=0.0, rubber_band_factor=0.0)
+        """With floor=0.0, rubber-banding can erase progress and cause stalling."""
+        config = RaceConfig(progress_floor=0.0)
         weak = [
             HorseStats(
                 "slug",

@@ -98,9 +98,15 @@ The spec's original formula (`speed*0.5 + stamina*0.3 + luck*0.1 + consistency*0
 
 ### Progress Floor
 
-In the context of **preventing horses from visually freezing mid-race**, facing **the problem that negative per-phase form bonuses combined with the hard zero-clamp cause zero progress for many consecutive ticks**, we decided to **replace the zero clamp with a configurable minimum progress floor**, to achieve **guaranteed forward movement every tick while preserving all other race dynamics (fatigue, bursts, stamina differentiation)**, accepting **that the absolute worst-case deceleration is now bounded rather than unlimited**.
+In the context of **preventing horses from visually freezing mid-race**, facing **two independent stalling sources — negative form bonuses zeroing out base progress and rubber-banding erasing the floored progress afterward**, we decided to **apply the progress floor after all modifiers (fatigue, bursts, scaling, and rubber-banding) rather than on the intermediate base+noise value**, to achieve **guaranteed forward movement every tick regardless of rubber-band forces**, accepting **that the absolute worst-case deceleration is now bounded rather than unlimited**.
 
-The floor value is small relative to typical per-tick progress, so it only activates on ticks that would have been clamped to zero. Fatigue and burst multipliers still apply on top of the floor, keeping stamina strategically meaningful.
+The floor in position-space is `progress_floor * progress_scale / num_ticks`. With default values this produces clearly visible movement per rendered frame. A separate zero-clamp on `base + noise` prevents negative values from multiplying through fatigue and burst modifiers.
+
+### Form Variance Reduction
+
+In the context of **horse stats being overshadowed by random form draws**, facing **the problem that `form_variance=1.0` regularly produced form bonuses that dominated stat contributions (0.3–0.9), making horse attributes nearly meaningless**, we decided to **reduce `form_variance` from 1.0 to 0.3**, to achieve **form draws that create lead changes and drama without routinely overwhelming horse stats**, accepting **slightly less variance between phases compared to the original setting**.
+
+With σ=0.3, a 3σ draw is ±0.9 — still significant but unable to dominate a strong horse's stats. Form differences between horses still exceed 0.3 roughly half the time, preserving frequent lead changes.
 
 ### Noise Floor
 

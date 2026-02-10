@@ -128,8 +128,9 @@ def simulate_race(
             noise_scale = max(0.2, (100 - h.consistency) / 100.0)
             noise = rng.gauss(0, noise_scale * config.noise_factor)
 
-            # Floor prevents stalling on bad form/noise draws
-            progress = max(config.progress_floor, base + noise)
+            # Clamp negative base+noise to zero (don't let it multiply
+            # through fatigue/burst as a negative value)
+            progress = max(0.0, base + noise)
 
             # Fatigue penalty after onset
             if phase > config.fatigue_onset:
@@ -158,8 +159,13 @@ def simulate_race(
             rubber_band = (avg_pos - positions[i]) * config.rubber_band_factor
             progress += rubber_band
 
-            # No backward movement
-            positions[i] = max(positions[i], positions[i] + progress)
+            # Floor guarantees forward movement every tick, even after
+            # rubber-banding erases the scaled progress
+            min_progress = (
+                config.progress_floor * config.progress_scale / config.num_ticks
+            )
+            progress = max(min_progress, progress)
+            positions[i] += progress
 
         snapshots.append(list(positions))
 
