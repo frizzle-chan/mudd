@@ -22,6 +22,7 @@ from mudd.racing import (
     render_announcement,
     render_frame,
     render_race_gif,
+    render_winner,
     simulate_race,
     sprite_from_bytes,
 )
@@ -322,7 +323,10 @@ def _build_message_queue(
     winner_idx = result.finishing_order[0]
     winner_name = horse_names[winner_idx]
     results_text = format_results(result.finishing_order, horse_names, odds)
-    victory_image = horses[winner_idx].victory_image
+    raw_victory = horses[winner_idx].victory_image
+    victory_image = (
+        render_winner(raw_victory, winner_name, race_number=0) if raw_victory else None
+    )
 
     # Generate commentary per GIF batch
     total_frames = config.total_render_frames
@@ -569,9 +573,18 @@ class Racing(commands.Cog):
             result, odds, horses, forms, images, channel_id, config
         )
 
-        # 5. Persist and finalize announcement with actual race_id
+        # 5. Persist and finalize images with actual race_id
+        winner_idx = result.finishing_order[0]
+        winner_info = (horses[winner_idx].victory_image, horses[winner_idx].name)
         await self._persist_race(
-            pool, result, odds, messages, announcement_horses, forms, channel_id
+            pool,
+            result,
+            odds,
+            messages,
+            announcement_horses,
+            forms,
+            channel_id,
+            winner_info,
         )
 
     async def _persist_race(
@@ -583,8 +596,9 @@ class Racing(commands.Cog):
         announcement_horses: list[AnnouncementHorse],
         forms: dict[str, list[int]],
         channel_id: int,
+        winner_info: tuple[bytes | None, str],
     ) -> None:
-        """Insert race, re-render announcement with actual race_id, insert messages."""
+        """Insert race, re-render images with actual race_id, insert messages."""
         race_id = await create_race(
             pool, result, odds, status=RaceStatus.RUNNING, channel_id=channel_id
         )
@@ -611,6 +625,22 @@ class Racing(commands.Cog):
             image_name=first.image_name,
             post_at=first.post_at,
         )
+
+        # Re-render winner image with actual race number
+        raw_victory, winner_name = winner_info
+        if raw_victory:
+            winner_image_final = render_winner(
+                raw_victory, winner_name, race_number=race_id
+            )
+            last = messages[-1]
+            messages[-1] = RaceMessageInput(
+                sequence=last.sequence,
+                message_type=last.message_type,
+                content=last.content,
+                image_data=winner_image_final,
+                image_name=last.image_name,
+                post_at=last.post_at,
+            )
 
         await create_race_messages(pool, race_id, messages)
         await update_rolling_counters(pool)

@@ -14,6 +14,7 @@ from mudd.racing.rendering import (
     render_frame,
     render_race,
     render_race_gif,
+    render_winner,
     sprite_from_bytes,
     tile_frames,
 )
@@ -35,6 +36,7 @@ __all__ = [
     "render_frame",
     "render_race",
     "render_race_gif",
+    "render_winner",
     "simulate_race",
     "sprite_from_bytes",
     "tile_frames",

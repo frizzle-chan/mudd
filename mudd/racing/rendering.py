@@ -89,11 +89,22 @@ CANVAS_WIDTH = 640
 NAME_MARGIN = 88
 TRACK_WIDTH = 530
 FINISH_X = 620
-RIGHT_PADDING = 20
+FRAME_WIDTH = FINISH_X + 2  # content width for race frames (up to finish line)
 LANE_HEIGHT = 24
 SPRITE_SIZE = 16
 LANE_PADDING = 8
-MARGIN = 16
+# Mac System 1 window chrome (shared between frames and announcement)
+WIN_BORDER_OUTER = 2  # outer border line width
+WIN_BORDER_GAP = 1  # gap between outer and inner border
+WIN_BORDER_INNER = 1  # inner border line width
+WIN_BORDER_TOTAL = 4  # sum of the above
+WIN_CHECKER_MARGIN = 12  # checker-filled margin inside window border
+WIN_FRAME_INSET = WIN_BORDER_TOTAL + WIN_CHECKER_MARGIN  # total edge-to-content
+WIN_TITLEBAR_HEIGHT = 40  # title bar height
+WIN_STRIPE_GAP = 3  # vertical pitch of title bar stripes
+WIN_TITLE_PAD = 8  # gap between title text and stripes
+WIN_STRIPE_MARGIN = 6  # margin from border to stripe start
+WIN_SEPARATOR_WIDTH = 1  # horizontal rule width
 
 # Colors
 BG_COLOR = (35, 35, 45)
@@ -104,7 +115,8 @@ FINISH_COLOR = (220, 180, 50)
 TEXT_COLOR = (200, 200, 210)
 MUTED_TEXT_COLOR = (140, 140, 155)
 HEADER_TEXT_COLOR = (90, 95, 105)
-PROGRESS_BAR_COLOR = (40, 40, 50)
+CHECKER_DARK = BG_COLOR
+CHECKER_LIGHT = (50, 52, 62)
 ACCENT_COLOR = (180, 150, 50)
 
 # Fallback sprite palette
@@ -157,6 +169,85 @@ def fallback_sprite(index: int) -> Image.Image:
     return img
 
 
+def _fill_checker(
+    img: Image.Image,
+    x: int,
+    y: int,
+    w: int,
+    h: int,
+) -> None:
+    """Fill a rectangle with a 1px checkerboard pattern."""
+    a = bytes(CHECKER_DARK + (255,))
+    b = bytes(CHECKER_LIGHT + (255,))
+    data = bytearray(w * h * 4)
+    for py in range(h):
+        for px in range(w):
+            off = (py * w + px) * 4
+            data[off : off + 4] = a if (px + py) % 2 == 0 else b
+    checker = Image.frombytes("RGBA", (w, h), bytes(data))
+    img.paste(checker, (x, y))
+
+
+def _draw_window_border(
+    draw: ImageDraw.ImageDraw,
+    width: int,
+    height: int,
+) -> None:
+    """Draw Mac System 1 double-line window border."""
+    # Outer border
+    draw.rectangle(
+        [0, 0, width - 1, height - 1],
+        outline=LANE_DIVIDER,
+        width=WIN_BORDER_OUTER,
+    )
+    # Inner border (inset by outer + gap)
+    inset = WIN_BORDER_OUTER + WIN_BORDER_GAP
+    draw.rectangle(
+        [inset, inset, width - 1 - inset, height - 1 - inset],
+        outline=LANE_DIVIDER,
+        width=WIN_BORDER_INNER,
+    )
+
+
+def _draw_titlebar(
+    img: Image.Image,
+    draw: ImageDraw.ImageDraw,
+    title: str,
+    canvas_width: int,
+) -> None:
+    """Draw a Mac System 1 title bar with centered text and stripes."""
+    tb_top = WIN_BORDER_TOTAL
+    tb_bottom = tb_top + WIN_TITLEBAR_HEIGHT
+
+    # Title text centered
+    tw, th = _textsize(title, scale=2)
+    title_x = canvas_width // 2
+    title_y = tb_top + (WIN_TITLEBAR_HEIGHT - th) // 2
+    _draw_text(img, (title_x, title_y), title, fill=FINISH_COLOR, scale=2, anchor="mt")
+
+    # Stripes: 1px horizontal lines filling title bar on both sides of the title
+    stripe_left = WIN_BORDER_TOTAL + WIN_STRIPE_MARGIN
+    stripe_right = canvas_width - 1 - WIN_BORDER_TOTAL - WIN_STRIPE_MARGIN
+    title_left = title_x - tw // 2 - WIN_TITLE_PAD
+    title_right = title_x + tw // 2 + WIN_TITLE_PAD
+
+    all_stripes = list(range(tb_top + WIN_STRIPE_GAP, tb_bottom, WIN_STRIPE_GAP))
+    trimmed = all_stripes[2:-3] if len(all_stripes) > 5 else all_stripes
+    for y in trimmed:
+        if stripe_left < title_left:
+            draw.line([(stripe_left, y), (title_left, y)], fill=LANE_DIVIDER, width=1)
+        if title_right < stripe_right:
+            draw.line([(title_right, y), (stripe_right, y)], fill=LANE_DIVIDER, width=1)
+
+    # Separator below title bar
+    sep_y = tb_bottom
+    draw.line(
+        [(WIN_BORDER_TOTAL, sep_y), (canvas_width - 1 - WIN_BORDER_TOTAL, sep_y)],
+        fill=LANE_DIVIDER,
+        width=WIN_SEPARATOR_WIDTH,
+    )
+
+
 def render_frame(
     horses: list[RaceHorse],
     positions: list[float],
@@ -180,13 +271,29 @@ def render_frame(
     """
     n = len(horses)
     content_h = n * LANE_HEIGHT
-    frame_width = CANVAS_WIDTH + MARGIN
-    frame_height = content_h + MARGIN * 2
+    frame_width = FRAME_WIDTH + WIN_FRAME_INSET * 2
+    frame_height = content_h + WIN_FRAME_INSET * 2
     img = Image.new("RGBA", (frame_width, frame_height), BG_COLOR + (255,))
     draw = ImageDraw.Draw(img)
+    _draw_window_border(draw, frame_width, frame_height)
+
+    # Checker fill in margin between border and content
+    _fill_checker(
+        img,
+        WIN_BORDER_TOTAL,
+        WIN_BORDER_TOTAL,
+        frame_width - WIN_BORDER_TOTAL * 2,
+        frame_height - WIN_BORDER_TOTAL * 2,
+    )
 
     # Origin offset for content area
-    ox, oy = MARGIN, MARGIN
+    ox, oy = WIN_FRAME_INSET, WIN_FRAME_INSET
+
+    # Content background (covers checker in the content area)
+    draw.rectangle(
+        [ox, oy, ox + FRAME_WIDTH - 1, oy + content_h - 1],
+        fill=BG_COLOR + (255,),
+    )
 
     # Track background (alternating lane stripes, extending into name area)
     track_h = content_h
@@ -248,23 +355,13 @@ def render_frame(
         sprite_y = lane_y + (LANE_HEIGHT - SPRITE_SIZE) // 2
         img.paste(horse.sprite, (x, sprite_y), horse.sprite)
 
-    # Progress bar (1px tall, top of image, aligned with track)
-    track_left = ox + NAME_MARGIN
-    bar_w = int((frame_index + 1) / total_frames * TRACK_WIDTH) if total_frames else 0
-    if bar_w > 0:
-        draw.line(
-            [(track_left, 0), (track_left + bar_w - 1, 0)],
-            fill=PROGRESS_BAR_COLOR,
-            width=1,
-        )
-
-    # Tick label (debug only, bottom-right margin, low contrast)
+    # Tick label (debug only, bottom-right of content area, low contrast)
     if _log.isEnabledFor(logging.DEBUG):
         tick_text = f"Tick {tick}  ({frame_index + 1}/{total_frames})"
         tw, th = _textsize(tick_text)
         _draw_text(
             img,
-            (frame_width - tw - 4, frame_height - th - 2),
+            (ox + FRAME_WIDTH - tw - 4, oy + content_h - th - 2),
             tick_text,
             fill=HEADER_TEXT_COLOR,
         )
@@ -333,19 +430,7 @@ def tile_frames(frames: list[Image.Image], gap: int = 4) -> Image.Image:
 PROFILE_SIZE = 64
 ANNOUNCEMENT_ROW_HEIGHT = 80
 ANNOUNCEMENT_PADDING = 12
-# Mac System 1 window chrome
-WIN_BORDER_OUTER = 2  # outer border line width
-WIN_BORDER_GAP = 1  # gap between outer and inner border
-WIN_BORDER_INNER = 1  # inner border line width
-WIN_BORDER_TOTAL = 4  # sum of the above
-
-WIN_TITLEBAR_HEIGHT = 40  # title bar height
-WIN_STRIPE_GAP = 3  # vertical pitch of title bar stripes
-WIN_TITLE_PAD = 8  # gap between title text and stripes
-WIN_STRIPE_MARGIN = 6  # margin from border to stripe start
-
 WIN_INFOBAR_HEIGHT = 24  # column header bar height
-WIN_SEPARATOR_WIDTH = 1  # horizontal rule width
 
 
 @dataclass(frozen=True, slots=True)
@@ -391,60 +476,12 @@ def render_announcement(
     img = Image.new("RGBA", (CANVAS_WIDTH, height), BG_COLOR + (255,))
     draw = ImageDraw.Draw(img)
 
-    # --- Double border ---
-    # Outer 2px rectangle
-    draw.rectangle(
-        [0, 0, CANVAS_WIDTH - 1, height - 1],
-        outline=LANE_DIVIDER,
-        width=WIN_BORDER_OUTER,
-    )
-    # Inner 1px rectangle (inset by outer + gap = 3px)
-    inset = WIN_BORDER_OUTER + WIN_BORDER_GAP
-    draw.rectangle(
-        [inset, inset, CANVAS_WIDTH - 1 - inset, height - 1 - inset],
-        outline=LANE_DIVIDER,
-        width=WIN_BORDER_INNER,
-    )
-
-    # --- Title bar ---
-    tb_top = WIN_BORDER_TOTAL
-    tb_bottom = tb_top + WIN_TITLEBAR_HEIGHT
-
-    # Title text centered
-    title_text = f"Race #{race_number}"
-    tw, th = _textsize(title_text, scale=2)
-    title_x = CANVAS_WIDTH // 2
-    title_y = tb_top + (WIN_TITLEBAR_HEIGHT - th) // 2
-    _draw_text(
-        img, (title_x, title_y), title_text, fill=FINISH_COLOR, scale=2, anchor="mt"
-    )
-
-    # Stripes: 1px horizontal lines filling title bar on both sides of the title
-    stripe_left = WIN_BORDER_TOTAL + WIN_STRIPE_MARGIN
-    stripe_right = CANVAS_WIDTH - 1 - WIN_BORDER_TOTAL - WIN_STRIPE_MARGIN
-    title_left = title_x - tw // 2 - WIN_TITLE_PAD
-    title_right = title_x + tw // 2 + WIN_TITLE_PAD
-
-    all_stripes = list(range(tb_top + WIN_STRIPE_GAP, tb_bottom, WIN_STRIPE_GAP))
-    trimmed = all_stripes[2:-3] if len(all_stripes) > 5 else all_stripes
-    for y in trimmed:
-        # Left side stripes
-        if stripe_left < title_left:
-            draw.line([(stripe_left, y), (title_left, y)], fill=LANE_DIVIDER, width=1)
-        # Right side stripes
-        if title_right < stripe_right:
-            draw.line([(title_right, y), (stripe_right, y)], fill=LANE_DIVIDER, width=1)
-
-    # --- Separator below title bar ---
-    sep1_y = tb_bottom
-    draw.line(
-        [(WIN_BORDER_TOTAL, sep1_y), (CANVAS_WIDTH - 1 - WIN_BORDER_TOTAL, sep1_y)],
-        fill=LANE_DIVIDER,
-        width=WIN_SEPARATOR_WIDTH,
-    )
+    # --- Double border + title bar ---
+    _draw_window_border(draw, CANVAS_WIDTH, height)
+    _draw_titlebar(img, draw, f"Race #{race_number}", CANVAS_WIDTH)
 
     # --- Info bar (column headers) ---
-    ib_top = sep1_y + WIN_SEPARATOR_WIDTH
+    ib_top = chrome_top
     ib_mid_y = ib_top + WIN_INFOBAR_HEIGHT // 2
     _draw_text(
         img, (PROFILE_SIZE + 24, ib_mid_y), "Horse", fill=MUTED_TEXT_COLOR, anchor="lm"
@@ -508,6 +545,77 @@ def render_announcement(
             scale=2,
             anchor="lm",
         )
+
+    buf = BytesIO()
+    img.save(buf, format="PNG")
+    return buf.getvalue()
+
+
+# ---------------------------------------------------------------------------
+# Winner image
+# ---------------------------------------------------------------------------
+
+
+def render_winner(
+    victory_image: bytes,
+    winner_name: str,
+    race_number: int,
+) -> bytes:
+    """Wrap a victory image in Mac System 1 window chrome.
+
+    Args:
+        victory_image: Raw image bytes (PNG/JPEG/etc).
+        winner_name: The winning horse's name.
+        race_number: Race number for the title bar.
+
+    Returns:
+        PNG image bytes.
+    """
+    pic = Image.open(BytesIO(victory_image)).convert("RGBA")
+
+    # Scale up small images with nearest-neighbor (3x for crisp pixel art)
+    while pic.height <= 128:
+        pic = pic.resize((pic.width * 3, pic.height * 3), Resampling.NEAREST)
+
+    chrome_top = WIN_BORDER_TOTAL + WIN_TITLEBAR_HEIGHT + WIN_SEPARATOR_WIDTH
+    canvas_w = pic.width + WIN_BORDER_TOTAL * 2
+    canvas_h = (
+        chrome_top
+        + pic.height
+        + WIN_SEPARATOR_WIDTH
+        + WIN_TITLEBAR_HEIGHT
+        + WIN_BORDER_TOTAL
+    )
+
+    img = Image.new("RGBA", (canvas_w, canvas_h), BG_COLOR + (255,))
+    draw = ImageDraw.Draw(img)
+
+    # Border + title bar ("Race #N - WINNER")
+    _draw_window_border(draw, canvas_w, canvas_h)
+    _draw_titlebar(img, draw, f"Race #{race_number} - WINNER", canvas_w)
+
+    # Victory image
+    img.paste(pic, (WIN_BORDER_TOTAL, chrome_top), pic)
+
+    # Separator below image
+    sep_y = chrome_top + pic.height
+    draw.line(
+        [(WIN_BORDER_TOTAL, sep_y), (canvas_w - 1 - WIN_BORDER_TOTAL, sep_y)],
+        fill=LANE_DIVIDER,
+        width=WIN_SEPARATOR_WIDTH,
+    )
+
+    # Name bar — winner name centered (1x to accommodate long names)
+    name_top = sep_y + WIN_SEPARATOR_WIDTH
+    _, nh = _textsize(winner_name)
+    name_y = name_top + (WIN_TITLEBAR_HEIGHT - nh) // 2
+    _draw_text(
+        img,
+        (canvas_w // 2, name_y),
+        winner_name,
+        fill=TEXT_COLOR,
+        anchor="mt",
+    )
 
     buf = BytesIO()
     img.save(buf, format="PNG")
