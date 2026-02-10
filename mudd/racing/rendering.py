@@ -43,6 +43,7 @@ MARGIN = 16
 # Colors
 BG_COLOR = (35, 35, 45)
 TRACK_BG = (50, 55, 65)
+TRACK_BG_ALT = (47, 52, 62)
 LANE_DIVIDER = (65, 70, 80)
 FINISH_COLOR = (220, 180, 50)
 TEXT_COLOR = (200, 200, 210)
@@ -132,12 +133,20 @@ def render_frame(
     # Origin offset for content area
     ox, oy = MARGIN, MARGIN
 
-    # Track background
+    # Track background (alternating lane stripes)
     track_h = content_h
-    draw.rectangle(
-        [ox + NAME_MARGIN, oy, ox + NAME_MARGIN + TRACK_WIDTH, oy + track_h],
-        fill=TRACK_BG,
-    )
+    for i in range(n):
+        lane_y = oy + i * LANE_HEIGHT
+        fill = TRACK_BG if i % 2 == 0 else TRACK_BG_ALT
+        draw.rectangle(
+            [
+                ox + NAME_MARGIN,
+                lane_y,
+                ox + NAME_MARGIN + TRACK_WIDTH,
+                lane_y + LANE_HEIGHT,
+            ],
+            fill=fill,
+        )
 
     # Lane dividers
     for i in range(1, n):
