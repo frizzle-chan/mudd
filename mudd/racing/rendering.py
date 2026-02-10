@@ -6,6 +6,7 @@ Produces PIL images from race simulation snapshots.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from io import BytesIO
 
@@ -13,6 +14,8 @@ from PIL import Image, ImageDraw, ImageFont
 from PIL.Image import Resampling
 
 from mudd.racing.simulation import BurstEvent, RaceResult
+
+_log = logging.getLogger(__name__)
 
 # Font path — UnifontEX monospace installed in the Docker image
 _FONT_PATH = "/usr/share/fonts/truetype/unifontex/unifontex.ttf"
@@ -35,7 +38,7 @@ RIGHT_PADDING = 40
 LANE_HEIGHT = 24
 SPRITE_SIZE = 16
 LANE_PADDING = 8
-HEADER_HEIGHT = 20
+MARGIN = 16
 
 # Colors
 BG_COLOR = (35, 35, 45)
@@ -44,6 +47,7 @@ LANE_DIVIDER = (65, 70, 80)
 FINISH_COLOR = (220, 180, 50)
 TEXT_COLOR = (200, 200, 210)
 HEADER_TEXT_COLOR = (90, 95, 105)
+PROGRESS_BAR_COLOR = (40, 40, 50)
 
 # Fallback sprite palette
 _FALLBACK_COLORS = [
@@ -117,57 +121,84 @@ def render_frame(
         A single frame as an RGBA PIL Image.
     """
     n = len(horses)
-    frame_height = HEADER_HEIGHT + n * LANE_HEIGHT
-    img = Image.new("RGBA", (CANVAS_WIDTH, frame_height), BG_COLOR + (255,))
+    content_h = n * LANE_HEIGHT
+    frame_width = CANVAS_WIDTH + MARGIN
+    frame_height = content_h + MARGIN * 2
+    img = Image.new("RGBA", (frame_width, frame_height), BG_COLOR + (255,))
     draw = ImageDraw.Draw(img)
 
-    header_font = _load_font(13)
     name_font = _load_font(14)
 
-    # Header
-    header_text = f"Tick {tick}  ({frame_index + 1}/{total_frames})"
-    draw.text((4, 2), header_text, fill=HEADER_TEXT_COLOR, font=header_font)
+    # Origin offset for content area
+    ox, oy = MARGIN, MARGIN
 
     # Track background
-    track_y = HEADER_HEIGHT
-    track_h = n * LANE_HEIGHT
+    track_h = content_h
     draw.rectangle(
-        [NAME_MARGIN, track_y, NAME_MARGIN + TRACK_WIDTH, track_y + track_h],
+        [ox + NAME_MARGIN, oy, ox + NAME_MARGIN + TRACK_WIDTH, oy + track_h],
         fill=TRACK_BG,
     )
 
     # Lane dividers
     for i in range(1, n):
-        y = track_y + i * LANE_HEIGHT
+        y = oy + i * LANE_HEIGHT
         draw.line(
-            [(NAME_MARGIN, y), (NAME_MARGIN + TRACK_WIDTH, y)],
+            [(ox + NAME_MARGIN, y), (ox + NAME_MARGIN + TRACK_WIDTH, y)],
             fill=LANE_DIVIDER,
             width=1,
         )
 
     # Finish line (2px wide)
     draw.line(
-        [(FINISH_X, track_y), (FINISH_X, track_y + track_h)],
+        [(ox + FINISH_X, oy), (ox + FINISH_X, oy + track_h)],
         fill=FINISH_COLOR,
         width=2,
     )
 
     # Horses
     for i, horse in enumerate(horses):
-        lane_y = track_y + i * LANE_HEIGHT
+        lane_y = oy + i * LANE_HEIGHT
 
         # Name label
         draw.text(
-            (4, lane_y + (LANE_HEIGHT - 14) // 2),
+            (ox + 4, lane_y + (LANE_HEIGHT - 14) // 2),
             horse.name[:10],
             fill=TEXT_COLOR,
             font=name_font,
         )
 
         # Sprite position: map 0.0-1.0 to NAME_MARGIN .. FINISH_X
-        x = NAME_MARGIN + int(positions[i] * (FINISH_X - NAME_MARGIN - SPRITE_SIZE))
+        x = (
+            ox
+            + NAME_MARGIN
+            + int(positions[i] * (FINISH_X - NAME_MARGIN - SPRITE_SIZE))
+        )
         sprite_y = lane_y + (LANE_HEIGHT - SPRITE_SIZE) // 2
         img.paste(horse.sprite, (x, sprite_y), horse.sprite)
+
+    # Progress bar (1px tall, top of image, aligned with track)
+    track_left = ox + NAME_MARGIN
+    bar_w = int((frame_index + 1) / total_frames * TRACK_WIDTH) if total_frames else 0
+    if bar_w > 0:
+        draw.line(
+            [(track_left, 0), (track_left + bar_w - 1, 0)],
+            fill=PROGRESS_BAR_COLOR,
+            width=1,
+        )
+
+    # Tick label (debug only, bottom-right margin, low contrast)
+    if _log.isEnabledFor(logging.DEBUG):
+        tick_font = _load_font(13)
+        tick_text = f"Tick {tick}  ({frame_index + 1}/{total_frames})"
+        bbox = draw.textbbox((0, 0), tick_text, font=tick_font)
+        tw = bbox[2] - bbox[0]
+        th = bbox[3] - bbox[1]
+        draw.text(
+            (frame_width - tw - 4, frame_height - th - 2),
+            tick_text,
+            fill=HEADER_TEXT_COLOR,
+            font=tick_font,
+        )
 
     return img
 

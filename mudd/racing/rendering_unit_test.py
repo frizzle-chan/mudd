@@ -6,8 +6,8 @@ from PIL import Image
 
 from mudd.racing.rendering import (
     CANVAS_WIDTH,
-    HEADER_HEIGHT,
     LANE_HEIGHT,
+    MARGIN,
     SPRITE_SIZE,
     RaceHorse,
     fallback_sprite,
@@ -103,14 +103,14 @@ class TestRenderFrame:
         frame = render_frame(
             horses, positions, [], tick=10, frame_index=0, total_frames=13
         )
-        assert frame.width == CANVAS_WIDTH
-        assert frame.height == HEADER_HEIGHT + 4 * LANE_HEIGHT
+        assert frame.width == CANVAS_WIDTH + MARGIN
+        assert frame.height == 4 * LANE_HEIGHT + MARGIN * 2
         assert frame.mode == "RGBA"
 
     def test_single_horse(self) -> None:
         horses = _make_horses(1)
         frame = render_frame(horses, [0.5], [], tick=0, frame_index=0, total_frames=1)
-        assert frame.height == HEADER_HEIGHT + LANE_HEIGHT
+        assert frame.height == LANE_HEIGHT + MARGIN * 2
 
 
 class TestRenderRace:
@@ -131,7 +131,7 @@ class TestRenderRace:
         result = _make_result(5)
         frames = render_race(horses, result)
         widths = {f.width for f in frames}
-        assert widths == {CANVAS_WIDTH}
+        assert widths == {CANVAS_WIDTH + MARGIN}
 
 
 class TestTileFrames:
@@ -142,7 +142,7 @@ class TestTileFrames:
         gap = 4
         tiled = tile_frames(frames, gap=gap)
         expected_height = sum(f.height for f in frames) + gap * (len(frames) - 1)
-        assert tiled.width == CANVAS_WIDTH
+        assert tiled.width == CANVAS_WIDTH + MARGIN
         assert tiled.height == expected_height
 
     def test_empty_frames(self) -> None:
