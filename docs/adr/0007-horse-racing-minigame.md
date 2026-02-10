@@ -119,7 +119,49 @@ In the context of **preventing high-consistency horses from having zero variance
 - Racing sprite may need separate surge/stumble visual states — could be composited by the renderer or require additional assets
 - If the horse roster grows large, the flat directory could get noisy — subdirectories per horse would be a natural evolution
 
-## Open Questions
+### Pre-Computed Message Queue
 
-- Racing sprite and victory image dimensions depend on the renderer design
-- Whether the racing sprite needs separate frames or states for surge/stumble events
+In the context of **delivering race events to Discord over time**, facing **the need for crash resilience and rate-limit safety**, we decided to **pre-compute all race messages and images with future timestamps, storing them in a database queue that a polling loop drains**, to achieve **full restart resilience (the poller resumes where it left off) and natural rate-limit backpressure (the 10-second poll interval stays well under Discord's rate limits)**, accepting **a small delay (up to 10 seconds) between scheduled and actual post times**.
+
+### Thread-Based Race Delivery
+
+In the context of **presenting a multi-message race in a Discord channel**, facing **the risk of flooding the channel with dozens of messages**, we decided to **post a single announcement message to the channel and create a thread from it for all subsequent race messages**, to achieve **a clean channel timeline where each race is a single entry that expands into a thread**, accepting **that users must open the thread to follow the race in real time**.
+
+### Prefix Command for Race Triggering
+
+In the context of **triggering races for development and testing**, facing **the convention that all player-facing commands use slash commands**, we decided to **use a `!horse` text command with role-based access control**, to achieve **a low-friction trigger for authorized testers that doesn't pollute the slash command namespace**, accepting **a departure from the slash-command-only convention**.
+
+### Polling-Based Message Delivery
+
+In the context of **posting pre-computed race messages at scheduled times**, facing **the choice between scheduler-based delivery and polling**, we decided to **use a 10-second polling loop that fetches all due messages and posts them in order**, to achieve **simplicity and natural batching of the starting sequence (messages sharing the same timestamp fire in rapid succession within one poll cycle)**, accepting **up to 10 seconds of jitter on scheduled post times**.
+
+### Delete-After-Post Message Queue
+
+In the context of **managing pre-computed race messages that include large image data**, facing **the risk of BYTEA image data accumulating in the database**, we decided to **delete each message row immediately after successful posting**, to achieve **bounded storage usage where only the current in-flight race's images exist in the database at any time**, accepting **that message delivery is at-most-once (a crash between posting and deletion could skip that message on restart)**.
+
+### Animated GIF Race Progress
+
+In the context of **showing race progress in Discord threads**, facing **the choice between static tiled images and animated content**, we decided to **group sampled race frames into short animated GIFs (3-4 frames each, ~800ms per frame) that Discord auto-plays inline**, to achieve **a natural animation of the race progressing without requiring any client-side player or embed**, accepting **larger file sizes compared to static PNGs and the limitation of GIF's 256-color palette**.
+
+## Consequences
+
+### Positive
+
+- One file per horse keeps authoring simple and diff-friendly
+- External descriptor ensures all horses validate against the same schema
+- Range types catch stat errors at validation time rather than runtime
+- Flat directory with naming convention makes assets discoverable without a manifest
+- Race delivery survives bot restarts — the message queue in the database acts as a durable task queue
+- Thread-based delivery keeps channels clean while allowing full race detail in threads
+
+### Negative
+
+- Adding a horse requires creating four files (rec + three images) rather than one
+- Image validation (dimensions, format, existence) must happen outside recutils
+- Pre-computing all messages upfront means the race outcome is determined before it starts (no live interaction possible)
+
+### Future Considerations
+
+- Racing sprite may need separate surge/stumble visual states — could be composited by the renderer or require additional assets
+- If the horse roster grows large, the flat directory could get noisy — subdirectories per horse would be a natural evolution
+- Betting integration will add messages to the starting sequence and payout messages after results

@@ -6,6 +6,8 @@ Async functions for persisting races and maintaining rolling counters.
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
+from datetime import datetime
 
 import asyncpg
 
@@ -13,15 +15,37 @@ from mudd.racing.odds import HorseOdds
 from mudd.racing.simulation import RaceResult
 
 
+@dataclass(frozen=True, slots=True)
+class PendingMessage:
+    """A race message ready to be posted to Discord."""
+
+    id: int
+    race_id: int
+    sequence: int
+    message_type: str
+    content: str | None
+    image_data: bytes | None
+    image_name: str | None
+    channel_id: int | None
+    thread_id: int | None
+
+
 async def create_race(
     pool: asyncpg.Pool,
     result: RaceResult,
     odds: list[HorseOdds],
+    *,
+    status: str = "finished",
+    channel_id: int | None = None,
 ) -> int:
-    """Persist a completed race and its results.
+    """Persist a race and its results.
 
-    Single transaction: inserts the race row with JSONB columns, then
-    batch-inserts race_results using unnest().
+    Args:
+        pool: Database connection pool.
+        result: Simulation output.
+        odds: Odds at race time.
+        status: Race status (default 'finished' for backward compat).
+        channel_id: Discord channel ID for live races.
 
     Returns:
         The new race ID.
@@ -51,19 +75,23 @@ async def create_race(
         ]
     )
 
+    finished_at = "NOW()" if status == "finished" else "NULL"
+
     async with pool.acquire() as conn, conn.transaction():
         race_id: int = await conn.fetchval(
-            """INSERT INTO races
+            f"""INSERT INTO races
                    (status, horses, snapshots, events, finishing_order,
-                    odds_snapshot, started_at, finished_at)
-               VALUES ('finished', $1::jsonb, $2::jsonb, $3::jsonb, $4::jsonb,
-                       $5::jsonb, NOW(), NOW())
+                    odds_snapshot, started_at, finished_at, channel_id)
+               VALUES ($1::race_status, $2::jsonb, $3::jsonb, $4::jsonb, $5::jsonb,
+                       $6::jsonb, NOW(), {finished_at}, $7)
                RETURNING id""",
+            status,
             horses_json,
             snapshots_json,
             events_json,
             finishing_order_json,
             odds_json,
+            channel_id,
         )
 
         # Batch insert race_results using unnest
@@ -84,6 +112,120 @@ async def create_race(
         )
 
     return race_id
+
+
+@dataclass(frozen=True, slots=True)
+class RaceMessageInput:
+    """Input for a single race message to enqueue."""
+
+    sequence: int
+    message_type: str
+    content: str | None
+    image_data: bytes | None
+    image_name: str | None
+    post_at: datetime
+
+
+async def create_race_messages(
+    pool: asyncpg.Pool,
+    race_id: int,
+    messages: list[RaceMessageInput],
+) -> None:
+    """Batch insert pre-computed race messages.
+
+    Uses unnest() for efficient bulk insert.
+    """
+    race_ids = [race_id] * len(messages)
+    sequences = [m.sequence for m in messages]
+    types = [m.message_type for m in messages]
+    contents = [m.content for m in messages]
+    image_datas = [m.image_data for m in messages]
+    image_names = [m.image_name for m in messages]
+    post_ats = [m.post_at for m in messages]
+
+    await pool.execute(
+        """INSERT INTO race_messages
+               (race_id, sequence, message_type, content,
+                image_data, image_name, post_at)
+           SELECT * FROM unnest(
+               $1::int[], $2::int[],
+               $3::race_message_type[], $4::text[],
+               $5::bytea[], $6::text[], $7::timestamptz[]
+           )""",
+        race_ids,
+        sequences,
+        types,
+        contents,
+        image_datas,
+        image_names,
+        post_ats,
+    )
+
+
+async def fetch_pending_messages(pool: asyncpg.Pool) -> list[PendingMessage]:
+    """Fetch all race messages due for posting.
+
+    Returns messages ordered by race_id and sequence.
+    """
+    rows = await pool.fetch(
+        """SELECT rm.id, rm.race_id, rm.sequence, rm.message_type,
+                  rm.content, rm.image_data, rm.image_name,
+                  r.channel_id, r.thread_id
+           FROM race_messages rm
+           JOIN races r ON rm.race_id = r.id
+           WHERE rm.post_at <= NOW()
+           ORDER BY rm.race_id, rm.sequence"""
+    )
+    return [
+        PendingMessage(
+            id=row["id"],
+            race_id=row["race_id"],
+            sequence=row["sequence"],
+            message_type=row["message_type"],
+            content=row["content"],
+            image_data=row["image_data"],
+            image_name=row["image_name"],
+            channel_id=row["channel_id"],
+            thread_id=row["thread_id"],
+        )
+        for row in rows
+    ]
+
+
+async def delete_message(pool: asyncpg.Pool, message_id: int) -> None:
+    """Delete a race message after successful posting."""
+    await pool.execute("DELETE FROM race_messages WHERE id = $1", message_id)
+
+
+async def set_race_thread(pool: asyncpg.Pool, race_id: int, thread_id: int) -> None:
+    """Store the Discord thread ID for a race."""
+    await pool.execute(
+        "UPDATE races SET thread_id = $1 WHERE id = $2", thread_id, race_id
+    )
+
+
+async def finish_race(pool: asyncpg.Pool, race_id: int) -> None:
+    """Mark a race as finished after all messages have been posted."""
+    await pool.execute(
+        "UPDATE races SET status = 'finished', finished_at = NOW() WHERE id = $1",
+        race_id,
+    )
+
+
+async def get_remaining_message_count(pool: asyncpg.Pool, race_id: int) -> int:
+    """Get count of remaining unposted messages for a race."""
+    count: int = await pool.fetchval(
+        "SELECT COUNT(*) FROM race_messages WHERE race_id = $1", race_id
+    )
+    return count
+
+
+async def has_active_race(pool: asyncpg.Pool) -> bool:
+    """Check if there is an active (non-finished) race."""
+    row = await pool.fetchval(
+        "SELECT 1 FROM races WHERE status IN ('open', 'locked', 'running') LIMIT 1"
+    )
+    return row is not None
 
 
 async def update_rolling_counters(pool: asyncpg.Pool, rolling_window: int = 20) -> None:

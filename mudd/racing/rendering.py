@@ -7,11 +7,24 @@ Produces PIL images from race simulation snapshots.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from io import BytesIO
 
 from PIL import Image, ImageDraw, ImageFont
 from PIL.Image import Resampling
 
 from mudd.racing.simulation import BurstEvent, RaceResult
+
+# Font path — UnifontEX monospace installed in the Docker image
+_FONT_PATH = "/usr/share/fonts/truetype/unifontex/unifontex.ttf"
+
+
+def _load_font(size: int) -> ImageFont.FreeTypeFont:
+    """Load UnifontEX at the given size, falling back to default."""
+    try:
+        return ImageFont.truetype(_FONT_PATH, size)
+    except OSError:
+        return _load_font(size)
+
 
 # Layout constants
 CANVAS_WIDTH = 640
@@ -107,8 +120,8 @@ def render_frame(
     img = Image.new("RGBA", (CANVAS_WIDTH, frame_height), BG_COLOR + (255,))
     draw = ImageDraw.Draw(img)
 
-    header_font = ImageFont.load_default(size=11)
-    name_font = ImageFont.load_default(size=14)
+    header_font = _load_font(13)
+    name_font = _load_font(14)
 
     # Header
     header_text = f"Tick {tick}  ({frame_index + 1}/{total_frames})"
@@ -210,3 +223,182 @@ def tile_frames(frames: list[Image.Image], gap: int = 4) -> Image.Image:
         y += frame.height + gap
 
     return tiled
+
+
+# ---------------------------------------------------------------------------
+# Announcement image
+# ---------------------------------------------------------------------------
+
+PROFILE_SIZE = 64
+ANNOUNCEMENT_ROW_HEIGHT = 80
+ANNOUNCEMENT_PADDING = 12
+ANNOUNCEMENT_HEADER_HEIGHT = 48
+
+
+@dataclass(frozen=True, slots=True)
+class AnnouncementHorse:
+    """A horse entry for the announcement image."""
+
+    horse_id: str
+    name: str
+    profile: Image.Image  # 64x64 RGBA
+
+
+def profile_from_bytes(data: bytes) -> Image.Image:
+    """Convert BYTEA image data to a 64x64 RGBA PIL Image."""
+    img = Image.open(BytesIO(data))
+    img = img.convert("RGBA")
+    img = img.resize((PROFILE_SIZE, PROFILE_SIZE), Resampling.NEAREST)
+    return img
+
+
+def render_announcement(
+    horses: list[AnnouncementHorse],
+    odds: list[float],
+    forms: list[str],
+    star_ratings: list[str],
+    race_number: int,
+) -> bytes:
+    """Render the pre-race announcement image.
+
+    Args:
+        horses: Horse entries with profiles.
+        odds: Displayed payout per horse (e.g. 2.2).
+        forms: Pre-formatted form strings per horse (e.g. "W-P-L").
+        star_ratings: Pre-formatted star strings per horse (e.g. "★★★☆☆").
+        race_number: Race number for the header.
+
+    Returns:
+        PNG image bytes.
+    """
+    n = len(horses)
+    height = (
+        ANNOUNCEMENT_HEADER_HEIGHT + n * ANNOUNCEMENT_ROW_HEIGHT + ANNOUNCEMENT_PADDING
+    )
+    img = Image.new("RGBA", (CANVAS_WIDTH, height), BG_COLOR + (255,))
+    draw = ImageDraw.Draw(img)
+
+    header_font = _load_font(20)
+    name_font = _load_font(16)
+    detail_font = _load_font(13)
+    star_font = _load_font(18)
+
+    # Header
+    header_text = f"Race #{race_number}"
+    draw.text(
+        (CANVAS_WIDTH // 2, ANNOUNCEMENT_PADDING),
+        header_text,
+        fill=FINISH_COLOR,
+        font=header_font,
+        anchor="mt",
+    )
+
+    # Column headers
+    col_y = ANNOUNCEMENT_HEADER_HEIGHT - 16
+    draw.text((PROFILE_SIZE + 24, col_y), "Horse", fill=TEXT_COLOR, font=detail_font)
+    draw.text((300, col_y), "Odds", fill=TEXT_COLOR, font=detail_font)
+    draw.text((380, col_y), "Form", fill=TEXT_COLOR, font=detail_font)
+    draw.text((480, col_y), "Rating", fill=TEXT_COLOR, font=detail_font)
+
+    for i, horse in enumerate(horses):
+        row_y = ANNOUNCEMENT_HEADER_HEIGHT + i * ANNOUNCEMENT_ROW_HEIGHT
+
+        # Divider line
+        if i > 0:
+            x_end = CANVAS_WIDTH - ANNOUNCEMENT_PADDING
+            draw.line(
+                [(ANNOUNCEMENT_PADDING, row_y), (x_end, row_y)],
+                fill=LANE_DIVIDER,
+                width=1,
+            )
+
+        # Profile image
+        profile_y = row_y + (ANNOUNCEMENT_ROW_HEIGHT - PROFILE_SIZE) // 2
+        img.paste(horse.profile, (ANNOUNCEMENT_PADDING, profile_y), horse.profile)
+
+        # Name
+        text_x = PROFILE_SIZE + 24
+        name_y = row_y + ANNOUNCEMENT_ROW_HEIGHT // 2 - 10
+        draw.text((text_x, name_y), horse.name, fill=TEXT_COLOR, font=name_font)
+
+        # Odds
+        detail_y = name_y + 2
+        draw.text(
+            (300, detail_y),
+            f"{odds[i]:.1f}:1",
+            fill=TEXT_COLOR,
+            font=detail_font,
+        )
+
+        # Form
+        draw.text(
+            (380, detail_y),
+            forms[i],
+            fill=TEXT_COLOR,
+            font=detail_font,
+        )
+
+        # Star rating
+        draw.text(
+            (480, detail_y),
+            star_ratings[i],
+            fill=FINISH_COLOR,
+            font=star_font,
+        )
+
+    buf = BytesIO()
+    img.save(buf, format="PNG")
+    return buf.getvalue()
+
+
+# ---------------------------------------------------------------------------
+# Animated GIF rendering
+# ---------------------------------------------------------------------------
+
+
+def render_race_gif(
+    horses: list[RaceHorse],
+    result: RaceResult,
+    frame_indices: list[int],
+    frame_duration_ms: int = 800,
+    render_frames: int = 24,
+) -> bytes:
+    """Render a subset of race frames as an animated GIF.
+
+    Args:
+        horses: Horse names and sprites.
+        result: Full race simulation result.
+        frame_indices: Indices into the sampled frames to include.
+        frame_duration_ms: Duration per frame in milliseconds.
+        render_frames: Total sampled frames (must match the
+            frame_indices range).
+
+    Returns:
+        Animated GIF bytes.
+    """
+    ticks = sample_frames(result.snapshots, render_frames)
+    total = len(ticks)
+
+    frames: list[Image.Image] = []
+    for idx in frame_indices:
+        tick = ticks[idx]
+        positions = result.snapshots[tick]
+        tick_events = [e for e in result.events if e.tick == tick]
+        frame = render_frame(horses, positions, tick_events, tick, idx, total)
+        # GIF doesn't support full alpha; convert to RGB with solid background
+        frames.append(frame.convert("RGB"))
+
+    if not frames:
+        placeholder = Image.new("RGB", (CANVAS_WIDTH, 1), BG_COLOR)
+        frames = [placeholder]
+
+    buf = BytesIO()
+    frames[0].save(
+        buf,
+        format="GIF",
+        save_all=True,
+        append_images=frames[1:],
+        duration=frame_duration_ms,
+        loop=0,
+    )
+    return buf.getvalue()
