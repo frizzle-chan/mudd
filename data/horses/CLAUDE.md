@@ -80,4 +80,6 @@ Consistency: 55
 Luck: 35
 ```
 
+**Trailing blank line**: Each `.rec` file must end with a blank line after the last field. Without it, `cat *.rec | recfix --check` merges adjacent records and fails with "multiple key fields."
+
 Stats are fixed at creation. Dynamic odds are computed at runtime from attributes and recent race performance.

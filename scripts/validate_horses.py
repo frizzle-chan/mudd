@@ -75,11 +75,31 @@ def get_horse_stats(content: str) -> dict[str, dict[str, int]]:
     return horses
 
 
+def check_trailing_blank_lines() -> list[str]:
+    """Check that every horse .rec file ends with a trailing blank line."""
+    errors: list[str] = []
+    for path in sorted(HORSES_DIR.glob("*.rec")):
+        if path.name == "00_horse.rec":
+            continue
+        text = path.read_text()
+        if text and not text.endswith("\n\n"):
+            errors.append(
+                f"{path.name}: missing trailing blank line "
+                f"(records will merge during concatenation)"
+            )
+    return errors
+
+
 def main() -> int:
+    errors = check_trailing_blank_lines()
+    if errors:
+        for error in errors:
+            print(error, file=sys.stderr)
+        return 1
+
     content = cat_rec_files()
     horse_ids = get_horse_ids(content)
     stats = get_horse_stats(content)
-    errors: list[str] = []
 
     for horse_id in horse_ids:
         for suffix in REQUIRED_SUFFIXES:
