@@ -39,6 +39,7 @@ async def run(args: argparse.Namespace) -> int:
         render_announcement,
         render_frame,
         render_race_gif,
+        render_winner,
         sample_frames,
         sprite_from_bytes,
     )
@@ -189,7 +190,12 @@ async def run(args: argparse.Namespace) -> int:
                 # Victory image
                 winner_horse = horses[result.finishing_order[0]]
                 if winner_horse.victory_image:
-                    (render_dir / "winner.png").write_bytes(winner_horse.victory_image)
+                    winner_data = render_winner(
+                        winner_horse.victory_image,
+                        winner_horse.name,
+                        race_number=race_num,
+                    )
+                    (render_dir / "winner.png").write_bytes(winner_data)
 
                 print(f"Rendered to {render_dir}/")
 
