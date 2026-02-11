@@ -21,6 +21,7 @@ class MessageType(StrEnum):
 
     ANNOUNCEMENT = "announcement"
     THREAD = "thread"
+    RACE_START = "race_start"
 
 
 class RaceStatus(StrEnum):
@@ -28,6 +29,7 @@ class RaceStatus(StrEnum):
 
     OPEN = "open"
     LOCKED = "locked"
+    ANNOUNCING = "announcing"
     RUNNING = "running"
     FINISHED = "finished"
     CANCELLED = "cancelled"
@@ -241,7 +243,9 @@ async def get_remaining_message_count(pool: asyncpg.Pool, race_id: int) -> int:
 async def has_active_race(pool: asyncpg.Pool) -> bool:
     """Check if there is an active (non-finished) race."""
     row = await pool.fetchval(
-        "SELECT 1 FROM races WHERE status IN ('open', 'locked', 'running') LIMIT 1"
+        "SELECT 1 FROM races"
+        " WHERE status IN ('open', 'locked', 'announcing', 'running')"
+        " LIMIT 1"
     )
     return row is not None
 
@@ -283,6 +287,31 @@ async def update_rolling_counters(pool: asyncpg.Pool, rolling_window: int = 20) 
         WHERE h.id = c.horse_id
         """,
         rolling_window,
+    )
+
+
+async def transition_to_running(pool: asyncpg.Pool, race_id: int) -> None:
+    """Transition a race from announcing to running."""
+    await pool.execute(
+        "UPDATE races SET status = 'running', started_at = NOW()"
+        " WHERE id = $1 AND status = 'announcing'",
+        race_id,
+    )
+
+
+async def set_scheduled_event_id(
+    pool: asyncpg.Pool, race_id: int, event_id: int
+) -> None:
+    """Store the Discord scheduled event ID for a race."""
+    await pool.execute(
+        "UPDATE races SET scheduled_event_id = $1 WHERE id = $2", event_id, race_id
+    )
+
+
+async def get_scheduled_event_id(pool: asyncpg.Pool, race_id: int) -> int | None:
+    """Get the Discord scheduled event ID for a race."""
+    return await pool.fetchval(
+        "SELECT scheduled_event_id FROM races WHERE id = $1", race_id
     )
 
 

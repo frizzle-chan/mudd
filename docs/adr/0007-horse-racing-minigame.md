@@ -167,6 +167,24 @@ In the context of **tuning race pacing and duration**, facing **all timing value
 
 In the context of **showing race progress in Discord threads**, facing **the choice between static tiled images and animated content**, we decided to **group sampled race frames into short animated GIFs (3-4 frames each, ~800ms per frame) that Discord auto-plays inline**, to achieve **a natural animation of the race progressing without requiring any client-side player or embed**, accepting **larger file sizes compared to static PNGs and the limitation of GIF's 256-color palette**.
 
+### Daily Scheduled Races
+
+In the context of **running a daily race at a fixed time**, facing **the choice between an external cron job and an in-process scheduler**, we decided to **use discord.py's `@tasks.loop(time=...)` with a timezone-aware `datetime.time`**, to achieve **a self-contained scheduling mechanism that handles DST transitions automatically and requires no external infrastructure**, accepting **that the scheduler only fires while the bot is running (missed races are skipped, not queued)**.
+
+The scheduler fires at a configurable offset before the race start time (default: 60 minutes). This pre-race window allows the announcement and discussion thread to build anticipation before the race begins.
+
+### Split Announcement / Race Timing
+
+In the context of **supporting both ad-hoc (`!horse`) and daily scheduled races**, facing **the need for different time gaps between announcement and race start**, we decided to **parameterize the message queue builder with explicit `announcement_time` and `race_start_time` anchors, inserting a `RACE_START` sentinel message that triggers the `announcing` → `running` status transition**, to achieve **a single code path for both race types where only the time gap differs**, accepting **an additional enum value (`announcing`) and sentinel message type (`race_start`) in the database schema**.
+
+For ad-hoc races, the gap is 45 seconds (preserving existing behavior). For daily races, the gap is configurable (default: 60 minutes).
+
+### Discord Scheduled Events
+
+In the context of **making races discoverable to server members who aren't in the race-track channel**, facing **the need for visibility beyond channel messages**, we decided to **create Discord scheduled events (external entity type) for both ad-hoc and daily races**, to achieve **server-wide visibility via Discord's events panel, with automatic lifecycle management (scheduled → active → completed)**, accepting **best-effort event management where event failures never abort the race**.
+
+Event descriptions include navigation directions from the foyer to the race track, helping new players find the race.
+
 ## Consequences
 
 ### Positive
@@ -177,12 +195,15 @@ In the context of **showing race progress in Discord threads**, facing **the cho
 - Flat directory with naming convention makes assets discoverable without a manifest
 - Race delivery survives bot restarts — the message queue in the database acts as a durable task queue
 - Thread-based delivery keeps channels clean while allowing full race detail in threads
+- Daily races create a predictable social event that players can plan around
+- Discord scheduled events make races visible server-wide, not just to race-track visitors
 
 ### Negative
 
 - Adding a horse requires creating four files (rec + three images) rather than one
 - Image validation (dimensions, format, existence) must happen outside recutils
 - Pre-computing all messages upfront means the race outcome is determined before it starts (no live interaction possible)
+- Daily race scheduler only fires while the bot is running — missed races are silently skipped
 
 ### Future Considerations
 
