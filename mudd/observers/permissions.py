@@ -33,10 +33,12 @@ class PermissionReconciler:
         self,
         bot: discord.Client,
         pool: asyncpg.Pool,
+        guild_id: int,
         room_cache: RoomChannelCache | None = None,
     ) -> None:
         self.bot = bot
         self.pool = pool
+        self._guild_id = guild_id
         self.room_cache = room_cache
         self._location_sync_events: list[UserLocationSyncEvent] = []
         self._user_sync_events: list[UserSyncEvent] = []
@@ -56,19 +58,18 @@ class PermissionReconciler:
         user_sync_events = self._user_sync_events
         self._user_sync_events = []
 
-        if not self.bot.guilds:
+        guild = self.bot.get_guild(self._guild_id)
+        if guild is None:
+            logger.warning(
+                "Guild %d not available, skipping permission flush", self._guild_id
+            )
             return
 
-        for guild in self.bot.guilds:
-            for evt in location_sync_events:
-                if evt.guild_id != guild.id:
-                    continue
-                await self._sync_user_location(guild, evt)
+        for evt in location_sync_events:
+            await self._sync_user_location(guild, evt)
 
-            for evt in user_sync_events:
-                if evt.guild_id != guild.id:
-                    continue
-                await self._handle_user_sync(guild, evt)
+        for evt in user_sync_events:
+            await self._handle_user_sync(guild, evt)
 
     async def _set_voice_permissions(
         self,

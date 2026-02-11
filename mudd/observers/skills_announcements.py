@@ -26,9 +26,11 @@ class SkillsAnnouncements:
     def __init__(
         self,
         bot: discord.Client,
+        guild_id: int,
         room_cache: RoomChannelCache | None = None,
     ) -> None:
         self._bot = bot
+        self._guild_id = guild_id
         self._room_cache = room_cache
         self._pending: list[tuple[discord.TextChannel, str]] = []
 
@@ -73,11 +75,19 @@ class SkillsAnnouncements:
             return
 
         # Fallback: linear scan when cache is not available
-        for guild in self._bot.guilds:
-            member = guild.get_member(event.user_id)
-            if member is None:
-                continue
+        guild = self._bot.get_guild(self._guild_id)
+        if guild is None:
+            logger.warning(
+                "Guild %d not available for level-up announcement: "
+                "room_id='%s', user_id=%d",
+                self._guild_id,
+                event.room_id,
+                event.user_id,
+            )
+            return
 
+        member = guild.get_member(event.user_id)
+        if member is not None:
             for channel in guild.text_channels:
                 if channel.name == event.room_id:
                     message = format_level_up_message(

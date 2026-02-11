@@ -39,6 +39,7 @@ def build_observers(
     room_id: str,
     *,
     bot: discord.Client | None = None,
+    guild_id: int | None = None,
     room_cache: RoomChannelCache | None = None,
 ) -> list[Observer]:
     """Build the standard observer set for interactive commands.
@@ -57,8 +58,8 @@ def build_observers(
         )
     )
 
-    if bot is not None:
-        observers.append(DiscordReconciler(bot, pool, room_cache=room_cache))
+    if bot is not None and guild_id is not None:
+        observers.append(DiscordReconciler(bot, pool, guild_id, room_cache=room_cache))
 
     return observers
 

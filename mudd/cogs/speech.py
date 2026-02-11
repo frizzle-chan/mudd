@@ -76,6 +76,7 @@ class Speech(commands.Cog):
             message.author.id,
             room_id,
             bot=self.bot,
+            guild_id=bot.guild_id,
             room_cache=self._room_cache,
         )
 
