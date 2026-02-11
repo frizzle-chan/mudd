@@ -108,7 +108,10 @@ class PermissionReconciler:
 
         # Skip API call if voice permissions already match desired state
         current = paired_voice.overwrites_for(member)
-        if overwrite is None and current.is_empty():
+        if overwrite is None:
+            if current.is_empty():
+                return
+        elif current == overwrite:
             return
 
         try:

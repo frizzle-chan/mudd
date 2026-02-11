@@ -29,19 +29,20 @@ PLAINTEXT_CHANNEL_PATTERN = re.compile(r"#([\w-]+)")
 
 
 def extract_exits_from_topic(
-    topic: str | None, guild: discord.Guild
+    topic: str | None, guild: discord.Guild, room_cache: RoomChannelCache
 ) -> list[discord.TextChannel]:
     """Extract valid exit channels from a channel's topic (plaintext #channel-name)."""
     if not topic:
         return []
 
-    channel_by_name = {ch.name.lower(): ch for ch in guild.text_channels}
-
     exits: list[discord.TextChannel] = []
     for match in PLAINTEXT_CHANNEL_PATTERN.finditer(topic):
         name = match.group(1).lower()
-        if name in channel_by_name:
-            exits.append(channel_by_name[name])
+        channel_id = room_cache.get_channel_for_room(name)
+        if channel_id is not None:
+            channel = guild.get_channel(channel_id)
+            if isinstance(channel, discord.TextChannel):
+                exits.append(channel)
 
     return exits
 
@@ -95,7 +96,9 @@ class Movement(commands.Cog):
 
         channel = interaction.channel
         topic = getattr(channel, "topic", None)
-        valid_exits = extract_exits_from_topic(topic, interaction.guild)
+        valid_exits = extract_exits_from_topic(
+            topic, interaction.guild, self.room_cache
+        )
 
         # Filter exits based on current input (case-insensitive)
         current_lower = current.lower()
@@ -128,7 +131,9 @@ class Movement(commands.Cog):
 
         channel = interaction.channel
         topic = getattr(channel, "topic", None)
-        valid_exits = extract_exits_from_topic(topic, interaction.guild)
+        valid_exits = extract_exits_from_topic(
+            topic, interaction.guild, self.room_cache
+        )
 
         if not valid_exits:
             await interaction.response.send_message(
