@@ -364,6 +364,7 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 - Horses are defined in `data/horses/*.rec` files
 - Stats are fixed at creation; rolling-window counters are updated after each race
 - Synced to database on bot startup and every 15 minutes
+- Maximum 10 horses per race (Discord poll answer limit); randomly selected when more are active
 
 ### Races Table
 
@@ -386,6 +387,7 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 - `channel_id BIGINT` - Discord channel where the announcement was posted
 - `thread_id BIGINT` - Discord thread created from the announcement
 - `scheduled_event_id BIGINT` - Discord scheduled event ID for lifecycle management
+- `poll_message_id BIGINT` - Discord message ID of the "Favorite horse?" poll
 
 ### Race Messages Table
 
@@ -400,7 +402,7 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 | `image_name` | TEXT | Filename for discord.File (e.g. "announcement.png") |
 | `post_at` | TIMESTAMPTZ NOT NULL | When to post this message |
 
-**Race Message Type Enum:** `announcement`, `thread`, `race_start`
+**Race Message Type Enum:** `announcement`, `thread`, `race_start`, `poll`
 
 **Indexes:**
 - Index on `post_at` for poller queries

@@ -21,7 +21,7 @@ from mudd.models.inventory_forum import UserInventoryForum
 from mudd.models.room import InventoryThread, Room
 from mudd.models.user import STARTING_BALANCE, User
 from mudd.observers.effects import EffectsObserver
-from mudd.utils.discord import normalize_channel_name
+from mudd.utils.discord import fetch_thread, normalize_channel_name
 from mudd.views import ViewEntity
 
 logger = logging.getLogger(__name__)
@@ -40,23 +40,6 @@ def _format_transaction_message(event: BalanceChangedEvent) -> str:
     abs_amount = abs(event.delta)
     balance = event.new_balance
     return f"{sign}\u00a5{abs_amount:,} | {event.memo} | Balance: \u00a5{balance:,}"
-
-
-async def _fetch_thread(guild: discord.Guild, thread_id: int) -> discord.Thread | None:
-    """Resolve a thread by ID, falling back to an API call if not cached."""
-    thread = guild.get_thread(thread_id)
-    if thread is not None:
-        return thread
-    try:
-        channel = await guild.fetch_channel(thread_id)
-    except discord.NotFound:
-        return None
-    if isinstance(channel, discord.Thread):
-        return channel
-    logger.warning(
-        "Expected thread for ID %d but got %s", thread_id, type(channel).__name__
-    )
-    return None
 
 
 class InventoryReconciler:
@@ -258,7 +241,7 @@ class InventoryReconciler:
         if thread_id is None:
             return
 
-        thread = await _fetch_thread(guild, thread_id)
+        thread = await fetch_thread(guild, thread_id)
         if thread:
             try:
                 await thread.delete()
@@ -489,7 +472,7 @@ class InventoryReconciler:
             self.pool, wallet.instance_id
         )
         if wallet_thread_id:
-            thread = await _fetch_thread(guild, wallet_thread_id)
+            thread = await fetch_thread(guild, wallet_thread_id)
             if thread:
                 expected_name = ViewEntity(wallet).display_name
                 needs_pin = not thread.flags.pinned
@@ -555,7 +538,7 @@ class InventoryReconciler:
         if thread_id is None:
             return
 
-        thread = await _fetch_thread(guild, thread_id)
+        thread = await fetch_thread(guild, thread_id)
         if thread is None:
             return
 
@@ -583,7 +566,7 @@ class InventoryReconciler:
                 continue
 
             if thread_id:
-                thread = await _fetch_thread(guild, thread_id)
+                thread = await fetch_thread(guild, thread_id)
                 if thread and msg_id:
                     await self._update_thread_description(thread, msg_id, instance)
                     continue

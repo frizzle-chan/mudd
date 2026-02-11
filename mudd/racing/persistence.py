@@ -22,6 +22,7 @@ class MessageType(StrEnum):
     ANNOUNCEMENT = "announcement"
     THREAD = "thread"
     RACE_START = "race_start"
+    POLL = "poll"
 
 
 class RaceStatus(StrEnum):
@@ -313,6 +314,27 @@ async def get_scheduled_event_id(pool: asyncpg.Pool, race_id: int) -> int | None
     return await pool.fetchval(
         "SELECT scheduled_event_id FROM races WHERE id = $1", race_id
     )
+
+
+async def set_poll_message_id(
+    pool: asyncpg.Pool, race_id: int, message_id: int
+) -> None:
+    """Store the Discord poll message ID for a race."""
+    await pool.execute(
+        "UPDATE races SET poll_message_id = $1 WHERE id = $2", message_id, race_id
+    )
+
+
+async def get_poll_message_id(pool: asyncpg.Pool, race_id: int) -> int | None:
+    """Get the Discord poll message ID for a race."""
+    return await pool.fetchval(
+        "SELECT poll_message_id FROM races WHERE id = $1", race_id
+    )
+
+
+async def get_race_thread_id(pool: asyncpg.Pool, race_id: int) -> int | None:
+    """Get the Discord thread ID for a race."""
+    return await pool.fetchval("SELECT thread_id FROM races WHERE id = $1", race_id)
 
 
 async def get_recent_results(

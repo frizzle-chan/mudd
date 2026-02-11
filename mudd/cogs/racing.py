@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import datetime as dt
+import json
 import logging
 import random
 from dataclasses import dataclass
@@ -48,10 +49,13 @@ from mudd.racing.persistence import (
     delete_message,
     fetch_pending_messages,
     finish_race,
+    get_poll_message_id,
+    get_race_thread_id,
     get_recent_results,
     get_remaining_message_count,
     get_scheduled_event_id,
     has_active_race,
+    set_poll_message_id,
     set_race_thread,
     set_scheduled_event_id,
     transition_to_running,
@@ -59,6 +63,7 @@ from mudd.racing.persistence import (
 )
 from mudd.racing.rendering import fallback_sprite, sample_frames
 from mudd.racing.simulation import BurstType, RaceResult
+from mudd.utils.discord import fetch_thread
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +72,9 @@ HORSE_ROLE_NAME = "horse"
 
 # Room where races can be triggered
 RACE_TRACK_ROOM = "race-track"
+
+# Discord polls support at most 10 answers
+MAX_HORSES = 10
 
 
 def _announcement_time(config: RaceConfig) -> dt.time:
@@ -434,15 +442,32 @@ def _build_message_queue(
         )
     )
 
-    # Seq 1: Betting prompt (thread)
+    # Seq 1: Poll — "Favorite horse?"
+    # Duration must survive from open until race finish, rounded up to
+    # the next hour (Discord minimum is 1 h).
+    poll_open = announcement_time + dt.timedelta(seconds=3)
+    race_end = race_start_time + dt.timedelta(
+        seconds=num_batches * config.gif_interval_seconds + 10
+    )
+    poll_seconds = int((race_end - poll_open).total_seconds())
+    poll_duration_hours = max(1, -(-poll_seconds // 3600))
+    poll_answers = [
+        {"text": h.name, "emoji": f"{i}\u20e3"} for i, h in enumerate(horses)
+    ]
     messages.append(
         RaceMessageInput(
             sequence=1,
-            message_type=MessageType.THREAD,
-            content="Place your bets! (Betting coming soon...)",
+            message_type=MessageType.POLL,
+            content=json.dumps(
+                {
+                    "question": "Favorite horse?",
+                    "answers": poll_answers,
+                    "duration_hours": poll_duration_hours,
+                }
+            ),
             image_data=None,
             image_name=None,
-            post_at=announcement_time + dt.timedelta(seconds=3),
+            post_at=poll_open,
         )
     )
 
@@ -490,14 +515,28 @@ def _build_message_queue(
         )
     )
 
-    # Seq 6 through 6+N-1: Race progress (GIFs + commentary)
+    # Race progress (GIFs + commentary), with "bets closed" at midpoint
     gif_interval = config.gif_interval_seconds
+    mid = num_batches // 2
+    seq = 6
     race_frames = zip(images.gif_batches, commentaries, strict=True)
     for i, (gif_data, commentary) in enumerate(race_frames):
+        if i == mid:
+            messages.append(
+                RaceMessageInput(
+                    sequence=seq,
+                    message_type=MessageType.THREAD,
+                    content="**__Betting is closed!__**",
+                    image_data=None,
+                    image_name=None,
+                    post_at=race_start_time + dt.timedelta(seconds=i * gif_interval),
+                )
+            )
+            seq += 1
         content = f"And they're off!\n\n{commentary}" if i == 0 else commentary
         messages.append(
             RaceMessageInput(
-                sequence=6 + i,
+                sequence=seq,
                 message_type=MessageType.THREAD,
                 content=content,
                 image_data=gif_data,
@@ -505,12 +544,13 @@ def _build_message_queue(
                 post_at=race_start_time + dt.timedelta(seconds=i * gif_interval),
             )
         )
+        seq += 1
 
-    # Seq 6+N: Photo finish
+    # Photo finish
     photo_finish_offset = num_batches * gif_interval
     messages.append(
         RaceMessageInput(
-            sequence=6 + num_batches,
+            sequence=seq,
             message_type=MessageType.THREAD,
             content="Photo finish!",
             image_data=images.photo_finish,
@@ -519,10 +559,10 @@ def _build_message_queue(
         )
     )
 
-    # Seq 6+N+1: Results + winner
+    # Results + winner
     messages.append(
         RaceMessageInput(
-            sequence=6 + num_batches + 1,
+            sequence=seq + 1,
             message_type=MessageType.THREAD,
             content=f"**{winner_name} wins!**\n```\n{results_text}\n```",
             image_data=victory_image,
@@ -600,12 +640,14 @@ class Racing(commands.Cog):
         """Pre-compute an ad-hoc race and enqueue messages for posting."""
         pool = self._pool
 
-        # 1. Load active horses
+        # 1. Load active horses (capped at MAX_HORSES for Discord poll limit)
         horses = await Horse.get_all_active(pool)
         if len(horses) < 2:
             if isinstance(channel, discord.TextChannel):
                 await channel.send("Not enough horses to race! Need at least 2.")
             return
+        if len(horses) > MAX_HORSES:
+            horses = random.sample(horses, MAX_HORSES)
 
         # 2. Build HorseStats, compute odds, simulate
         config = DEFAULT_CONFIG
@@ -664,7 +706,7 @@ class Racing(commands.Cog):
         config = DEFAULT_CONFIG
         tz = ZoneInfo(config.race_timezone)
 
-        # 1. Load active horses
+        # 1. Load active horses (capped at MAX_HORSES for Discord poll limit)
         horses = await Horse.get_all_active(pool)
         if len(horses) < 2:
             logger.warning(
@@ -672,6 +714,8 @@ class Racing(commands.Cog):
                 len(horses),
             )
             return
+        if len(horses) > MAX_HORSES:
+            horses = random.sample(horses, MAX_HORSES)
 
         # 2. Build HorseStats, compute odds, simulate
         stats = [h.to_stats() for h in horses]
@@ -913,6 +957,7 @@ class Racing(commands.Cog):
             remaining = await get_remaining_message_count(self._pool, race_id)
             if remaining == 0:
                 await finish_race(self._pool, race_id)
+                await self._end_poll(race_id)
                 await self._end_discord_event(race_id)
                 logger.info(
                     "Race #%d finished — all messages posted",
@@ -954,6 +999,10 @@ class Racing(commands.Cog):
         if msg.message_type == MessageType.ANNOUNCEMENT:
             thread_id = await self._post_announcement(msg, kwargs, guild)
             return True, thread_id
+
+        if msg.message_type == MessageType.POLL:
+            posted = await self._post_poll(msg, guild, batch_threads)
+            return posted, None
 
         if msg.message_type == MessageType.THREAD:
             posted = await self._post_to_thread(msg, kwargs, guild, batch_threads)
@@ -1018,19 +1067,81 @@ class Racing(commands.Cog):
             )
             return False
 
-        thread = guild.get_thread(thread_id)
+        thread = await fetch_thread(guild, thread_id)
         if thread is None:
-            try:
-                thread = await guild.fetch_channel(thread_id)
-            except discord.NotFound:
-                logger.warning(
-                    "Thread %d not found for race %d",
-                    thread_id,
-                    msg.race_id,
-                )
-                return True  # Don't retry — thread is gone
+            logger.warning(
+                "Thread %d not found for race %d",
+                thread_id,
+                msg.race_id,
+            )
+            return True  # Don't retry — thread is gone
 
-        if isinstance(thread, discord.Thread):
-            await thread.send(**kwargs)  # type: ignore[arg-type]
-
+        await thread.send(**kwargs)  # type: ignore[arg-type]
         return True
+
+    async def _post_poll(
+        self,
+        msg: PendingMessage,
+        guild: discord.Guild,
+        batch_threads: dict[int, int],
+    ) -> bool:
+        """Post a Discord poll to the race's thread.
+
+        Returns True if the poll was posted, False if the thread
+        isn't available yet (will retry next cycle).
+        """
+        thread_id = msg.thread_id or batch_threads.get(msg.race_id)
+        if thread_id is None:
+            logger.warning(
+                "No thread_id for poll in race %d — will retry next cycle",
+                msg.race_id,
+            )
+            return False
+
+        thread = await fetch_thread(guild, thread_id)
+        if thread is None:
+            logger.warning(
+                "Thread %d not found for race %d poll",
+                thread_id,
+                msg.race_id,
+            )
+            return True  # Don't retry — thread is gone
+
+        data = json.loads(msg.content) if msg.content else {}
+        question = data.get("question", "Favorite horse?")
+        answers = data.get("answers", [])
+        duration_hours = data.get("duration_hours", 1)
+
+        poll = discord.Poll(
+            question=question,
+            duration=dt.timedelta(hours=duration_hours),
+            multiple=False,
+        )
+        for answer in answers:
+            poll.add_answer(text=answer["text"], emoji=answer.get("emoji"))
+
+        sent = await thread.send(poll=poll)
+        await set_poll_message_id(self._pool, msg.race_id, sent.id)
+        logger.info("Posted poll (message %d) for race #%d", sent.id, msg.race_id)
+        return True
+
+    async def _end_poll(self, race_id: int) -> None:
+        """End the Discord poll for a race (best-effort)."""
+        guild = self.bot.get_guild(self.bot.guild_id)
+        if guild is None:
+            return
+        poll_msg_id = await get_poll_message_id(self._pool, race_id)
+        if poll_msg_id is None:
+            return
+        thread_id = await get_race_thread_id(self._pool, race_id)
+        if thread_id is None:
+            return
+        thread = await fetch_thread(guild, thread_id)
+        if thread is None:
+            return
+        try:
+            message = await thread.fetch_message(poll_msg_id)
+            await message.end_poll()
+            logger.info("Ended poll for race #%d", race_id)
+        except Exception:
+            logger.exception("Failed to end poll for race #%d", race_id)

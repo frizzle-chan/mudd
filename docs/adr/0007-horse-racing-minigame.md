@@ -185,6 +185,12 @@ In the context of **making races discoverable to server members who aren't in th
 
 Event descriptions include navigation directions from the foyer to the race track, helping new players find the race.
 
+### Poll-Based Predictions
+
+In the context of **letting spectators predict the race winner**, facing **the choice between a custom betting system and Discord-native polls**, we decided to **post a Discord poll to the race thread with each horse as an answer (capped at 10 — Discord's answer limit)**, to achieve **zero-friction engagement using a familiar Discord feature, with automatic result tallying and no currency risk**, accepting **that polls are limited to 10 answers and don't involve currency stakes**.
+
+When more than 10 horses are active, 10 are randomly selected for the race. The poll is posted as the second message in the thread (sequence 1) and ended automatically when the race finishes. Poll lifecycle is best-effort — failures never abort the race.
+
 ## Consequences
 
 ### Positive
@@ -204,9 +210,11 @@ Event descriptions include navigation directions from the foyer to the race trac
 - Image validation (dimensions, format, existence) must happen outside recutils
 - Pre-computing all messages upfront means the race outcome is determined before it starts (no live interaction possible)
 - Daily race scheduler only fires while the bot is running — missed races are silently skipped
+- Discord polls cap at 10 answers, limiting races to 10 horses maximum
 
 ### Future Considerations
 
 - Racing sprite may need separate surge/stumble visual states — could be composited by the renderer or require additional assets
 - If the horse roster grows large, the flat directory could get noisy — subdirectories per horse would be a natural evolution
+- The roster can grow beyond 10 horses; only 10 are randomly selected per race, so all active horses still get exposure over time
 - Betting integration will add messages to the starting sequence and payout messages after results
