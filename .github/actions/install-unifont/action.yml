@@ -1,0 +1,13 @@
+name: Install UnifontEX
+description: Install the UnifontEX monospace font for image rendering
+
+runs:
+  using: composite
+  steps:
+    - name: Install UnifontEX
+      shell: bash
+      run: |
+        sudo mkdir -p /usr/share/fonts/truetype/unifontex
+        sudo curl -sSL \
+          -o /usr/share/fonts/truetype/unifontex/unifontex.ttf \
+          https://github.com/stgiga/UnifontEX/releases/download/15.1jan23morePona/UnifontExMono.ttf
