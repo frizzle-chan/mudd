@@ -31,6 +31,9 @@ jobs:
       - name: Install recutils
         run: sudo apt-get update && sudo apt-get install -y recutils
 
+      - name: Install UnifontEX
+        uses: ./.github/actions/install-unifont
+
       - name: Install uv
         uses: astral-sh/setup-uv@61cb8a9741eeb8a550a1b8544337180c0fc8476b # v7.2.0
 
@@ -58,6 +61,11 @@ jobs:
             recfix --check "$file"
             uv run scripts/validate_world.py "$file"
           done
+
+      - name: Validate horse definitions
+        run: |
+          cat data/horses/*.rec | recfix --check
+          uv run scripts/validate_horses.py
 
       - name: Validate verb word lists
         run: uv run scripts/validate_verbs.py

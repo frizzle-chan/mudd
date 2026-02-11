@@ -1,0 +1,18 @@
+# Horse record descriptor
+# Referenced by individual horse files via: %rec: Horse 00_horse.rec
+#
+# Each horse also has three image assets in this directory:
+#   <id>_profile.png  - Portrait for the betting board
+#   <id>_race.png     - Sprite for race playback frames
+#   <id>_victory.png  - Image shown on win announcement
+
+%rec: Horse
+%key: Id
+%type: Speed range 1 100
+%type: Stamina range 1 100
+%type: Consistency range 1 100
+%type: Luck range 1 100
+%type: Active bool
+%mandatory: Id Name Speed Stamina Consistency Luck
+%allowed: Id Name Speed Stamina Consistency Luck Active
+

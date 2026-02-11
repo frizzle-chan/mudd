@@ -15,7 +15,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from PIL import Image  # type: ignore[import-not-found]
+from PIL import Image
 
 REPO_ROOT = Path(__file__).parent.parent
 SRC_DIR = REPO_ROOT / "img-src"

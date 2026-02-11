@@ -14,6 +14,7 @@ from mudd.cogs.interact import Interact
 from mudd.cogs.look import Look
 from mudd.cogs.movement import Movement
 from mudd.cogs.ping import Ping
+from mudd.cogs.racing import Racing
 from mudd.cogs.speech import Speech
 from mudd.cogs.sync import Sync
 from mudd.database import get_pool, init_database
@@ -74,6 +75,7 @@ async def setup_hook():
     await bot.add_cog(Sync(bot, pool, room_cache, autocomplete_cache, user_cache))
     await bot.add_cog(Economy(bot, pool))
     await bot.add_cog(Speech(bot, pool, room_cache))
+    await bot.add_cog(Racing(bot, pool, room_cache))
 
 
 @bot.event

@@ -13,6 +13,10 @@ Id: floor-1
 Name: Floor 1
 Description: The ground floor of the mansion
 
+Id: outside
+Name: Outside
+Description: The grounds surrounding the mansion
+
 # ============================================================================
 # Room record type
 # ============================================================================
@@ -75,6 +79,7 @@ Description: A long room, walls laden with gilt-framed canvases. Impressive art 
 +
 + to the west is the #library
 + to the east is the #foyer
++ to the north is the #courtyard
 
 Id: library
 Name: Library
@@ -132,6 +137,21 @@ Description: A dimly lit lounge.
 +
 + There is a door on the south side of the room leading to the #office
 + To the west is the #banquet-hall
+
+Id: courtyard
+Name: Courtyard
+Zone: outside
+Description: A sprawling stone courtyard behind the mansion. The air is fresh and you can hear birds singing.
++
++ to the south is the #gallery
++ a dirt path leads east to the #race-track
+
+Id: race-track
+Name: Race Track
+Zone: outside
+Description: A well-maintained oval dirt track with white-railed fences. A wooden grandstand lines one side, and a large tote board displays the day's odds. The smell of hay and leather fills the air.
++
++ the path back to the #courtyard is to the west
 
 # ============================================================================
 # Entity record type
