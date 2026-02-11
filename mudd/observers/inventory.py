@@ -21,6 +21,7 @@ from mudd.models.inventory_forum import UserInventoryForum
 from mudd.models.room import InventoryThread, Room
 from mudd.models.user import STARTING_BALANCE, User
 from mudd.observers.effects import EffectsObserver
+from mudd.utils.discord import normalize_channel_name
 from mudd.views import ViewEntity
 
 logger = logging.getLogger(__name__)
@@ -30,7 +31,7 @@ INVENTORY_CATEGORY_NAME = "Inventory"
 
 def _get_inventory_forum_name(username: str) -> str:
     """Get the forum channel name for a user's inventory."""
-    return f"{username}-inventory"
+    return normalize_channel_name(username, "inventory")
 
 
 def _format_transaction_message(event: BalanceChangedEvent) -> str:
@@ -39,6 +40,23 @@ def _format_transaction_message(event: BalanceChangedEvent) -> str:
     abs_amount = abs(event.delta)
     balance = event.new_balance
     return f"{sign}\u00a5{abs_amount:,} | {event.memo} | Balance: \u00a5{balance:,}"
+
+
+async def _fetch_thread(guild: discord.Guild, thread_id: int) -> discord.Thread | None:
+    """Resolve a thread by ID, falling back to an API call if not cached."""
+    thread = guild.get_thread(thread_id)
+    if thread is not None:
+        return thread
+    try:
+        channel = await guild.fetch_channel(thread_id)
+    except discord.NotFound:
+        return None
+    if isinstance(channel, discord.Thread):
+        return channel
+    logger.warning(
+        "Expected thread for ID %d but got %s", thread_id, type(channel).__name__
+    )
+    return None
 
 
 class InventoryReconciler:

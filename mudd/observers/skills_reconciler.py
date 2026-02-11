@@ -23,6 +23,7 @@ from mudd.skills.formatting import (
     get_milestone_role,
 )
 from mudd.skills.registry import Skill
+from mudd.utils.discord import normalize_channel_name
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +32,7 @@ SKILLS_CATEGORY_NAME = "Skills"
 
 def _get_skills_channel_name(username: str) -> str:
     """Get the channel name for a user's skills channel."""
-    return f"{username}-skills"
+    return normalize_channel_name(username, "skills")
 
 
 async def ensure_roles(guild: discord.Guild) -> None:
