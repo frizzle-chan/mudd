@@ -849,8 +849,8 @@ Name: Pond
 Prototype: furniture
 Room: courtyard
 ContentsVisible: no
-DescriptionShort: a stone {{ e.name }} with lily pads floating on the surface
-DescriptionLong: A serene stone pond filled with clear water. Lily pads float lazily on the surface, and you can see small fish darting beneath. The water ripples gently in the breeze.
+DescriptionShort: a {{ e.name }} with lily pads floating on the surface
+DescriptionLong: A serene pond filled with clear water. Lily pads float lazily on the surface, and you can see small fish darting beneath. The water ripples gently in the breeze. I bet you could __fish__ here.
 OnTouch: You dip your fingers into the cool water. It's refreshing.
 OnLook: {{ e.description_long }}
 OnFish: {% if e.contents %}{{ effects.dispense() }}{{ effects.broadcast("**" ~ user ~ "** casts a line into the pond...") }}You cast your line into the pond and wait patiently. After a moment, you feel a tug!{% else %}You cast into the pond but nothing is biting.{% endif %}
