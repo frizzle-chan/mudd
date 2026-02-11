@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed
+Accepted
 
 ## Context
 
@@ -77,13 +77,13 @@ In the context of **tuning race balance and writing reproducible tests**, facing
 
 ### Rubber-Banding Placement
 
-In the context of **keeping races visually competitive**, facing **the choice of whether to apply rubber-banding before or after progress scaling**, we decided to **apply rubber-banding after the `progress_scale / num_ticks` multiplication**, to achieve **rubber-band forces that are proportional to actual position gaps rather than being diluted by the scaling step**, accepting **that the rubber-band factor needed recalibration from the original spec value**.
+In the context of **keeping races visually competitive**, facing **the choice of whether to apply rubber-banding before or after progress scaling**, we decided to **apply rubber-banding after the `progress_scale / num_ticks` multiplication**, to achieve **rubber-band forces that are proportional to actual position gaps rather than being diluted by the scaling step**, accepting **that the rubber-band factor is calibrated for position-space forces**.
 
-With the original placement (before scaling), rubber-band forces computed from positions in the 0–1 range were added to unscaled progress values in the 0.3–0.8 range, then divided by ~30. The effect was negligible. After the fix, the rubber-band force and the progress value are in the same coordinate space.
+Applying rubber-banding in position-space ensures the force and the progress value are in the same coordinate space. If rubber-banding were applied before scaling, the forces (computed from 0–1 range positions) would be diluted by the `progress_scale / num_ticks` division, rendering them negligible.
 
 ### Per-Phase Form Factors
 
-In the context of **creating spectator drama with lead changes**, facing **the problem that per-tick gaussian noise averages out over 60 ticks via the law of large numbers**, we decided to **draw three independent additive form bonuses per horse (one per race phase) from a uniform variance distribution**, to achieve **natural lead changes when phase transitions shift which horse has the best effective speed**, accepting **an additional tuning constant (`form_variance`) and a departure from the spec's noise-only variance model**.
+In the context of **creating spectator drama with lead changes**, facing **the problem that per-tick gaussian noise averages out over 60 ticks via the law of large numbers**, we decided to **draw three independent additive form bonuses per horse (one per race phase) from a uniform variance distribution**, to achieve **natural lead changes when phase transitions shift which horse has the best effective speed**, accepting **an additional tuning constant (`form_variance`)**.
 
 Key design choices:
 - Form variance is **uniform across horses** (not scaled by consistency). Consistency only controls per-tick noise. This prevents volatile horses from gaining a structural advantage in multi-horse races where wide variance distributions produce more extreme positive outcomes.
@@ -92,9 +92,9 @@ Key design choices:
 
 ### Odds Formula Calibration
 
-In the context of **setting displayed betting odds that reflect actual win probabilities**, facing **a mismatch between the spec's base strength formula and the simulation's phase-weighted physics**, we decided to **calibrate the odds formula weights to match empirical simulation outcomes**, to achieve **displayed odds that are within 2% of actual win rates, well within the 10% house edge buffer**, accepting **that the odds weights differ from the original spec values**.
+In the context of **setting displayed betting odds that reflect actual win probabilities**, facing **the need to align odds weights with the simulation's phase-weighted physics**, we decided to **weight the odds formula to match empirical simulation outcomes**, to achieve **displayed odds that are within 2% of actual win rates, well within the 10% house edge buffer**, accepting **that the weights are empirically derived rather than analytically proven**.
 
-The spec's original formula (`speed*0.5 + stamina*0.3 + luck*0.1 + consistency*0.1`) implied a simulation where speed dominates. The actual simulation weights luck heavily in the start phase (0.6 weight for 20% of ticks) and stamina in the final stretch (0.6 weight for 30% of ticks), producing effective weights closer to `speed*0.35 + stamina*0.35 + luck*0.25 + consistency*0.05`.
+The simulation weights luck heavily in the start phase (0.6 weight for 20% of ticks) and stamina in the final stretch (0.6 weight for 30% of ticks). The odds formula uses `speed*0.35 + stamina*0.35 + luck*0.25 + consistency*0.05` to match these effective weights, producing displayed odds within 2% of actual win rates.
 
 ### Odds Exponentiation
 
@@ -106,9 +106,9 @@ In the context of **preventing horses from visually freezing mid-race**, facing 
 
 The floor in position-space is `progress_floor * progress_scale / num_ticks`. With default values this produces clearly visible movement per rendered frame. A separate zero-clamp on `base + noise` prevents negative values from multiplying through fatigue and burst modifiers.
 
-### Form Variance Reduction
+### Form Variance Tuning
 
-In the context of **horse stats being overshadowed by random form draws**, facing **the problem that `form_variance=1.0` regularly produced form bonuses that dominated stat contributions (0.3–0.9), making horse attributes nearly meaningless**, we decided to **reduce `form_variance` from 1.0 to 0.3**, to achieve **form draws that create lead changes and drama without routinely overwhelming horse stats**, accepting **slightly less variance between phases compared to the original setting**.
+In the context of **horse stats being overshadowed by random form draws**, facing **the risk that large form bonuses could dominate stat contributions and make horse attributes meaningless**, we decided to **set `form_variance` to 0.3**, to achieve **form draws that create lead changes and drama without routinely overwhelming horse stats**, accepting **that extreme lead changes from form alone are rare**.
 
 With σ=0.3, a 3σ draw is ±0.9 — still significant but unable to dominate a strong horse's stats. Form differences between horses still exceed 0.3 roughly half the time, preserving frequent lead changes.
 
@@ -177,7 +177,7 @@ The scheduler fires at a configurable offset before the race start time (default
 
 In the context of **supporting both ad-hoc (`!horse`) and daily scheduled races**, facing **the need for different time gaps between announcement and race start**, we decided to **parameterize the message queue builder with explicit `announcement_time` and `race_start_time` anchors, inserting a `RACE_START` sentinel message that triggers the `announcing` → `running` status transition**, to achieve **a single code path for both race types where only the time gap differs**, accepting **an additional enum value (`announcing`) and sentinel message type (`race_start`) in the database schema**.
 
-For ad-hoc races, the gap is 45 seconds (preserving existing behavior). For daily races, the gap is configurable (default: 60 minutes).
+For ad-hoc races, the gap is 45 seconds. For daily races, the gap is configurable (default: 60 minutes).
 
 ### Discord Scheduled Events
 
