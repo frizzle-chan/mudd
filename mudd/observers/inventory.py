@@ -256,7 +256,7 @@ class InventoryReconciler:
         if thread_id is None:
             return
 
-        thread = guild.get_thread(thread_id)
+        thread = await _fetch_thread(guild, thread_id)
         if thread:
             try:
                 await thread.delete()
@@ -487,7 +487,7 @@ class InventoryReconciler:
             self.pool, wallet.instance_id
         )
         if wallet_thread_id:
-            thread = guild.get_thread(wallet_thread_id)
+            thread = await _fetch_thread(guild, wallet_thread_id)
             if thread:
                 expected_name = ViewEntity(wallet).display_name
                 needs_pin = not thread.flags.pinned
@@ -553,7 +553,7 @@ class InventoryReconciler:
         if thread_id is None:
             return
 
-        thread = guild.get_thread(thread_id)
+        thread = await _fetch_thread(guild, thread_id)
         if thread is None:
             return
 
@@ -581,7 +581,7 @@ class InventoryReconciler:
                 continue
 
             if thread_id:
-                thread = guild.get_thread(thread_id)
+                thread = await _fetch_thread(guild, thread_id)
                 if thread and msg_id:
                     await self._update_thread_description(thread, msg_id, instance)
                     continue
