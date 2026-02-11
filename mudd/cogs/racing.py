@@ -50,6 +50,7 @@ from mudd.racing.persistence import (
     fetch_pending_messages,
     finish_race,
     get_poll_message_id,
+    get_race_thread_id,
     get_recent_results,
     get_remaining_message_count,
     get_scheduled_event_id,
@@ -62,6 +63,7 @@ from mudd.racing.persistence import (
 )
 from mudd.racing.rendering import fallback_sprite, sample_frames
 from mudd.racing.simulation import BurstType, RaceResult
+from mudd.utils.discord import fetch_thread
 
 logger = logging.getLogger(__name__)
 
@@ -1065,21 +1067,16 @@ class Racing(commands.Cog):
             )
             return False
 
-        thread = guild.get_thread(thread_id)
+        thread = await fetch_thread(guild, thread_id)
         if thread is None:
-            try:
-                thread = await guild.fetch_channel(thread_id)
-            except discord.NotFound:
-                logger.warning(
-                    "Thread %d not found for race %d",
-                    thread_id,
-                    msg.race_id,
-                )
-                return True  # Don't retry — thread is gone
+            logger.warning(
+                "Thread %d not found for race %d",
+                thread_id,
+                msg.race_id,
+            )
+            return True  # Don't retry — thread is gone
 
-        if isinstance(thread, discord.Thread):
-            await thread.send(**kwargs)  # type: ignore[arg-type]
-
+        await thread.send(**kwargs)  # type: ignore[arg-type]
         return True
 
     async def _post_poll(
@@ -1101,20 +1098,14 @@ class Racing(commands.Cog):
             )
             return False
 
-        thread = guild.get_thread(thread_id)
+        thread = await fetch_thread(guild, thread_id)
         if thread is None:
-            try:
-                thread = await guild.fetch_channel(thread_id)
-            except discord.NotFound:
-                logger.warning(
-                    "Thread %d not found for race %d poll",
-                    thread_id,
-                    msg.race_id,
-                )
-                return True  # Don't retry — thread is gone
-
-        if not isinstance(thread, discord.Thread):
-            return True
+            logger.warning(
+                "Thread %d not found for race %d poll",
+                thread_id,
+                msg.race_id,
+            )
+            return True  # Don't retry — thread is gone
 
         data = json.loads(msg.content) if msg.content else {}
         question = data.get("question", "Favorite horse?")
@@ -1142,20 +1133,13 @@ class Racing(commands.Cog):
         poll_msg_id = await get_poll_message_id(self._pool, race_id)
         if poll_msg_id is None:
             return
+        thread_id = await get_race_thread_id(self._pool, race_id)
+        if thread_id is None:
+            return
+        thread = await fetch_thread(guild, thread_id)
+        if thread is None:
+            return
         try:
-            thread_id = await self._pool.fetchval(
-                "SELECT thread_id FROM races WHERE id = $1", race_id
-            )
-            if thread_id is None:
-                return
-            thread = guild.get_thread(thread_id)
-            if thread is None:
-                try:
-                    thread = await guild.fetch_channel(thread_id)
-                except discord.NotFound:
-                    return
-            if not isinstance(thread, discord.Thread):
-                return
             message = await thread.fetch_message(poll_msg_id)
             await message.end_poll()
             logger.info("Ended poll for race #%d", race_id)

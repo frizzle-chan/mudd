@@ -387,7 +387,7 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 - `channel_id BIGINT` - Discord channel where the announcement was posted
 - `thread_id BIGINT` - Discord thread created from the announcement
 - `scheduled_event_id BIGINT` - Discord scheduled event ID for lifecycle management
-- `poll_message_id BIGINT` - Discord message ID of the "Who will win?" poll
+- `poll_message_id BIGINT` - Discord message ID of the "Favorite horse?" poll
 
 ### Race Messages Table
 

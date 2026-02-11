@@ -332,6 +332,11 @@ async def get_poll_message_id(pool: asyncpg.Pool, race_id: int) -> int | None:
     )
 
 
+async def get_race_thread_id(pool: asyncpg.Pool, race_id: int) -> int | None:
+    """Get the Discord thread ID for a race."""
+    return await pool.fetchval("SELECT thread_id FROM races WHERE id = $1", race_id)
+
+
 async def get_recent_results(
     pool: asyncpg.Pool, horse_ids: list[str], limit: int = 5
 ) -> dict[str, list[int]]:
