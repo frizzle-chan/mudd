@@ -20,6 +20,7 @@ from mudd.observers import (
 )
 
 if TYPE_CHECKING:
+    from mudd.bot import MuddBot
     from mudd.caches.user import UserCache
 
 logger = logging.getLogger(__name__)
@@ -218,6 +219,9 @@ class Movement(commands.Cog):
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
         """Assign new members to the default location and create inventory forum."""
+        bot: MuddBot = self.bot  # type: ignore[assignment]
+        if member.guild.id != bot.guild_id:
+            return
         if member.bot:
             return
 
@@ -256,6 +260,9 @@ class Movement(commands.Cog):
     @commands.Cog.listener()
     async def on_member_remove(self, member: discord.Member):
         """Clean up user data when member leaves."""
+        bot: MuddBot = self.bot  # type: ignore[assignment]
+        if member.guild.id != bot.guild_id:
+            return
         try:
             # Create reconciler and emit event
             reconciler = DiscordReconciler(

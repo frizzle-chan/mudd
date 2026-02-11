@@ -214,68 +214,71 @@ class Sync(commands.Cog):
         except Exception:
             logger.exception("Failed to report orphans")
 
-        for guild in self.bot.guilds:
-            logger.info(f"Starting remaining sync for {guild.name}")
+        guild = self.bot.get_guild(self.bot.guild_id)
+        if guild is None:
+            logger.warning("Whitelisted guild not available — skipping remaining sync")
+            return
 
-            # Rebuild room cache after channels are created
-            try:
-                await self.room_cache.rebuild(guild)
-            except Exception:
-                logger.exception(f"Failed to rebuild room cache for {guild.name}")
-                if fail_fast:
-                    raise
+        logger.info(f"Starting remaining sync for {guild.name}")
 
-            # Create reconciler with room_cache for permission sync
-            perm_reconciler = DiscordReconciler(
-                self.bot,
-                pool,
-                room_cache=self.room_cache,
-                console_channel=self._console_channel,
-            )
+        # Rebuild room cache after channels are created
+        try:
+            await self.room_cache.rebuild(guild)
+        except Exception:
+            logger.exception(f"Failed to rebuild room cache for {guild.name}")
+            if fail_fast:
+                raise
 
-            # Visibility sync via UserLocationSyncEvent
-            try:
-                vis_stats = await self._sync_user_visibility(guild, perm_reconciler)
-                logger.info(f"Visibility sync for {guild.name}: {vis_stats}")
-            except Exception:
-                logger.exception(f"Failed visibility sync for {guild.name}")
-                if fail_fast:
-                    raise
+        # Create reconciler with room_cache for permission sync
+        perm_reconciler = DiscordReconciler(
+            self.bot,
+            pool,
+            room_cache=self.room_cache,
+            console_channel=self._console_channel,
+        )
 
-            # Inventory sync via unified event (forums, wallets, threads, descriptions)
-            # Reset stats before sync
-            perm_reconciler.reset_inventory_forum_stats()
-            member_count = 0
-            for member in guild.members:
-                if not member.bot:
-                    member_count += 1
-                    perm_reconciler.notify(
-                        InventorySyncEvent(guild_id=guild.id, user_id=member.id)
-                    )
+        # Visibility sync via UserLocationSyncEvent
+        try:
+            vis_stats = await self._sync_user_visibility(guild, perm_reconciler)
+            logger.info(f"Visibility sync for {guild.name}: {vis_stats}")
+        except Exception:
+            logger.exception(f"Failed visibility sync for {guild.name}")
+            if fail_fast:
+                raise
 
-            try:
-                await perm_reconciler.flush()
-                inv_stats = perm_reconciler.get_inventory_forum_stats()
-                logger.info(
-                    f"Inventory sync for {guild.name}: "
-                    f"{member_count} users, {inv_stats}"
+        # Inventory sync via unified event (forums, wallets, threads, descriptions)
+        # Reset stats before sync
+        perm_reconciler.reset_inventory_forum_stats()
+        member_count = 0
+        for member in guild.members:
+            if not member.bot:
+                member_count += 1
+                perm_reconciler.notify(
+                    InventorySyncEvent(guild_id=guild.id, user_id=member.id)
                 )
-            except Exception:
-                logger.exception(f"Failed inventory sync for {guild.name}")
 
-            # Skills sync: channels, nicknames, milestone roles
-            try:
-                await self._sync_skills(guild, pool)
-            except Exception:
-                logger.exception(f"Failed skills sync for {guild.name}")
+        try:
+            await perm_reconciler.flush()
+            inv_stats = perm_reconciler.get_inventory_forum_stats()
+            logger.info(
+                f"Inventory sync for {guild.name}: {member_count} users, {inv_stats}"
+            )
+        except Exception:
+            logger.exception(f"Failed inventory sync for {guild.name}")
 
-            # Recurring race event sync
-            try:
-                await self._sync_recurring_race_event(guild, fail_fast=fail_fast)
-            except Exception:
-                logger.exception(f"Failed recurring race event sync for {guild.name}")
-                if fail_fast:
-                    raise
+        # Skills sync: channels, nicknames, milestone roles
+        try:
+            await self._sync_skills(guild, pool)
+        except Exception:
+            logger.exception(f"Failed skills sync for {guild.name}")
+
+        # Recurring race event sync
+        try:
+            await self._sync_recurring_race_event(guild, fail_fast=fail_fast)
+        except Exception:
+            logger.exception(f"Failed recurring race event sync for {guild.name}")
+            if fail_fast:
+                raise
 
         if fail_fast:
             logger.info("Initial sync complete")
@@ -515,26 +518,29 @@ class Sync(commands.Cog):
             room_ids: Set of valid room IDs
             reconciler: DiscordReconciler to notify of orphans
         """
-        for guild in self.bot.guilds:
-            for zone in zones:
-                # Find category for this zone
-                normalized_name = zone.name.lower().replace(" ", "-")
-                category = None
-                for cat in guild.categories:
-                    if cat.name.lower().replace(" ", "-") == normalized_name:
-                        category = cat
-                        break
+        guild = self.bot.get_guild(self.bot.guild_id)
+        if guild is None:
+            return
 
-                if category is None:
-                    continue
+        for zone in zones:
+            # Find category for this zone
+            normalized_name = zone.name.lower().replace(" ", "-")
+            category = None
+            for cat in guild.categories:
+                if cat.name.lower().replace(" ", "-") == normalized_name:
+                    category = cat
+                    break
 
-                # Find orphan channels in this category
-                for channel in category.channels:
-                    if channel.name not in room_ids:
-                        reconciler.notify(
-                            OrphanChannelDetectedEvent(
-                                guild_id=guild.id,
-                                channel_name=channel.name,
-                                category_name=category.name,
-                            )
+            if category is None:
+                continue
+
+            # Find orphan channels in this category
+            for channel in category.channels:
+                if channel.name not in room_ids:
+                    reconciler.notify(
+                        OrphanChannelDetectedEvent(
+                            guild_id=guild.id,
+                            channel_name=channel.name,
+                            category_name=category.name,
                         )
+                    )

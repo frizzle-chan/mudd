@@ -51,7 +51,10 @@ intents.message_content = True
 args = parse_args()
 # Empty prefix tuple disables prefix command parsing — this bot
 # uses slash commands and on_message listeners only.
-bot = MuddBot(world_file=args.world, command_prefix=(), intents=intents)
+guild_id = int(os.environ["GUILD_ID"])
+bot = MuddBot(
+    world_file=args.world, guild_id=guild_id, command_prefix=(), intents=intents
+)
 
 
 @bot.event
@@ -82,7 +85,9 @@ async def setup_hook():
 async def on_ready():
     # Sync cog handles zone/room sync and room cache initialization
     # on first periodic_sync iteration. This just syncs slash commands.
-    await bot.tree.sync()
+    guild = discord.Object(id=bot.guild_id)
+    bot.tree.copy_global_to(guild=guild)
+    await bot.tree.sync(guild=guild)
     logger.info(f"Logged in as {bot.user} (world: {bot.world_file})")
 
 
