@@ -436,7 +436,7 @@ OnTake: {{ effects.destroy() }}You feel a tug, but it slips away! The fish got a
 Id: fish_crucian_carp
 Name: Crucian Carp
 Prototype: fish
-Tags: toilet_fish urinal_fish sink_fish kitchen_sink_fish size_tiny location_river time_all_day
+Tags: toilet_fish urinal_fish sink_fish kitchen_sink_fish pond_fish size_tiny location_river location_pond time_all_day
 Rarity: common
 DescriptionShort: a small {{ e.name }}
 DescriptionLong: A tiny crucian carp.
@@ -444,7 +444,7 @@ DescriptionLong: A tiny crucian carp.
 Id: fish_bluegill
 Name: Bluegill
 Prototype: fish
-Tags: toilet_fish urinal_fish sink_fish size_tiny location_river time_day
+Tags: toilet_fish urinal_fish sink_fish pond_fish size_tiny location_river location_pond time_day
 Rarity: common
 DescriptionShort: a little {{ e.name }}
 DescriptionLong: A tiny bluegill with iridescent scales.
@@ -452,7 +452,7 @@ DescriptionLong: A tiny bluegill with iridescent scales.
 Id: fish_barbel_steed
 Name: Barbel Steed
 Prototype: fish
-Tags: toilet_fish urinal_fish size_medium location_river time_all_day
+Tags: toilet_fish urinal_fish pond_fish size_medium location_river location_pond time_all_day
 Rarity: common
 DescriptionShort: a {{ e.name }} swimming in circles
 DescriptionLong: A medium-sized barbel steed with twitching whisker-like barbels.
@@ -460,7 +460,7 @@ DescriptionLong: A medium-sized barbel steed with twitching whisker-like barbels
 Id: fish_dace
 Name: Dace
 Prototype: fish
-Tags: toilet_fish urinal_fish size_medium location_river time_all_day
+Tags: toilet_fish urinal_fish pond_fish size_medium location_river location_pond time_all_day
 Rarity: common
 DescriptionShort: a silvery {{ e.name }}
 DescriptionLong: A medium-sized dace with silvery scales.
@@ -468,7 +468,7 @@ DescriptionLong: A medium-sized dace with silvery scales.
 Id: fish_catfish
 Name: Catfish
 Prototype: fish
-Tags: toilet_fish size_large location_lake time_all_day
+Tags: toilet_fish pond_fish size_large location_lake location_pond time_all_day
 Rarity: common
 DescriptionShort: a whiskered {{ e.name }}
 DescriptionLong: A large catfish with long whiskers.
@@ -492,7 +492,7 @@ DescriptionLong: A medium-sized bass.
 Id: fish_herabuna
 Name: Herabuna
 Prototype: fish
-Tags: toilet_fish urinal_fish size_medium location_lake time_all_day
+Tags: toilet_fish urinal_fish pond_fish size_medium location_lake location_pond time_all_day
 Rarity: common
 DescriptionShort: a {{ e.name }}
 DescriptionLong: A medium-sized herabuna, a type of crucian carp.
@@ -500,7 +500,7 @@ DescriptionLong: A medium-sized herabuna, a type of crucian carp.
 Id: fish_carp
 Name: Carp
 Prototype: fish
-Tags: toilet_fish size_large location_river time_all_day
+Tags: toilet_fish pond_fish size_large location_river location_pond time_all_day
 Rarity: common
 DescriptionShort: a big {{ e.name }}
 DescriptionLong: A large, hardy carp.
@@ -508,7 +508,7 @@ DescriptionLong: A large, hardy carp.
 Id: fish_loach
 Name: Loach
 Prototype: fish
-Tags: toilet_fish urinal_fish sink_fish kitchen_sink_fish size_small location_river time_all_day
+Tags: toilet_fish urinal_fish sink_fish kitchen_sink_fish pond_fish size_small location_river location_pond time_all_day
 Rarity: common
 DescriptionShort: a wriggly {{ e.name }}
 DescriptionLong: A small, eel-like loach. Slippery.
@@ -516,7 +516,7 @@ DescriptionLong: A small, eel-like loach. Slippery.
 Id: fish_bass
 Name: Bass
 Prototype: fish
-Tags: toilet_fish size_large location_river time_all_day
+Tags: toilet_fish pond_fish size_large location_river location_pond time_all_day
 Rarity: common
 DescriptionShort: a {{ e.name }}
 DescriptionLong: A large bass. Fights hard on the line.
@@ -839,6 +839,21 @@ OnOpen: {{ effects.set_focus() }}You peer into the {{ e.name }}, pushing aside d
 + {{ e.contents }}{% else %} Nothing but garbage.{% endif %}
 OnClose: {{ effects.clear_focus() }}You let the lid swing shut.
 OnTouch: The metal is cold and slightly damp.
+
+# ----------------------------------------------------------------------------
+# Courtyard entities
+# ----------------------------------------------------------------------------
+
+Id: courtyard_pond
+Name: Pond
+Prototype: furniture
+Room: courtyard
+ContentsVisible: no
+DescriptionShort: a stone {{ e.name }} with lily pads floating on the surface
+DescriptionLong: A serene stone pond filled with clear water. Lily pads float lazily on the surface, and you can see small fish darting beneath. The water ripples gently in the breeze.
+OnTouch: You dip your fingers into the cool water. It's refreshing.
+OnLook: {{ e.description_long }}
+OnFish: {% if e.contents %}{{ effects.dispense() }}{{ effects.broadcast("**" ~ user ~ "** casts a line into the pond...") }}You cast your line into the pond and wait patiently. After a moment, you feel a tug!{% else %}You cast into the pond but nothing is biting.{% endif %}
 
 # ----------------------------------------------------------------------------
 # Office entities
@@ -2120,6 +2135,13 @@ Id: kitchen_sink_fish_pool
 Room: kitchen
 Container: kitchen_sink
 TagQuery: kitchen_sink_fish
+MaxCount: 1
+RespawnIntervalMinutes: 10
+
+Id: courtyard_pond_fish_pool
+Room: courtyard
+Container: courtyard_pond
+TagQuery: pond_fish
 MaxCount: 1
 RespawnIntervalMinutes: 10
 
