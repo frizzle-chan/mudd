@@ -433,6 +433,8 @@ class SkillsReconciler:
             return
 
         nick = format_nickname(member.display_name, total_level)
+        if member.nick == nick:
+            return
         try:
             await member.edit(nick=nick)
             await User.update_display_name(self._pool, user_id, nick)
