@@ -78,6 +78,8 @@ def _announcement_time(config: RaceConfig) -> dt.time:
     return announce_dt.timetz()
 
 
+DAILY_RACE_EVENT_NAME = "Daily Horse Race"
+
 RACE_EVENT_DESCRIPTION = (
     "Daily horse race at the track!\n\n"
     "**How to get there from the Foyer:**\n"
@@ -708,7 +710,7 @@ class Racing(commands.Cog):
         # 7. Persist with ANNOUNCING status
         winner_idx = result.finishing_order[0]
         winner_info = (horses[winner_idx].victory_image, horses[winner_idx].name)
-        race_id = await self._persist_race(
+        await self._persist_race(
             pool,
             result,
             odds,
@@ -718,15 +720,6 @@ class Racing(commands.Cog):
             channel_id,
             winner_info,
             status=RaceStatus.ANNOUNCING,
-        )
-
-        # 8. Create Discord scheduled event (best-effort)
-        race_duration = config.race_duration_minutes * 60
-        await self._create_discord_event(
-            race_id,
-            f"Daily Horse Race #{race_id}",
-            race_start_time,
-            race_start_time + dt.timedelta(seconds=race_duration + 30),
         )
 
     async def _persist_race(
@@ -826,6 +819,7 @@ class Racing(commands.Cog):
                 start_time=start_time,
                 end_time=end_time,
                 entity_type=discord.EntityType.external,
+                privacy_level=discord.PrivacyLevel.guild_only,
                 location="#race-track",
                 description=RACE_EVENT_DESCRIPTION,
             )
