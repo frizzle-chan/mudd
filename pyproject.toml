@@ -23,6 +23,7 @@ dev = [
     "pytest>=8.0",
     "pytest-asyncio>=0.24",
     "pytest-cov>=6.0",
+    "pytest-regressions[image]>=2.7.0",
     "ruff>=0.14.10",
     "squawk-cli>=2.36.0",
     "ty>=0.0.8",
@@ -30,7 +31,7 @@ dev = [
 ]
 
 [tool.pytest.ini_options]
-python_files = ["test_*.py", "*_unit_test.py"]
+python_files = ["test_*.py", "*_unit_test.py", "*_image_test.py"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "session"
 addopts = "--cov=mudd --cov-report=term-missing:skip-covered --cov-report=xml"
@@ -38,7 +39,7 @@ addopts = "--cov=mudd --cov-report=term-missing:skip-covered --cov-report=xml"
 [tool.coverage.run]
 source = ["mudd"]
 branch = true
-omit = ["*_unit_test.py"]
+omit = ["*_unit_test.py", "*_image_test.py"]
 
 [tool.coverage.report]
 show_missing = true
@@ -51,7 +52,7 @@ exclude = [".claude/skills/skill-creator/", "vulture_whitelist.py"]
 paths = ["main.py", "mudd/", "scripts/", "tests/", "vulture_whitelist.py"]
 min_confidence = 90
 ignore_names = ["clean_user_state"]
-exclude = ["*_unit_test.py"]
+exclude = ["*_unit_test.py", "*_image_test.py"]
 
 [tool.ruff.lint]
 select = [

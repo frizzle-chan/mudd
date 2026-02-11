@@ -183,6 +183,8 @@ pytest mudd/                     # Run only colocated unit tests
 
 **Unit test convention**: Pure unit tests live alongside source files with the `_unit_test.py` suffix (e.g., `mudd/utils/text_unit_test.py` tests `mudd/utils/text.py`). No `unittest.mock` in unit tests — if it needs mocks, write an integration test instead.
 
+**Image regression tests**: Visual regression tests use the `_image_test.py` suffix and `pytest-regressions[image]`. Baselines are checked-in PNGs in a sibling directory. Regenerate with `pytest <test_file> --regen-all`.
+
 **Test helpers must mirror production**: When test helpers (e.g., `move()`, `interact()`) construct observers or flush pipelines, they must use the same observer list and `flush_all()` path as production cogs. Divergence masks integration bugs.
 
 ## Devcontainer Setup

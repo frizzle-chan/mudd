@@ -30,6 +30,14 @@ mudd/
 
 When adding a new unit test, create a `<module>_unit_test.py` file next to the source file it tests.
 
+## Image Regression Tests
+
+Visual regression tests use `pytest-regressions[image]` and live alongside source files with the `_image_test.py` suffix. Baselines are checked-in PNGs in a directory named after the test file (e.g., `rendering_image_test/`).
+
+```bash
+pytest mudd/racing/rendering_image_test.py --regen-all  # regenerate baselines
+```
+
 ## Running Tests
 
 ```bash
