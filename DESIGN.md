@@ -380,11 +380,12 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 | `started_at` | TIMESTAMPTZ | When the race began running |
 | `finished_at` | TIMESTAMPTZ | When the race finished |
 
-**Race Status Enum:** `open`, `locked`, `running`, `finished`, `cancelled`
+**Race Status Enum:** `open`, `locked`, `announcing`, `running`, `finished`, `cancelled`
 
 **Additional Columns (Discord state):**
 - `channel_id BIGINT` - Discord channel where the announcement was posted
 - `thread_id BIGINT` - Discord thread created from the announcement
+- `scheduled_event_id BIGINT` - Discord scheduled event ID for lifecycle management
 
 ### Race Messages Table
 
@@ -399,7 +400,7 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 | `image_name` | TEXT | Filename for discord.File (e.g. "announcement.png") |
 | `post_at` | TIMESTAMPTZ NOT NULL | When to post this message |
 
-**Race Message Type Enum:** `announcement`, `thread`
+**Race Message Type Enum:** `announcement`, `thread`, `race_start`
 
 **Indexes:**
 - Index on `post_at` for poller queries

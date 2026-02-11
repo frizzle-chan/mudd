@@ -12,6 +12,13 @@ class RaceConfig:
     See horse.local.md § Tuning Constants for documentation.
     """
 
+    # Scheduling
+    race_hour: int = 16  # 4:20 PM Central = race start time
+    race_minute: int = 20
+    race_timezone: str = "America/Chicago"
+    pre_race_minutes: int = 60  # announcement posted this many minutes before
+
+    # Simulation
     house_edge: float = 0.10
     odds_exponent: float = 2.5
     rolling_window: int = 20

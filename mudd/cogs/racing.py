@@ -7,6 +7,7 @@ import logging
 import random
 from dataclasses import dataclass
 from io import BytesIO
+from zoneinfo import ZoneInfo
 
 import asyncpg
 import discord
@@ -45,8 +46,11 @@ from mudd.racing.persistence import (
     finish_race,
     get_recent_results,
     get_remaining_message_count,
+    get_scheduled_event_id,
     has_active_race,
     set_race_thread,
+    set_scheduled_event_id,
+    transition_to_running,
     update_rolling_counters,
 )
 from mudd.racing.rendering import fallback_sprite, sample_frames
@@ -59,6 +63,27 @@ HORSE_ROLE_NAME = "horse"
 
 # Room where races can be triggered
 RACE_TRACK_ROOM = "race-track"
+
+
+def _announcement_time(config: RaceConfig) -> dt.time:
+    """Compute the daily announcement time from race config.
+
+    Subtracts ``pre_race_minutes`` from the race start time to get the
+    time the scheduler should fire.
+    """
+    tz = ZoneInfo(config.race_timezone)
+    # Use a dummy date to do proper time arithmetic (handles hour rollover)
+    race_dt = dt.datetime(2000, 1, 1, config.race_hour, config.race_minute, tzinfo=tz)
+    announce_dt = race_dt - dt.timedelta(minutes=config.pre_race_minutes)
+    return announce_dt.timetz()
+
+
+RACE_EVENT_DESCRIPTION = (
+    "Daily horse race at the track!\n\n"
+    "**How to get there from the Foyer:**\n"
+    "`/move gallery` -> `/move courtyard` -> `/move race-track`\n\n"
+    "Head to #race-track to watch the race!"
+)
 
 
 def _generate_commentary(
@@ -317,8 +342,17 @@ def _build_message_queue(
     images: _RaceImages,
     channel_id: int,
     config: RaceConfig,
+    *,
+    announcement_time: dt.datetime,
+    race_start_time: dt.datetime,
 ) -> list[RaceMessageInput]:
-    """Construct the full list of RaceMessageInputs with timings and commentary."""
+    """Construct the full list of RaceMessageInputs with timings and commentary.
+
+    All timestamps are anchored to ``announcement_time`` (when the announcement
+    posts) and ``race_start_time`` (when GIFs begin).  A ``RACE_START`` sentinel
+    message is inserted 30 s before ``race_start_time`` to trigger the
+    ``announcing`` -> ``running`` status transition.
+    """
     horse_names = [h.name for h in horses]
     winner_idx = result.finishing_order[0]
     winner_name = horse_names[winner_idx]
@@ -350,9 +384,7 @@ def _build_message_queue(
         for i in range(num_batches)
     ]
 
-    # Compute timestamps
-    now = dt.datetime.now(dt.UTC)
-    race_start_ts = int((now + dt.timedelta(seconds=45)).timestamp())
+    race_start_ts = int(race_start_time.timestamp())
     flavor = _generate_announcement_flavor(horses, forms)
     announcement_text = (
         f"Today's race is set to begin <t:{race_start_ts}:R>\n\n{flavor}"
@@ -392,7 +424,7 @@ def _build_message_queue(
             content=announcement_text,
             image_data=announcement_image,
             image_name="announcement.png",
-            post_at=now,
+            post_at=announcement_time,
         )
     )
 
@@ -404,85 +436,92 @@ def _build_message_queue(
             content="Place your bets! (Betting coming soon...)",
             image_data=None,
             image_name=None,
-            post_at=now + dt.timedelta(seconds=3),
+            post_at=announcement_time + dt.timedelta(seconds=3),
         )
     )
 
-    # Seq 2-4: Starting sequence
+    # Seq 2: RACE_START sentinel — triggers announcing -> running + event start
     messages.append(
         RaceMessageInput(
             sequence=2,
-            message_type=MessageType.THREAD,
-            content="Riders up!",
+            message_type=MessageType.RACE_START,
+            content=None,
             image_data=None,
             image_name=None,
-            post_at=now + dt.timedelta(seconds=20),
+            post_at=race_start_time - dt.timedelta(seconds=30),
         )
     )
+
+    # Seq 3-5: Starting sequence
     messages.append(
         RaceMessageInput(
             sequence=3,
             message_type=MessageType.THREAD,
-            content="They're approaching the starting gate...",
+            content="Riders up!",
             image_data=None,
             image_name=None,
-            post_at=now + dt.timedelta(seconds=25),
+            post_at=race_start_time - dt.timedelta(seconds=25),
         )
     )
     messages.append(
         RaceMessageInput(
             sequence=4,
             message_type=MessageType.THREAD,
+            content="They're approaching the starting gate...",
+            image_data=None,
+            image_name=None,
+            post_at=race_start_time - dt.timedelta(seconds=20),
+        )
+    )
+    messages.append(
+        RaceMessageInput(
+            sequence=5,
+            message_type=MessageType.THREAD,
             content="They're all in the gate...",
             image_data=images.starting_gate,
             image_name="starting_gate.png",
-            post_at=now + dt.timedelta(seconds=30),
+            post_at=race_start_time - dt.timedelta(seconds=15),
         )
     )
 
-    # Seq 5 through 5+N-1: Race progress (GIFs + commentary)
+    # Seq 6 through 6+N-1: Race progress (GIFs + commentary)
     gif_interval = config.gif_interval_seconds
     race_frames = zip(images.gif_batches, commentaries, strict=True)
     for i, (gif_data, commentary) in enumerate(race_frames):
-        if i == 0:
-            content = f"And they're off!\n\n{commentary}"
-            offset = dt.timedelta(seconds=45)
-        else:
-            content = commentary
-            offset = dt.timedelta(seconds=45 + i * gif_interval)
+        content = f"And they're off!\n\n{commentary}" if i == 0 else commentary
         messages.append(
             RaceMessageInput(
-                sequence=5 + i,
+                sequence=6 + i,
                 message_type=MessageType.THREAD,
                 content=content,
                 image_data=gif_data,
                 image_name=f"race_part{i + 1}.gif",
-                post_at=now + offset,
+                post_at=race_start_time + dt.timedelta(seconds=i * gif_interval),
             )
         )
 
-    # Seq 5+N: Photo finish
-    photo_finish_offset = 45 + num_batches * gif_interval
+    # Seq 6+N: Photo finish
+    photo_finish_offset = num_batches * gif_interval
     messages.append(
         RaceMessageInput(
-            sequence=5 + num_batches,
+            sequence=6 + num_batches,
             message_type=MessageType.THREAD,
             content="Photo finish!",
             image_data=images.photo_finish,
             image_name="photo_finish.png",
-            post_at=now + dt.timedelta(seconds=photo_finish_offset),
+            post_at=race_start_time + dt.timedelta(seconds=photo_finish_offset),
         )
     )
 
-    # Seq 5+N+1: Results + winner
+    # Seq 6+N+1: Results + winner
     messages.append(
         RaceMessageInput(
-            sequence=5 + num_batches + 1,
+            sequence=6 + num_batches + 1,
             message_type=MessageType.THREAD,
             content=f"**{winner_name} wins!**\n```\n{results_text}\n```",
             image_data=victory_image,
             image_name="winner.png" if victory_image else None,
-            post_at=now + dt.timedelta(seconds=photo_finish_offset + 10),
+            post_at=race_start_time + dt.timedelta(seconds=photo_finish_offset + 10),
         )
     )
 
@@ -504,9 +543,11 @@ class Racing(commands.Cog):
 
     async def cog_load(self) -> None:
         self.race_poster.start()
+        self.daily_race_scheduler.start()
 
     async def cog_unload(self) -> None:
         self.race_poster.cancel()
+        self.daily_race_scheduler.cancel()
 
     @commands.Cog.listener()
     async def on_message(self, message: discord.Message) -> None:
@@ -545,7 +586,7 @@ class Racing(commands.Cog):
             await message.reply("Something went wrong preparing the race.")
 
     async def _prepare_race(self, channel: discord.abc.Messageable) -> None:
-        """Pre-compute an entire race and enqueue messages for posting."""
+        """Pre-compute an ad-hoc race and enqueue messages for posting."""
         pool = self._pool
 
         # 1. Load active horses
@@ -567,16 +608,25 @@ class Racing(commands.Cog):
         race_horses, announcement_horses = _build_race_horses(horses)
         images = _render_race_images(race_horses, result, config)
 
-        # 4. Build message queue
+        # 4. Build message queue with ad-hoc timing
+        now = dt.datetime.now(dt.UTC)
         channel_id = getattr(channel, "id", 0)
         messages = _build_message_queue(
-            result, odds, horses, forms, images, channel_id, config
+            result,
+            odds,
+            horses,
+            forms,
+            images,
+            channel_id,
+            config,
+            announcement_time=now,
+            race_start_time=now + dt.timedelta(seconds=45),
         )
 
         # 5. Persist and finalize images with actual race_id
         winner_idx = result.finishing_order[0]
         winner_info = (horses[winner_idx].victory_image, horses[winner_idx].name)
-        await self._persist_race(
+        race_id = await self._persist_race(
             pool,
             result,
             odds,
@@ -585,6 +635,98 @@ class Racing(commands.Cog):
             forms,
             channel_id,
             winner_info,
+        )
+
+        # 6. Create Discord scheduled event (best-effort)
+        race_start = now + dt.timedelta(seconds=45)
+        race_duration = config.race_duration_minutes * 60
+        await self._create_discord_event(
+            race_id,
+            f"Horse Race #{race_id}",
+            race_start,
+            race_start + dt.timedelta(seconds=race_duration + 30),
+        )
+
+    async def _prepare_scheduled_race(self) -> None:
+        """Pre-compute a daily scheduled race and enqueue messages."""
+        pool = self._pool
+        config = DEFAULT_CONFIG
+        tz = ZoneInfo(config.race_timezone)
+
+        # 1. Load active horses
+        horses = await Horse.get_all_active(pool)
+        if len(horses) < 2:
+            logger.warning(
+                "Not enough horses for scheduled race (have %d, need 2)",
+                len(horses),
+            )
+            return
+
+        # 2. Build HorseStats, compute odds, simulate
+        stats = [h.to_stats() for h in horses]
+        odds = compute_odds(stats)
+        horse_ids = [h.id for h in horses]
+        forms = await get_recent_results(pool, horse_ids)
+        result = simulate_race(stats)
+
+        # 3. Build visual assets
+        race_horses, announcement_horses = _build_race_horses(horses)
+        images = _render_race_images(race_horses, result, config)
+
+        # 4. Compute timing anchors
+        now = dt.datetime.now(dt.UTC)
+        today_local = now.astimezone(tz)
+        race_start_time = today_local.replace(
+            hour=config.race_hour,
+            minute=config.race_minute,
+            second=0,
+            microsecond=0,
+        ).astimezone(dt.UTC)
+
+        # 5. Get channel_id from room cache
+        channel_id = self._room_cache.get_channel_for_room(RACE_TRACK_ROOM)
+        if channel_id is None:
+            logger.warning(
+                "No channel found for %s — skipping scheduled race",
+                RACE_TRACK_ROOM,
+            )
+            return
+
+        # 6. Build message queue with scheduled timing
+        messages = _build_message_queue(
+            result,
+            odds,
+            horses,
+            forms,
+            images,
+            channel_id,
+            config,
+            announcement_time=now,
+            race_start_time=race_start_time,
+        )
+
+        # 7. Persist with ANNOUNCING status
+        winner_idx = result.finishing_order[0]
+        winner_info = (horses[winner_idx].victory_image, horses[winner_idx].name)
+        race_id = await self._persist_race(
+            pool,
+            result,
+            odds,
+            messages,
+            announcement_horses,
+            forms,
+            channel_id,
+            winner_info,
+            status=RaceStatus.ANNOUNCING,
+        )
+
+        # 8. Create Discord scheduled event (best-effort)
+        race_duration = config.race_duration_minutes * 60
+        await self._create_discord_event(
+            race_id,
+            f"Daily Horse Race #{race_id}",
+            race_start_time,
+            race_start_time + dt.timedelta(seconds=race_duration + 30),
         )
 
     async def _persist_race(
@@ -597,10 +739,12 @@ class Racing(commands.Cog):
         forms: dict[str, list[int]],
         channel_id: int,
         winner_info: tuple[bytes | None, str],
-    ) -> None:
+        *,
+        status: RaceStatus = RaceStatus.RUNNING,
+    ) -> int:
         """Insert race, re-render images with actual race_id, insert messages."""
         race_id = await create_race(
-            pool, result, odds, status=RaceStatus.RUNNING, channel_id=channel_id
+            pool, result, odds, status=status, channel_id=channel_id
         )
 
         # Re-render announcement image with actual race number
@@ -646,6 +790,79 @@ class Racing(commands.Cog):
         await update_rolling_counters(pool)
 
         logger.info("Race #%d prepared with %d messages", race_id, len(messages))
+        return race_id
+
+    @tasks.loop(time=_announcement_time(DEFAULT_CONFIG))
+    async def daily_race_scheduler(self) -> None:
+        """Fire once per day to prepare the daily scheduled race."""
+        try:
+            if await has_active_race(self._pool):
+                logger.warning("Skipping daily race — active race exists")
+                return
+            await self._prepare_scheduled_race()
+        except Exception:
+            logger.exception("Error in daily race scheduler")
+
+    @daily_race_scheduler.before_loop
+    async def before_daily_race_scheduler(self) -> None:
+        await self.bot.wait_until_ready()
+
+    # -- Discord scheduled event helpers ----------------------------------
+
+    async def _create_discord_event(
+        self,
+        race_id: int,
+        name: str,
+        start_time: dt.datetime,
+        end_time: dt.datetime,
+    ) -> None:
+        """Create a Discord scheduled event for the race (best-effort)."""
+        guild = self.bot.guilds[0] if self.bot.guilds else None
+        if guild is None:
+            return
+        try:
+            event = await guild.create_scheduled_event(
+                name=name,
+                start_time=start_time,
+                end_time=end_time,
+                entity_type=discord.EntityType.external,
+                location="#race-track",
+                description=RACE_EVENT_DESCRIPTION,
+            )
+            await set_scheduled_event_id(self._pool, race_id, event.id)
+            logger.info("Created Discord event %d for race #%d", event.id, race_id)
+        except Exception:
+            logger.exception("Failed to create Discord event for race #%d", race_id)
+
+    async def _start_discord_event(self, race_id: int) -> None:
+        """Start the Discord scheduled event for a race (best-effort)."""
+        guild = self.bot.guilds[0] if self.bot.guilds else None
+        if guild is None:
+            return
+        event_id = await get_scheduled_event_id(self._pool, race_id)
+        if event_id is None:
+            return
+        try:
+            event = await guild.fetch_scheduled_event(event_id)
+            await event.start()
+            logger.info("Started Discord event %d for race #%d", event_id, race_id)
+        except Exception:
+            logger.exception("Failed to start Discord event for race #%d", race_id)
+
+    async def _end_discord_event(self, race_id: int) -> None:
+        """End the Discord scheduled event for a race (best-effort)."""
+        guild = self.bot.guilds[0] if self.bot.guilds else None
+        if guild is None:
+            return
+        event_id = await get_scheduled_event_id(self._pool, race_id)
+        if event_id is None:
+            return
+        try:
+            event = await guild.fetch_scheduled_event(event_id)
+            await event.end()
+            logger.info("Ended Discord event %d for race #%d", event_id, race_id)
+        except Exception:
+            logger.exception("Failed to end Discord event for race #%d", race_id)
 
     @tasks.loop(seconds=10)
     async def race_poster(self) -> None:
@@ -693,6 +910,7 @@ class Racing(commands.Cog):
             remaining = await get_remaining_message_count(self._pool, race_id)
             if remaining == 0:
                 await finish_race(self._pool, race_id)
+                await self._end_discord_event(race_id)
                 logger.info(
                     "Race #%d finished — all messages posted",
                     race_id,
@@ -710,6 +928,13 @@ class Racing(commands.Cog):
             successfully (and should be deleted from the queue). thread_id
             is set when an announcement created a new thread.
         """
+        # RACE_START sentinel — no Discord message, just state transition
+        if msg.message_type == MessageType.RACE_START:
+            await transition_to_running(self._pool, msg.race_id)
+            await self._start_discord_event(msg.race_id)
+            logger.info("Race #%d transitioned to running", msg.race_id)
+            return True, None
+
         # Build send kwargs — only include file if present so
         # the type checker sees a matching overload.
         kwargs: dict[str, object] = {"content": msg.content}
