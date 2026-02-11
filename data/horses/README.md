@@ -2,7 +2,7 @@
 
 Horse definitions for the MUDD racing minigame.
 
-Each horse is a [GNU recutils](https://www.gnu.org/software/recutils/) record with four stats (speed, stamina, consistency, luck) and three image assets (profile, race sprite, victory).
+Each horse is a [GNU recutils](https://www.gnu.org/software/recutils/) record with four stats (speed, stamina, consistency, luck), optional narrative fields (description, lore), and three image assets (profile, race sprite, victory).
 
 ## Files
 
@@ -27,10 +27,30 @@ All horse image assets must be hand-drawn. AI-generated artwork will not be acce
     Stamina: 60
     Consistency: 50
     Luck: 40
+    Description: A brief description of the horse's appearance and notable characteristics.
+    + 
+    Lore: Background story and narrative about the horse. This can span multiple
+    + paragraphs using the continuation syntax with '+' at the start of each line.
+    + Tell the horse's story, their origins, motivations, or interesting history.
     ```
 
 2. Add the three image assets with matching `<id>` prefix.
 3. Run `just horses` to validate.
+
+## Field Reference
+
+### Required Fields
+- **Id**: Unique identifier (lowercase, alphanumeric with hyphens)
+- **Name**: Display name shown to players
+- **Speed**: Integer 1-100 (dominant in middle stretch)
+- **Stamina**: Integer 1-100 (dominant in final stretch)
+- **Consistency**: Integer 1-100 (controls variance)
+- **Luck**: Integer 1-100 (dominant at start)
+
+### Optional Fields
+- **Active**: Boolean (defaults to TRUE if omitted)
+- **Description**: Short description of appearance and characteristics
+- **Lore**: Background story and narrative (supports multi-line with `+` continuation)
 
 ## Validation
 
