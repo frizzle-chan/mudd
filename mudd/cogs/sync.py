@@ -133,6 +133,7 @@ class Sync(commands.Cog):
         reconciler = DiscordReconciler(
             self.bot,
             pool,
+            guild_id=self.bot.guild_id,
             room_cache=None,
             console_channel=self._console_channel,
             seen_orphans=self._seen_orphans,
@@ -233,6 +234,7 @@ class Sync(commands.Cog):
         perm_reconciler = DiscordReconciler(
             self.bot,
             pool,
+            guild_id=self.bot.guild_id,
             room_cache=self.room_cache,
             console_channel=self._console_channel,
         )
@@ -290,7 +292,7 @@ class Sync(commands.Cog):
             guild: Discord guild
             pool: Database connection pool
         """
-        reconciler = DiscordReconciler(self.bot, pool)
+        reconciler = DiscordReconciler(self.bot, pool, guild_id=self.bot.guild_id)
 
         # Ensure milestone roles and skills category exist
         await ensure_roles(guild)

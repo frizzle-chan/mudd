@@ -172,11 +172,13 @@ class Movement(commands.Cog):
 
         try:
             # Build standard observers
+            bot: MuddBot = self.bot  # type: ignore[assignment]
             observers = build_observers(
                 self._pool,
                 user.id,
                 user.current_room,
                 bot=cast(discord.Client, self.bot),
+                guild_id=bot.guild_id,
                 room_cache=self.room_cache,
             )
             if self._user_cache is not None:
@@ -233,6 +235,7 @@ class Movement(commands.Cog):
             reconciler = DiscordReconciler(
                 cast(discord.Client, self.bot),
                 self._pool,
+                guild_id=bot.guild_id,
                 room_cache=self.room_cache,
             )
 
@@ -268,6 +271,7 @@ class Movement(commands.Cog):
             reconciler = DiscordReconciler(
                 cast(discord.Client, self.bot),
                 self._pool,
+                guild_id=bot.guild_id,
                 room_cache=self.room_cache,
             )
 

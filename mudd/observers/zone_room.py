@@ -30,11 +30,13 @@ class ZoneRoomReconciler:
         self,
         bot: discord.Client,
         pool: asyncpg.Pool,
+        guild_id: int,
         console_channel: str = "console",
         seen_orphans: set[tuple[int, str, str]] | None = None,
     ) -> None:
         self.bot = bot
         self.pool = pool
+        self._guild_id = guild_id
         self._console_channel = console_channel
         self._zone_events: list[ZoneSyncedEvent] = []
         self._room_events: list[RoomSyncedEvent] = []
@@ -65,19 +67,22 @@ class ZoneRoomReconciler:
         orphan_events = self._orphan_events
         self._orphan_events = []
 
-        if not self.bot.guilds:
+        guild = self.bot.get_guild(self._guild_id)
+        if guild is None:
+            logger.warning(
+                "Guild %d not available, skipping zone/room flush", self._guild_id
+            )
             return
 
-        for guild in self.bot.guilds:
-            for evt in zone_events:
-                await self._ensure_zone_category(guild, evt)
+        for evt in zone_events:
+            await self._ensure_zone_category(guild, evt)
 
-            for evt in room_events:
-                await self._ensure_room_channel(guild, evt)
+        for evt in room_events:
+            await self._ensure_room_channel(guild, evt)
 
-            for evt in orphan_events:
-                if evt.guild_id == guild.id:
-                    await self._report_orphan(guild, evt)
+        for evt in orphan_events:
+            if evt.guild_id == guild.id:
+                await self._report_orphan(guild, evt)
 
     async def _ensure_zone_category(
         self, guild: discord.Guild, event: ZoneSyncedEvent

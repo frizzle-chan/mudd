@@ -65,8 +65,13 @@ class Scene:
             Scene with observers attached
         """
         scene = await cls.from_interaction(pool, interaction)
+        guild_id = interaction.guild_id
         observers = build_observers(
-            pool, scene.user.id, scene.user.current_room, bot=bot
+            pool,
+            scene.user.id,
+            scene.user.current_room,
+            bot=bot,
+            guild_id=guild_id,
         )
         effects = EffectsObserver(_forward_targets=tuple(observers))
         scene = scene.with_observers(effects, *observers)

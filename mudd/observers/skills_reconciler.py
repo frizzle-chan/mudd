@@ -102,11 +102,13 @@ class SkillsReconciler:
         self,
         bot: discord.Client,
         pool: asyncpg.Pool,
+        guild_id: int,
         room_cache: RoomChannelCache | None = None,
     ) -> None:
         self._bot = bot
         self._pool = pool
-        self._announcements = SkillsAnnouncements(bot, room_cache)
+        self._guild_id = guild_id
+        self._announcements = SkillsAnnouncements(bot, guild_id, room_cache)
         self._xp_events: list[XPGainedEvent] = []
         self._level_up_events: list[LevelUpEvent] = []
         self._user_left_events: list[UserLeftEvent] = []
@@ -173,10 +175,9 @@ class SkillsReconciler:
                 )
 
         # Handle user departures
-        for evt in user_left_events:
-            for guild in self._bot.guilds:
-                if evt.guild_id != guild.id:
-                    continue
+        guild = self._bot.get_guild(self._guild_id)
+        if guild is not None:
+            for evt in user_left_events:
                 await self._handle_user_left(guild, evt)
 
         # Prepare level-up announcements (sent later via post_announcements)
@@ -421,22 +422,25 @@ class SkillsReconciler:
             total_level: Pre-computed total level
         """
 
-        for guild in self._bot.guilds:
-            member = guild.get_member(user_id)
-            if member is None:
-                continue
-            if member.id == guild.owner_id:
-                continue
+        guild = self._bot.get_guild(self._guild_id)
+        if guild is None:
+            return
 
-            nick = format_nickname(member.display_name, total_level)
-            try:
-                await member.edit(nick=nick)
-                await User.update_display_name(self._pool, user_id, nick)
-            except discord.Forbidden:
-                logger.warning(
-                    "Cannot edit nickname for %s (owner?)",
-                    member.display_name,
-                )
+        member = guild.get_member(user_id)
+        if member is None:
+            return
+        if member.id == guild.owner_id:
+            return
+
+        nick = format_nickname(member.display_name, total_level)
+        try:
+            await member.edit(nick=nick)
+            await User.update_display_name(self._pool, user_id, nick)
+        except discord.Forbidden:
+            logger.warning(
+                "Cannot edit nickname for %s (owner?)",
+                member.display_name,
+            )
 
     async def _update_milestone_role(self, user_id: int, total_level: int) -> None:
         """Update milestone role for a user.
@@ -449,35 +453,38 @@ class SkillsReconciler:
         """
         target_role_name = get_milestone_role(total_level)
 
-        for guild in self._bot.guilds:
-            member = guild.get_member(user_id)
-            if member is None:
-                continue
+        guild = self._bot.get_guild(self._guild_id)
+        if guild is None:
+            return
 
-            # Build set of milestone role objects
-            milestone_roles = {r for r in guild.roles if r.name in MILESTONE_ROLE_NAMES}
+        member = guild.get_member(user_id)
+        if member is None:
+            return
 
-            # Current milestone roles on the member
-            current = milestone_roles & set(member.roles)
+        # Build set of milestone role objects
+        milestone_roles = {r for r in guild.roles if r.name in MILESTONE_ROLE_NAMES}
 
-            if target_role_name is None:
-                # Remove all milestone roles
-                for role in current:
-                    await member.remove_roles(role)
-                return
+        # Current milestone roles on the member
+        current = milestone_roles & set(member.roles)
 
-            # Find target role
-            target_role = discord.utils.get(guild.roles, name=target_role_name)
-            if target_role is None:
-                return
-
-            # Remove wrong roles, add correct one
+        if target_role_name is None:
+            # Remove all milestone roles
             for role in current:
-                if role != target_role:
-                    await member.remove_roles(role)
+                await member.remove_roles(role)
+            return
 
-            if target_role not in member.roles:
-                await member.add_roles(target_role)
+        # Find target role
+        target_role = discord.utils.get(guild.roles, name=target_role_name)
+        if target_role is None:
+            return
+
+        # Remove wrong roles, add correct one
+        for role in current:
+            if role != target_role:
+                await member.remove_roles(role)
+
+        if target_role not in member.roles:
+            await member.add_roles(target_role)
 
     async def _handle_user_left(
         self, guild: discord.Guild, event: UserLeftEvent
