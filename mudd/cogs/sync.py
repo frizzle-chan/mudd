@@ -9,11 +9,13 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
+from zoneinfo import ZoneInfo
 
 import asyncpg
 import discord
+import discord.http
 from discord.ext import commands, tasks
 
 if TYPE_CHECKING:
@@ -21,6 +23,7 @@ if TYPE_CHECKING:
     from mudd.caches.entity_autocomplete import EntityAutocompleteCache
     from mudd.caches.user import UserCache
 
+from mudd.cogs.racing import DAILY_RACE_EVENT_NAME, RACE_EVENT_DESCRIPTION
 from mudd.events import (
     InventorySyncEvent,
     OrphanChannelDetectedEvent,
@@ -266,6 +269,14 @@ class Sync(commands.Cog):
             except Exception:
                 logger.exception(f"Failed skills sync for {guild.name}")
 
+            # Recurring race event sync
+            try:
+                await self._sync_recurring_race_event(guild, fail_fast=fail_fast)
+            except Exception:
+                logger.exception(f"Failed recurring race event sync for {guild.name}")
+                if fail_fast:
+                    raise
+
         if fail_fast:
             logger.info("Initial sync complete")
 
@@ -298,6 +309,71 @@ class Sync(commands.Cog):
         logger.info(
             f"Skills sync for {guild.name}: {synced} users, {pruned} orphans pruned"
         )
+
+    async def _sync_recurring_race_event(
+        self, guild: discord.Guild, *, fail_fast: bool
+    ) -> None:
+        """Ensure a recurring daily Discord event exists for the daily horse race.
+
+        Checks existing scheduled events for one matching DAILY_RACE_EVENT_NAME.
+        If none exists, creates a new recurring event via the raw HTTP API
+        (discord.py's create_scheduled_event doesn't support recurrence_rule).
+        """
+        from mudd.racing.config import DEFAULT_CONFIG
+
+        events = await guild.fetch_scheduled_events()
+        for event in events:
+            if event.name == DAILY_RACE_EVENT_NAME:
+                logger.debug("Recurring race event already exists (id=%d)", event.id)
+                return
+
+        # Compute next 4:20 PM Central
+        config = DEFAULT_CONFIG
+        tz = ZoneInfo(config.race_timezone)
+        now_local = datetime.now(tz)
+        race_today = now_local.replace(
+            hour=config.race_hour,
+            minute=config.race_minute,
+            second=0,
+            microsecond=0,
+        )
+        if race_today <= now_local:
+            race_today += timedelta(days=1)
+
+        start_utc = race_today.astimezone(UTC)
+        race_duration_secs = config.race_duration_minutes * 60
+        end_utc = start_utc + timedelta(seconds=race_duration_secs + 300)
+
+        start_iso = start_utc.isoformat()
+        end_iso = end_utc.isoformat()
+
+        payload = {
+            "name": DAILY_RACE_EVENT_NAME,
+            "description": RACE_EVENT_DESCRIPTION,
+            "entity_type": 3,  # EXTERNAL
+            "privacy_level": 2,  # GUILD_ONLY
+            "scheduled_start_time": start_iso,
+            "scheduled_end_time": end_iso,
+            "entity_metadata": {"location": "#race-track"},
+            "recurrence_rule": {
+                "start": start_iso,
+                "frequency": 3,  # DAILY
+                "interval": 1,
+            },
+        }
+
+        try:
+            route = discord.http.Route(
+                "POST",
+                "/guilds/{guild_id}/scheduled-events",
+                guild_id=guild.id,
+            )
+            await guild._state.http.request(route, json=payload)
+            logger.info("Created recurring race event for %s", guild.name)
+        except Exception:
+            logger.exception("Failed to create recurring race event for %s", guild.name)
+            if fail_fast:
+                raise
 
     async def _sync_user_visibility(
         self, guild, reconciler: DiscordReconciler
