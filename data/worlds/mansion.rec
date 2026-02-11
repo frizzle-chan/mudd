@@ -149,6 +149,7 @@ Description: A sprawling stone courtyard behind the mansion. The air is fresh an
 Id: race-track
 Name: Race Track
 Zone: outside
+HasVoice: yes
 Description: A well-maintained oval dirt track with white-railed fences. A wooden grandstand lines one side, and a large tote board displays the day's odds. The smell of hay and leather fills the air.
 +
 + the path back to the #courtyard is to the west
