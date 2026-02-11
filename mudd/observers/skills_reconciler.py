@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 from typing import TYPE_CHECKING
 
@@ -215,6 +216,7 @@ class SkillsReconciler:
         try:
             channel_id = await self._ensure_skills_channel(guild, user_id)
             await self._update_skills_channel(user_id, skills, total_level)
+            await self._purge_stale_messages(user_id)
 
             # Repair thread/command permissions on existing channels
             channel = guild.get_channel(channel_id)
@@ -408,11 +410,48 @@ class SkillsReconciler:
                 await msg.edit(content=content)
                 return
             except discord.NotFound:
-                pass  # Message deleted, create new one
+                pass  # Message deleted, fall through to create new one
+
+        # Purge any stale bot messages before sending a new one.
+        # This prevents orphaned duplicates when the tracked message_id
+        # was lost (e.g. DB record recreated during channel recovery).
+        bot_user = self._bot.user
+        async for old_msg in channel.history(limit=10):
+            if old_msg.author == bot_user:
+                with contextlib.suppress(discord.HTTPException):
+                    await old_msg.delete()
 
         # Send new message and store ID
         msg = await channel.send(content)
         await UserSkillsChannel.update_message_id(self._pool, user_id, msg.id)
+
+    async def _purge_stale_messages(self, user_id: int) -> None:
+        """Delete bot messages in a user's skills channel that aren't the tracked one.
+
+        Called during periodic sync to clean up orphaned messages left behind
+        when the tracked message_id was lost and a new message was created.
+
+        Args:
+            user_id: Discord user ID
+        """
+        record = await UserSkillsChannel.get(self._pool, user_id)
+        if record is None or record.message_id is None:
+            return
+
+        channel = self._bot.get_channel(record.channel_id)
+        if not isinstance(channel, discord.TextChannel):
+            return
+
+        bot_user = self._bot.user
+        async for msg in channel.history(limit=10):
+            if msg.author == bot_user and msg.id != record.message_id:
+                with contextlib.suppress(discord.HTTPException):
+                    await msg.delete()
+                    logger.info(
+                        "Purged stale skills message %d for user %d",
+                        msg.id,
+                        user_id,
+                    )
 
     async def _update_nickname(self, user_id: int, total_level: int) -> None:
         """Update user's nickname with total level.
