@@ -7,11 +7,15 @@ import logging
 import random
 from dataclasses import dataclass
 from io import BytesIO
+from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
 
 import asyncpg
 import discord
 from discord.ext import commands, tasks
+
+if TYPE_CHECKING:
+    from mudd.bot import MuddBot
 
 from mudd.models.horse import Horse
 from mudd.observers import RoomChannelCache
@@ -533,9 +537,11 @@ def _build_message_queue(
 class Racing(commands.Cog):
     """Horse racing integration — triggers races and posts to Discord."""
 
+    bot: MuddBot
+
     def __init__(
         self,
-        bot: commands.Bot,
+        bot: MuddBot,
         pool: asyncpg.Pool,
         room_cache: RoomChannelCache,
     ) -> None:
@@ -555,6 +561,9 @@ class Racing(commands.Cog):
     async def on_message(self, message: discord.Message) -> None:
         """Listen for !horse command in the race-track channel."""
         if message.author.bot or message.guild is None:
+            return
+
+        if message.guild.id != self.bot.guild_id:
             return
 
         if message.content.strip().lower() != "!horse":
@@ -810,7 +819,7 @@ class Racing(commands.Cog):
         end_time: dt.datetime,
     ) -> None:
         """Create a Discord scheduled event for the race (best-effort)."""
-        guild = self.bot.guilds[0] if self.bot.guilds else None
+        guild = self.bot.get_guild(self.bot.guild_id)
         if guild is None:
             return
         try:
@@ -830,7 +839,7 @@ class Racing(commands.Cog):
 
     async def _start_discord_event(self, race_id: int) -> None:
         """Start the Discord scheduled event for a race (best-effort)."""
-        guild = self.bot.guilds[0] if self.bot.guilds else None
+        guild = self.bot.get_guild(self.bot.guild_id)
         if guild is None:
             return
         event_id = await get_scheduled_event_id(self._pool, race_id)
@@ -845,7 +854,7 @@ class Racing(commands.Cog):
 
     async def _end_discord_event(self, race_id: int) -> None:
         """End the Discord scheduled event for a race (best-effort)."""
-        guild = self.bot.guilds[0] if self.bot.guilds else None
+        guild = self.bot.get_guild(self.bot.guild_id)
         if guild is None:
             return
         event_id = await get_scheduled_event_id(self._pool, race_id)
@@ -937,7 +946,7 @@ class Racing(commands.Cog):
                 BytesIO(msg.image_data), filename=msg.image_name
             )
 
-        guild = self.bot.guilds[0] if self.bot.guilds else None
+        guild = self.bot.get_guild(self.bot.guild_id)
         if guild is None:
             logger.warning("No guild available for race message")
             return False, None
