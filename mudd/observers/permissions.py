@@ -105,6 +105,11 @@ class PermissionReconciler:
                     f"{paired_voice}: {e}"
                 )
 
+        # Skip API call if voice permissions already match desired state
+        current = paired_voice.overwrites_for(member)
+        if overwrite is None and current.is_empty():
+            return
+
         try:
             await paired_voice.set_permissions(
                 member, overwrite=overwrite, reason=reason
@@ -260,24 +265,27 @@ class PermissionReconciler:
         if channel_id:
             channel = guild.get_channel(channel_id)
             if channel:
-                try:
-                    await channel.set_permissions(
-                        member,
-                        overwrite=discord.PermissionOverwrite(view_channel=True),
-                        reason="MUDD - user sync",
-                    )
-                except discord.HTTPException as e:
-                    logger.error(f"Failed to grant permissions for user: {e}")
+                # Skip if permissions already correct (avoids rate limits during sync)
+                overwrites = channel.overwrites_for(member)
+                if overwrites.view_channel is not True:
+                    try:
+                        await channel.set_permissions(
+                            member,
+                            overwrite=discord.PermissionOverwrite(view_channel=True),
+                            reason="MUDD - user sync",
+                        )
+                    except discord.HTTPException as e:
+                        logger.error(f"Failed to grant permissions for user: {e}")
 
-                if isinstance(channel, discord.TextChannel):
-                    await self._set_voice_permissions(
-                        channel,
-                        member,
-                        overwrite=discord.PermissionOverwrite(
-                            view_channel=True, connect=True, speak=True
-                        ),
-                        reason="MUDD - user sync",
-                    )
+                    if isinstance(channel, discord.TextChannel):
+                        await self._set_voice_permissions(
+                            channel,
+                            member,
+                            overwrite=discord.PermissionOverwrite(
+                                view_channel=True, connect=True, speak=True
+                            ),
+                            reason="MUDD - user sync",
+                        )
 
         # Revoke stale permissions from rooms user is no longer in
         await self._revoke_stale_permissions(guild, member, user.current_room)
