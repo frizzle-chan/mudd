@@ -17,9 +17,10 @@ from discord.ext import commands, tasks
 if TYPE_CHECKING:
     from mudd.bot import MuddBot
 
-from mudd.models.bet import Bet
+from mudd.models.bet import MIN_BET
 from mudd.models.horse import Horse
-from mudd.observers import DiscordReconciler, RoomChannelCache
+from mudd.models.race import RaceStatus
+from mudd.observers import RoomChannelCache
 from mudd.racing import (
     AnnouncementHorse,
     RaceHorse,
@@ -32,12 +33,7 @@ from mudd.racing import (
     simulate_race,
     sprite_from_bytes,
 )
-from mudd.racing.betting import (
-    MIN_BET,
-    RaceHorseInfo,
-    format_payout_message,
-)
-from mudd.racing.config import DEFAULT_CONFIG, RaceConfig
+from mudd.racing.config import DEFAULT_CONFIG, RACE_TRACK_ROOM, RaceConfig
 from mudd.racing.formatting import (
     format_form,
     format_results,
@@ -47,8 +43,9 @@ from mudd.racing.odds import HorseOdds
 from mudd.racing.persistence import (
     MessageType,
     PendingMessage,
+    PollAnswer,
+    PollConfig,
     RaceMessageInput,
-    RaceStatus,
     create_race,
     create_race_messages,
     delete_message,
@@ -56,7 +53,6 @@ from mudd.racing.persistence import (
     finish_race,
     get_poll_message_id,
     get_race_thread_id,
-    get_race_winner,
     get_recent_results,
     get_remaining_message_count,
     get_scheduled_event_id,
@@ -75,9 +71,6 @@ logger = logging.getLogger(__name__)
 
 # Role required to trigger races
 HORSE_ROLE_NAME = "horse"
-
-# Room where races can be triggered
-RACE_TRACK_ROOM = "race-track"
 
 # Discord polls support at most 10 answers
 MAX_HORSES = 10
@@ -459,7 +452,7 @@ def _build_message_queue(
     poll_seconds = int((race_end - poll_open).total_seconds())
     poll_duration_hours = max(1, -(-poll_seconds // 3600))
     poll_answers = [
-        {"text": h.name, "emoji": f"{i}\u20e3"} for i, h in enumerate(horses)
+        PollAnswer(text=h.name, emoji=f"{i}\u20e3") for i, h in enumerate(horses)
     ]
     messages.append(
         RaceMessageInput(
@@ -469,11 +462,11 @@ def _build_message_queue(
             image_data=None,
             image_name=None,
             post_at=poll_open,
-            poll={
-                "question": "Favorite horse?",
-                "answers": poll_answers,
-                "duration_hours": poll_duration_hours,
-            },
+            poll=PollConfig(
+                question="Favorite horse?",
+                answers=poll_answers,
+                duration_hours=poll_duration_hours,
+            ),
         )
     )
 
@@ -1152,18 +1145,15 @@ class Racing(commands.Cog):
             )
             return True  # Don't retry — thread is gone
 
-        data = msg.poll or {}
-        question = data.get("question", "Favorite horse?")
-        answers = data.get("answers", [])
-        duration_hours = data.get("duration_hours", 1)
+        poll_config = msg.poll or PollConfig(question="Favorite horse?")
 
         poll = discord.Poll(
-            question=question,
-            duration=dt.timedelta(hours=duration_hours),
+            question=poll_config.question,
+            duration=dt.timedelta(hours=poll_config.duration_hours),
             multiple=False,
         )
-        for answer in answers:
-            poll.add_answer(text=answer["text"], emoji=answer.get("emoji"))
+        for answer in poll_config.answers:
+            poll.add_answer(text=answer.text, emoji=answer.emoji)
 
         sent = await thread.send(poll=poll)
         await set_poll_message_id(self._pool, msg.race_id, sent.id)
@@ -1171,50 +1161,17 @@ class Racing(commands.Cog):
         return True
 
     async def _resolve_and_post_payouts(self, race_id: int) -> None:
-        """Resolve betting payouts and post results to the race thread."""
-        try:
-            bet_count = await Bet.count(self._pool, race_id)
-            if bet_count == 0:
-                return
+        """Delegate payout resolution to the Betting cog."""
+        from mudd.cogs.betting import Betting
 
-            winner_horse_id = await get_race_winner(self._pool, race_id)
-            if winner_horse_id is None:
-                return
-
-            # Get odds from the race
-            odds = await RaceHorseInfo.get_for_race(self._pool, race_id)
-
-            payouts, balance_events = await Bet.resolve_payouts(
-                self._pool, race_id, winner_horse_id, odds
+        betting_cog = self.bot.get_cog(Betting.__cog_name__)
+        if isinstance(betting_cog, Betting):
+            await betting_cog.resolve_and_post_payouts(race_id)
+        else:
+            logger.warning(
+                "Betting cog not loaded — cannot resolve payouts for race #%d",
+                race_id,
             )
-            if not payouts:
-                return
-
-            message = format_payout_message(payouts)
-            if not message:
-                return
-
-            # Post to thread
-            guild = self.bot.get_guild(self.bot.guild_id)
-            if guild is None:
-                return
-            thread_id = await get_race_thread_id(self._pool, race_id)
-            if thread_id is None:
-                return
-            thread = await fetch_thread(guild, thread_id)
-            if thread is None:
-                return
-            await thread.send(message)
-            logger.info("Posted payout results for race #%d", race_id)
-
-            # Update wallet threads for all balance changes (best-effort)
-            if balance_events:
-                reconciler = DiscordReconciler(self.bot, self._pool, self.bot.guild_id)
-                for evt in balance_events:
-                    reconciler.notify(evt)
-                await reconciler.flush()
-        except Exception:
-            logger.exception("Failed to resolve payouts for race #%d", race_id)
 
     async def _end_poll(self, race_id: int) -> None:
         """End the Discord poll for a race (best-effort)."""

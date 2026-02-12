@@ -8,11 +8,13 @@ methods for mutations. Mutations return new instances (immutable pattern).
 """
 
 from mudd.models.bet import Bet, BetError, BetResult, PayoutRecord
+from mudd.models.currency import AccountMissing, InsufficientFunds, TransferOutcome
 from mudd.models.entity import EntityInstance, InstanceThreadInfo, ResolvedEntity
 from mudd.models.entity_definition import EntityDefinition
 from mudd.models.horse import Horse
 from mudd.models.interfaces import IEntityInstance, IReadableEntity, IRoom, IUser
 from mudd.models.inventory_forum import UserInventoryForum
+from mudd.models.race import ActiveRace, RaceHorseInfo, RaceStatus
 from mudd.models.room import EntityModal, InventoryThread, Room, RoomEntityInstance
 from mudd.models.skills import UserSkill, XPResult
 from mudd.models.spawning_pool import SpawningPool
@@ -25,6 +27,10 @@ __all__ = [
     "BetError",
     "BetResult",
     "PayoutRecord",
+    # Currency model
+    "AccountMissing",
+    "InsufficientFunds",
+    "TransferOutcome",
     # Entity models
     "ResolvedEntity",
     # Horse model
@@ -34,6 +40,10 @@ __all__ = [
     "EntityDefinition",
     # Inventory forum model
     "UserInventoryForum",
+    # Race model
+    "ActiveRace",
+    "RaceHorseInfo",
+    "RaceStatus",
     # SpawningPool model
     "SpawningPool",
     # User model

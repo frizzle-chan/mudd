@@ -1,25 +1,30 @@
 """Bet model for horse race wagering.
 
 Encapsulates all betting operations: placing, cancelling, resolving payouts,
-and querying bet counts. Uses the double-entry currency ledger.
+and querying bet counts. Uses the shared currency transfer helper.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from datetime import datetime
+import logging
+from dataclasses import dataclass
 from enum import StrEnum
-from typing import TYPE_CHECKING
 
 import asyncpg
 
 from mudd.events import BalanceChangedEvent
-from mudd.models.user import HOUSE_ACCOUNT_ID
-from mudd.racing.betting import MIN_BET
-from mudd.racing.persistence import RaceStatus
+from mudd.models.currency import (
+    HOUSE_ACCOUNT_ID,
+    AccountMissing,
+    InsufficientFunds,
+    ensure_account,
+    transfer_currency,
+)
+from mudd.models.race import RaceHorseInfo, RaceStatus
 
-if TYPE_CHECKING:
-    from mudd.racing.betting import RaceHorseInfo
+logger = logging.getLogger(__name__)
+
+MIN_BET = 5
 
 
 class BetError(StrEnum):
@@ -58,18 +63,11 @@ class PayoutRecord:
     displayed_payout: float
 
 
-@dataclass(frozen=True)
 class Bet:
-    """A bet placed on a horse race."""
+    """Betting operations for horse races.
 
-    id: int
-    race_id: int
-    user_id: int
-    horse_id: str
-    amount: int
-    payout: int | None
-    created_at: datetime
-    _pool: asyncpg.Pool = field(repr=False, compare=False)
+    All methods are classmethods — no instances are constructed.
+    """
 
     @classmethod
     async def place(
@@ -86,8 +84,6 @@ class Bet:
         If the user already has a bet on this horse, computes the delta
         and adjusts the currency transfer accordingly.
         """
-        horse_name = ""
-
         if amount < MIN_BET:
             return BetResult(success=False, error=BetError.AMOUNT_TOO_LOW)
 
@@ -114,7 +110,7 @@ class Bet:
             )
             if horse_row is None:
                 return BetResult(success=False, error=BetError.HORSE_NOT_IN_RACE)
-            horse_name = horse_row["name"]
+            horse_name: str = horse_row["name"]
 
             # Check for existing bet on this horse
             existing = await conn.fetchrow(
@@ -141,86 +137,40 @@ class Bet:
                     displayed_payout=displayed_payout,
                 )
 
-            # Upsert player's currency account (creates if missing)
-            await conn.execute(
-                """
-                INSERT INTO currency_accounts (user_id, balance)
-                VALUES ($1, 0)
-                ON CONFLICT (user_id) DO NOTHING
-                """,
-                user_id,
-            )
+            # Ensure player has a currency account
+            await ensure_account(conn, user_id)
 
-            # Lock accounts in sorted order (house=0 always first)
-            house_row = await conn.fetchrow(
-                "SELECT balance FROM currency_accounts WHERE user_id = $1 FOR UPDATE",
-                HOUSE_ACCOUNT_ID,
-            )
-            player_row = await conn.fetchrow(
-                "SELECT balance FROM currency_accounts WHERE user_id = $1 FOR UPDATE",
-                user_id,
-            )
-
-            if house_row is None:
-                raise ValueError("House account does not exist")
-            if player_row is None:
-                return BetResult(success=False, error=BetError.NO_CURRENCY_ACCOUNT)
-
-            if delta > 0 and player_row["balance"] < delta:
-                return BetResult(success=False, error=BetError.INSUFFICIENT_FUNDS)
-
-            # Create transaction + ledger entries
+            # Transfer currency (direction depends on delta sign)
             if delta > 0:
-                # Player pays more: debit player, credit house
                 memo = f"Bet on {horse_name} (Race #{race_id})"
-                tx_row = await conn.fetchrow(
-                    "INSERT INTO currency_transactions (memo) VALUES ($1) RETURNING id",
-                    memo,
-                )
-                await conn.execute(
-                    """
-                    INSERT INTO currency_ledger (transaction_id, account_id, amount)
-                    VALUES ($1, $2, $3), ($1, $4, $5)
-                    """,
-                    tx_row["id"],
-                    user_id,
-                    -delta,
-                    HOUSE_ACCOUNT_ID,
-                    delta,
-                )
+                try:
+                    outcome = await transfer_currency(
+                        conn,
+                        from_id=user_id,
+                        to_id=HOUSE_ACCOUNT_ID,
+                        amount=delta,
+                        memo=memo,
+                    )
+                except AccountMissing:
+                    return BetResult(success=False, error=BetError.NO_CURRENCY_ACCOUNT)
+                except InsufficientFunds:
+                    return BetResult(success=False, error=BetError.INSUFFICIENT_FUNDS)
+                new_player_balance = outcome.from_balance
             else:
-                # Player gets refund (delta is negative, so -delta is positive)
                 refund = -delta
                 memo = f"Bet adjustment refund for {horse_name} (Race #{race_id})"
-                tx_row = await conn.fetchrow(
-                    "INSERT INTO currency_transactions (memo) VALUES ($1) RETURNING id",
-                    memo,
-                )
-                await conn.execute(
-                    """
-                    INSERT INTO currency_ledger (transaction_id, account_id, amount)
-                    VALUES ($1, $2, $3), ($1, $4, $5)
-                    """,
-                    tx_row["id"],
-                    HOUSE_ACCOUNT_ID,
-                    -refund,
-                    user_id,
-                    refund,
-                )
-
-            # Update balances
-            new_player_balance = player_row["balance"] - delta
-            new_house_balance = house_row["balance"] + delta
-            await conn.execute(
-                "UPDATE currency_accounts SET balance = $1 WHERE user_id = $2",
-                new_house_balance,
-                HOUSE_ACCOUNT_ID,
-            )
-            await conn.execute(
-                "UPDATE currency_accounts SET balance = $1 WHERE user_id = $2",
-                new_player_balance,
-                user_id,
-            )
+                try:
+                    outcome = await transfer_currency(
+                        conn,
+                        from_id=HOUSE_ACCOUNT_ID,
+                        to_id=user_id,
+                        amount=refund,
+                        memo=memo,
+                        require_funds=False,
+                    )
+                except AccountMissing:
+                    return BetResult(success=False, error=BetError.NO_CURRENCY_ACCOUNT)
+                new_player_balance = outcome.to_balance
 
             # Upsert bet row
             if existing:
@@ -244,7 +194,7 @@ class Bet:
                     amount,
                 )
 
-        # Emit event outside transaction (matches User.credit_from_house pattern)
+        # Emit event outside transaction
         balance_event = BalanceChangedEvent(
             user_id=user_id,
             new_balance=new_player_balance,
@@ -293,7 +243,7 @@ class Bet:
             if bet_row is None:
                 return BetResult(success=False, error=BetError.NO_BET_TO_CANCEL)
 
-            refund = bet_row["amount"]
+            refund: int = bet_row["amount"]
 
             # Get horse name
             horse_row = await conn.fetchrow(
@@ -301,52 +251,19 @@ class Bet:
             )
             horse_name = horse_row["name"] if horse_row else horse_id
 
-            # Lock accounts in sorted order (house=0 always first)
-            house_row = await conn.fetchrow(
-                "SELECT balance FROM currency_accounts WHERE user_id = $1 FOR UPDATE",
-                HOUSE_ACCOUNT_ID,
-            )
-            player_row = await conn.fetchrow(
-                "SELECT balance FROM currency_accounts WHERE user_id = $1 FOR UPDATE",
-                user_id,
-            )
-
-            if house_row is None:
-                raise ValueError("House account does not exist")
-            if player_row is None:
-                return BetResult(success=False, error=BetError.NO_CURRENCY_ACCOUNT)
-
-            # Create refund transaction
             memo = f"Bet cancelled on {horse_name} (Race #{race_id})"
-            tx_row = await conn.fetchrow(
-                "INSERT INTO currency_transactions (memo) VALUES ($1) RETURNING id",
-                memo,
-            )
-            await conn.execute(
-                """
-                INSERT INTO currency_ledger (transaction_id, account_id, amount)
-                VALUES ($1, $2, $3), ($1, $4, $5)
-                """,
-                tx_row["id"],
-                HOUSE_ACCOUNT_ID,
-                -refund,
-                user_id,
-                refund,
-            )
-
-            # Update balances
-            new_player_balance = player_row["balance"] + refund
-            new_house_balance = house_row["balance"] - refund
-            await conn.execute(
-                "UPDATE currency_accounts SET balance = $1 WHERE user_id = $2",
-                new_house_balance,
-                HOUSE_ACCOUNT_ID,
-            )
-            await conn.execute(
-                "UPDATE currency_accounts SET balance = $1 WHERE user_id = $2",
-                new_player_balance,
-                user_id,
-            )
+            try:
+                outcome = await transfer_currency(
+                    conn,
+                    from_id=HOUSE_ACCOUNT_ID,
+                    to_id=user_id,
+                    amount=refund,
+                    memo=memo,
+                    require_funds=False,
+                )
+            except AccountMissing:
+                return BetResult(success=False, error=BetError.NO_CURRENCY_ACCOUNT)
+            new_player_balance = outcome.to_balance
 
         # Emit event outside transaction
         balance_event = BalanceChangedEvent(
@@ -376,7 +293,7 @@ class Bet:
 
         Winning bets get payout = amount * displayed_payout.
         Losing bets get payout = 0.
-        All bet rows are updated with their payout.
+        All operations run in a single transaction with batch updates.
 
         Returns:
             Tuple of (payout records, balance change events for wallet notifications).
@@ -392,22 +309,28 @@ class Bet:
         if not rows:
             return [], []
 
+        # Compute payouts in Python
+        bet_ids: list[int] = []
+        payout_amounts: list[int] = []
         payouts: list[PayoutRecord] = []
-        balance_events: list[BalanceChangedEvent] = []
+        # Winning bets grouped by user for batch transfer
+        winner_payouts: dict[int, tuple[int, str]] = {}  # user_id -> (total, memo)
 
         for row in rows:
-            bet_id = row["id"]
-            user_id = row["user_id"]
-            horse_id = row["horse_id"]
-            amount_bet = row["amount"]
+            bet_id: int = row["id"]
+            uid: int = row["user_id"]
+            horse_id: str = row["horse_id"]
+            amount_bet: int = row["amount"]
             dp = odds_map.get(horse_id, 0.0)
             h_name = horse_names.get(horse_id, horse_id)
 
             payout = int(amount_bet * dp) if horse_id == winner_horse_id else 0
 
+            bet_ids.append(bet_id)
+            payout_amounts.append(payout)
             payouts.append(
                 PayoutRecord(
-                    user_id=user_id,
+                    user_id=uid,
                     horse_id=horse_id,
                     horse_name=h_name,
                     amount_bet=amount_bet,
@@ -416,67 +339,54 @@ class Bet:
                 )
             )
 
-            # Update bet row with payout
-            await pool.execute(
-                "UPDATE bets SET payout = $1 WHERE id = $2",
-                payout,
-                bet_id,
+            if payout > 0:
+                existing_total, _ = winner_payouts.get(uid, (0, ""))
+                winner_payouts[uid] = (
+                    existing_total + payout,
+                    f"Race #{race_id} payout: {h_name} won!",
+                )
+
+        balance_events: list[BalanceChangedEvent] = []
+
+        async with pool.acquire() as conn, conn.transaction():
+            # Batch update all bet payout values
+            await conn.execute(
+                "UPDATE bets AS b SET payout = v.payout "
+                "FROM (SELECT unnest($1::int[]) AS id,"
+                " unnest($2::int[]) AS payout) AS v "
+                "WHERE b.id = v.id",
+                bet_ids,
+                payout_amounts,
             )
 
-            # Credit winnings to player (if any)
-            if payout > 0:
-                async with pool.acquire() as conn, conn.transaction():
-                    # Lock accounts in sorted order
-                    house_row = await conn.fetchrow(
-                        "SELECT balance FROM currency_accounts"
-                        " WHERE user_id = $1 FOR UPDATE",
-                        HOUSE_ACCOUNT_ID,
-                    )
-                    player_row = await conn.fetchrow(
-                        "SELECT balance FROM currency_accounts"
-                        " WHERE user_id = $1 FOR UPDATE",
-                        user_id,
-                    )
+            if not winner_payouts:
+                return payouts, []
 
-                    if house_row is None or player_row is None:
-                        continue
+            # Process winner payouts using shared transfer helper
+            for uid, (total_payout, memo) in sorted(winner_payouts.items()):
+                try:
+                    outcome = await transfer_currency(
+                        conn,
+                        from_id=HOUSE_ACCOUNT_ID,
+                        to_id=uid,
+                        amount=total_payout,
+                        memo=memo,
+                        require_funds=False,
+                    )
+                except AccountMissing as exc:
+                    logger.warning(
+                        "Skipping payout for user %d (race #%d): %s",
+                        uid,
+                        race_id,
+                        exc,
+                    )
+                    continue
 
-                    memo = f"Race #{race_id} payout: {h_name} won!"
-                    tx_row = await conn.fetchrow(
-                        "INSERT INTO currency_transactions (memo)"
-                        " VALUES ($1) RETURNING id",
-                        memo,
-                    )
-                    await conn.execute(
-                        """
-                        INSERT INTO currency_ledger (transaction_id, account_id, amount)
-                        VALUES ($1, $2, $3), ($1, $4, $5)
-                        """,
-                        tx_row["id"],
-                        HOUSE_ACCOUNT_ID,
-                        -payout,
-                        user_id,
-                        payout,
-                    )
-
-                    new_player_balance = player_row["balance"] + payout
-                    await conn.execute(
-                        "UPDATE currency_accounts SET balance = $1 WHERE user_id = $2",
-                        house_row["balance"] - payout,
-                        HOUSE_ACCOUNT_ID,
-                    )
-                    await conn.execute(
-                        "UPDATE currency_accounts SET balance = $1 WHERE user_id = $2",
-                        new_player_balance,
-                        user_id,
-                    )
-
-                # Emit event outside transaction
                 balance_events.append(
                     BalanceChangedEvent(
-                        user_id=user_id,
-                        new_balance=new_player_balance,
-                        delta=payout,
+                        user_id=uid,
+                        new_balance=outcome.to_balance,
+                        delta=total_payout,
                         memo=memo,
                     )
                 )

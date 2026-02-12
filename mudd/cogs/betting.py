@@ -13,16 +13,16 @@ from discord.ext import commands
 if TYPE_CHECKING:
     from mudd.bot import MuddBot
 
-from mudd.models.bet import Bet, BetError, BetResult
-from mudd.observers import DiscordReconciler, RoomChannelCache
-from mudd.racing.betting import MIN_BET, ActiveRace, RaceHorseInfo
-from mudd.racing.persistence import get_race_thread_id
+from mudd.events import BalanceChangedEvent
+from mudd.models.bet import MIN_BET, Bet, BetError, BetResult
+from mudd.models.race import ActiveRace, RaceHorseInfo
+from mudd.observers import RoomChannelCache, build_observers, flush_all
+from mudd.racing.betting import format_payout_message
+from mudd.racing.config import RACE_TRACK_ROOM
+from mudd.racing.persistence import get_race_thread_id, get_race_winner
 from mudd.utils.discord import fetch_thread
 
 logger = logging.getLogger(__name__)
-
-# Room where bets can be placed
-RACE_TRACK_ROOM = "race-track"
 
 
 class Betting(commands.Cog):
@@ -149,8 +149,8 @@ class Betting(commands.Cog):
 
             await interaction.response.send_message(
                 f"Cancelled your bet on **{result.horse_name}**. "
-                f"¥{result.amount:,} refunded.\n"
-                f"Balance: ¥{result.new_balance:,}",
+                f"\u00a5{result.amount:,} refunded.\n"
+                f"Balance: \u00a5{result.new_balance:,}",
                 ephemeral=True,
             )
 
@@ -197,9 +197,9 @@ class Betting(commands.Cog):
             return
 
         await interaction.response.send_message(
-            f"Bet ¥{result.amount:,} on **{result.horse_name}** "
+            f"Bet \u00a5{result.amount:,} on **{result.horse_name}** "
             f"({result.displayed_payout:.1f}:1)\n"
-            f"Balance: ¥{result.new_balance:,}",
+            f"Balance: \u00a5{result.new_balance:,}",
             ephemeral=True,
         )
 
@@ -208,11 +208,55 @@ class Betting(commands.Cog):
             interaction.guild,
             race.id,
             f"**{interaction.user.display_name}** bet "
-            f"¥{result.amount:,} on **{result.horse_name}**",
+            f"\u00a5{result.amount:,} on **{result.horse_name}**",
         )
 
         # Update wallet thread (best-effort, after response)
         await self._notify_wallet(interaction.guild_id, result)
+
+    async def resolve_and_post_payouts(self, race_id: int) -> None:
+        """Resolve betting payouts and post results to the race thread.
+
+        Called by the Racing cog when a race finishes.
+        """
+        try:
+            bet_count = await Bet.count(self._pool, race_id)
+            if bet_count == 0:
+                return
+
+            winner_horse_id = await get_race_winner(self._pool, race_id)
+            if winner_horse_id is None:
+                return
+
+            odds = await RaceHorseInfo.get_for_race(self._pool, race_id)
+
+            payouts, balance_events = await Bet.resolve_payouts(
+                self._pool, race_id, winner_horse_id, odds
+            )
+            if not payouts:
+                return
+
+            message = format_payout_message(payouts)
+            if not message:
+                return
+
+            # Post to thread
+            guild = self.bot.get_guild(self.bot.guild_id)
+            if guild is None:
+                return
+            thread_id = await get_race_thread_id(self._pool, race_id)
+            if thread_id is None:
+                return
+            thread = await fetch_thread(guild, thread_id)
+            if thread is None:
+                return
+            await thread.send(message)
+            logger.info("Posted payout results for race #%d", race_id)
+
+            # Update wallet threads for all balance changes
+            await self._notify_wallet_events(balance_events)
+        except Exception:
+            logger.exception("Failed to resolve payouts for race #%d", race_id)
 
     async def _notify_wallet(
         self,
@@ -222,12 +266,30 @@ class Betting(commands.Cog):
         """Notify the wallet inventory thread of a balance change (best-effort)."""
         if result.balance_event is None or guild_id is None:
             return
+        await self._notify_wallet_events([result.balance_event])
+
+    async def _notify_wallet_events(
+        self,
+        events: list[BalanceChangedEvent],
+    ) -> None:
+        """Deliver balance change events through the standard observer pipeline."""
+        if not events:
+            return
         try:
-            reconciler = DiscordReconciler(self.bot, self._pool, guild_id)
-            reconciler.notify(result.balance_event)
-            await reconciler.flush()
+            observers = build_observers(
+                self._pool,
+                user_id=0,
+                room_id="",
+                bot=self.bot,
+                guild_id=self.bot.guild_id,
+                room_cache=self._room_cache,
+            )
+            for evt in events:
+                for obs in observers:
+                    obs.notify(evt)
+            await flush_all(observers)
         except Exception:
-            logger.exception("Failed to update wallet thread for bet")
+            logger.exception("Failed to update wallet thread for betting events")
 
     async def _post_to_race_thread(
         self,
@@ -258,10 +320,10 @@ def _error_message(error: BetError | None) -> str:
         case BetError.INSUFFICIENT_FUNDS:
             return "You don't have enough yen."
         case BetError.AMOUNT_TOO_LOW:
-            return f"Minimum bet is ¥{MIN_BET:,}."
+            return f"Minimum bet is \u00a5{MIN_BET:,}."
         case BetError.NO_BET_TO_CANCEL:
             return "You don't have a bet on that horse to cancel."
         case BetError.NO_CURRENCY_ACCOUNT:
             return "You don't have a currency account. Try looking at your wallet."
-        case _:
+        case None:
             return "Something went wrong."

@@ -5,13 +5,14 @@ Async functions for persisting races and maintaining rolling counters.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
 from typing import Any
 
 import asyncpg
 
+from mudd.models.race import RaceStatus
 from mudd.racing.odds import HorseOdds
 from mudd.racing.simulation import RaceResult
 
@@ -25,15 +26,41 @@ class MessageType(StrEnum):
     POLL = "poll"
 
 
-class RaceStatus(StrEnum):
-    """PostgreSQL race_status enum."""
+@dataclass(frozen=True, slots=True)
+class PollAnswer:
+    """A single answer option for a Discord poll."""
 
-    OPEN = "open"
-    LOCKED = "locked"
-    ANNOUNCING = "announcing"
-    RUNNING = "running"
-    FINISHED = "finished"
-    CANCELLED = "cancelled"
+    text: str
+    emoji: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class PollConfig:
+    """Typed configuration for a Discord poll message."""
+
+    question: str
+    answers: list[PollAnswer] = field(default_factory=list)
+    duration_hours: int = 1
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize to a JSON-compatible dict for JSONB storage."""
+        return {
+            "question": self.question,
+            "answers": [{"text": a.text, "emoji": a.emoji} for a in self.answers],
+            "duration_hours": self.duration_hours,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> PollConfig:
+        """Deserialize from a JSONB dict."""
+        return cls(
+            question=data.get("question", "Favorite horse?"),
+            answers=[
+                PollAnswer(text=a["text"], emoji=a.get("emoji"))
+                for a in data.get("answers", [])
+            ],
+            duration_hours=data.get("duration_hours", 1),
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,7 +76,7 @@ class PendingMessage:
     image_name: str | None
     channel_id: int | None
     thread_id: int | None
-    poll: dict[str, Any] | None
+    poll: PollConfig | None
 
 
 async def create_race(
@@ -142,7 +169,7 @@ class RaceMessageInput:
     image_data: bytes | None
     image_name: str | None
     post_at: datetime
-    poll: dict[str, Any] | None = None
+    poll: PollConfig | None = None
 
 
 async def create_race_messages(
@@ -161,7 +188,7 @@ async def create_race_messages(
     image_datas = [m.image_data for m in messages]
     image_names = [m.image_name for m in messages]
     post_ats = [m.post_at for m in messages]
-    polls = [m.poll for m in messages]
+    polls = [m.poll.to_dict() if m.poll else None for m in messages]
 
     await pool.execute(
         """INSERT INTO race_messages
@@ -209,7 +236,7 @@ async def fetch_pending_messages(pool: asyncpg.Pool) -> list[PendingMessage]:
             image_name=row["image_name"],
             channel_id=row["channel_id"],
             thread_id=row["thread_id"],
-            poll=row["poll"],
+            poll=PollConfig.from_dict(row["poll"]) if row["poll"] else None,
         )
         for row in rows
     ]

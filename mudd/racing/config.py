@@ -65,4 +65,7 @@ class RaceConfig:
         ]
 
 
+# Room where races happen and bets can be placed
+RACE_TRACK_ROOM = "race-track"
+
 DEFAULT_CONFIG = RaceConfig()
