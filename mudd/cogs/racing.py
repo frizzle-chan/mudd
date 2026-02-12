@@ -931,8 +931,16 @@ class Racing(commands.Cog):
             return
         try:
             event = await guild.fetch_scheduled_event(event_id)
-            await event.end()
-            logger.info("Ended Discord event %d for race #%d", event_id, race_id)
+            if event.status == discord.EventStatus.active:
+                await event.end()
+                logger.info("Ended Discord event %d for race #%d", event_id, race_id)
+            else:
+                logger.info(
+                    "Discord event %d for race #%d already %s",
+                    event_id,
+                    race_id,
+                    event.status.name,
+                )
         except Exception:
             logger.exception("Failed to end Discord event for race #%d", race_id)
 
