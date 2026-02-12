@@ -46,6 +46,11 @@ class ViewEntity:
         """Short description template."""
         return self._entity.description_short
 
+    @property
+    def contents_visible(self) -> bool:
+        """Whether the entity's contents are visible."""
+        return self._entity.contents_visible
+
     @async_cached_property
     async def contents(self) -> str:
         """Get contents as a markdown bullet list."""
