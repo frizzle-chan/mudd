@@ -245,3 +245,7 @@ In the context of **making betting activity visible to spectators**, facing **th
 ### Dynamic Payout Message
 
 In the context of **showing betting results after a race**, facing **the constraint that bets aren't known when messages are pre-computed**, we decided to **post payout results dynamically after the race finishes rather than pre-computing them**, to achieve **accurate results that reflect all bets placed during the betting window**, accepting **that payout messages are not crash-resilient like pre-computed messages**.
+
+### Wallet Transaction Notifications for Bets
+
+In the context of **betting transactions not appearing in wallet inventory threads**, facing **the betting functions bypassing the observer pattern by modifying the currency ledger directly without emitting events**, we decided to **return `BalanceChangedEvent` instances from betting functions and have the cog callers create a `DiscordReconciler` to notify and flush**, to achieve **consistent wallet transaction logs for all currency changes including bets, cancellations, and payouts**, accepting **that each bet operation creates a short-lived `DiscordReconciler` instance rather than sharing one through the Scene/observer pipeline**.

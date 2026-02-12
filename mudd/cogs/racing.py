@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from mudd.bot import MuddBot
 
 from mudd.models.horse import Horse
-from mudd.observers import RoomChannelCache
+from mudd.observers import DiscordReconciler, RoomChannelCache
 from mudd.racing import (
     AnnouncementHorse,
     RaceHorse,
@@ -1190,7 +1190,9 @@ class Racing(commands.Cog):
             # Get odds from the race
             odds = await get_race_horses(self._pool, race_id)
 
-            payouts = await resolve_payouts(self._pool, race_id, winner_horse_id, odds)
+            payouts, balance_events = await resolve_payouts(
+                self._pool, race_id, winner_horse_id, odds
+            )
             if not payouts:
                 return
 
@@ -1210,6 +1212,13 @@ class Racing(commands.Cog):
                 return
             await thread.send(message)
             logger.info("Posted payout results for race #%d", race_id)
+
+            # Update wallet threads for all balance changes (best-effort)
+            if balance_events:
+                reconciler = DiscordReconciler(self.bot, self._pool, self.bot.guild_id)
+                for evt in balance_events:
+                    reconciler.notify(evt)
+                await reconciler.flush()
         except Exception:
             logger.exception("Failed to resolve payouts for race #%d", race_id)
 

@@ -11,6 +11,7 @@ from enum import StrEnum
 
 import asyncpg
 
+from mudd.events import BalanceChangedEvent
 from mudd.models.user import HOUSE_ACCOUNT_ID
 from mudd.racing.persistence import RaceStatus
 
@@ -38,6 +39,7 @@ class BetResult:
     horse_name: str = ""
     new_balance: int = 0
     displayed_payout: float = 0.0
+    balance_event: BalanceChangedEvent | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -277,12 +279,21 @@ async def place_bet(
                 amount,
             )
 
+    # Emit event outside transaction (matches User.credit_from_house pattern)
+    balance_event = BalanceChangedEvent(
+        user_id=user_id,
+        new_balance=new_player_balance,
+        delta=-delta,
+        memo=memo,
+    )
+
     return BetResult(
         success=True,
         amount=amount,
         horse_name=horse_name,
         new_balance=new_player_balance,
         displayed_payout=displayed_payout,
+        balance_event=balance_event,
     )
 
 
@@ -371,11 +382,20 @@ async def cancel_bet(
             user_id,
         )
 
+    # Emit event outside transaction
+    balance_event = BalanceChangedEvent(
+        user_id=user_id,
+        new_balance=new_player_balance,
+        delta=refund,
+        memo=memo,
+    )
+
     return BetResult(
         success=True,
         amount=refund,
         horse_name=horse_name,
         new_balance=new_player_balance,
+        balance_event=balance_event,
     )
 
 
@@ -384,12 +404,15 @@ async def resolve_payouts(
     race_id: int,
     winner_horse_id: str,
     odds: list[RaceHorseInfo],
-) -> list[PayoutRecord]:
+) -> tuple[list[PayoutRecord], list[BalanceChangedEvent]]:
     """Resolve all bets for a finished race.
 
     Winning bets get payout = amount * displayed_payout.
     Losing bets get payout = 0.
     All bet rows are updated with their payout.
+
+    Returns:
+        Tuple of (payout records, balance change events for wallet notifications).
     """
     odds_map = {o.id: o.displayed_payout for o in odds}
     horse_names = {o.id: o.name for o in odds}
@@ -400,9 +423,10 @@ async def resolve_payouts(
         race_id,
     )
     if not rows:
-        return []
+        return [], []
 
     payouts: list[PayoutRecord] = []
+    balance_events: list[BalanceChangedEvent] = []
 
     for row in rows:
         bet_id = row["id"]
@@ -467,6 +491,7 @@ async def resolve_payouts(
                     payout,
                 )
 
+                new_player_balance = player_row["balance"] + payout
                 await conn.execute(
                     "UPDATE currency_accounts SET balance = $1 WHERE user_id = $2",
                     house_row["balance"] - payout,
@@ -474,11 +499,21 @@ async def resolve_payouts(
                 )
                 await conn.execute(
                     "UPDATE currency_accounts SET balance = $1 WHERE user_id = $2",
-                    player_row["balance"] + payout,
+                    new_player_balance,
                     user_id,
                 )
 
-    return payouts
+            # Emit event outside transaction
+            balance_events.append(
+                BalanceChangedEvent(
+                    user_id=user_id,
+                    new_balance=new_player_balance,
+                    delta=payout,
+                    memo=memo,
+                )
+            )
+
+    return payouts, balance_events
 
 
 async def get_bet_count(pool: asyncpg.Pool, race_id: int) -> int:
@@ -500,17 +535,19 @@ def format_payout_message(payouts: list[PayoutRecord]) -> str:
     lines: list[str] = ["### Betting Results\n"]
 
     if winners:
+        lines.append("Winners:")
         for p in winners:
             lines.append(
-                f"\U0001f911 <@{p.user_id}> bet \u00a5{p.amount_bet:,} on "
-                f"**{p.horse_name}** and won **\u00a5{p.payout:,}**!"
+                f"💹 <@{p.user_id}> bet ¥{p.amount_bet:,} on "
+                f"**{p.horse_name}** and won **¥{p.payout:,}**!"
             )
 
     if losers:
+        lines.append("Losers:")
         for p in losers:
             lines.append(
-                f"\U0001f614 <@{p.user_id}> bet \u00a5{p.amount_bet:,} on "
-                f"**{p.horse_name}**."
+                f"🔻 <@{p.user_id}> bet ¥{p.amount_bet:,} on "
+                f"**{p.horse_name}** and lost."
             )
 
     return "\n".join(lines)

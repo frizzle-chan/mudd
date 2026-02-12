@@ -13,10 +13,11 @@ from discord.ext import commands
 if TYPE_CHECKING:
     from mudd.bot import MuddBot
 
-from mudd.observers import RoomChannelCache
+from mudd.observers import DiscordReconciler, RoomChannelCache
 from mudd.racing.betting import (
     MIN_BET,
     BetError,
+    BetResult,
     cancel_bet,
     get_active_race,
     get_race_horses,
@@ -167,6 +168,9 @@ class Betting(commands.Cog):
                 f"**{interaction.user.display_name}** cancelled their bet on "
                 f"**{result.horse_name}**",
             )
+
+            # Update wallet thread (best-effort, after response)
+            await self._notify_wallet(interaction.guild_id, result)
             return
 
         # Validate amount
@@ -213,6 +217,24 @@ class Betting(commands.Cog):
             f"**{interaction.user.display_name}** bet "
             f"\u00a5{result.amount:,} on **{result.horse_name}**",
         )
+
+        # Update wallet thread (best-effort, after response)
+        await self._notify_wallet(interaction.guild_id, result)
+
+    async def _notify_wallet(
+        self,
+        guild_id: int | None,
+        result: BetResult,
+    ) -> None:
+        """Notify the wallet inventory thread of a balance change (best-effort)."""
+        if result.balance_event is None or guild_id is None:
+            return
+        try:
+            reconciler = DiscordReconciler(self.bot, self._pool, guild_id)
+            reconciler.notify(result.balance_event)
+            await reconciler.flush()
+        except Exception:
+            logger.exception("Failed to update wallet thread for bet")
 
     async def _post_to_race_thread(
         self,

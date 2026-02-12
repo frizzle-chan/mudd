@@ -64,10 +64,12 @@ def test_format_payout_message_mixed() -> None:
     ]
     result = format_payout_message(payouts)
     lines = result.split("\n")
-    # Header + winner + loser
-    assert len(lines) == 4
-    assert "won" in lines[2]
-    assert "Thunder" in lines[3]
+    # Header (with trailing \n) + blank + Winners: + winner + Losers: + loser
+    assert len(lines) == 6
+    assert "Winners:" in lines[2]
+    assert "won" in lines[3]
+    assert "Losers:" in lines[4]
+    assert "Thunder" in lines[5]
 
 
 def test_format_payout_message_large_amounts() -> None:
