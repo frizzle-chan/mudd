@@ -1,6 +1,7 @@
 """Unit tests for betting module."""
 
-from mudd.racing.betting import PayoutRecord, format_payout_message
+from mudd.models.bet import PayoutRecord
+from mudd.racing.betting import format_payout_message
 
 
 def test_format_payout_message_empty() -> None:

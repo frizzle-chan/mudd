@@ -369,3 +369,16 @@ async def get_recent_results(
     for row in rows:
         results[row["horse_id"]].append(row["position"])
     return results
+
+
+async def get_race_winner(pool: asyncpg.Pool, race_id: int) -> str | None:
+    """Return the winner horse ID for a finished race, or None."""
+    row = await pool.fetchrow(
+        "SELECT finishing_order, horses FROM races WHERE id = $1",
+        race_id,
+    )
+    if row is None:
+        return None
+    finishing_order = row["finishing_order"]
+    horse_ids = row["horses"]
+    return horse_ids[finishing_order[0]]

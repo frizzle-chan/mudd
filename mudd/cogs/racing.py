@@ -17,6 +17,7 @@ from discord.ext import commands, tasks
 if TYPE_CHECKING:
     from mudd.bot import MuddBot
 
+from mudd.models.bet import Bet
 from mudd.models.horse import Horse
 from mudd.observers import DiscordReconciler, RoomChannelCache
 from mudd.racing import (
@@ -33,10 +34,8 @@ from mudd.racing import (
 )
 from mudd.racing.betting import (
     MIN_BET,
+    RaceHorseInfo,
     format_payout_message,
-    get_bet_count,
-    get_race_horses,
-    resolve_payouts,
 )
 from mudd.racing.config import DEFAULT_CONFIG, RaceConfig
 from mudd.racing.formatting import (
@@ -57,6 +56,7 @@ from mudd.racing.persistence import (
     finish_race,
     get_poll_message_id,
     get_race_thread_id,
+    get_race_winner,
     get_recent_results,
     get_remaining_message_count,
     get_scheduled_event_id,
@@ -496,11 +496,11 @@ def _build_message_queue(
             message_type=MessageType.THREAD,
             content=(
                 "## Place your bets!\n"
-                f"\u2022 minimum bet is **¥{MIN_BET}**\n"
-                f"\u2022 `/bet <horse> <amount>` to place a bet\n"
-                "\u2022 `/bet <horse> 0` to cancel a bet\n"
-                "\u2022 You can bet on multiple horses\n"
-                "\u2022 Betting closes when the race starts!"
+                f"• minimum bet is **¥{MIN_BET}**\n"
+                "• `/bet <horse> <amount>` to place a bet\n"
+                "• `/bet <horse> 0` to cancel a bet\n"
+                "• You can bet on multiple horses\n"
+                "• Betting closes when the race starts!"
             ),
             image_data=None,
             image_name=None,
@@ -924,7 +924,7 @@ class Racing(commands.Cog):
             await event.start()
             logger.info("Started Discord event %d for race #%d", event_id, race_id)
         except ValueError:
-            logger.debug(
+            logger.info(
                 "Discord event %d for race #%d already running", event_id, race_id
             )
         except Exception:
@@ -950,6 +950,8 @@ class Racing(commands.Cog):
                     race_id,
                     event.status.name,
                 )
+        except ValueError:
+            logger.info("Discord event %d for race #%d not endable", event_id, race_id)
         except Exception:
             logger.exception("Failed to end Discord event for race #%d", race_id)
 
@@ -1171,26 +1173,18 @@ class Racing(commands.Cog):
     async def _resolve_and_post_payouts(self, race_id: int) -> None:
         """Resolve betting payouts and post results to the race thread."""
         try:
-            bet_count = await get_bet_count(self._pool, race_id)
+            bet_count = await Bet.count(self._pool, race_id)
             if bet_count == 0:
                 return
 
-            # Read race data for winner and odds
-            row = await self._pool.fetchrow(
-                "SELECT finishing_order, horses FROM races WHERE id = $1",
-                race_id,
-            )
-            if row is None:
+            winner_horse_id = await get_race_winner(self._pool, race_id)
+            if winner_horse_id is None:
                 return
 
-            finishing_order = row["finishing_order"]
-            horse_ids = row["horses"]
-            winner_horse_id = horse_ids[finishing_order[0]]
-
             # Get odds from the race
-            odds = await get_race_horses(self._pool, race_id)
+            odds = await RaceHorseInfo.get_for_race(self._pool, race_id)
 
-            payouts, balance_events = await resolve_payouts(
+            payouts, balance_events = await Bet.resolve_payouts(
                 self._pool, race_id, winner_horse_id, odds
             )
             if not payouts:

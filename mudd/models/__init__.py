@@ -7,6 +7,7 @@ Models are frozen dataclasses with classmethods for queries and instance
 methods for mutations. Mutations return new instances (immutable pattern).
 """
 
+from mudd.models.bet import Bet, BetError, BetResult, PayoutRecord
 from mudd.models.entity import EntityInstance, InstanceThreadInfo, ResolvedEntity
 from mudd.models.entity_definition import EntityDefinition
 from mudd.models.horse import Horse
@@ -19,6 +20,11 @@ from mudd.models.user import FocusContext, TransferError, TransferResult, User
 from mudd.models.zone import SyncStats, Zone
 
 __all__ = [
+    # Bet model
+    "Bet",
+    "BetError",
+    "BetResult",
+    "PayoutRecord",
     # Entity models
     "ResolvedEntity",
     # Horse model

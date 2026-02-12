@@ -13,17 +13,10 @@ from discord.ext import commands
 if TYPE_CHECKING:
     from mudd.bot import MuddBot
 
+from mudd.models.bet import Bet, BetError, BetResult
 from mudd.observers import DiscordReconciler, RoomChannelCache
-from mudd.racing.betting import (
-    MIN_BET,
-    BetError,
-    BetResult,
-    cancel_bet,
-    get_active_race,
-    get_race_horses,
-    place_bet,
-)
-from mudd.racing.persistence import RaceStatus, get_race_thread_id
+from mudd.racing.betting import MIN_BET, ActiveRace, RaceHorseInfo
+from mudd.racing.persistence import get_race_thread_id
 from mudd.utils.discord import fetch_thread
 
 logger = logging.getLogger(__name__)
@@ -51,15 +44,15 @@ class Betting(commands.Cog):
         self, interaction: Interaction, current: str
     ) -> list[app_commands.Choice[str]]:
         """Autocomplete callback for horse selection."""
-        race = await get_active_race(self._pool)
-        if race is None or race.status != RaceStatus.ANNOUNCING:
+        race = await ActiveRace.get(self._pool)
+        if race is None or not race.is_announcing():
             return [
                 app_commands.Choice(
                     name="No race accepting bets right now", value="invalid"
                 )
             ]
 
-        horses = await get_race_horses(self._pool, race.id)
+        horses = await RaceHorseInfo.get_for_race(self._pool, race.id)
         if not horses:
             return [app_commands.Choice(name="No horses found", value="invalid")]
 
@@ -129,7 +122,7 @@ class Betting(commands.Cog):
             return
 
         # Get active race
-        race = await get_active_race(self._pool)
+        race = await ActiveRace.get(self._pool)
         if race is None:
             await interaction.response.send_message(
                 "There's no active race right now.", ephemeral=True
@@ -140,14 +133,14 @@ class Betting(commands.Cog):
 
         # Cancel bet if amount is 0
         if amount == 0:
-            if race.status != RaceStatus.ANNOUNCING:
+            if not race.is_announcing():
                 await interaction.response.send_message(
-                    "Betting is closed \u2014 the race has started!",
+                    "Betting is closed — the race has started!",
                     ephemeral=True,
                 )
                 return
 
-            result = await cancel_bet(self._pool, race.id, user_id, horse)
+            result = await Bet.cancel(self._pool, race.id, user_id, horse)
 
             if not result.success:
                 msg = _error_message(result.error)
@@ -156,8 +149,8 @@ class Betting(commands.Cog):
 
             await interaction.response.send_message(
                 f"Cancelled your bet on **{result.horse_name}**. "
-                f"\u00a5{result.amount:,} refunded.\n"
-                f"Balance: \u00a5{result.new_balance:,}",
+                f"¥{result.amount:,} refunded.\n"
+                f"Balance: ¥{result.new_balance:,}",
                 ephemeral=True,
             )
 
@@ -181,7 +174,7 @@ class Betting(commands.Cog):
             return
 
         # Look up horse info for displayed_payout
-        horses = await get_race_horses(self._pool, race.id)
+        horses = await RaceHorseInfo.get_for_race(self._pool, race.id)
         horse_info = next((h for h in horses if h.id == horse), None)
         if horse_info is None:
             await interaction.response.send_message(
@@ -189,7 +182,7 @@ class Betting(commands.Cog):
             )
             return
 
-        result = await place_bet(
+        result = await Bet.place(
             self._pool,
             race.id,
             user_id,
@@ -204,9 +197,9 @@ class Betting(commands.Cog):
             return
 
         await interaction.response.send_message(
-            f"Bet \u00a5{result.amount:,} on **{result.horse_name}** "
+            f"Bet ¥{result.amount:,} on **{result.horse_name}** "
             f"({result.displayed_payout:.1f}:1)\n"
-            f"Balance: \u00a5{result.new_balance:,}",
+            f"Balance: ¥{result.new_balance:,}",
             ephemeral=True,
         )
 
@@ -215,7 +208,7 @@ class Betting(commands.Cog):
             interaction.guild,
             race.id,
             f"**{interaction.user.display_name}** bet "
-            f"\u00a5{result.amount:,} on **{result.horse_name}**",
+            f"¥{result.amount:,} on **{result.horse_name}**",
         )
 
         # Update wallet thread (best-effort, after response)
@@ -259,13 +252,13 @@ def _error_message(error: BetError | None) -> str:
     """Map a BetError to a user-facing message."""
     match error:
         case BetError.RACE_NOT_ACCEPTING_BETS:
-            return "Betting is closed \u2014 the race has started!"
+            return "Betting is closed, the race has started!"
         case BetError.HORSE_NOT_IN_RACE:
             return "That horse isn't in this race."
         case BetError.INSUFFICIENT_FUNDS:
             return "You don't have enough yen."
         case BetError.AMOUNT_TOO_LOW:
-            return f"Minimum bet is \u00a5{MIN_BET:,}."
+            return f"Minimum bet is ¥{MIN_BET:,}."
         case BetError.NO_BET_TO_CANCEL:
             return "You don't have a bet on that horse to cancel."
         case BetError.NO_CURRENCY_ACCOUNT:
