@@ -32,6 +32,14 @@ from mudd.racing import (
     simulate_race,
     sprite_from_bytes,
 )
+from mudd.racing.betting import (
+    MAX_BET,
+    MIN_BET,
+    format_payout_message,
+    get_bet_count,
+    get_race_horses,
+    resolve_payouts,
+)
 from mudd.racing.config import DEFAULT_CONFIG, RaceConfig
 from mudd.racing.formatting import (
     format_form,
@@ -483,10 +491,41 @@ def _build_message_queue(
         )
     )
 
-    # Seq 3-5: Starting sequence
+    # Seq 3: Betting instructions (between POLL and RACE_START)
     messages.append(
         RaceMessageInput(
             sequence=3,
+            message_type=MessageType.THREAD,
+            content=(
+                "**Place your bets!**\n\n"
+                f"\u2022 `/bet <horse> <amount>` \u2014 "
+                f"bet \u00a5{MIN_BET}\u2013\u00a5{MAX_BET}\n"
+                "\u2022 You can bet on multiple horses\n"
+                "\u2022 `/bet <horse> 0` to cancel a bet\n"
+                "\u2022 Betting closes when the race starts!"
+            ),
+            image_data=None,
+            image_name=None,
+            post_at=announcement_time + dt.timedelta(seconds=5),
+        )
+    )
+
+    # Seq 4: "Betting is closed!" — 2 seconds after RACE_START
+    messages.append(
+        RaceMessageInput(
+            sequence=4,
+            message_type=MessageType.THREAD,
+            content="**Betting is closed!** Good luck!",
+            image_data=None,
+            image_name=None,
+            post_at=race_start_time - dt.timedelta(seconds=28),
+        )
+    )
+
+    # Seq 5-7: Starting sequence
+    messages.append(
+        RaceMessageInput(
+            sequence=5,
             message_type=MessageType.THREAD,
             content="Riders up!",
             image_data=None,
@@ -496,7 +535,7 @@ def _build_message_queue(
     )
     messages.append(
         RaceMessageInput(
-            sequence=4,
+            sequence=6,
             message_type=MessageType.THREAD,
             content="They're approaching the starting gate...",
             image_data=None,
@@ -506,7 +545,7 @@ def _build_message_queue(
     )
     messages.append(
         RaceMessageInput(
-            sequence=5,
+            sequence=7,
             message_type=MessageType.THREAD,
             content="They're all in the gate...",
             image_data=images.starting_gate,
@@ -515,24 +554,11 @@ def _build_message_queue(
         )
     )
 
-    # Race progress (GIFs + commentary), with "bets closed" at midpoint
+    # Race progress (GIFs + commentary)
     gif_interval = config.gif_interval_seconds
-    mid = num_batches // 2
-    seq = 6
+    seq = 8
     race_frames = zip(images.gif_batches, commentaries, strict=True)
     for i, (gif_data, commentary) in enumerate(race_frames):
-        if i == mid:
-            messages.append(
-                RaceMessageInput(
-                    sequence=seq,
-                    message_type=MessageType.THREAD,
-                    content="**__Betting is closed!__**",
-                    image_data=None,
-                    image_name=None,
-                    post_at=race_start_time + dt.timedelta(seconds=i * gif_interval),
-                )
-            )
-            seq += 1
         content = f"And they're off!\n\n{commentary}" if i == 0 else commentary
         messages.append(
             RaceMessageInput(
@@ -760,7 +786,7 @@ class Racing(commands.Cog):
             race_start_time=race_start_time,
         )
 
-        # 7. Persist with ANNOUNCING status
+        # 7. Persist (default status is ANNOUNCING)
         winner_idx = result.finishing_order[0]
         winner_info = (horses[winner_idx].victory_image, horses[winner_idx].name)
         await self._persist_race(
@@ -772,7 +798,6 @@ class Racing(commands.Cog):
             forms,
             channel_id,
             winner_info,
-            status=RaceStatus.ANNOUNCING,
         )
 
     async def _persist_race(
@@ -786,7 +811,7 @@ class Racing(commands.Cog):
         channel_id: int,
         winner_info: tuple[bytes | None, str],
         *,
-        status: RaceStatus = RaceStatus.RUNNING,
+        status: RaceStatus = RaceStatus.ANNOUNCING,
     ) -> int:
         """Insert race, re-render images with actual race_id, insert messages."""
         race_id = await create_race(
@@ -957,6 +982,7 @@ class Racing(commands.Cog):
             remaining = await get_remaining_message_count(self._pool, race_id)
             if remaining == 0:
                 await finish_race(self._pool, race_id)
+                await self._resolve_and_post_payouts(race_id)
                 await self._end_poll(race_id)
                 await self._end_discord_event(race_id)
                 logger.info(
@@ -1124,6 +1150,51 @@ class Racing(commands.Cog):
         await set_poll_message_id(self._pool, msg.race_id, sent.id)
         logger.info("Posted poll (message %d) for race #%d", sent.id, msg.race_id)
         return True
+
+    async def _resolve_and_post_payouts(self, race_id: int) -> None:
+        """Resolve betting payouts and post results to the race thread."""
+        try:
+            bet_count = await get_bet_count(self._pool, race_id)
+            if bet_count == 0:
+                return
+
+            # Read race data for winner and odds
+            row = await self._pool.fetchrow(
+                "SELECT finishing_order, horses FROM races WHERE id = $1",
+                race_id,
+            )
+            if row is None:
+                return
+
+            finishing_order = row["finishing_order"]
+            horse_ids = row["horses"]
+            winner_horse_id = horse_ids[finishing_order[0]]
+
+            # Get odds from the race
+            odds = await get_race_horses(self._pool, race_id)
+
+            payouts = await resolve_payouts(self._pool, race_id, winner_horse_id, odds)
+            if not payouts:
+                return
+
+            message = format_payout_message(payouts)
+            if not message:
+                return
+
+            # Post to thread
+            guild = self.bot.get_guild(self.bot.guild_id)
+            if guild is None:
+                return
+            thread_id = await get_race_thread_id(self._pool, race_id)
+            if thread_id is None:
+                return
+            thread = await fetch_thread(guild, thread_id)
+            if thread is None:
+                return
+            await thread.send(message)
+            logger.info("Posted payout results for race #%d", race_id)
+        except Exception:
+            logger.exception("Failed to resolve payouts for race #%d", race_id)
 
     async def _end_poll(self, race_id: int) -> None:
         """End the Discord poll for a race (best-effort)."""
