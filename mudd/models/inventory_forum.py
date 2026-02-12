@@ -42,6 +42,19 @@ class UserInventoryForum:
         )
 
     @classmethod
+    async def get_all_forum_ids(cls, pool: asyncpg.Pool) -> set[int]:
+        """Get all tracked inventory forum IDs.
+
+        Args:
+            pool: Database connection pool
+
+        Returns:
+            Set of forum channel IDs
+        """
+        rows = await pool.fetch("SELECT forum_id FROM user_inventory_forums")
+        return {row["forum_id"] for row in rows}
+
+    @classmethod
     async def create_or_update(
         cls,
         pool: asyncpg.Pool,

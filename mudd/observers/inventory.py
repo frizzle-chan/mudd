@@ -283,6 +283,46 @@ class InventoryReconciler:
 
         return pruned
 
+    async def prune_orphan_channels(self, guild: discord.Guild) -> int:
+        """Delete inventory forums not tracked in the database.
+
+        Args:
+            guild: Discord guild
+
+        Returns:
+            Number of channels pruned
+        """
+        category = None
+        for cat in guild.categories:
+            if cat.name == INVENTORY_CATEGORY_NAME:
+                category = cat
+                break
+
+        if category is None:
+            return 0
+
+        valid_ids = await UserInventoryForum.get_all_forum_ids(self.pool)
+        pruned = 0
+
+        for channel in list(category.channels):
+            if channel.id not in valid_ids:
+                try:
+                    await channel.delete(reason="Orphan inventory channel pruning")
+                    logger.info(
+                        "Pruned orphan inventory channel '%s' (ID: %d)",
+                        channel.name,
+                        channel.id,
+                    )
+                    pruned += 1
+                except discord.HTTPException as e:
+                    logger.error(
+                        "Failed to prune inventory channel %d: %s",
+                        channel.id,
+                        e,
+                    )
+
+        return pruned
+
     async def _ensure_user_inventory(self, guild: discord.Guild, user_id: int) -> None:
         """Idempotent: ensure user's complete inventory is synced.
 

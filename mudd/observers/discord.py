@@ -213,6 +213,11 @@ class DiscordReconciler:
         await self._skills.post_announcements()
 
     @property
+    def inventory(self) -> InventoryReconciler:
+        """Access the inventory sub-reconciler directly."""
+        return self._inventory
+
+    @property
     def skills(self) -> SkillsReconciler:
         """Access the skills sub-reconciler directly."""
         return self._skills

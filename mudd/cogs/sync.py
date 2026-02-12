@@ -262,8 +262,10 @@ class Sync(commands.Cog):
         try:
             await perm_reconciler.flush()
             inv_stats = perm_reconciler.get_inventory_forum_stats()
+            inv_pruned = await perm_reconciler.inventory.prune_orphan_channels(guild)
             logger.info(
-                f"Inventory sync for {guild.name}: {member_count} users, {inv_stats}"
+                f"Inventory sync for {guild.name}: {member_count} users, "
+                f"{inv_stats}, {inv_pruned} orphans pruned"
             )
         except Exception:
             logger.exception(f"Failed inventory sync for {guild.name}")
