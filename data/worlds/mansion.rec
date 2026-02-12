@@ -835,7 +835,7 @@ Prototype: chest
 Room: restroom
 ContentsVisible: no
 DescriptionShort: A metal {{ e.name }} sits in the corner.
-DescriptionLong: A stainless steel trash can with a swinging lid. It's overflowing with crumpled paper towels.
+DescriptionLong: A stainless steel trash can with a swinging lid. It's overflowing with crumpled paper towels. You could __open__ it to dig around inside.
 OnOpen: {{ effects.set_focus() }}You peer into the {{ e.name }}, pushing aside damp paper towels.{% if e.contents %} You spot:
 + {{ e.contents }}{% else %} Nothing but garbage.{% endif %}
 OnClose: {{ effects.clear_focus() }}You let the lid swing shut.
@@ -874,7 +874,7 @@ Prototype: object
 Room: office
 ContentsVisible: no
 DescriptionShort: An old {{ e.name }} hums on the desk.
-DescriptionLong: A bulky CRT monitor displaying green text on black. The case is beige plastic, yellowed with age. A small sticker reads "MUDD-OS v0.2.1".
+DescriptionLong: A bulky CRT monitor displaying green text on black. The case is beige plastic, yellowed with age. A small sticker reads "MUDD-OS v0.2.1". You could __login__ to see what's on it.
 OnUse: The CRT hums as you press the power button. Green text flickers to life. You can now __login__.
 OnOpen: {{ effects.set_focus() }}```
 + ┏┳┓╻ ╻╺┳┓╺┳┓   ┏━┓┏━┓
