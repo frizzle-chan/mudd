@@ -111,7 +111,7 @@ class EffectsCollector:
         """Queue granting currency to the user.
 
         Args:
-            amount: Amount of yen to grant (from house account)
+            amount: Amount to grant (from house account)
 
         Returns:
             Empty string (allows inline use in templates)
@@ -124,7 +124,7 @@ class EffectsCollector:
         """Queue a currency charge (debit) from the user.
 
         Args:
-            amount: Amount of yen to charge (debited to house account)
+            amount: Amount to charge (debited to house account)
 
         Returns:
             Empty string (allows inline use in templates)

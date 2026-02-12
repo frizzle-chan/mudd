@@ -71,7 +71,7 @@ Insert after the previous terminal_inbox entry, before `# Gallery entities`.
 
 **Include gameplay tips:**
 - Where to find new things ("Check the lounge for the slot machine")
-- How to use new features ("Use /pay to send yen to nearby players")
+- How to use new features ("Use /pay to send money to nearby players")
 - Fun interactions ("Pull the handle to win prizes!")
 
 **Tone:** Casual dev update from Frizzle. Excited about new features, hints at what's coming.

@@ -18,8 +18,8 @@ class TemplateRenderError(Exception):
 
 
 def _money_filter(value: int) -> str:
-    """Format an integer as a yen currency string."""
-    return f"¥{value:,}"
+    """Format an integer as a currency string."""
+    return f"¤{value:,}"
 
 
 def _md_list_filter(items: list[object]) -> str:

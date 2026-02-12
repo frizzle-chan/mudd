@@ -22,15 +22,15 @@ def format_payout_message(payouts: list[PayoutRecord]) -> str:
         lines.append("Winners:")
         for p in winners:
             lines.append(
-                f"\U0001f4b9 <@{p.user_id}> bet \u00a5{p.amount_bet:,} on "
-                f"**{p.horse_name}** and won **\u00a5{p.payout:,}**!"
+                f"\U0001f4b9 <@{p.user_id}> bet \u00a4{p.amount_bet:,} on "
+                f"**{p.horse_name}** and won **\u00a4{p.payout:,}**!"
             )
 
     if losers:
         lines.append("Losers:")
         for p in losers:
             lines.append(
-                f"\U0001f53b <@{p.user_id}> bet \u00a5{p.amount_bet:,} on "
+                f"\U0001f53b <@{p.user_id}> bet \u00a4{p.amount_bet:,} on "
                 f"**{p.horse_name}** and lost."
             )
 

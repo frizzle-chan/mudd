@@ -77,7 +77,7 @@ class Betting(commands.Cog):
     )
     @app_commands.describe(
         horse="Horse to bet on",
-        amount="Amount to bet in yen (0 to cancel)",
+        amount="Amount to bet (0 to cancel)",
     )
     @app_commands.autocomplete(horse=horse_autocomplete)
     async def bet(
@@ -149,8 +149,8 @@ class Betting(commands.Cog):
 
             await interaction.response.send_message(
                 f"Cancelled your bet on **{result.horse_name}**. "
-                f"\u00a5{result.amount:,} refunded.\n"
-                f"Balance: \u00a5{result.new_balance:,}",
+                f"\u00a4{result.amount:,} refunded.\n"
+                f"Balance: \u00a4{result.new_balance:,}",
                 ephemeral=True,
             )
 
@@ -197,9 +197,9 @@ class Betting(commands.Cog):
             return
 
         await interaction.response.send_message(
-            f"Bet \u00a5{result.amount:,} on **{result.horse_name}** "
+            f"Bet \u00a4{result.amount:,} on **{result.horse_name}** "
             f"({result.displayed_payout:.1f}:1)\n"
-            f"Balance: \u00a5{result.new_balance:,}",
+            f"Balance: \u00a4{result.new_balance:,}",
             ephemeral=True,
         )
 
@@ -208,7 +208,7 @@ class Betting(commands.Cog):
             interaction.guild,
             race.id,
             f"**{interaction.user.display_name}** bet "
-            f"\u00a5{result.amount:,} on **{result.horse_name}**",
+            f"\u00a4{result.amount:,} on **{result.horse_name}**",
         )
 
         # Update wallet thread (best-effort, after response)
@@ -318,9 +318,9 @@ def _error_message(error: BetError | None) -> str:
         case BetError.HORSE_NOT_IN_RACE:
             return "That horse isn't in this race."
         case BetError.INSUFFICIENT_FUNDS:
-            return "You don't have enough yen."
+            return "You don't have enough money."
         case BetError.AMOUNT_TOO_LOW:
-            return f"Minimum bet is \u00a5{MIN_BET:,}."
+            return f"Minimum bet is \u00a4{MIN_BET:,}."
         case BetError.NO_BET_TO_CANCEL:
             return "You don't have a bet on that horse to cancel."
         case BetError.NO_CURRENCY_ACCOUNT:

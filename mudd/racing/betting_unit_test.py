@@ -23,8 +23,8 @@ def test_format_payout_message_winner_only() -> None:
     assert "### Betting Results" in result
     assert "<@123>" in result
     assert "Flash" in result
-    assert "¥100" in result
-    assert "¥350" in result
+    assert "¤100" in result
+    assert "¤350" in result
 
 
 def test_format_payout_message_loser_only() -> None:
@@ -85,5 +85,5 @@ def test_format_payout_message_large_amounts() -> None:
         ),
     ]
     result = format_payout_message(payouts)
-    assert "¥1,000" in result
-    assert "¥5,500" in result
+    assert "¤1,000" in result
+    assert "¤5,500" in result

@@ -394,7 +394,7 @@ class User:
         """Get the user's currency balance.
 
         Returns:
-            Balance in yen (0 if no account exists)
+            Balance (0 if no account exists)
         """
         row = await self._pool.fetchrow(
             "SELECT balance FROM currency_accounts WHERE user_id = $1",
@@ -746,7 +746,7 @@ class User:
             )
 
         # Broadcast the payment to the channel
-        amount_str = f"\u00a5{amount:,}"
+        amount_str = f"\u00a4{amount:,}"
         broadcast_msg = f"{self.mention} paid {amount_str} to {recipient.mention}"
         for observer in self._observers:
             observer.notify(BroadcastEvent(message=broadcast_msg))

@@ -489,7 +489,7 @@ def _build_message_queue(
             message_type=MessageType.THREAD,
             content=(
                 "## Place your bets!\n"
-                f"• minimum bet is **¥{MIN_BET}**\n"
+                f"• minimum bet is **¤{MIN_BET}**\n"
                 "• `/bet <horse> <amount>` to place a bet\n"
                 "• `/bet <horse> 0` to cancel a bet\n"
                 "• You can bet on multiple horses\n"

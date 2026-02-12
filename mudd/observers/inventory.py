@@ -39,7 +39,7 @@ def _format_transaction_message(event: BalanceChangedEvent) -> str:
     sign = "+" if event.delta >= 0 else "-"
     abs_amount = abs(event.delta)
     balance = event.new_balance
-    return f"{sign}\u00a5{abs_amount:,} | {event.memo} | Balance: \u00a5{balance:,}"
+    return f"{sign}\u00a4{abs_amount:,} | {event.memo} | Balance: \u00a4{balance:,}"
 
 
 class InventoryReconciler:

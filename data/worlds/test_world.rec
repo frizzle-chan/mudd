@@ -461,7 +461,7 @@ Rarity: common
 Tags: test_currency_spawn
 DescriptionShort: a pile of {{ e.name }}
 DescriptionLong: Test coins for currency grant testing.
-OnTake: {{ effects.grant_currency(100) }}{{ effects.destroy() }}{{ effects.broadcast("**" ~ user ~ "** pockets " ~ e ~ " (+¥100)") }}TEST_CURRENCY_RESPONSE - You pick up the coins. (+¥100)
+OnTake: {{ effects.grant_currency(100) }}{{ effects.destroy() }}{{ effects.broadcast("**" ~ user ~ "** pockets " ~ e ~ " (+¤100)") }}TEST_CURRENCY_RESPONSE - You pick up the coins. (+¤100)
 
 Id: test_dispenser
 Name: Test Dispenser
@@ -547,8 +547,8 @@ Prototype: furniture
 Room: store-room
 ContentsVisible: no
 DescriptionShort: A {{ e.name }} stands against the wall.
-DescriptionLong: A test machine that charges ¥5 per use and dispenses a prize.
-OnUse: {% if not e.contents %}The machine is empty.{% elif user.balance < 5 %}TEST_INSUFFICIENT_FUNDS - Not enough yen. You have {{ user.balance | money }}.{% else %}{{ effects.charge(5) }}{{ effects.dispense() }}{{ effects.broadcast("**" ~ user ~ "** uses the charge machine...") }}TEST_CHARGE_RESPONSE - You insert ¥5 and receive a prize!{% endif %}
+DescriptionLong: A test machine that charges ¤5 per use and dispenses a prize.
+OnUse: {% if not e.contents %}The machine is empty.{% elif user.balance < 5 %}TEST_INSUFFICIENT_FUNDS - Not enough money. You have {{ user.balance | money }}.{% else %}{{ effects.charge(5) }}{{ effects.dispense() }}{{ effects.broadcast("**" ~ user ~ "** uses the charge machine...") }}TEST_CHARGE_RESPONSE - You insert ¤5 and receive a prize!{% endif %}
 
 Id: test_charge_prize
 Name: Test Charge Prize
