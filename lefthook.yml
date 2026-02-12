@@ -1,4 +1,12 @@
 pre-commit:
+  commands:
+    branch-guard:
+      run: |
+        BRANCH=$(git rev-parse --abbrev-ref HEAD)
+        if [ "$BRANCH" = "master" ]; then
+          echo "❌ Direct commits to master are not allowed. Please create a branch first."
+          exit 1
+        fi
   jobs:
     - name: ruff check
       glob: "*.py"
