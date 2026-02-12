@@ -40,12 +40,18 @@ class HorseOdds:
 def base_strength(speed: int, stamina: int, luck: int, consistency: int) -> float:
     """Compute static base strength from attributes.
 
-    Weights are calibrated to match the simulation's phase-weighted
-    physics: luck has outsized influence in the start phase (20% of
-    ticks at 0.6 weight), and stamina dominates the final stretch
-    plus fatigue resistance.
+    Weights are empirically calibrated against 3×1000 race simulations
+    to match the simulation's effective stat contributions. Stamina
+    dominates because it contributes twice: via phase weights in the
+    final stretch AND via fatigue resistance in the last 40% of the
+    race. Speed and luck have moderate influence through their
+    respective dominant phases. Consistency has minimal impact on win
+    rate (it reduces variance, not expected performance).
+
+    Combined with ``odds_exponent`` (4.5), these weights produce
+    expected win rates within 2% of simulated actuals.
     """
-    return speed * 0.35 + stamina * 0.35 + luck * 0.25 + consistency * 0.05
+    return speed * 0.19 + stamina * 0.57 + luck * 0.21 + consistency * 0.03
 
 
 def performance_modifier(

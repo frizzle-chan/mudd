@@ -16,14 +16,14 @@ from mudd.racing.odds import (
 class TestBaseStrength:
     def test_flash_stats(self) -> None:
         # Flash: speed=90, stamina=70, consistency=75, luck=55
-        # Weights: speed*0.35 + stamina*0.35 + luck*0.25 + consistency*0.05
+        # Weights: speed*0.19 + stamina*0.57 + luck*0.21 + consistency*0.03
         result = base_strength(speed=90, stamina=70, luck=55, consistency=75)
-        assert result == pytest.approx(73.5)
+        assert result == pytest.approx(70.8)
 
     def test_glue_stats(self) -> None:
         # Glue: speed=30, stamina=55, consistency=90, luck=20
         result = base_strength(speed=30, stamina=55, luck=20, consistency=90)
-        assert result == pytest.approx(39.25)
+        assert result == pytest.approx(43.95)
 
     def test_all_equal(self) -> None:
         result = base_strength(speed=50, stamina=50, luck=50, consistency=50)
@@ -128,11 +128,11 @@ class TestComputeOdds:
         for o in odds:
             assert 1 <= o.star_rating <= 5
 
-    def test_flash_has_highest_base_strength(self) -> None:
+    def test_thunder_has_highest_base_strength(self) -> None:
         odds = compute_odds(_make_horses())
-        flash_odds = next(o for o in odds if o.horse_id == "flash")
+        thunder_odds = next(o for o in odds if o.horse_id == "thunder")
         for o in odds:
-            assert flash_odds.base_strength >= o.base_strength
+            assert thunder_odds.base_strength >= o.base_strength
 
     def test_no_history_modifier_is_one(self) -> None:
         odds = compute_odds(_make_horses())

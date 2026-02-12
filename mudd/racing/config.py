@@ -20,7 +20,7 @@ class RaceConfig:
 
     # Simulation
     house_edge: float = 0.10
-    odds_exponent: float = 2.5
+    odds_exponent: float = 4.5
     rolling_window: int = 20
     num_ticks: int = 0  # 0 = auto-derive from race_duration_minutes
     rubber_band_factor: float = 0.05
