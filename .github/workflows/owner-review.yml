@@ -28,18 +28,23 @@ jobs:
               return;
             }
 
-            const { data: authorPerm } = await github.rest.repos.getCollaboratorPermissionLevel({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              username: pr.user.login,
-            });
+            // Bot authors (e.g., Copilot) are never owners — skip straight to review check
+            if (pr.user.type !== 'User') {
+              console.log(`PR author '${pr.user.login}' is a ${pr.user.type}, not a User. Checking for owner approval...`);
+            } else {
+              const { data: authorPerm } = await github.rest.repos.getCollaboratorPermissionLevel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                username: pr.user.login,
+              });
 
-            if (authorPerm.permission === 'admin') {
-              console.log(`PR author '${pr.user.login}' is an owner (admin). No additional review required.`);
-              return;
+              if (authorPerm.permission === 'admin') {
+                console.log(`PR author '${pr.user.login}' is an owner (admin). No additional review required.`);
+                return;
+              }
+
+              console.log(`PR author '${pr.user.login}' has '${authorPerm.permission}' permission. Checking for owner approval...`);
             }
-
-            console.log(`PR author '${pr.user.login}' has '${authorPerm.permission}' permission. Checking for owner approval...`);
 
             const { data: reviews } = await github.rest.pulls.listReviews({
               owner: context.repo.owner,
@@ -51,6 +56,7 @@ jobs:
             const latestByReviewer = new Map();
             for (const review of reviews) {
               if (review.state === 'COMMENTED') continue;
+              if (review.user.type !== 'User') continue; // Skip bots (e.g., Copilot)
               latestByReviewer.set(review.user.login, review.state);
             }
 
