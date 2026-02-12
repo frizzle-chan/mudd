@@ -158,14 +158,17 @@ class DiscordReconciler:
         self,
         bot: discord.Client,
         pool: asyncpg.Pool,
+        guild_id: int,
         room_cache: RoomChannelCache | None = None,
         console_channel: str = "console",
         seen_orphans: set[tuple[int, str, str]] | None = None,
     ) -> None:
-        self._zone_room = ZoneRoomReconciler(bot, pool, console_channel, seen_orphans)
-        self._permissions = PermissionReconciler(bot, pool, room_cache)
-        self._inventory = InventoryReconciler(bot, pool)
-        self._skills = SkillsReconciler(bot, pool, room_cache)
+        self._zone_room = ZoneRoomReconciler(
+            bot, pool, guild_id, console_channel, seen_orphans
+        )
+        self._permissions = PermissionReconciler(bot, pool, guild_id, room_cache)
+        self._inventory = InventoryReconciler(bot, pool, guild_id)
+        self._skills = SkillsReconciler(bot, pool, guild_id, room_cache)
 
     def notify(self, event: GameEvent) -> None:
         """Receive notification (sync). Delegate to sub-reconcilers."""

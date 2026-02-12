@@ -33,10 +33,12 @@ class PermissionReconciler:
         self,
         bot: discord.Client,
         pool: asyncpg.Pool,
+        guild_id: int,
         room_cache: RoomChannelCache | None = None,
     ) -> None:
         self.bot = bot
         self.pool = pool
+        self._guild_id = guild_id
         self.room_cache = room_cache
         self._location_sync_events: list[UserLocationSyncEvent] = []
         self._user_sync_events: list[UserSyncEvent] = []
@@ -56,19 +58,18 @@ class PermissionReconciler:
         user_sync_events = self._user_sync_events
         self._user_sync_events = []
 
-        if not self.bot.guilds:
+        guild = self.bot.get_guild(self._guild_id)
+        if guild is None:
+            logger.warning(
+                "Guild %d not available, skipping permission flush", self._guild_id
+            )
             return
 
-        for guild in self.bot.guilds:
-            for evt in location_sync_events:
-                if evt.guild_id != guild.id:
-                    continue
-                await self._sync_user_location(guild, evt)
+        for evt in location_sync_events:
+            await self._sync_user_location(guild, evt)
 
-            for evt in user_sync_events:
-                if evt.guild_id != guild.id:
-                    continue
-                await self._handle_user_sync(guild, evt)
+        for evt in user_sync_events:
+            await self._handle_user_sync(guild, evt)
 
     async def _set_voice_permissions(
         self,
@@ -104,6 +105,14 @@ class PermissionReconciler:
                     f"Failed to disconnect {member} from voice channel "
                     f"{paired_voice}: {e}"
                 )
+
+        # Skip API call if voice permissions already match desired state
+        current = paired_voice.overwrites_for(member)
+        if overwrite is None:
+            if current.is_empty():
+                return
+        elif current == overwrite:
+            return
 
         try:
             await paired_voice.set_permissions(
@@ -260,24 +269,27 @@ class PermissionReconciler:
         if channel_id:
             channel = guild.get_channel(channel_id)
             if channel:
-                try:
-                    await channel.set_permissions(
-                        member,
-                        overwrite=discord.PermissionOverwrite(view_channel=True),
-                        reason="MUDD - user sync",
-                    )
-                except discord.HTTPException as e:
-                    logger.error(f"Failed to grant permissions for user: {e}")
+                # Skip if permissions already correct (avoids rate limits during sync)
+                overwrites = channel.overwrites_for(member)
+                if overwrites.view_channel is not True:
+                    try:
+                        await channel.set_permissions(
+                            member,
+                            overwrite=discord.PermissionOverwrite(view_channel=True),
+                            reason="MUDD - user sync",
+                        )
+                    except discord.HTTPException as e:
+                        logger.error(f"Failed to grant permissions for user: {e}")
 
-                if isinstance(channel, discord.TextChannel):
-                    await self._set_voice_permissions(
-                        channel,
-                        member,
-                        overwrite=discord.PermissionOverwrite(
-                            view_channel=True, connect=True, speak=True
-                        ),
-                        reason="MUDD - user sync",
-                    )
+                    if isinstance(channel, discord.TextChannel):
+                        await self._set_voice_permissions(
+                            channel,
+                            member,
+                            overwrite=discord.PermissionOverwrite(
+                                view_channel=True, connect=True, speak=True
+                            ),
+                            reason="MUDD - user sync",
+                        )
 
         # Revoke stale permissions from rooms user is no longer in
         await self._revoke_stale_permissions(guild, member, user.current_room)

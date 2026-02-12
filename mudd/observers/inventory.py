@@ -21,6 +21,7 @@ from mudd.models.inventory_forum import UserInventoryForum
 from mudd.models.room import InventoryThread, Room
 from mudd.models.user import STARTING_BALANCE, User
 from mudd.observers.effects import EffectsObserver
+from mudd.utils.discord import fetch_thread, normalize_channel_name
 from mudd.views import ViewEntity
 
 logger = logging.getLogger(__name__)
@@ -30,7 +31,7 @@ INVENTORY_CATEGORY_NAME = "Inventory"
 
 def _get_inventory_forum_name(username: str) -> str:
     """Get the forum channel name for a user's inventory."""
-    return f"{username}-inventory"
+    return normalize_channel_name(username, "inventory")
 
 
 def _format_transaction_message(event: BalanceChangedEvent) -> str:
@@ -57,9 +58,11 @@ class InventoryReconciler:
         self,
         bot: discord.Client,
         pool: asyncpg.Pool,
+        guild_id: int,
     ) -> None:
         self.bot = bot
         self.pool = pool
+        self._guild_id = guild_id
         self._inventory_sync_events: list[InventorySyncEvent] = []
         self._balance_changed_events: list[BalanceChangedEvent] = []
         self._user_left_events: list[UserLeftEvent] = []
@@ -83,7 +86,9 @@ class InventoryReconciler:
             case EntityPickedUpEvent(instance=instance):
                 if instance.owner_id:
                     self._inventory_sync_events.append(
-                        InventorySyncEvent(guild_id=0, user_id=instance.owner_id)
+                        InventorySyncEvent(
+                            guild_id=self._guild_id, user_id=instance.owner_id
+                        )
                     )
             case EntityDroppedEvent(instance=instance):
                 self._entity_drop_events.append((instance, None))
@@ -92,7 +97,7 @@ class InventoryReconciler:
             case BalanceChangedEvent() as evt:
                 self._balance_changed_events.append(evt)
                 self._inventory_sync_events.append(
-                    InventorySyncEvent(guild_id=0, user_id=evt.user_id)
+                    InventorySyncEvent(guild_id=self._guild_id, user_id=evt.user_id)
                 )
             case InventorySyncEvent() as evt:
                 self._inventory_sync_events.append(evt)
@@ -110,34 +115,32 @@ class InventoryReconciler:
         entity_drop_events = self._entity_drop_events
         self._entity_drop_events = []
 
-        if not self.bot.guilds:
+        guild = self.bot.get_guild(self._guild_id)
+        if guild is None:
+            logger.warning(
+                "Guild %d not available, skipping inventory flush", self._guild_id
+            )
             return
 
-        for guild in self.bot.guilds:
-            # Process inventory sync events (deduplicated by user_id)
-            synced_users: set[int] = set()
-            for evt in inventory_sync_events:
-                if evt.guild_id != 0 and evt.guild_id != guild.id:
-                    continue
-                if evt.user_id in synced_users:
-                    continue
-                synced_users.add(evt.user_id)
-                await self._ensure_user_inventory(guild, evt.user_id)
+        # Process inventory sync events (deduplicated by user_id)
+        synced_users: set[int] = set()
+        for evt in inventory_sync_events:
+            if evt.user_id in synced_users:
+                continue
+            synced_users.add(evt.user_id)
+            await self._ensure_user_inventory(guild, evt.user_id)
 
-            # Post transaction notifications after inventory sync
-            # (which ensures wallet threads exist)
-            for evt in balance_changed_events:
-                await self._post_transaction_notification(guild, evt)
+        # Post transaction notifications after inventory sync
+        # (which ensures wallet threads exist)
+        for evt in balance_changed_events:
+            await self._post_transaction_notification(guild, evt)
 
-            # Process user left events
-            for evt in user_left_events:
-                if evt.guild_id != guild.id:
-                    continue
-                await self._handle_user_left(guild, evt)
+        # Process user left events
+        for evt in user_left_events:
+            await self._handle_user_left(guild, evt)
 
         # Process entity drop/destroy events
         for instance, thread_id in entity_drop_events:
-            guild = self.bot.guilds[0]  # Single-guild bot
             await self._delete_inventory_thread(guild, instance, thread_id=thread_id)
 
     def get_inventory_forum_stats(self) -> dict[str, int]:
@@ -238,7 +241,7 @@ class InventoryReconciler:
         if thread_id is None:
             return
 
-        thread = guild.get_thread(thread_id)
+        thread = await fetch_thread(guild, thread_id)
         if thread:
             try:
                 await thread.delete()
@@ -469,7 +472,7 @@ class InventoryReconciler:
             self.pool, wallet.instance_id
         )
         if wallet_thread_id:
-            thread = guild.get_thread(wallet_thread_id)
+            thread = await fetch_thread(guild, wallet_thread_id)
             if thread:
                 expected_name = ViewEntity(wallet).display_name
                 needs_pin = not thread.flags.pinned
@@ -535,7 +538,7 @@ class InventoryReconciler:
         if thread_id is None:
             return
 
-        thread = guild.get_thread(thread_id)
+        thread = await fetch_thread(guild, thread_id)
         if thread is None:
             return
 
@@ -563,7 +566,7 @@ class InventoryReconciler:
                 continue
 
             if thread_id:
-                thread = guild.get_thread(thread_id)
+                thread = await fetch_thread(guild, thread_id)
                 if thread and msg_id:
                     await self._update_thread_description(thread, msg_id, instance)
                     continue

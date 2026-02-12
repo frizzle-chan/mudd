@@ -117,6 +117,9 @@ The codebase uses an MVC + events architecture:
 **Discord permission gotchas**:
 - Thread creation permissions (`create_public_threads`, `create_private_threads`, `send_messages_in_threads`) are independent of `send_messages`. Deny each one explicitly for read-only channels.
 - The bot cannot edit the server owner's nickname. Check `member.id == guild.owner_id` before calling `member.edit(nick=...)` to avoid error spam.
+- Discord channel names only allow `[a-z0-9-_]` and silently strip everything else. Use `normalize_channel_name()` from `mudd/utils/discord.py` when computing channel/forum names from usernames to avoid rename loops during sync.
+- `guild.get_thread()` is a **local cache-only** lookup — forum threads not recently interacted with are often absent. Use the `_fetch_thread()` helper in `mudd/observers/inventory.py` (cache first, then `guild.fetch_channel()` API fallback) or the equivalent pattern in `mudd/cogs/racing.py`.
+- `channel.set_permissions()` always issues a PUT even if the overwrite already matches. Check `channel.overwrites_for(member)` (local cache, no API call) before calling `set_permissions()` in sync loops to avoid 429 rate limits.
 
 **Docker**: The `.dockerignore` uses an allowlist pattern (starts with `*`, then `!` to include specific paths). **When adding new top-level directories needed at runtime, you must add them to `.dockerignore`.**
 
@@ -182,6 +185,8 @@ pytest mudd/                     # Run only colocated unit tests
 ```
 
 **Unit test convention**: Pure unit tests live alongside source files with the `_unit_test.py` suffix (e.g., `mudd/utils/text_unit_test.py` tests `mudd/utils/text.py`). No `unittest.mock` in unit tests — if it needs mocks, write an integration test instead.
+
+**Image regression tests**: Visual regression tests use the `_image_test.py` suffix and `pytest-regressions[image]`. Baselines are checked-in PNGs in a sibling directory. Regenerate with `pytest <test_file> --regen-all`.
 
 **Test helpers must mirror production**: When test helpers (e.g., `move()`, `interact()`) construct observers or flush pipelines, they must use the same observer list and `flush_all()` path as production cogs. Divergence masks integration bugs.
 

@@ -20,6 +20,7 @@ from mudd.observers import (
 )
 
 if TYPE_CHECKING:
+    from mudd.bot import MuddBot
     from mudd.caches.user import UserCache
 
 logger = logging.getLogger(__name__)
@@ -28,19 +29,20 @@ PLAINTEXT_CHANNEL_PATTERN = re.compile(r"#([\w-]+)")
 
 
 def extract_exits_from_topic(
-    topic: str | None, guild: discord.Guild
+    topic: str | None, guild: discord.Guild, room_cache: RoomChannelCache
 ) -> list[discord.TextChannel]:
     """Extract valid exit channels from a channel's topic (plaintext #channel-name)."""
     if not topic:
         return []
 
-    channel_by_name = {ch.name.lower(): ch for ch in guild.text_channels}
-
     exits: list[discord.TextChannel] = []
     for match in PLAINTEXT_CHANNEL_PATTERN.finditer(topic):
         name = match.group(1).lower()
-        if name in channel_by_name:
-            exits.append(channel_by_name[name])
+        channel_id = room_cache.get_channel_for_room(name)
+        if channel_id is not None:
+            channel = guild.get_channel(channel_id)
+            if isinstance(channel, discord.TextChannel):
+                exits.append(channel)
 
     return exits
 
@@ -94,7 +96,9 @@ class Movement(commands.Cog):
 
         channel = interaction.channel
         topic = getattr(channel, "topic", None)
-        valid_exits = extract_exits_from_topic(topic, interaction.guild)
+        valid_exits = extract_exits_from_topic(
+            topic, interaction.guild, self.room_cache
+        )
 
         # Filter exits based on current input (case-insensitive)
         current_lower = current.lower()
@@ -127,7 +131,9 @@ class Movement(commands.Cog):
 
         channel = interaction.channel
         topic = getattr(channel, "topic", None)
-        valid_exits = extract_exits_from_topic(topic, interaction.guild)
+        valid_exits = extract_exits_from_topic(
+            topic, interaction.guild, self.room_cache
+        )
 
         if not valid_exits:
             await interaction.response.send_message(
@@ -171,11 +177,13 @@ class Movement(commands.Cog):
 
         try:
             # Build standard observers
+            bot: MuddBot = self.bot  # type: ignore[assignment]
             observers = build_observers(
                 self._pool,
                 user.id,
                 user.current_room,
                 bot=cast(discord.Client, self.bot),
+                guild_id=bot.guild_id,
                 room_cache=self.room_cache,
             )
             if self._user_cache is not None:
@@ -218,6 +226,9 @@ class Movement(commands.Cog):
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
         """Assign new members to the default location and create inventory forum."""
+        bot: MuddBot = self.bot  # type: ignore[assignment]
+        if member.guild.id != bot.guild_id:
+            return
         if member.bot:
             return
 
@@ -229,6 +240,7 @@ class Movement(commands.Cog):
             reconciler = DiscordReconciler(
                 cast(discord.Client, self.bot),
                 self._pool,
+                guild_id=bot.guild_id,
                 room_cache=self.room_cache,
             )
 
@@ -256,11 +268,15 @@ class Movement(commands.Cog):
     @commands.Cog.listener()
     async def on_member_remove(self, member: discord.Member):
         """Clean up user data when member leaves."""
+        bot: MuddBot = self.bot  # type: ignore[assignment]
+        if member.guild.id != bot.guild_id:
+            return
         try:
             # Create reconciler and emit event
             reconciler = DiscordReconciler(
                 cast(discord.Client, self.bot),
                 self._pool,
+                guild_id=bot.guild_id,
                 room_cache=self.room_cache,
             )
 

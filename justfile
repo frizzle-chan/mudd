@@ -1,4 +1,4 @@
-default: lint format types entities verbs squawk vulture
+default: lint format types entities horses verbs squawk vulture
 
 test:
     uv run pytest
@@ -31,6 +31,10 @@ entities:
         uv run scripts/validate_world.py "$file"
     done
 
+horses:
+    cat data/horses/*.rec | recfix --check
+    uv run scripts/validate_horses.py
+
 verbs:
     uv run scripts/validate_verbs.py
 
@@ -54,6 +58,13 @@ resetdb:
 migratedb:
     uv run python -c "import asyncio; from mudd.database import init_database; asyncio.run(init_database())"
 
+# Simulate a horse race against the dev database
+race:
+    rm -rf .tasks/race
+    mkdir -p .tasks/race
+    ./scripts/simulate_race.py --render=.tasks/race
+
 # Optimize images from img-src/ to img-dist/
 images:
     uv run scripts/optimize_images.py
+

@@ -200,3 +200,5 @@ img-dist/
 # Dev server PID file
 mudd.pid
 mudd.log
+
+*.local.png

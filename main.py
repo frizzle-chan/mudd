@@ -14,6 +14,7 @@ from mudd.cogs.interact import Interact
 from mudd.cogs.look import Look
 from mudd.cogs.movement import Movement
 from mudd.cogs.ping import Ping
+from mudd.cogs.racing import Racing
 from mudd.cogs.speech import Speech
 from mudd.cogs.sync import Sync
 from mudd.database import get_pool, init_database
@@ -45,13 +46,15 @@ def parse_args() -> argparse.Namespace:
 
 intents = discord.Intents.default()
 intents.members = True
-# Enable message_content to suppress discord.py warning about prefix commands.
-# This bot uses slash commands only, but discord.py requires this intent when
-# a command_prefix is specified (even if not used).
 intents.message_content = True
 
 args = parse_args()
-bot = MuddBot(world_file=args.world, command_prefix="!", intents=intents)
+# Empty prefix tuple disables prefix command parsing — this bot
+# uses slash commands and on_message listeners only.
+guild_id = int(os.environ["GUILD_ID"])
+bot = MuddBot(
+    world_file=args.world, guild_id=guild_id, command_prefix=(), intents=intents
+)
 
 
 @bot.event
@@ -75,12 +78,18 @@ async def setup_hook():
     await bot.add_cog(Sync(bot, pool, room_cache, autocomplete_cache, user_cache))
     await bot.add_cog(Economy(bot, pool))
     await bot.add_cog(Speech(bot, pool, room_cache))
+    await bot.add_cog(Racing(bot, pool, room_cache))
 
 
 @bot.event
 async def on_ready():
     # Sync cog handles zone/room sync and room cache initialization
     # on first periodic_sync iteration. This just syncs slash commands.
+    guild = discord.Object(id=bot.guild_id)
+    bot.tree.copy_global_to(guild=guild)
+    await bot.tree.sync(guild=guild)
+    # Clear stale global commands so they don't duplicate the guild commands
+    bot.tree.clear_commands(guild=None)
     await bot.tree.sync()
     logger.info(f"Logged in as {bot.user} (world: {bot.world_file})")
 

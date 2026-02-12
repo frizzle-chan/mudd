@@ -1,10 +1,12 @@
 *
 
+!README.md
 !uv.lock
 !pyproject.toml
 
 !main.py
 !mudd/
 !migrations/
+!data/horses/
 !data/verbs/
 !data/worlds/

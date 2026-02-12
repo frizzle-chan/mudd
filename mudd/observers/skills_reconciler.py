@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import logging
 from typing import TYPE_CHECKING
 
@@ -23,6 +24,7 @@ from mudd.skills.formatting import (
     get_milestone_role,
 )
 from mudd.skills.registry import Skill
+from mudd.utils.discord import normalize_channel_name
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +33,7 @@ SKILLS_CATEGORY_NAME = "Skills"
 
 def _get_skills_channel_name(username: str) -> str:
     """Get the channel name for a user's skills channel."""
-    return f"{username}-skills"
+    return normalize_channel_name(username, "skills")
 
 
 async def ensure_roles(guild: discord.Guild) -> None:
@@ -101,11 +103,13 @@ class SkillsReconciler:
         self,
         bot: discord.Client,
         pool: asyncpg.Pool,
+        guild_id: int,
         room_cache: RoomChannelCache | None = None,
     ) -> None:
         self._bot = bot
         self._pool = pool
-        self._announcements = SkillsAnnouncements(bot, room_cache)
+        self._guild_id = guild_id
+        self._announcements = SkillsAnnouncements(bot, guild_id, room_cache)
         self._xp_events: list[XPGainedEvent] = []
         self._level_up_events: list[LevelUpEvent] = []
         self._user_left_events: list[UserLeftEvent] = []
@@ -172,10 +176,9 @@ class SkillsReconciler:
                 )
 
         # Handle user departures
-        for evt in user_left_events:
-            for guild in self._bot.guilds:
-                if evt.guild_id != guild.id:
-                    continue
+        guild = self._bot.get_guild(self._guild_id)
+        if guild is not None:
+            for evt in user_left_events:
                 await self._handle_user_left(guild, evt)
 
         # Prepare level-up announcements (sent later via post_announcements)
@@ -213,6 +216,7 @@ class SkillsReconciler:
         try:
             channel_id = await self._ensure_skills_channel(guild, user_id)
             await self._update_skills_channel(user_id, skills, total_level)
+            await self._purge_stale_messages(user_id)
 
             # Repair thread/command permissions on existing channels
             channel = guild.get_channel(channel_id)
@@ -406,11 +410,48 @@ class SkillsReconciler:
                 await msg.edit(content=content)
                 return
             except discord.NotFound:
-                pass  # Message deleted, create new one
+                pass  # Message deleted, fall through to create new one
+
+        # Purge any stale bot messages before sending a new one.
+        # This prevents orphaned duplicates when the tracked message_id
+        # was lost (e.g. DB record recreated during channel recovery).
+        bot_user = self._bot.user
+        async for old_msg in channel.history(limit=10):
+            if old_msg.author == bot_user:
+                with contextlib.suppress(discord.HTTPException):
+                    await old_msg.delete()
 
         # Send new message and store ID
         msg = await channel.send(content)
         await UserSkillsChannel.update_message_id(self._pool, user_id, msg.id)
+
+    async def _purge_stale_messages(self, user_id: int) -> None:
+        """Delete bot messages in a user's skills channel that aren't the tracked one.
+
+        Called during periodic sync to clean up orphaned messages left behind
+        when the tracked message_id was lost and a new message was created.
+
+        Args:
+            user_id: Discord user ID
+        """
+        record = await UserSkillsChannel.get(self._pool, user_id)
+        if record is None or record.message_id is None:
+            return
+
+        channel = self._bot.get_channel(record.channel_id)
+        if not isinstance(channel, discord.TextChannel):
+            return
+
+        bot_user = self._bot.user
+        async for msg in channel.history(limit=10):
+            if msg.author == bot_user and msg.id != record.message_id:
+                with contextlib.suppress(discord.HTTPException):
+                    await msg.delete()
+                    logger.info(
+                        "Purged stale skills message %d for user %d",
+                        msg.id,
+                        user_id,
+                    )
 
     async def _update_nickname(self, user_id: int, total_level: int) -> None:
         """Update user's nickname with total level.
@@ -420,22 +461,27 @@ class SkillsReconciler:
             total_level: Pre-computed total level
         """
 
-        for guild in self._bot.guilds:
-            member = guild.get_member(user_id)
-            if member is None:
-                continue
-            if member.id == guild.owner_id:
-                continue
+        guild = self._bot.get_guild(self._guild_id)
+        if guild is None:
+            return
 
-            nick = format_nickname(member.display_name, total_level)
-            try:
-                await member.edit(nick=nick)
-                await User.update_display_name(self._pool, user_id, nick)
-            except discord.Forbidden:
-                logger.warning(
-                    "Cannot edit nickname for %s (owner?)",
-                    member.display_name,
-                )
+        member = guild.get_member(user_id)
+        if member is None:
+            return
+        if member.id == guild.owner_id:
+            return
+
+        nick = format_nickname(member.display_name, total_level)
+        if member.nick == nick:
+            return
+        try:
+            await member.edit(nick=nick)
+            await User.update_display_name(self._pool, user_id, nick)
+        except discord.Forbidden:
+            logger.warning(
+                "Cannot edit nickname for %s (owner?)",
+                member.display_name,
+            )
 
     async def _update_milestone_role(self, user_id: int, total_level: int) -> None:
         """Update milestone role for a user.
@@ -448,35 +494,38 @@ class SkillsReconciler:
         """
         target_role_name = get_milestone_role(total_level)
 
-        for guild in self._bot.guilds:
-            member = guild.get_member(user_id)
-            if member is None:
-                continue
+        guild = self._bot.get_guild(self._guild_id)
+        if guild is None:
+            return
 
-            # Build set of milestone role objects
-            milestone_roles = {r for r in guild.roles if r.name in MILESTONE_ROLE_NAMES}
+        member = guild.get_member(user_id)
+        if member is None:
+            return
 
-            # Current milestone roles on the member
-            current = milestone_roles & set(member.roles)
+        # Build set of milestone role objects
+        milestone_roles = {r for r in guild.roles if r.name in MILESTONE_ROLE_NAMES}
 
-            if target_role_name is None:
-                # Remove all milestone roles
-                for role in current:
-                    await member.remove_roles(role)
-                return
+        # Current milestone roles on the member
+        current = milestone_roles & set(member.roles)
 
-            # Find target role
-            target_role = discord.utils.get(guild.roles, name=target_role_name)
-            if target_role is None:
-                return
-
-            # Remove wrong roles, add correct one
+        if target_role_name is None:
+            # Remove all milestone roles
             for role in current:
-                if role != target_role:
-                    await member.remove_roles(role)
+                await member.remove_roles(role)
+            return
 
-            if target_role not in member.roles:
-                await member.add_roles(target_role)
+        # Find target role
+        target_role = discord.utils.get(guild.roles, name=target_role_name)
+        if target_role is None:
+            return
+
+        # Remove wrong roles, add correct one
+        for role in current:
+            if role != target_role:
+                await member.remove_roles(role)
+
+        if target_role not in member.roles:
+            await member.add_roles(target_role)
 
     async def _handle_user_left(
         self, guild: discord.Guild, event: UserLeftEvent

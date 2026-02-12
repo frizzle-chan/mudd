@@ -4,10 +4,14 @@ from __future__ import annotations
 
 import logging
 import time
+from typing import TYPE_CHECKING
 
 import asyncpg
 import discord
 from discord.ext import commands
+
+if TYPE_CHECKING:
+    from mudd.bot import MuddBot
 
 from mudd.events.types import GrantXPSignal
 from mudd.models.user import User
@@ -44,6 +48,10 @@ class Speech(commands.Cog):
         if message.author.bot or message.guild is None:
             return
 
+        bot: MuddBot = self.bot  # type: ignore[assignment]
+        if message.guild.id != bot.guild_id:
+            return
+
         # Only grant XP in room channels
         room_id = self._room_cache.get_room_for_channel(message.channel.id)
         if room_id is None:
@@ -68,6 +76,7 @@ class Speech(commands.Cog):
             message.author.id,
             room_id,
             bot=self.bot,
+            guild_id=bot.guild_id,
             room_cache=self._room_cache,
         )
 

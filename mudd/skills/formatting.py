@@ -15,7 +15,7 @@ MILESTONE_ROLES: list[tuple[str, int]] = [
     ("Newbie", SKILL_COUNT * 1),
     ("Apprentice", SKILL_COUNT * 3),
     ("Adventurer", SKILL_COUNT * 10),
-    ("Journeyman", SKILL_COUNT * 20),
+    ("Adept", SKILL_COUNT * 20),
     ("Expert", SKILL_COUNT * 40),
     ("Veteran", SKILL_COUNT * 60),
     ("Hero", SKILL_COUNT * 80),

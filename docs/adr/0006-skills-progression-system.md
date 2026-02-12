@@ -143,7 +143,7 @@ Thresholds are defined as `num_skills × average_level`, so they scale automatic
 | Newbie | 1 | 5 | 6 | 10 |
 | Apprentice | 3 | 15 | 18 | 30 |
 | Adventurer | 10 | 50 | 60 | 100 |
-| Journeyman | 20 | 100 | 120 | 200 |
+| Adept | 20 | 100 | 120 | 200 |
 | Expert | 40 | 200 | 240 | 400 |
 | Veteran | 60 | 300 | 360 | 600 |
 | Hero | 80 | 400 | 480 | 800 |
