@@ -69,6 +69,13 @@ class GrantXPSignal:
 
 
 @dataclass(frozen=True, slots=True)
+class ChargeCurrencySignal:
+    """Signal that currency should be charged (debited) from the user."""
+
+    amount: int
+
+
+@dataclass(frozen=True, slots=True)
 class DispenseSignal:
     """Signal that an item should be dispensed from this container."""
 
@@ -264,6 +271,7 @@ type GameEvent = (
     | GrantEvent
     | GrantRandomEvent
     | GrantCurrencyEvent
+    | ChargeCurrencySignal
     | GrantXPSignal
     | PickupSignal
     | DropSignal

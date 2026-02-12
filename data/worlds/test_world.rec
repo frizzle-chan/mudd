@@ -537,6 +537,29 @@ Tags: test_loot test_currency_spawn test_painting_spawn
 DescriptionShort: a {{ e.name }}
 DescriptionLong: A test item with multiple tags for multi-tag query testing.
 
+# ----------------------------------------------------------------------------
+# Charge effect test fixtures
+# ----------------------------------------------------------------------------
+
+Id: test_charge_machine
+Name: Test Charge Machine
+Prototype: furniture
+Room: store-room
+ContentsVisible: no
+DescriptionShort: A {{ e.name }} stands against the wall.
+DescriptionLong: A test machine that charges ¥5 per use and dispenses a prize.
+OnUse: {% if not e.contents %}The machine is empty.{% elif user.balance < 5 %}TEST_INSUFFICIENT_FUNDS - Not enough yen. You have {{ user.balance | money }}.{% else %}{{ effects.charge(5) }}{{ effects.dispense() }}{{ effects.broadcast("**" ~ user ~ "** uses the charge machine...") }}TEST_CHARGE_RESPONSE - You insert ¥5 and receive a prize!{% endif %}
+
+Id: test_charge_prize
+Name: Test Charge Prize
+Prototype: item
+Room: store-room
+Container: test_charge_machine
+Rarity: common
+Tags: test_charge_prize_spawn
+DescriptionShort: a {{ e.name }}
+DescriptionLong: A test prize from the charge machine.
+
 # ============================================================================
 # Spawning Pool record type
 # ============================================================================

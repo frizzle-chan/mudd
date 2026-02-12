@@ -13,7 +13,7 @@ from mudd.events import Observer
 from mudd.models.entity import EntityInstance, ResolvedEntity
 from mudd.models.interfaces import IReadableEntity, IRoom
 from mudd.models.room import EntityModal, InventoryThread, Room
-from mudd.models.user import User
+from mudd.models.user import InsufficientFundsError, User
 from mudd.observers import EffectsObserver, build_observers, flush_all, post_flush_all
 from mudd.views import ViewEntity
 
@@ -254,6 +254,18 @@ class Scene:
 
         # Apply effects - commands already validated capabilities
 
+        # Currency charges: debit to house account (pay before receiving)
+        view = ViewEntity(target)
+        for amount in effects.currency_charges:
+            try:
+                await self.user.debit_to_house(amount, memo=f"Charged by {view.name}")
+            except InsufficientFundsError:
+                logger.warning(
+                    "Charge of %d failed for user %d: insufficient funds",
+                    amount,
+                    self.user.id,
+                )
+
         # Dispense: pick random item from container contents → _take_item
         if effects.has_dispense:
             contents = await target.get_contents()
@@ -278,7 +290,6 @@ class Scene:
             await self.user.clear_focus()
 
         # Currency grants: credit from house account
-        view = ViewEntity(target)
         for amount in effects.currency_grants:
             await self.user.credit_from_house(
                 amount, memo=f"Picked up from {view.name}"

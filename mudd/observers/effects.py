@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from mudd.events.observer import Observer
 from mudd.events.types import (
     BroadcastEvent,
+    ChargeCurrencySignal,
     ClearFocusSignal,
     DestroySignal,
     DispenseSignal,
@@ -52,6 +53,7 @@ class EffectsObserver:
     _grants: list[str] = field(default_factory=list)
     _grant_randoms: list[str] = field(default_factory=list)
     _currency_grants: list[int] = field(default_factory=list)
+    _currency_charges: list[int] = field(default_factory=list)
     _xp_grants: list[tuple[Skill, int]] = field(default_factory=list)
     _pickup_signaled: bool = False
     _drop_signaled: bool = False
@@ -75,6 +77,8 @@ class EffectsObserver:
                 self._grant_randoms.append(tag)
             case GrantCurrencyEvent(amount=amount):
                 self._currency_grants.append(amount)
+            case ChargeCurrencySignal(amount=amount):
+                self._currency_charges.append(amount)
             case GrantXPSignal(skill=skill, amount=amount):
                 self._xp_grants.append((skill, amount))
             case PickupSignal():
@@ -129,6 +133,11 @@ class EffectsObserver:
     def currency_grants(self) -> list[int]:
         """Amounts of currency to grant."""
         return self._currency_grants
+
+    @property
+    def currency_charges(self) -> list[int]:
+        """Amounts of currency to charge (debit from user)."""
+        return self._currency_charges
 
     @property
     def xp_grants(self) -> list[tuple[Skill, int]]:

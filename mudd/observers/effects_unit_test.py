@@ -4,6 +4,7 @@ import pytest
 
 from mudd.events import (
     BroadcastEvent,
+    ChargeCurrencySignal,
     DestroySignal,
     DispenseSignal,
     DropSignal,
@@ -51,6 +52,19 @@ class TestEffectsObserverNotify:
         observer = EffectsObserver()
         observer.notify(GrantCurrencyEvent(amount=100))
         assert observer.currency_grants == [100]
+
+    def test_charge_currency_signal_collected(self):
+        """ChargeCurrencySignal is collected in currency_charges list."""
+        observer = EffectsObserver()
+        observer.notify(ChargeCurrencySignal(amount=5))
+        assert observer.currency_charges == [5]
+
+    def test_multiple_charges_collected(self):
+        """Multiple ChargeCurrencySignal events are collected in order."""
+        observer = EffectsObserver()
+        observer.notify(ChargeCurrencySignal(amount=5))
+        observer.notify(ChargeCurrencySignal(amount=10))
+        assert observer.currency_charges == [5, 10]
 
     def test_pickup_signal_sets_flag(self):
         """PickupSignal sets has_pickup flag."""
@@ -194,6 +208,28 @@ class TestEffectsCollector:
         collector = EffectsCollector(observer)
         collector.grant_currency(-50)
         assert observer.currency_grants == []
+
+    def test_charge_returns_empty_string(self):
+        """charge() returns empty string for inline template use."""
+        observer = EffectsObserver()
+        collector = EffectsCollector(observer)
+        result = collector.charge(5)
+        assert result == ""
+        assert observer.currency_charges == [5]
+
+    def test_charge_ignores_zero_amount(self):
+        """charge() ignores zero amounts."""
+        observer = EffectsObserver()
+        collector = EffectsCollector(observer)
+        collector.charge(0)
+        assert observer.currency_charges == []
+
+    def test_charge_ignores_negative_amount(self):
+        """charge() ignores negative amounts."""
+        observer = EffectsObserver()
+        collector = EffectsCollector(observer)
+        collector.charge(-5)
+        assert observer.currency_charges == []
 
     def test_dispense_returns_empty_string(self):
         """dispense() returns empty string for inline template use."""

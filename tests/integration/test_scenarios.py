@@ -32,7 +32,7 @@ from mudd.events import (
 )
 from mudd.models import EntityInstance, RoomEntityInstance, User
 from mudd.models.spawning_pool import SpawningPool
-from mudd.models.user import TransferError
+from mudd.models.user import InsufficientFundsError, TransferError
 from mudd.scene import Scene
 from tests.helpers import (
     NullReconciler,
@@ -926,3 +926,158 @@ async def test_cannot_drop_item_not_in_inventory(test_db, clean_user_state):
         for o in options
         if not isinstance(o, RoomEntityInstance)
     )
+
+
+async def test_charge_machine_deducts_yen_and_dispenses(test_db, clean_user_state):
+    """Charge machine deducts ¥5, dispenses prize, emits balance event."""
+    user = await create_test_user(test_db, room_id="store-room")
+    await User.create_currency_account(test_db, user.id, 100)
+
+    # Use the charge machine
+    machine = next(
+        o
+        for o in await autocomplete(test_db, user.id, "Charge Machine")
+        if not isinstance(o, RoomEntityInstance)
+    )
+    result = await act(
+        test_db, user.id, UseCommand(), f"entity://{machine.instance_id}"
+    )
+
+    # Template rendered the success path
+    assert "TEST_CHARGE_RESPONSE" in result.output
+
+    # Charge signal was collected by the effects observer
+    assert len(result.effects.currency_charges) == 1
+    assert result.effects.currency_charges[0] == 5
+
+    # Dispense signal was also fired
+    assert result.effects.has_dispense
+
+    # Broadcast was emitted
+    assert len(result.effects.broadcasts) > 0
+    assert "uses the charge machine" in result.effects.broadcasts[0]
+
+    # Prize should have been picked up into inventory
+    inv = await autocomplete(test_db, user.id, "i.")
+    assert any(e.entity.name == "Test Charge Prize" for e in inv)
+
+    # Balance should be 100 - 5 = 95
+    refreshed = await User.get(test_db, user.id)
+    assert refreshed is not None
+    assert await refreshed.get_balance() == 95
+
+    # BalanceChangedEvent emitted with negative delta
+    balance_events = [
+        e for e in result.reconciler.events if isinstance(e, BalanceChangedEvent)
+    ]
+    charge_event = next(e for e in balance_events if e.delta < 0)
+    assert charge_event.delta == -5
+    assert charge_event.user_id == user.id
+
+
+async def test_charge_machine_insufficient_funds(test_db, clean_user_state):
+    """Player with insufficient yen sees rejection message, no charge or dispense."""
+    user = await create_test_user(test_db, room_id="store-room")
+    await User.create_currency_account(test_db, user.id, 3)  # Less than ¥5
+
+    # Use the charge machine
+    machine = next(
+        o
+        for o in await autocomplete(test_db, user.id, "Charge Machine")
+        if not isinstance(o, RoomEntityInstance)
+    )
+    result = await act(
+        test_db, user.id, UseCommand(), f"entity://{machine.instance_id}"
+    )
+
+    # Template rendered the insufficient funds path
+    assert "TEST_INSUFFICIENT_FUNDS" in result.output
+    assert "¥3" in result.output
+
+    # No charge or dispense signals were emitted
+    assert len(result.effects.currency_charges) == 0
+    assert not result.effects.has_dispense
+
+    # Balance unchanged
+    refreshed = await User.get(test_db, user.id)
+    assert refreshed is not None
+    assert await refreshed.get_balance() == 3
+
+    # No prize in inventory
+    inv = await autocomplete(test_db, user.id, "i.")
+    assert not any(e.entity.name == "Test Charge Prize" for e in inv)
+
+
+async def test_charge_machine_empty(test_db, clean_user_state):
+    """Player uses empty charge machine, sees empty message, no charge."""
+    user = await create_test_user(test_db, room_id="store-room")
+    await User.create_currency_account(test_db, user.id, 100)
+
+    # Remove the prize from the machine so it's empty
+    machine = next(
+        o
+        for o in await autocomplete(test_db, user.id, "Charge Machine")
+        if not isinstance(o, RoomEntityInstance)
+    )
+
+    # First use: dispenses the prize (empties the machine)
+    await act(test_db, user.id, UseCommand(), f"entity://{machine.instance_id}")
+
+    # Second use: machine should be empty
+    result = await act(
+        test_db, user.id, UseCommand(), f"entity://{machine.instance_id}"
+    )
+    assert "empty" in result.output.lower()
+
+    # No charge on the empty attempt
+    assert len(result.effects.currency_charges) == 0
+
+    # Balance should be 95 (only first pull charged)
+    refreshed = await User.get(test_db, user.id)
+    assert refreshed is not None
+    assert await refreshed.get_balance() == 95
+
+
+async def test_debit_to_house_insufficient_funds_error(test_db, clean_user_state):
+    """User.debit_to_house raises InsufficientFundsError when balance is too low."""
+    user = await create_test_user(test_db, room_id="store-room")
+    await User.create_currency_account(test_db, user.id, 10)
+
+    fresh = await User.get(test_db, user.id)
+    assert fresh is not None
+
+    with pytest.raises(InsufficientFundsError) as exc_info:
+        await fresh.debit_to_house(50, memo="test overcharge")
+
+    assert exc_info.value.balance == 10
+    assert exc_info.value.amount == 50
+
+    # Balance unchanged
+    assert await fresh.get_balance() == 10
+
+
+async def test_debit_to_house_success(test_db, clean_user_state):
+    """User.debit_to_house deducts correctly and emits BalanceChangedEvent."""
+    user = await create_test_user(test_db, room_id="store-room")
+    await User.create_currency_account(test_db, user.id, 200)
+
+    reconciler = NullReconciler()
+    fresh = await User.get(test_db, user.id)
+    assert fresh is not None
+    fresh = fresh.with_observers(reconciler)
+
+    new_balance = await fresh.debit_to_house(75, memo="test debit")
+    assert new_balance == 125
+
+    # Balance persisted
+    assert await fresh.get_balance() == 125
+
+    # BalanceChangedEvent emitted with negative delta
+    balance_events = [
+        e for e in reconciler.events if isinstance(e, BalanceChangedEvent)
+    ]
+    assert len(balance_events) == 1
+    assert balance_events[0].user_id == user.id
+    assert balance_events[0].new_balance == 125
+    assert balance_events[0].delta == -75
+    assert balance_events[0].memo == "test debit"
