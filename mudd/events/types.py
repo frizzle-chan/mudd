@@ -94,6 +94,7 @@ class EntityPickedUpEvent:
     """Fact: entity was picked up by a user."""
 
     instance: EntityInstance
+    spawning_pool_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -109,6 +110,7 @@ class EntityDestroyedEvent:
 
     instance: EntityInstance
     thread_id: int | None = None
+    spawning_pool_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

@@ -673,6 +673,8 @@ class EntityInstance:
         """Move this instance to a user's inventory.
 
         Updates the database and notifies observers with "picked_up" event.
+        Captures spawning_pool_id before clearing it so observers can
+        reset the pool's respawn timer.
 
         Args:
             user: User model instance to receive the item
@@ -680,11 +682,12 @@ class EntityInstance:
         Returns:
             New EntityInstance with updated location
         """
-        from mudd.models.spawning_pool import SpawningPool
-
-        # Reset the spawning pool timer so a replacement doesn't spawn
-        # instantly (must run before spawning_pool_id is cleared below).
-        await SpawningPool.reset_timer(self._pool, self.instance_id)
+        # Capture spawning_pool_id before the UPDATE clears it.
+        row = await self._pool.fetchrow(
+            "SELECT spawning_pool_id FROM entity_instances WHERE id = $1",
+            self.instance_id,
+        )
+        spawning_pool_id = row["spawning_pool_id"] if row else None
 
         await self._pool.execute(
             """
@@ -704,7 +707,12 @@ class EntityInstance:
             container_entity_id=None,
         )
         for observer in new_instance._observers:
-            observer.notify(EntityPickedUpEvent(instance=new_instance))
+            observer.notify(
+                EntityPickedUpEvent(
+                    instance=new_instance,
+                    spawning_pool_id=spawning_pool_id,
+                )
+            )
         return new_instance
 
     async def drop_to_room(
@@ -749,18 +757,26 @@ class EntityInstance:
         """Delete this instance from the database.
 
         Notifies observers with "destroyed" event before deletion.
-        Pre-fetches thread_id so observers can clean up Discord threads
-        after the row is deleted.
+        Pre-fetches thread_id and spawning_pool_id so observers can
+        clean up Discord threads and reset respawn timers after the
+        row is deleted.
         """
-        from mudd.models.spawning_pool import SpawningPool
+        row = await self._pool.fetchrow(
+            """SELECT discord_thread_id, spawning_pool_id
+            FROM entity_instances WHERE id = $1""",
+            self.instance_id,
+        )
+        thread_id = row["discord_thread_id"] if row else None
+        spawning_pool_id = row["spawning_pool_id"] if row else None
 
-        # Reset the spawning pool timer so a replacement doesn't spawn
-        # instantly (must run before the row is deleted).
-        await SpawningPool.reset_timer(self._pool, self.instance_id)
-
-        thread_id = await EntityInstance.get_thread_id(self._pool, self.instance_id)
         for observer in self._observers:
-            observer.notify(EntityDestroyedEvent(instance=self, thread_id=thread_id))
+            observer.notify(
+                EntityDestroyedEvent(
+                    instance=self,
+                    thread_id=thread_id,
+                    spawning_pool_id=spawning_pool_id,
+                )
+            )
         await self._pool.execute(
             "DELETE FROM entity_instances WHERE id = $1",
             self.instance_id,

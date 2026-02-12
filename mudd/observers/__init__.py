@@ -18,6 +18,7 @@ from mudd.observers.cache import CacheInvalidationObserver
 from mudd.observers.discord import DiscordReconciler, RoomChannelCache
 from mudd.observers.effects import EffectsObserver
 from mudd.observers.skills import SkillsObserver
+from mudd.observers.spawning_pool import SpawningPoolObserver
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +28,7 @@ __all__ = [
     "EffectsObserver",
     "RoomChannelCache",
     "SkillsObserver",
+    "SpawningPoolObserver",
     "build_observers",
     "flush_all",
     "post_flush_all",
@@ -50,6 +52,7 @@ def build_observers(
     """
     observers: list[Observer] = []
 
+    observers.append(SpawningPoolObserver(pool))
     observers.append(
         SkillsObserver(
             _pool=pool,
