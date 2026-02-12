@@ -5,13 +5,14 @@ Async functions for persisting races and maintaining rolling counters.
 
 from __future__ import annotations
 
-import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
+from typing import Any
 
 import asyncpg
 
+from mudd.models.race import RaceStatus
 from mudd.racing.odds import HorseOdds
 from mudd.racing.simulation import RaceResult
 
@@ -25,15 +26,41 @@ class MessageType(StrEnum):
     POLL = "poll"
 
 
-class RaceStatus(StrEnum):
-    """PostgreSQL race_status enum."""
+@dataclass(frozen=True, slots=True)
+class PollAnswer:
+    """A single answer option for a Discord poll."""
 
-    OPEN = "open"
-    LOCKED = "locked"
-    ANNOUNCING = "announcing"
-    RUNNING = "running"
-    FINISHED = "finished"
-    CANCELLED = "cancelled"
+    text: str
+    emoji: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class PollConfig:
+    """Typed configuration for a Discord poll message."""
+
+    question: str
+    answers: list[PollAnswer] = field(default_factory=list)
+    duration_hours: int = 1
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize to a JSON-compatible dict for JSONB storage."""
+        return {
+            "question": self.question,
+            "answers": [{"text": a.text, "emoji": a.emoji} for a in self.answers],
+            "duration_hours": self.duration_hours,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> PollConfig:
+        """Deserialize from a JSONB dict."""
+        return cls(
+            question=data.get("question", "Favorite horse?"),
+            answers=[
+                PollAnswer(text=a["text"], emoji=a.get("emoji"))
+                for a in data.get("answers", [])
+            ],
+            duration_hours=data.get("duration_hours", 1),
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,6 +76,7 @@ class PendingMessage:
     image_name: str | None
     channel_id: int | None
     thread_id: int | None
+    poll: PollConfig | None
 
 
 async def create_race(
@@ -71,30 +99,26 @@ async def create_race(
     Returns:
         The new race ID.
     """
-    horses_json = json.dumps(result.horse_ids)
-    snapshots_json = json.dumps(result.snapshots)
-    events_json = json.dumps(
-        [
-            {
-                "tick": e.tick,
-                "horse_index": e.horse_index,
-                "type": str(e.burst_type),
-            }
-            for e in result.events
-        ]
-    )
-    finishing_order_json = json.dumps(result.finishing_order)
-    odds_json = json.dumps(
-        [
-            {
-                "horse_id": o.horse_id,
-                "displayed_payout": o.displayed_payout,
-                "true_probability": o.true_probability,
-                "star_rating": o.star_rating,
-            }
-            for o in odds
-        ]
-    )
+    horses_data = result.horse_ids
+    snapshots_data = result.snapshots
+    events_data = [
+        {
+            "tick": e.tick,
+            "horse_index": e.horse_index,
+            "type": str(e.burst_type),
+        }
+        for e in result.events
+    ]
+    finishing_order_data = result.finishing_order
+    odds_data = [
+        {
+            "horse_id": o.horse_id,
+            "displayed_payout": o.displayed_payout,
+            "true_probability": o.true_probability,
+            "star_rating": o.star_rating,
+        }
+        for o in odds
+    ]
 
     finished_at = "NOW()" if status == RaceStatus.FINISHED else "NULL"
 
@@ -107,11 +131,11 @@ async def create_race(
                        $6::jsonb, NOW(), {finished_at}, $7)
                RETURNING id""",
             status,
-            horses_json,
-            snapshots_json,
-            events_json,
-            finishing_order_json,
-            odds_json,
+            horses_data,
+            snapshots_data,
+            events_data,
+            finishing_order_data,
+            odds_data,
             channel_id,
         )
 
@@ -145,6 +169,7 @@ class RaceMessageInput:
     image_data: bytes | None
     image_name: str | None
     post_at: datetime
+    poll: PollConfig | None = None
 
 
 async def create_race_messages(
@@ -163,15 +188,17 @@ async def create_race_messages(
     image_datas = [m.image_data for m in messages]
     image_names = [m.image_name for m in messages]
     post_ats = [m.post_at for m in messages]
+    polls = [m.poll.to_dict() if m.poll else None for m in messages]
 
     await pool.execute(
         """INSERT INTO race_messages
                (race_id, sequence, message_type, content,
-                image_data, image_name, post_at)
+                image_data, image_name, post_at, poll)
            SELECT * FROM unnest(
                $1::int[], $2::int[],
                $3::race_message_type[], $4::text[],
-               $5::bytea[], $6::text[], $7::timestamptz[]
+               $5::bytea[], $6::text[], $7::timestamptz[],
+               $8::jsonb[]
            )""",
         race_ids,
         sequences,
@@ -180,6 +207,7 @@ async def create_race_messages(
         image_datas,
         image_names,
         post_ats,
+        polls,
     )
 
 
@@ -191,7 +219,7 @@ async def fetch_pending_messages(pool: asyncpg.Pool) -> list[PendingMessage]:
     rows = await pool.fetch(
         """SELECT rm.id, rm.race_id, rm.sequence, rm.message_type,
                   rm.content, rm.image_data, rm.image_name,
-                  r.channel_id, r.thread_id
+                  rm.poll, r.channel_id, r.thread_id
            FROM race_messages rm
            JOIN races r ON rm.race_id = r.id
            WHERE rm.post_at <= NOW()
@@ -208,6 +236,7 @@ async def fetch_pending_messages(pool: asyncpg.Pool) -> list[PendingMessage]:
             image_name=row["image_name"],
             channel_id=row["channel_id"],
             thread_id=row["thread_id"],
+            poll=PollConfig.from_dict(row["poll"]) if row["poll"] else None,
         )
         for row in rows
     ]
@@ -367,3 +396,16 @@ async def get_recent_results(
     for row in rows:
         results[row["horse_id"]].append(row["position"])
     return results
+
+
+async def get_race_winner(pool: asyncpg.Pool, race_id: int) -> str | None:
+    """Return the winner horse ID for a finished race, or None."""
+    row = await pool.fetchrow(
+        "SELECT finishing_order, horses FROM races WHERE id = $1",
+        race_id,
+    )
+    if row is None:
+        return None
+    finishing_order = row["finishing_order"]
+    horse_ids = row["horses"]
+    return horse_ids[finishing_order[0]]

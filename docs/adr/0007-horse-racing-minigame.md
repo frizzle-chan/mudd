@@ -217,4 +217,35 @@ When more than 10 horses are active, 10 are randomly selected for the race. The 
 - Racing sprite may need separate surge/stumble visual states — could be composited by the renderer or require additional assets
 - If the horse roster grows large, the flat directory could get noisy — subdirectories per horse would be a natural evolution
 - The roster can grow beyond 10 horses; only 10 are randomly selected per race, so all active horses still get exposure over time
-- Betting integration will add messages to the starting sequence and payout messages after results
+
+### Multi-Horse Betting
+
+In the context of **allowing players to spread risk across multiple horses**, facing **the original one-bet-per-race constraint**, we decided to **change the UNIQUE constraint to `(race_id, user_id, horse_id)`**, to achieve **one bet per user per horse per race, allowing players to bet on multiple horses in the same race**, accepting **additional complexity in bet management and payout resolution**.
+
+### Betting Window
+
+In the context of **ensuring fair betting**, facing **the need to prevent bets after the race outcome is determined**, we decided to **accept bets only during ANNOUNCING status and lock them at the RACE_START transition**, to achieve **a clear betting window where odds are visible and players have time to decide**, accepting **that ad-hoc races have a shorter betting window (~15 seconds) than scheduled races (~59.5 minutes)**.
+
+### Ad-Hoc Race Status
+
+In the context of **enabling betting on ad-hoc races**, facing **the original default of RUNNING status**, we decided to **change the default race status from RUNNING to ANNOUNCING**, to achieve **a consistent betting window for both ad-hoc and scheduled races**, accepting **that ad-hoc races now have a brief announcing phase before starting**.
+
+### Bet Override via Delta
+
+In the context of **letting players change their bet amount on the same horse**, facing **the choice between refund-and-recharge or delta adjustment**, we decided to **compute the currency delta between old and new bet amounts**, to achieve **a single atomic currency transfer instead of two, reducing transaction volume and race conditions**, accepting **slightly more complex bet-update logic**.
+
+### Bet Cancellation
+
+In the context of **allowing players to back out of bets**, facing **the need for a simple cancellation mechanism**, we decided to **use `/bet horse 0` to delete the bet row and refund the full amount**, to achieve **cancellation without adding a separate command, only during ANNOUNCING status**, accepting **that the zero-amount convention is less discoverable than a dedicated cancel command**.
+
+### Thread Bet Announcements
+
+In the context of **making betting activity visible to spectators**, facing **the choice between private-only and public bet notifications**, we decided to **announce each bet publicly in the race thread while showing balance details only in the ephemeral response**, to achieve **social engagement where spectators can see who is backing which horse without exposing private balance information**, accepting **that bet amounts are publicly visible**.
+
+### Dynamic Payout Message
+
+In the context of **showing betting results after a race**, facing **the constraint that bets aren't known when messages are pre-computed**, we decided to **post payout results dynamically after the race finishes rather than pre-computing them**, to achieve **accurate results that reflect all bets placed during the betting window**, accepting **that payout messages are not crash-resilient like pre-computed messages**.
+
+### Wallet Transaction Notifications for Bets
+
+In the context of **betting transactions not appearing in wallet inventory threads**, facing **the betting functions bypassing the observer pattern by modifying the currency ledger directly without emitting events**, we decided to **return `BalanceChangedEvent` instances from betting functions and have the cog callers create a `DiscordReconciler` to notify and flush**, to achieve **consistent wallet transaction logs for all currency changes including bets, cancellations, and payouts**, accepting **that each bet operation creates a short-lived `DiscordReconciler` instance rather than sharing one through the Scene/observer pipeline**.

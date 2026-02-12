@@ -401,6 +401,7 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 | `image_data` | BYTEA | Pre-rendered image bytes (nullable for text-only) |
 | `image_name` | TEXT | Filename for discord.File (e.g. "announcement.png") |
 | `post_at` | TIMESTAMPTZ NOT NULL | When to post this message |
+| `poll` | JSONB | Poll configuration (question, answers, duration_hours) |
 
 **Race Message Type Enum:** `announcement`, `thread`, `race_start`, `poll`
 
@@ -444,7 +445,7 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 | `created_at` | TIMESTAMPTZ NOT NULL | When the bet was placed |
 
 **Constraints:**
-- UNIQUE on `(race_id, user_id)` — one bet per user per race
+- UNIQUE on `(race_id, user_id, horse_id)` — one bet per user per horse per race
 - CHECK on `amount > 0`
 - FK to races(id) with ON DELETE CASCADE
 - FK to horses(id) with ON DELETE CASCADE

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import datetime as dt
-import json
 import logging
 import random
 from dataclasses import dataclass
@@ -18,7 +17,9 @@ from discord.ext import commands, tasks
 if TYPE_CHECKING:
     from mudd.bot import MuddBot
 
+from mudd.models.bet import MIN_BET
 from mudd.models.horse import Horse
+from mudd.models.race import RaceStatus
 from mudd.observers import RoomChannelCache
 from mudd.racing import (
     AnnouncementHorse,
@@ -32,7 +33,7 @@ from mudd.racing import (
     simulate_race,
     sprite_from_bytes,
 )
-from mudd.racing.config import DEFAULT_CONFIG, RaceConfig
+from mudd.racing.config import DEFAULT_CONFIG, RACE_TRACK_ROOM, RaceConfig
 from mudd.racing.formatting import (
     format_form,
     format_results,
@@ -42,8 +43,9 @@ from mudd.racing.odds import HorseOdds
 from mudd.racing.persistence import (
     MessageType,
     PendingMessage,
+    PollAnswer,
+    PollConfig,
     RaceMessageInput,
-    RaceStatus,
     create_race,
     create_race_messages,
     delete_message,
@@ -69,9 +71,6 @@ logger = logging.getLogger(__name__)
 
 # Role required to trigger races
 HORSE_ROLE_NAME = "horse"
-
-# Room where races can be triggered
-RACE_TRACK_ROOM = "race-track"
 
 # Discord polls support at most 10 answers
 MAX_HORSES = 10
@@ -401,6 +400,7 @@ def _build_message_queue(
     race_start_ts = int(race_start_time.timestamp())
     flavor = _generate_announcement_flavor(horses, forms)
     announcement_text = (
+        "# Race #{race_number}\n"
         f"Today's race is set to begin <t:{race_start_ts}:R>\n\n{flavor}"
     )
 
@@ -452,22 +452,21 @@ def _build_message_queue(
     poll_seconds = int((race_end - poll_open).total_seconds())
     poll_duration_hours = max(1, -(-poll_seconds // 3600))
     poll_answers = [
-        {"text": h.name, "emoji": f"{i}\u20e3"} for i, h in enumerate(horses)
+        PollAnswer(text=h.name, emoji=f"{i}\u20e3") for i, h in enumerate(horses)
     ]
     messages.append(
         RaceMessageInput(
             sequence=1,
             message_type=MessageType.POLL,
-            content=json.dumps(
-                {
-                    "question": "Favorite horse?",
-                    "answers": poll_answers,
-                    "duration_hours": poll_duration_hours,
-                }
-            ),
+            content=None,
             image_data=None,
             image_name=None,
             post_at=poll_open,
+            poll=PollConfig(
+                question="Favorite horse?",
+                answers=poll_answers,
+                duration_hours=poll_duration_hours,
+            ),
         )
     )
 
@@ -483,12 +482,53 @@ def _build_message_queue(
         )
     )
 
-    # Seq 3-5: Starting sequence
+    # Seq 3: Betting instructions (between POLL and RACE_START)
     messages.append(
         RaceMessageInput(
             sequence=3,
             message_type=MessageType.THREAD,
+            content=(
+                "## Place your bets!\n"
+                f"• minimum bet is **¥{MIN_BET}**\n"
+                "• `/bet <horse> <amount>` to place a bet\n"
+                "• `/bet <horse> 0` to cancel a bet\n"
+                "• You can bet on multiple horses\n"
+                "• Betting closes when the race starts!"
+            ),
+            image_data=None,
+            image_name=None,
+            post_at=announcement_time + dt.timedelta(seconds=5),
+        )
+    )
+
+    # Seq 4: "Betting is closed!" — 2 seconds after RACE_START
+    messages.append(
+        RaceMessageInput(
+            sequence=4,
+            message_type=MessageType.THREAD,
+            content="### Betting is closed!\nGood luck!",
+            image_data=None,
+            image_name=None,
+            post_at=race_start_time - dt.timedelta(seconds=28),
+        )
+    )
+
+    # Seq 5-7: Starting sequence
+    messages.append(
+        RaceMessageInput(
+            sequence=5,
+            message_type=MessageType.THREAD,
             content="Riders up!",
+            image_data=None,
+            image_name=None,
+            post_at=race_start_time - dt.timedelta(seconds=30),
+        )
+    )
+    messages.append(
+        RaceMessageInput(
+            sequence=6,
+            message_type=MessageType.THREAD,
+            content="They're approaching the starting gate...",
             image_data=None,
             image_name=None,
             post_at=race_start_time - dt.timedelta(seconds=25),
@@ -496,44 +536,21 @@ def _build_message_queue(
     )
     messages.append(
         RaceMessageInput(
-            sequence=4,
-            message_type=MessageType.THREAD,
-            content="They're approaching the starting gate...",
-            image_data=None,
-            image_name=None,
-            post_at=race_start_time - dt.timedelta(seconds=20),
-        )
-    )
-    messages.append(
-        RaceMessageInput(
-            sequence=5,
+            sequence=7,
             message_type=MessageType.THREAD,
             content="They're all in the gate...",
             image_data=images.starting_gate,
             image_name="starting_gate.png",
-            post_at=race_start_time - dt.timedelta(seconds=15),
+            post_at=race_start_time - dt.timedelta(seconds=20),
         )
     )
 
-    # Race progress (GIFs + commentary), with "bets closed" at midpoint
+    # Race progress (GIFs + commentary)
     gif_interval = config.gif_interval_seconds
-    mid = num_batches // 2
-    seq = 6
+    seq = 8
     race_frames = zip(images.gif_batches, commentaries, strict=True)
     for i, (gif_data, commentary) in enumerate(race_frames):
-        if i == mid:
-            messages.append(
-                RaceMessageInput(
-                    sequence=seq,
-                    message_type=MessageType.THREAD,
-                    content="**__Betting is closed!__**",
-                    image_data=None,
-                    image_name=None,
-                    post_at=race_start_time + dt.timedelta(seconds=i * gif_interval),
-                )
-            )
-            seq += 1
-        content = f"And they're off!\n\n{commentary}" if i == 0 else commentary
+        content = f"## And they're off!\n\n{commentary}" if i == 0 else commentary
         messages.append(
             RaceMessageInput(
                 sequence=seq,
@@ -564,7 +581,7 @@ def _build_message_queue(
         RaceMessageInput(
             sequence=seq + 1,
             message_type=MessageType.THREAD,
-            content=f"**{winner_name} wins!**\n```\n{results_text}\n```",
+            content=f"## {winner_name} wins!\n```\n{results_text}\n```",
             image_data=victory_image,
             image_name="winner.png" if victory_image else None,
             post_at=race_start_time + dt.timedelta(seconds=photo_finish_offset + 10),
@@ -673,7 +690,7 @@ class Racing(commands.Cog):
             channel_id,
             config,
             announcement_time=now,
-            race_start_time=now + dt.timedelta(seconds=45),
+            race_start_time=now + dt.timedelta(minutes=2),
         )
 
         # 5. Persist and finalize images with actual race_id
@@ -760,7 +777,7 @@ class Racing(commands.Cog):
             race_start_time=race_start_time,
         )
 
-        # 7. Persist with ANNOUNCING status
+        # 7. Persist (default status is ANNOUNCING)
         winner_idx = result.finishing_order[0]
         winner_info = (horses[winner_idx].victory_image, horses[winner_idx].name)
         await self._persist_race(
@@ -772,7 +789,6 @@ class Racing(commands.Cog):
             forms,
             channel_id,
             winner_info,
-            status=RaceStatus.ANNOUNCING,
         )
 
     async def _persist_race(
@@ -786,7 +802,7 @@ class Racing(commands.Cog):
         channel_id: int,
         winner_info: tuple[bytes | None, str],
         *,
-        status: RaceStatus = RaceStatus.RUNNING,
+        status: RaceStatus = RaceStatus.ANNOUNCING,
     ) -> int:
         """Insert race, re-render images with actual race_id, insert messages."""
         race_id = await create_race(
@@ -810,7 +826,11 @@ class Racing(commands.Cog):
         messages[0] = RaceMessageInput(
             sequence=first.sequence,
             message_type=first.message_type,
-            content=first.content,
+            content=(
+                first.content.replace("{race_number}", str(race_id))
+                if first.content
+                else first.content
+            ),
             image_data=announcement_image_final,
             image_name=first.image_name,
             post_at=first.post_at,
@@ -891,8 +911,15 @@ class Racing(commands.Cog):
             return
         try:
             event = await guild.fetch_scheduled_event(event_id)
+            if event.status == discord.EventStatus.active:
+                logger.debug("Discord event %d already active", event_id)
+                return
             await event.start()
             logger.info("Started Discord event %d for race #%d", event_id, race_id)
+        except ValueError:
+            logger.info(
+                "Discord event %d for race #%d already running", event_id, race_id
+            )
         except Exception:
             logger.exception("Failed to start Discord event for race #%d", race_id)
 
@@ -906,8 +933,18 @@ class Racing(commands.Cog):
             return
         try:
             event = await guild.fetch_scheduled_event(event_id)
-            await event.end()
-            logger.info("Ended Discord event %d for race #%d", event_id, race_id)
+            if event.status == discord.EventStatus.active:
+                await event.end()
+                logger.info("Ended Discord event %d for race #%d", event_id, race_id)
+            else:
+                logger.info(
+                    "Discord event %d for race #%d already %s",
+                    event_id,
+                    race_id,
+                    event.status.name,
+                )
+        except ValueError:
+            logger.info("Discord event %d for race #%d not endable", event_id, race_id)
         except Exception:
             logger.exception("Failed to end Discord event for race #%d", race_id)
 
@@ -957,6 +994,7 @@ class Racing(commands.Cog):
             remaining = await get_remaining_message_count(self._pool, race_id)
             if remaining == 0:
                 await finish_race(self._pool, race_id)
+                await self._resolve_and_post_payouts(race_id)
                 await self._end_poll(race_id)
                 await self._end_discord_event(race_id)
                 logger.info(
@@ -1107,23 +1145,33 @@ class Racing(commands.Cog):
             )
             return True  # Don't retry — thread is gone
 
-        data = json.loads(msg.content) if msg.content else {}
-        question = data.get("question", "Favorite horse?")
-        answers = data.get("answers", [])
-        duration_hours = data.get("duration_hours", 1)
+        poll_config = msg.poll or PollConfig(question="Favorite horse?")
 
         poll = discord.Poll(
-            question=question,
-            duration=dt.timedelta(hours=duration_hours),
+            question=poll_config.question,
+            duration=dt.timedelta(hours=poll_config.duration_hours),
             multiple=False,
         )
-        for answer in answers:
-            poll.add_answer(text=answer["text"], emoji=answer.get("emoji"))
+        for answer in poll_config.answers:
+            poll.add_answer(text=answer.text, emoji=answer.emoji)
 
         sent = await thread.send(poll=poll)
         await set_poll_message_id(self._pool, msg.race_id, sent.id)
         logger.info("Posted poll (message %d) for race #%d", sent.id, msg.race_id)
         return True
+
+    async def _resolve_and_post_payouts(self, race_id: int) -> None:
+        """Delegate payout resolution to the Betting cog."""
+        from mudd.cogs.betting import Betting
+
+        betting_cog = self.bot.get_cog(Betting.__cog_name__)
+        if isinstance(betting_cog, Betting):
+            await betting_cog.resolve_and_post_payouts(race_id)
+        else:
+            logger.warning(
+                "Betting cog not loaded — cannot resolve payouts for race #%d",
+                race_id,
+            )
 
     async def _end_poll(self, race_id: int) -> None:
         """End the Discord poll for a race (best-effort)."""

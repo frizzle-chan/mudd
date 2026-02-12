@@ -18,13 +18,19 @@ from mudd.events import (
     UserLocationSyncEvent,
     UserMovedEvent,
 )
+from mudd.models.currency import (
+    HOUSE_ACCOUNT_ID,
+    AccountMissing,
+    InsufficientFunds,
+    ensure_account,
+    transfer_currency,
+)
 from mudd.models.entity import EntityInstance
 from mudd.models.room import Room
 from mudd.models.skills import UserSkill
 
 FOCUS_TIMEOUT_MINUTES = 5
 STARTING_BALANCE = 1000
-HOUSE_ACCOUNT_ID = 0
 
 
 class InsufficientFundsError(Exception):
@@ -417,60 +423,20 @@ class User:
             raise ValueError("Amount must be positive")
 
         async with self._pool.acquire() as conn, conn.transaction():
-            # Upsert player's currency account (creates if missing)
-            await conn.execute(
-                """
-                INSERT INTO currency_accounts (user_id, balance)
-                VALUES ($1, 0)
-                ON CONFLICT (user_id) DO NOTHING
-                """,
-                self.id,
-            )
+            await ensure_account(conn, self.id)
+            try:
+                outcome = await transfer_currency(
+                    conn,
+                    from_id=HOUSE_ACCOUNT_ID,
+                    to_id=self.id,
+                    amount=amount,
+                    memo=memo,
+                    require_funds=False,
+                )
+            except AccountMissing as exc:
+                raise ValueError(str(exc)) from exc
 
-            # Lock accounts in sorted order (house=0 always first)
-            house_row = await conn.fetchrow(
-                "SELECT balance FROM currency_accounts WHERE user_id = $1 FOR UPDATE",
-                HOUSE_ACCOUNT_ID,
-            )
-            player_row = await conn.fetchrow(
-                "SELECT balance FROM currency_accounts WHERE user_id = $1 FOR UPDATE",
-                self.id,
-            )
-
-            if house_row is None:
-                raise ValueError("House account does not exist")
-            if player_row is None:
-                raise ValueError("Player account does not exist")
-
-            # Create transaction + ledger entries
-            tx_row = await conn.fetchrow(
-                "INSERT INTO currency_transactions (memo) VALUES ($1) RETURNING id",
-                memo,
-            )
-            await conn.execute(
-                """
-                INSERT INTO currency_ledger (transaction_id, account_id, amount)
-                VALUES ($1, $2, $3), ($1, $4, $5)
-                """,
-                tx_row["id"],
-                HOUSE_ACCOUNT_ID,
-                -amount,
-                self.id,
-                amount,
-            )
-
-            # Update balances
-            new_balance = player_row["balance"] + amount
-            await conn.execute(
-                "UPDATE currency_accounts SET balance = $1 WHERE user_id = $2",
-                house_row["balance"] - amount,
-                HOUSE_ACCOUNT_ID,
-            )
-            await conn.execute(
-                "UPDATE currency_accounts SET balance = $1 WHERE user_id = $2",
-                new_balance,
-                self.id,
-            )
+        new_balance = outcome.to_balance
 
         # Emit event (outside transaction)
         for observer in self._observers:
@@ -733,77 +699,40 @@ class User:
         if self.id == recipient.id:
             raise ValueError("Cannot transfer to self")
 
-        # Sort IDs to prevent deadlocks
-        first_id, second_id = sorted([self.id, recipient.id])
-
         async with self._pool.acquire() as conn, conn.transaction():
-            # Lock accounts in sorted order
-            first_row = await conn.fetchrow(
-                "SELECT balance FROM currency_accounts WHERE user_id = $1 FOR UPDATE",
-                first_id,
-            )
-            second_row = await conn.fetchrow(
-                "SELECT balance FROM currency_accounts WHERE user_id = $1 FOR UPDATE",
-                second_id,
-            )
-
-            if first_id == self.id:
-                sender_row, recipient_row = first_row, second_row
-            else:
-                sender_row, recipient_row = second_row, first_row
-
-            if sender_row is None:
+            try:
+                outcome = await transfer_currency(
+                    conn,
+                    from_id=self.id,
+                    to_id=recipient.id,
+                    amount=amount,
+                    memo=memo,
+                )
+            except AccountMissing as exc:
+                # Determine which account is missing
+                if exc.account_id == self.id:
+                    return TransferResult(
+                        success=False,
+                        sender_balance=0,
+                        recipient_balance=0,
+                        error=TransferError.NO_SENDER_ACCOUNT,
+                    )
                 return TransferResult(
                     success=False,
                     sender_balance=0,
-                    recipient_balance=recipient_row["balance"] if recipient_row else 0,
-                    error=TransferError.NO_SENDER_ACCOUNT,
-                )
-            if recipient_row is None:
-                return TransferResult(
-                    success=False,
-                    sender_balance=sender_row["balance"],
                     recipient_balance=0,
                     error=TransferError.NO_RECIPIENT_ACCOUNT,
                 )
-            if sender_row["balance"] < amount:
+            except InsufficientFunds as exc:
                 return TransferResult(
                     success=False,
-                    sender_balance=sender_row["balance"],
-                    recipient_balance=recipient_row["balance"],
+                    sender_balance=exc.balance,
+                    recipient_balance=0,
                     error=TransferError.INSUFFICIENT_FUNDS,
                 )
 
-            # Create transaction + ledger entries
-            tx_row = await conn.fetchrow(
-                "INSERT INTO currency_transactions (memo) VALUES ($1) RETURNING id",
-                memo,
-            )
-            await conn.execute(
-                """
-                INSERT INTO currency_ledger (transaction_id, account_id, amount)
-                VALUES ($1, $2, $3), ($1, $4, $5)
-                """,
-                tx_row["id"],
-                self.id,
-                -amount,
-                recipient.id,
-                amount,
-            )
-
-            # Update balances
-            sender_new = sender_row["balance"] - amount
-            recipient_new = recipient_row["balance"] + amount
-            await conn.execute(
-                "UPDATE currency_accounts SET balance = $1 WHERE user_id = $2",
-                sender_new,
-                self.id,
-            )
-            await conn.execute(
-                "UPDATE currency_accounts SET balance = $1 WHERE user_id = $2",
-                recipient_new,
-                recipient.id,
-            )
+        sender_new = outcome.from_balance
+        recipient_new = outcome.to_balance
 
         # Emit events (outside transaction) with per-user memos using mentions
         sender_memo = f"Payment to {recipient.mention}"

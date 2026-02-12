@@ -1,5 +1,6 @@
 """PostgreSQL database connection management and migrations."""
 
+import json
 import logging
 import os
 import re
@@ -16,6 +17,16 @@ MIGRATIONS_DIR = Path(__file__).parent.parent / "migrations"
 MIGRATION_PATTERN = re.compile(r"^(\d+)_.*\.sql$")
 
 
+async def _init_connection(conn: asyncpg.Connection) -> None:
+    """Register codecs for custom types on each new connection."""
+    await conn.set_type_codec(
+        "jsonb",
+        encoder=json.dumps,
+        decoder=json.loads,
+        schema="pg_catalog",
+    )
+
+
 async def get_pool() -> asyncpg.Pool:
     """Get or create the database connection pool."""
     global _pool
@@ -29,6 +40,7 @@ async def get_pool() -> asyncpg.Pool:
             min_size=2,
             max_size=10,
             command_timeout=60,
+            init=_init_connection,
         )
         logger.info("Database connection pool created")
     return _pool
