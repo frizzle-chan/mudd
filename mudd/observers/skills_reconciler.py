@@ -36,17 +36,29 @@ def _get_skills_channel_name(username: str) -> str:
     return normalize_channel_name(username, "skills")
 
 
-async def ensure_roles(guild: discord.Guild) -> None:
+async def ensure_roles(guild: discord.Guild) -> dict[str, discord.Role]:
     """Ensure all milestone roles exist in the guild.
+
+    Returns a mapping of role name to Role object so callers can reference
+    newly-created roles immediately (guild.create_role() does not update
+    the local guild.roles cache until the gateway event arrives).
 
     Args:
         guild: Discord guild
+
+    Returns:
+        Mapping of milestone role name to discord.Role
     """
-    existing = {r.name for r in guild.roles}
+    roles: dict[str, discord.Role] = {
+        r.name: r for r in guild.roles if r.name in MILESTONE_ROLE_NAMES
+    }
     for role_name in MILESTONE_ROLE_NAMES:
-        if role_name not in existing:
+        if role_name not in roles:
             try:
-                await guild.create_role(name=role_name, reason="Skills milestone role")
+                role = await guild.create_role(
+                    name=role_name, reason="Skills milestone role"
+                )
+                roles[role_name] = role
                 logger.info(
                     "Created milestone role '%s' in %s",
                     role_name,
@@ -54,6 +66,7 @@ async def ensure_roles(guild: discord.Guild) -> None:
                 )
             except Exception:
                 logger.exception("Failed to create role '%s'", role_name)
+    return roles
 
 
 async def ensure_category(guild: discord.Guild) -> discord.CategoryChannel:
@@ -199,7 +212,12 @@ class SkillsReconciler:
         """Send all pending level-up announcements and clear them."""
         await self._announcements.post_announcements()
 
-    async def sync_user(self, guild: discord.Guild, member: discord.Member) -> None:
+    async def sync_user(
+        self,
+        guild: discord.Guild,
+        member: discord.Member,
+        milestone_roles: dict[str, discord.Role] | None = None,
+    ) -> None:
         """Full skills sync for a single user during periodic sync.
 
         Creates/updates their skills channel, nickname, and role.
@@ -207,6 +225,9 @@ class SkillsReconciler:
         Args:
             guild: Discord guild
             member: Guild member to sync
+            milestone_roles: Optional mapping from ensure_roles() so that
+                newly created roles can be found without waiting for the
+                gateway cache to update.
         """
         user_id = member.id
         await UserSkill.create_defaults(self._pool, user_id)
@@ -261,7 +282,9 @@ class SkillsReconciler:
             logger.exception("Failed to sync nickname for user %d", user_id)
 
         try:
-            await self._update_milestone_role(user_id, total_level)
+            await self._update_milestone_role(
+                user_id, total_level, role_overrides=milestone_roles
+            )
         except Exception:
             logger.exception(
                 "Failed to sync milestone role for user %d",
@@ -483,7 +506,12 @@ class SkillsReconciler:
                 member.display_name,
             )
 
-    async def _update_milestone_role(self, user_id: int, total_level: int) -> None:
+    async def _update_milestone_role(
+        self,
+        user_id: int,
+        total_level: int,
+        role_overrides: dict[str, discord.Role] | None = None,
+    ) -> None:
         """Update milestone role for a user.
 
         Removes old milestone roles and assigns the new one.
@@ -491,6 +519,9 @@ class SkillsReconciler:
         Args:
             user_id: Discord user ID
             total_level: Pre-computed total level
+            role_overrides: Optional mapping of role name to Role object.
+                Used during sync to include roles that guild.create_role()
+                created but that aren't yet in the guild cache.
         """
         target_role_name = get_milestone_role(total_level)
 
@@ -502,10 +533,16 @@ class SkillsReconciler:
         if member is None:
             return
 
-        # Build set of milestone role objects
-        milestone_roles = {r for r in guild.roles if r.name in MILESTONE_ROLE_NAMES}
+        # Build role lookup merging guild cache with overrides (newly created
+        # roles may not be in guild.roles yet).
+        role_lookup: dict[str, discord.Role] = {
+            r.name: r for r in guild.roles if r.name in MILESTONE_ROLE_NAMES
+        }
+        if role_overrides:
+            role_lookup.update(role_overrides)
 
         # Current milestone roles on the member
+        milestone_roles = set(role_lookup.values())
         current = milestone_roles & set(member.roles)
 
         if target_role_name is None:
@@ -515,7 +552,7 @@ class SkillsReconciler:
             return
 
         # Find target role
-        target_role = discord.utils.get(guild.roles, name=target_role_name)
+        target_role = role_lookup.get(target_role_name)
         if target_role is None:
             return
 

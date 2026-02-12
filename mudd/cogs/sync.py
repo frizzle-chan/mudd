@@ -295,7 +295,7 @@ class Sync(commands.Cog):
         reconciler = DiscordReconciler(self.bot, pool, guild_id=self.bot.guild_id)
 
         # Ensure milestone roles and skills category exist
-        await ensure_roles(guild)
+        milestone_roles = await ensure_roles(guild)
         await ensure_category(guild)
 
         # Sync each non-bot member
@@ -304,7 +304,9 @@ class Sync(commands.Cog):
             if member.bot:
                 continue
             try:
-                await reconciler.skills.sync_user(guild, member)
+                await reconciler.skills.sync_user(
+                    guild, member, milestone_roles=milestone_roles
+                )
                 synced += 1
             except Exception:
                 logger.exception("Failed to sync skills for user %d", member.id)
