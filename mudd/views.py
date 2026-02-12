@@ -29,9 +29,12 @@ class ViewEntity:
 
     @property
     def display_name(self) -> str:
-        """Entity name formatted with rarity emoji"""
+        """Entity name formatted with rarity emoji and search indicator."""
         emoji = RARITY_EMOJI[self._entity.rarity]
-        return f"{self._entity.name} {emoji}" if emoji else self._entity.name
+        name = f"{self._entity.name} {emoji}" if emoji else self._entity.name
+        if self._entity.entity.is_searchable:
+            return f"\U0001f50d {name}"
+        return name
 
     @property
     def description_long(self) -> str | None:
@@ -42,6 +45,11 @@ class ViewEntity:
     def description_short(self) -> str | None:
         """Short description template."""
         return self._entity.description_short
+
+    @property
+    def contents_visible(self) -> bool:
+        """Whether the entity's contents are visible."""
+        return self._entity.contents_visible
 
     @async_cached_property
     async def contents(self) -> str:

@@ -177,7 +177,7 @@ Id: object
 Name: object
 Rarity: none
 DescriptionShort: A {{ e.name }}.
-OnLook: {{ e.description_long or e.description_short or "You see nothing special." }}{% if e.contents %}
+OnLook: {{ e.description_long or e.description_short or "You see nothing special." }}{% if e.contents_visible and e.contents %}
 +
 + {{ e.contents }}{% endif %}
 OnTouch: You touch the {{ e.name }}. Nothing happens.
@@ -835,7 +835,7 @@ Prototype: chest
 Room: restroom
 ContentsVisible: no
 DescriptionShort: A metal {{ e.name }} sits in the corner.
-DescriptionLong: A stainless steel trash can with a swinging lid. It's overflowing with crumpled paper towels.
+DescriptionLong: A stainless steel trash can with a swinging lid. It's overflowing with crumpled paper towels. You could __open__ it to dig around inside.
 OnOpen: {{ effects.set_focus() }}You peer into the {{ e.name }}, pushing aside damp paper towels.{% if e.contents %} You spot:
 + {{ e.contents }}{% else %} Nothing but garbage.{% endif %}
 OnClose: {{ effects.clear_focus() }}You let the lid swing shut.
@@ -874,7 +874,7 @@ Prototype: object
 Room: office
 ContentsVisible: no
 DescriptionShort: An old {{ e.name }} hums on the desk.
-DescriptionLong: A bulky CRT monitor displaying green text on black. The case is beige plastic, yellowed with age. A small sticker reads "MUDD-OS v0.2.1".
+DescriptionLong: A bulky CRT monitor displaying green text on black. The case is beige plastic, yellowed with age. A small sticker reads "MUDD-OS v0.2.1". You could __login__ to see what's on it.
 OnUse: The CRT hums as you press the power button. Green text flickers to life. You can now __login__.
 OnOpen: {{ effects.set_focus() }}```
 + ┏┳┓╻ ╻╺┳┓╺┳┓   ┏━┓┏━┓
@@ -1283,7 +1283,7 @@ Name: Globe Minibar
 Prototype: furniture
 Room: lounge
 DescriptionShort: An oversized {{ e.name }} sits in the corner.
-DescriptionLong: A vintage wooden globe on a brass stand. You can __open__ the northern hemisphere to reveal the minibar inside.
+DescriptionLong: A vintage wooden globe on a brass stand. The northern hemisphere has a seam. You could __open__ it.
 ContentsVisible: no
 OnUse: {{ effects.set_focus() }}You swing open the northern hemisphere.{% if e.contents %} Inside:
 + {{ e.contents }}{% else %} It's empty.{% endif %}
@@ -1296,7 +1296,7 @@ Name: Drink Fridge
 Prototype: furniture
 Room: lounge
 DescriptionShort: A windowed {{ e.name }} sits against the east wall.
-DescriptionLong: A glass-door mini fridge humming quietly. The glass is fogged with condensation. You can __open__ it to see what's inside.
+DescriptionLong: A glass-door mini fridge humming quietly. The glass is fogged with condensation. You can __open__ it to grab a drink.
 OnTouch: The glass is cold and slightly damp with condensation.
 OnOpen: {{ effects.set_focus() }}You swing open the fridge door.{% if e.contents %} Inside:
 + {{ e.contents }}{% else %} It's empty.{% endif %}
