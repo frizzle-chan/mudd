@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import datetime as dt
-import json
 import logging
 import random
 from dataclasses import dataclass
@@ -408,6 +407,7 @@ def _build_message_queue(
     race_start_ts = int(race_start_time.timestamp())
     flavor = _generate_announcement_flavor(horses, forms)
     announcement_text = (
+        "# Race #{race_number}\n"
         f"Today's race is set to begin <t:{race_start_ts}:R>\n\n{flavor}"
     )
 
@@ -465,16 +465,15 @@ def _build_message_queue(
         RaceMessageInput(
             sequence=1,
             message_type=MessageType.POLL,
-            content=json.dumps(
-                {
-                    "question": "Favorite horse?",
-                    "answers": poll_answers,
-                    "duration_hours": poll_duration_hours,
-                }
-            ),
+            content=None,
             image_data=None,
             image_name=None,
             post_at=poll_open,
+            poll={
+                "question": "Favorite horse?",
+                "answers": poll_answers,
+                "duration_hours": poll_duration_hours,
+            },
         )
     )
 
@@ -496,8 +495,8 @@ def _build_message_queue(
             sequence=3,
             message_type=MessageType.THREAD,
             content=(
-                "**Place your bets!**\n\n"
-                f"minimum bet is {MIN_BET}\n"
+                "## Place your bets!\n"
+                f"\u2022 minimum bet is **¥{MIN_BET}**\n"
                 f"\u2022 `/bet <horse> <amount>` to place a bet\n"
                 "\u2022 `/bet <horse> 0` to cancel a bet\n"
                 "\u2022 You can bet on multiple horses\n"
@@ -529,7 +528,7 @@ def _build_message_queue(
             content="Riders up!",
             image_data=None,
             image_name=None,
-            post_at=race_start_time - dt.timedelta(seconds=25),
+            post_at=race_start_time - dt.timedelta(seconds=30),
         )
     )
     messages.append(
@@ -539,7 +538,7 @@ def _build_message_queue(
             content="They're approaching the starting gate...",
             image_data=None,
             image_name=None,
-            post_at=race_start_time - dt.timedelta(seconds=20),
+            post_at=race_start_time - dt.timedelta(seconds=25),
         )
     )
     messages.append(
@@ -549,7 +548,7 @@ def _build_message_queue(
             content="They're all in the gate...",
             image_data=images.starting_gate,
             image_name="starting_gate.png",
-            post_at=race_start_time - dt.timedelta(seconds=15),
+            post_at=race_start_time - dt.timedelta(seconds=20),
         )
     )
 
@@ -589,7 +588,7 @@ def _build_message_queue(
         RaceMessageInput(
             sequence=seq + 1,
             message_type=MessageType.THREAD,
-            content=f"**{winner_name} wins!**\n```\n{results_text}\n```",
+            content=f"## {winner_name} wins!\n```\n{results_text}\n```",
             image_data=victory_image,
             image_name="winner.png" if victory_image else None,
             post_at=race_start_time + dt.timedelta(seconds=photo_finish_offset + 10),
@@ -834,7 +833,11 @@ class Racing(commands.Cog):
         messages[0] = RaceMessageInput(
             sequence=first.sequence,
             message_type=first.message_type,
-            content=first.content,
+            content=(
+                first.content.replace("{race_number}", str(race_id))
+                if first.content
+                else first.content
+            ),
             image_data=announcement_image_final,
             image_name=first.image_name,
             post_at=first.post_at,
@@ -920,6 +923,10 @@ class Racing(commands.Cog):
                 return
             await event.start()
             logger.info("Started Discord event %d for race #%d", event_id, race_id)
+        except ValueError:
+            logger.debug(
+                "Discord event %d for race #%d already running", event_id, race_id
+            )
         except Exception:
             logger.exception("Failed to start Discord event for race #%d", race_id)
 
@@ -1143,7 +1150,7 @@ class Racing(commands.Cog):
             )
             return True  # Don't retry — thread is gone
 
-        data = json.loads(msg.content) if msg.content else {}
+        data = msg.poll or {}
         question = data.get("question", "Favorite horse?")
         answers = data.get("answers", [])
         duration_hours = data.get("duration_hours", 1)

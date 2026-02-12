@@ -497,7 +497,7 @@ def format_payout_message(payouts: list[PayoutRecord]) -> str:
     winners = [p for p in payouts if p.payout > 0]
     losers = [p for p in payouts if p.payout == 0]
 
-    lines: list[str] = ["**Betting Results**\n"]
+    lines: list[str] = ["### Betting Results\n"]
 
     if winners:
         for p in winners:
@@ -510,7 +510,7 @@ def format_payout_message(payouts: list[PayoutRecord]) -> str:
         for p in losers:
             lines.append(
                 f"\U0001f614 <@{p.user_id}> bet \u00a5{p.amount_bet:,} on "
-                f"**{p.horse_name}** — better luck next time!"
+                f"**{p.horse_name}**."
             )
 
     return "\n".join(lines)

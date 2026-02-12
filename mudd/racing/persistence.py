@@ -5,10 +5,10 @@ Async functions for persisting races and maintaining rolling counters.
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
+from typing import Any
 
 import asyncpg
 
@@ -49,6 +49,7 @@ class PendingMessage:
     image_name: str | None
     channel_id: int | None
     thread_id: int | None
+    poll: dict[str, Any] | None
 
 
 async def create_race(
@@ -71,30 +72,26 @@ async def create_race(
     Returns:
         The new race ID.
     """
-    horses_json = json.dumps(result.horse_ids)
-    snapshots_json = json.dumps(result.snapshots)
-    events_json = json.dumps(
-        [
-            {
-                "tick": e.tick,
-                "horse_index": e.horse_index,
-                "type": str(e.burst_type),
-            }
-            for e in result.events
-        ]
-    )
-    finishing_order_json = json.dumps(result.finishing_order)
-    odds_json = json.dumps(
-        [
-            {
-                "horse_id": o.horse_id,
-                "displayed_payout": o.displayed_payout,
-                "true_probability": o.true_probability,
-                "star_rating": o.star_rating,
-            }
-            for o in odds
-        ]
-    )
+    horses_data = result.horse_ids
+    snapshots_data = result.snapshots
+    events_data = [
+        {
+            "tick": e.tick,
+            "horse_index": e.horse_index,
+            "type": str(e.burst_type),
+        }
+        for e in result.events
+    ]
+    finishing_order_data = result.finishing_order
+    odds_data = [
+        {
+            "horse_id": o.horse_id,
+            "displayed_payout": o.displayed_payout,
+            "true_probability": o.true_probability,
+            "star_rating": o.star_rating,
+        }
+        for o in odds
+    ]
 
     finished_at = "NOW()" if status == RaceStatus.FINISHED else "NULL"
 
@@ -107,11 +104,11 @@ async def create_race(
                        $6::jsonb, NOW(), {finished_at}, $7)
                RETURNING id""",
             status,
-            horses_json,
-            snapshots_json,
-            events_json,
-            finishing_order_json,
-            odds_json,
+            horses_data,
+            snapshots_data,
+            events_data,
+            finishing_order_data,
+            odds_data,
             channel_id,
         )
 
@@ -145,6 +142,7 @@ class RaceMessageInput:
     image_data: bytes | None
     image_name: str | None
     post_at: datetime
+    poll: dict[str, Any] | None = None
 
 
 async def create_race_messages(
@@ -163,15 +161,17 @@ async def create_race_messages(
     image_datas = [m.image_data for m in messages]
     image_names = [m.image_name for m in messages]
     post_ats = [m.post_at for m in messages]
+    polls = [m.poll for m in messages]
 
     await pool.execute(
         """INSERT INTO race_messages
                (race_id, sequence, message_type, content,
-                image_data, image_name, post_at)
+                image_data, image_name, post_at, poll)
            SELECT * FROM unnest(
                $1::int[], $2::int[],
                $3::race_message_type[], $4::text[],
-               $5::bytea[], $6::text[], $7::timestamptz[]
+               $5::bytea[], $6::text[], $7::timestamptz[],
+               $8::jsonb[]
            )""",
         race_ids,
         sequences,
@@ -180,6 +180,7 @@ async def create_race_messages(
         image_datas,
         image_names,
         post_ats,
+        polls,
     )
 
 
@@ -191,7 +192,7 @@ async def fetch_pending_messages(pool: asyncpg.Pool) -> list[PendingMessage]:
     rows = await pool.fetch(
         """SELECT rm.id, rm.race_id, rm.sequence, rm.message_type,
                   rm.content, rm.image_data, rm.image_name,
-                  r.channel_id, r.thread_id
+                  rm.poll, r.channel_id, r.thread_id
            FROM race_messages rm
            JOIN races r ON rm.race_id = r.id
            WHERE rm.post_at <= NOW()
@@ -208,6 +209,7 @@ async def fetch_pending_messages(pool: asyncpg.Pool) -> list[PendingMessage]:
             image_name=row["image_name"],
             channel_id=row["channel_id"],
             thread_id=row["thread_id"],
+            poll=row["poll"],
         )
         for row in rows
     ]

@@ -19,7 +19,7 @@ def test_format_payout_message_winner_only() -> None:
         ),
     ]
     result = format_payout_message(payouts)
-    assert "**Betting Results**" in result
+    assert "### Betting Results" in result
     assert "<@123>" in result
     assert "Flash" in result
     assert "¥100" in result
@@ -38,10 +38,9 @@ def test_format_payout_message_loser_only() -> None:
         ),
     ]
     result = format_payout_message(payouts)
-    assert "**Betting Results**" in result
+    assert "### Betting Results" in result
     assert "<@456>" in result
     assert "Thunder" in result
-    assert "better luck next time" in result
 
 
 def test_format_payout_message_mixed() -> None:
@@ -68,7 +67,7 @@ def test_format_payout_message_mixed() -> None:
     # Header + winner + loser
     assert len(lines) == 4
     assert "won" in lines[2]
-    assert "better luck" in lines[3]
+    assert "Thunder" in lines[3]
 
 
 def test_format_payout_message_large_amounts() -> None:
