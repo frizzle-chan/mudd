@@ -415,7 +415,7 @@ async def test_payment_broadcast_and_mentions(test_db, clean_user_state):
     # Check that BroadcastEvent was emitted
     broadcast_events = [e for e in reconciler.events if isinstance(e, BroadcastEvent)]
     assert len(broadcast_events) == 1
-    assert broadcast_events[0].message == "<@3001> paid ¥50 to <@3002>"
+    assert broadcast_events[0].message == "<@3001> paid ¤50 to <@3002>"
 
     # Check that BalanceChangedEvents use mentions in memos
     balance_events = [
@@ -616,7 +616,7 @@ async def test_wallet_balance_display(test_db, clean_user_state):
     result = await act(
         test_db, user.id, LookCommand(), f"entity://{wallet.instance_id}"
     )
-    assert "¥1,000" in result.output
+    assert "¤1,000" in result.output
 
 
 async def test_transfer_insufficient_funds(test_db, clean_user_state):
@@ -928,8 +928,8 @@ async def test_cannot_drop_item_not_in_inventory(test_db, clean_user_state):
     )
 
 
-async def test_charge_machine_deducts_yen_and_dispenses(test_db, clean_user_state):
-    """Charge machine deducts ¥5, dispenses prize, emits balance event."""
+async def test_charge_machine_deducts_currency_and_dispenses(test_db, clean_user_state):
+    """Charge machine deducts ¤5, dispenses prize, emits balance event."""
     user = await create_test_user(test_db, room_id="store-room")
     await User.create_currency_account(test_db, user.id, 100)
 
@@ -976,9 +976,9 @@ async def test_charge_machine_deducts_yen_and_dispenses(test_db, clean_user_stat
 
 
 async def test_charge_machine_insufficient_funds(test_db, clean_user_state):
-    """Player with insufficient yen sees rejection message, no charge or dispense."""
+    """Player with insufficient funds sees rejection message, no charge or dispense."""
     user = await create_test_user(test_db, room_id="store-room")
-    await User.create_currency_account(test_db, user.id, 3)  # Less than ¥5
+    await User.create_currency_account(test_db, user.id, 3)  # Less than ¤5
 
     # Use the charge machine
     machine = next(
@@ -992,7 +992,7 @@ async def test_charge_machine_insufficient_funds(test_db, clean_user_state):
 
     # Template rendered the insufficient funds path
     assert "TEST_INSUFFICIENT_FUNDS" in result.output
-    assert "¥3" in result.output
+    assert "¤3" in result.output
 
     # No charge or dispense signals were emitted
     assert len(result.effects.currency_charges) == 0

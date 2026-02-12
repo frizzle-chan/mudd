@@ -13,7 +13,7 @@ CREATE TABLE currency_accounts (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- House account with 1 billion yen
+-- House account with 1 billion
 INSERT INTO currency_accounts (user_id, balance)
 VALUES (0, 1000000000);
 

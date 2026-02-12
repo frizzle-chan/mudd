@@ -74,8 +74,8 @@ class Economy(commands.Cog):
             for p in matches[:25]
         ]
 
-    @app_commands.command(name="pay", description="Give yen to another player")
-    @app_commands.describe(recipient="Player to pay", amount="Amount in yen")
+    @app_commands.command(name="pay", description="Give currency to another player")
+    @app_commands.describe(recipient="Player to pay", amount="Amount to pay")
     @app_commands.rename(recipient="to")
     @app_commands.autocomplete(recipient=recipient_autocomplete)
     async def pay(
@@ -84,7 +84,7 @@ class Economy(commands.Cog):
         recipient: str,
         amount: int,
     ):
-        """Transfer yen to another player in the same room."""
+        """Transfer currency to another player in the same room."""
         if not interaction.guild:
             await interaction.response.send_message(
                 "This command must be used in a server.", ephemeral=True
@@ -171,7 +171,7 @@ class Economy(commands.Cog):
         if not result.success:
             match result.error:
                 case TransferError.INSUFFICIENT_FUNDS:
-                    msg = "You don't have enough yen."
+                    msg = "You don't have enough money."
                 case TransferError.NO_SENDER_ACCOUNT:
                     msg = (
                         "You don't have a currency account. Try looking at your wallet."
@@ -185,8 +185,8 @@ class Economy(commands.Cog):
             return
 
         # Format balances for display
-        sender_balance_str = f"\u00a5{result.sender_balance:,}"
-        amount_str = f"\u00a5{amount:,}"
+        sender_balance_str = f"\u00a4{result.sender_balance:,}"
+        amount_str = f"\u00a4{amount:,}"
 
         # Respond with confirmation
         await interaction.response.send_message(

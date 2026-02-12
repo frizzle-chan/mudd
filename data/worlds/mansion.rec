@@ -257,7 +257,7 @@ OnUse: You whip out your wallet, it has **{{ user.balance|money }}**.
 OnOpen: You open up your wallet, inside it has **{{ user.balance|money }}**.
 
 # ----------------------------------------------------------------------------
-# Currency pickups (grant yen on take, don't go to inventory)
+# Currency pickups (grant currency on take, don't go to inventory)
 # Used by spawning pools, slot machines, NPC rewards, etc.
 # ----------------------------------------------------------------------------
 
@@ -267,17 +267,17 @@ Prototype: object
 Rarity: common
 Tags: currency slot_prize desk_drawer_loot foyer_vase_loot sitting_room_cushion_loot
 DescriptionShort: a few loose coins
-OnLook: A small handful of yen coins. Worth about ¥100.
-OnTake: {{ effects.grant_currency(100) }}{{ effects.destroy() }}{{ effects.broadcast("**" ~ user ~ "** pockets " ~ e ~ " (+¥100)") }}You pick up the {{ e.name }}. (+¥100)
+OnLook: A small handful of coins. Worth about ¤100.
+OnTake: {{ effects.grant_currency(100) }}{{ effects.destroy() }}{{ effects.broadcast("**" ~ user ~ "** pockets " ~ e ~ " (+¤100)") }}You pick up the {{ e.name }}. (+¤100)
 
 Id: bundle_of_bills
 Name: bundle of bills
 Prototype: object
 Rarity: uncommon
 Tags: currency slot_prize desk_drawer_loot foyer_vase_loot
-DescriptionShort: a bundle of yen notes
-OnLook: A bundle of yen notes held together with a paper band. Worth about ¥1,000.
-OnTake: {{ effects.grant_currency(1000) }}{{ effects.destroy() }}{{ effects.broadcast("**" ~ user ~ "** pockets " ~ e ~ " (+¥1,000)") }}You pick up the {{ e.name }}. (+¥1,000)
+DescriptionShort: a bundle of banknotes
+OnLook: A bundle of banknotes held together with a paper band. Worth about ¤1,000.
+OnTake: {{ effects.grant_currency(1000) }}{{ effects.destroy() }}{{ effects.broadcast("**" ~ user ~ "** pockets " ~ e ~ " (+¤1,000)") }}You pick up the {{ e.name }}. (+¤1,000)
 
 Id: money_clip
 Name: money clip
@@ -285,8 +285,8 @@ Prototype: object
 Rarity: rare
 Tags: currency slot_prize foyer_vase_loot
 DescriptionShort: a silver money clip stuffed with cash
-OnLook: An elegant silver money clip stuffed with neatly folded bills. Worth about ¥5,000.
-OnTake: {{ effects.grant_currency(5000) }}{{ effects.destroy() }}{{ effects.broadcast("**" ~ user ~ "** pockets " ~ e ~ " (+¥5,000)") }}You pick up the {{ e.name }}. (+¥5,000)
+OnLook: An elegant silver money clip stuffed with neatly folded bills. Worth about ¤5,000.
+OnTake: {{ effects.grant_currency(5000) }}{{ effects.destroy() }}{{ effects.broadcast("**" ~ user ~ "** pockets " ~ e ~ " (+¤5,000)") }}You pick up the {{ e.name }}. (+¤5,000)
 
 Id: cash_envelope
 Name: cash envelope
@@ -294,8 +294,8 @@ Prototype: object
 Rarity: epic
 Tags: currency slot_prize
 DescriptionShort: a thick cash envelope
-OnLook: A heavy envelope filled with a substantial stack of bills. Worth about ¥25,000.
-OnTake: {{ effects.grant_currency(25000) }}{{ effects.destroy() }}{{ effects.broadcast("**" ~ user ~ "** pockets " ~ e ~ " (+¥25,000)") }}You pick up the {{ e.name }}. (+¥25,000)
+OnLook: A heavy envelope filled with a substantial stack of bills. Worth about ¤25,000.
+OnTake: {{ effects.grant_currency(25000) }}{{ effects.destroy() }}{{ effects.broadcast("**" ~ user ~ "** pockets " ~ e ~ " (+¤25,000)") }}You pick up the {{ e.name }}. (+¤25,000)
 
 Id: briefcase_of_cash
 Name: briefcase of cash
@@ -303,8 +303,8 @@ Prototype: object
 Rarity: legendary
 Tags: currency slot_prize
 DescriptionShort: a briefcase filled with cash
-OnLook: A sleek black briefcase packed with neat stacks of bills. Worth about ¥100,000.
-OnTake: {{ effects.grant_currency(100000) }}{{ effects.destroy() }}{{ effects.broadcast("**" ~ user ~ "** pockets " ~ e ~ " (+¥100,000)") }}You pick up the {{ e.name }}. (+¥100,000)
+OnLook: A sleek black briefcase packed with neat stacks of bills. Worth about ¤100,000.
+OnTake: {{ effects.grant_currency(100000) }}{{ effects.destroy() }}{{ effects.broadcast("**" ~ user ~ "** pockets " ~ e ~ " (+¤100,000)") }}You pick up the {{ e.name }}. (+¤100,000)
 
 Id: gold_brick
 Name: gold brick
@@ -312,8 +312,8 @@ Prototype: object
 Rarity: mythic
 Tags: currency slot_prize
 DescriptionShort: a gleaming gold brick
-OnLook: A solid gold brick stamped with official mint markings. Worth about ¥500,000.
-OnTake: {{ effects.grant_currency(500000) }}{{ effects.destroy() }}{{ effects.broadcast("**" ~ user ~ "** pockets " ~ e ~ " (+¥500,000)") }}You pick up the {{ e.name }}. (+¥500,000)
+OnLook: A solid gold brick stamped with official mint markings. Worth about ¤500,000.
+OnTake: {{ effects.grant_currency(500000) }}{{ effects.destroy() }}{{ effects.broadcast("**" ~ user ~ "** pockets " ~ e ~ " (+¤500,000)") }}You pick up the {{ e.name }}. (+¤500,000)
 
 # ----------------------------------------------------------------------------
 # Generic items (used by spawning pools across multiple locations)
@@ -1075,9 +1075,9 @@ DescriptionLong: ```
 + Big update! We now have an economy.
 +
 + CURRENCY SYSTEM
-+ Every player starts with ¥1,000 and gets a wallet pinned in their
-+ inventory. Use /pay to send yen to other players in the same room.
-+ There's a house account with 1 billion yen that funds all the loot.
++ Every player starts with ¤1,000 and gets a wallet pinned in their
++ inventory. Use /pay to send money to other players in the same room.
++ There's a house account with 1 billion that funds all the loot.
 + Double-entry ledger for full auditability.
 +
 + SLOT MACHINE
@@ -1087,13 +1087,13 @@ DescriptionLong: ```
 + Avatar Blu-rays, and currency pickups.
 +
 + CURRENCY PICKUPS
-+ New item type that grants yen directly without clogging inventory:
-+ - loose_coins: ¥100 (common)
-+ - bundle_of_bills: ¥1,000 (uncommon)
-+ - money_clip: ¥5,000 (rare)
-+ - cash_envelope: ¥25,000 (epic)
-+ - briefcase_of_cash: ¥100,000 (legendary)
-+ - gold_brick: ¥500,000 (mythic)
++ New item type that grants currency directly without clogging inventory:
++ - loose_coins: ¤100 (common)
++ - bundle_of_bills: ¤1,000 (uncommon)
++ - money_clip: ¤5,000 (rare)
++ - cash_envelope: ¤25,000 (epic)
++ - briefcase_of_cash: ¤100,000 (legendary)
++ - gold_brick: ¤500,000 (mythic)
 +
 + GALLERY
 + The gallery now has a rotating wall of paintings that spawn from
@@ -1316,9 +1316,9 @@ Prototype: furniture
 Room: lounge
 ContentsVisible: no
 DescriptionShort: A vintage {{ e.name }} stands against the wall.
-DescriptionLong: A classic one-armed bandit with three spinning reels. The chrome handle gleams invitingly. __Pull__ the handle to try your luck! ¥5 per pull.
+DescriptionLong: A classic one-armed bandit with three spinning reels. The chrome handle gleams invitingly. __Pull__ the handle to try your luck! ¤5 per pull.
 OnTouch: The cold metal handle vibrates slightly.
-OnUse: {% if not e.contents %}The slot machine sits empty, waiting to be refilled.{% elif user.balance < 5 %}The slot machine costs ¥5 per pull. You only have {{ user.balance | money }}.{% else %}{{ effects.charge(5) }}{{ effects.dispense() }}{{ effects.broadcast("**" ~ user ~ "** puts ¥5 in the slot machine and pulls the lever...") }}You drop a ¥5 coin into the slot and pull the lever... The wheels spin... click click click...{% endif %}
+OnUse: {% if not e.contents %}The slot machine sits empty, waiting to be refilled.{% elif user.balance < 5 %}The slot machine costs ¤5 per pull. You only have {{ user.balance | money }}.{% else %}{{ effects.charge(5) }}{{ effects.dispense() }}{{ effects.broadcast("**" ~ user ~ "** puts ¤5 in the slot machine and pulls the lever...") }}You drop a ¤5 coin into the slot and pull the lever... The wheels spin... click click click...{% endif %}
 OnAttack: You kick the machine in frustration. It remains unmoved.
 
 # Slot machine prizes (spawned by lounge_slot_machine_pool)

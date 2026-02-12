@@ -19,9 +19,9 @@ Key requirements:
 
 ### Currency Choice
 
-In the context of **choosing an in-game currency**, facing **the need for a currency that fits the game's aesthetic and is easy to display**, we decided to **use Yen (¥)**, to achieve **a clean, recognizable symbol that works well with integer amounts**, accepting **that this is a stylistic choice without gameplay implications**.
+In the context of **choosing an in-game currency**, facing **the need for a currency that fits the game's aesthetic and is easy to display**, we decided to **use the generic currency sign (¤)**, to achieve **a clean, recognizable symbol that works well with integer amounts**, accepting **that this is a stylistic choice without gameplay implications**.
 
-**Starting Balance:** ¥1000 for all new players.
+**Starting Balance:** ¤1000 for all new players.
 
 ### Wallet as Inventory Item
 

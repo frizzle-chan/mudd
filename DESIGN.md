@@ -249,7 +249,7 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 | Column | Type | Description |
 |--------|------|-------------|
 | `user_id` | BIGINT (PK) | Discord user ID (0 is house account) |
-| `balance` | BIGINT NOT NULL | Current balance in yen (must be >= 0) |
+| `balance` | BIGINT NOT NULL | Current balance (must be >= 0) |
 | `wallet_instance_id` | UUID (FK to entity_instances.id) | Player's wallet entity instance |
 | `created_at` | TIMESTAMPTZ NOT NULL | When the account was created |
 
@@ -440,7 +440,7 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 | `race_id` | INT NOT NULL (FK to races.id) | Race being bet on |
 | `horse_id` | TEXT NOT NULL (FK to horses.id) | Horse being bet on |
 | `user_id` | BIGINT NOT NULL | Discord user who placed the bet |
-| `amount` | INT NOT NULL | Bet amount in yen (must be > 0) |
+| `amount` | INT NOT NULL | Bet amount (must be > 0) |
 | `payout` | INT | Payout amount (NULL until race finishes) |
 | `created_at` | TIMESTAMPTZ NOT NULL | When the bet was placed |
 
