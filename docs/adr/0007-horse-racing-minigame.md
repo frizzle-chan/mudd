@@ -94,11 +94,11 @@ Key design choices:
 
 In the context of **setting displayed betting odds that reflect actual win probabilities**, facing **the need to align odds weights with the simulation's phase-weighted physics**, we decided to **weight the odds formula to match empirical simulation outcomes**, to achieve **displayed odds that are within 2% of actual win rates, well within the 10% house edge buffer**, accepting **that the weights are empirically derived rather than analytically proven**.
 
-The simulation weights luck heavily in the start phase (0.6 weight for 20% of ticks) and stamina in the final stretch (0.6 weight for 30% of ticks). The odds formula uses `speed*0.35 + stamina*0.35 + luck*0.25 + consistency*0.05` to match these effective weights, producing displayed odds within 2% of actual win rates.
+Stamina dominates the formula because it contributes to race outcomes in two distinct ways: phase weights in the final stretch (0.6 weight for 30% of ticks) and fatigue resistance in the last 40% of the race (multiplicative penalty up to 15% for low-stamina horses). The odds formula uses `speed*0.19 + stamina*0.57 + luck*0.21 + consistency*0.03` with an exponent of 4.5, producing displayed odds within 2% of actual win rates across 3×1000 race simulations.
 
 ### Odds Exponentiation
 
-In the context of **generating meaningful odds spreads between horses**, facing **the problem that linear base strengths produce compressed probability ranges where even large stat differences result in similar odds**, we decided to **raise base strengths to a configurable power (default 2.5) before computing probabilities**, to achieve **wider odds spreads that give strong horses clearly shorter odds and weak horses clearly longer odds, matching player intuition about favorites vs. longshots**, accepting **that the exponent is an additional tuning constant and that the performance modifier now operates on exponentiated values rather than raw base strengths**.
+In the context of **generating meaningful odds spreads between horses**, facing **the problem that linear base strengths produce compressed probability ranges where even large stat differences result in similar odds**, we decided to **raise base strengths to a configurable power (default 4.5) before computing probabilities**, to achieve **wider odds spreads that give strong horses clearly shorter odds and weak horses clearly longer odds, matching player intuition about favorites vs. longshots**, accepting **that the exponent is an additional tuning constant and that the performance modifier now operates on exponentiated values rather than raw base strengths**.
 
 ### Progress Floor
 
