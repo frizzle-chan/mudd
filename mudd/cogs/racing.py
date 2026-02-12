@@ -506,7 +506,7 @@ def _build_message_queue(
         RaceMessageInput(
             sequence=4,
             message_type=MessageType.THREAD,
-            content="**Betting is closed!** Good luck!",
+            content="### Betting is closed!\nGood luck!",
             image_data=None,
             image_name=None,
             post_at=race_start_time - dt.timedelta(seconds=28),
@@ -550,7 +550,7 @@ def _build_message_queue(
     seq = 8
     race_frames = zip(images.gif_batches, commentaries, strict=True)
     for i, (gif_data, commentary) in enumerate(race_frames):
-        content = f"And they're off!\n\n{commentary}" if i == 0 else commentary
+        content = f"## And they're off!\n\n{commentary}" if i == 0 else commentary
         messages.append(
             RaceMessageInput(
                 sequence=seq,
