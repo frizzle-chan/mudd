@@ -15,7 +15,6 @@ if TYPE_CHECKING:
 
 from mudd.observers import RoomChannelCache
 from mudd.racing.betting import (
-    MAX_BET,
     MIN_BET,
     BetError,
     cancel_bet,
@@ -100,7 +99,7 @@ class Betting(commands.Cog):
             )
             return
 
-        # Verify channel is race-track
+        # Verify channel is race-track (or a thread within it)
         channel_id = interaction.channel_id
         if channel_id is None:
             await interaction.response.send_message(
@@ -109,10 +108,17 @@ class Betting(commands.Cog):
             return
         room_id = self._room_cache.get_room_for_channel(channel_id)
         if room_id != RACE_TRACK_ROOM:
-            await interaction.response.send_message(
-                "You can only place bets at the race track!", ephemeral=True
-            )
-            return
+            # Check if this is a thread whose parent is the race-track
+            channel = interaction.channel
+            parent_id = getattr(channel, "parent_id", None)
+            if parent_id is None or (
+                self._room_cache.get_room_for_channel(parent_id) != RACE_TRACK_ROOM
+            ):
+                await interaction.response.send_message(
+                    "You can only place bets at the race track!",
+                    ephemeral=True,
+                )
+                return
 
         # Handle invalid autocomplete selection
         if horse == "invalid":
@@ -238,8 +244,6 @@ def _error_message(error: BetError | None) -> str:
             return "You don't have enough yen."
         case BetError.AMOUNT_TOO_LOW:
             return f"Minimum bet is \u00a5{MIN_BET:,}."
-        case BetError.AMOUNT_TOO_HIGH:
-            return f"Maximum bet is \u00a5{MAX_BET:,}."
         case BetError.NO_BET_TO_CANCEL:
             return "You don't have a bet on that horse to cancel."
         case BetError.NO_CURRENCY_ACCOUNT:

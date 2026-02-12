@@ -33,7 +33,6 @@ from mudd.racing import (
     sprite_from_bytes,
 )
 from mudd.racing.betting import (
-    MAX_BET,
     MIN_BET,
     format_payout_message,
     get_bet_count,
@@ -498,10 +497,10 @@ def _build_message_queue(
             message_type=MessageType.THREAD,
             content=(
                 "**Place your bets!**\n\n"
-                f"\u2022 `/bet <horse> <amount>` \u2014 "
-                f"bet \u00a5{MIN_BET}\u2013\u00a5{MAX_BET}\n"
-                "\u2022 You can bet on multiple horses\n"
+                f"minimum bet is {MIN_BET}\n"
+                f"\u2022 `/bet <horse> <amount>` to place a bet\n"
                 "\u2022 `/bet <horse> 0` to cancel a bet\n"
+                "\u2022 You can bet on multiple horses\n"
                 "\u2022 Betting closes when the race starts!"
             ),
             image_data=None,
@@ -699,7 +698,7 @@ class Racing(commands.Cog):
             channel_id,
             config,
             announcement_time=now,
-            race_start_time=now + dt.timedelta(seconds=45),
+            race_start_time=now + dt.timedelta(minutes=2),
         )
 
         # 5. Persist and finalize images with actual race_id
@@ -916,6 +915,9 @@ class Racing(commands.Cog):
             return
         try:
             event = await guild.fetch_scheduled_event(event_id)
+            if event.status == discord.EventStatus.active:
+                logger.debug("Discord event %d already active", event_id)
+                return
             await event.start()
             logger.info("Started Discord event %d for race #%d", event_id, race_id)
         except Exception:

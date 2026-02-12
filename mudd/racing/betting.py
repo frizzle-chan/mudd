@@ -14,8 +14,7 @@ import asyncpg
 from mudd.models.user import HOUSE_ACCOUNT_ID
 from mudd.racing.persistence import RaceStatus
 
-MIN_BET = 10
-MAX_BET = 1000
+MIN_BET = 5
 
 
 class BetError(StrEnum):
@@ -25,7 +24,6 @@ class BetError(StrEnum):
     HORSE_NOT_IN_RACE = "horse_not_in_race"
     INSUFFICIENT_FUNDS = "insufficient_funds"
     AMOUNT_TOO_LOW = "amount_too_low"
-    AMOUNT_TOO_HIGH = "amount_too_high"
     NO_BET_TO_CANCEL = "no_bet_to_cancel"
     NO_CURRENCY_ACCOUNT = "no_currency_account"
 
@@ -125,8 +123,6 @@ async def place_bet(
 
     if amount < MIN_BET:
         return BetResult(success=False, error=BetError.AMOUNT_TOO_LOW)
-    if amount > MAX_BET:
-        return BetResult(success=False, error=BetError.AMOUNT_TOO_HIGH)
 
     async with pool.acquire() as conn, conn.transaction():
         # Lock race row to verify status
