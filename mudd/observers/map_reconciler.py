@@ -12,7 +12,7 @@ import asyncpg
 import discord
 
 from mudd.events.types import GameEvent, UserMovedEvent
-from mudd.map.rendering import MapRoom, generate_map_image
+from mudd.map.rendering import generate_map_image
 from mudd.models.entity import EntityInstance
 from mudd.models.room import Room
 from mudd.models.user import User
@@ -96,8 +96,9 @@ class MapReconciler:
         if room and description_msg_id:
             try:
                 msg = await thread.fetch_message(description_msg_id)
-                if msg.content != room.description:
-                    await msg.edit(content=room.description)
+                room_content = f"## {room.name}\n{room.description}"
+                if msg.content != room_content:
+                    await msg.edit(content=room_content)
             except discord.NotFound:
                 logger.warning(
                     f"Map description message {description_msg_id} not found "
@@ -112,12 +113,8 @@ class MapReconciler:
         if not is_new_visit:
             return
 
-        all_rooms = await Room.get_all(self.pool)
         visited = await User.get_visited_rooms(self.pool, event.user_id)
-        map_rooms = [
-            MapRoom(id=r.id, name=r.name, zone_id=r.zone_id) for r in all_rooms
-        ]
-        image_bytes = generate_map_image(map_rooms, visited, event.to_room)
+        image_bytes = generate_map_image(visited, event.to_room)
 
         image_msg_id = await User.get_map_image_msg_id(self.pool, event.user_id)
         image_file = discord.File(BytesIO(image_bytes), filename="map.png")

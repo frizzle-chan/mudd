@@ -17,7 +17,7 @@ from mudd.events import (
     InventorySyncEvent,
     UserLeftEvent,
 )
-from mudd.map.rendering import MapRoom, generate_map_image
+from mudd.map.rendering import generate_map_image
 from mudd.models.entity import EntityInstance
 from mudd.models.inventory_forum import UserInventoryForum
 from mudd.models.room import InventoryThread, Room
@@ -571,21 +571,19 @@ class InventoryReconciler:
 
         # Create new map thread
         room = await Room.get(self.pool, user.current_room)
-        room_description = room.description if room else "Unknown location."
+        room_content = (
+            f"## {room.name}\n{room.description}" if room else "Unknown location."
+        )
 
         # Generate initial map image
-        all_rooms = await Room.get_all(self.pool)
         visited = await User.get_visited_rooms(self.pool, user_id)
-        map_rooms = [
-            MapRoom(id=r.id, name=r.name, zone_id=r.zone_id) for r in all_rooms
-        ]
-        image_bytes = generate_map_image(map_rooms, visited, user.current_room)
+        image_bytes = generate_map_image(visited, user.current_room)
 
         view = ViewEntity(map_instance)
         try:
             thread, description_msg = await forum.create_thread(
                 name=view.display_name,
-                content=room_description,
+                content=room_content,
             )
 
             await EntityInstance.update_thread_ids(

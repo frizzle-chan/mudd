@@ -6,11 +6,13 @@ Pure rendering functions for race images (frames, announcements, GIFs). No datab
 
 UnifontEX is a **bitmap font with native glyphs at 16px**. Loading it at any other size causes FreeType to interpolate the bitmaps, producing blurry text.
 
+Font primitives live in `mudd.rendering.chrome` (shared with the map renderer).
+
 Rules:
-- Always render text via `_draw_text()`, which uses the font at its native 16px size.
-- For larger text, pass `scale=2` (or higher integer) to `_draw_text()` — it renders at 1x then scales up with `Resampling.NEAREST` for crisp results.
+- Always render text via `draw_text()` from `mudd.rendering.chrome`, which uses the font at its native 16px size.
+- For larger text, pass `scale=2` (or higher integer) to `draw_text()` — it renders at 1x then scales up with `Resampling.NEAREST` for crisp results.
 - Never call `ImageFont.truetype` directly or pass arbitrary pixel sizes.
-- Use `_textsize()` to measure text dimensions at a given scale.
+- Use `textsize()` from `mudd.rendering.chrome` to measure text dimensions at a given scale.
 
 ## Visual check
 

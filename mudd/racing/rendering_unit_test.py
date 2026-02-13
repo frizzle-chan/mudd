@@ -9,14 +9,8 @@ from mudd.racing.rendering import (
     FRAME_WIDTH,
     LANE_HEIGHT,
     SPRITE_SIZE,
-    WIN_BORDER_TOTAL,
-    WIN_FRAME_INSET,
     WIN_INFOBAR_HEIGHT,
-    WIN_SEPARATOR_WIDTH,
-    WIN_TITLEBAR_HEIGHT,
     RaceHorse,
-    _chrome_canvas,
-    _vcenter,
     fallback_sprite,
     render_frame,
     render_race,
@@ -25,6 +19,13 @@ from mudd.racing.rendering import (
     tile_frames,
 )
 from mudd.racing.simulation import RaceResult
+from mudd.rendering.chrome import (
+    WIN_BORDER_TOTAL,
+    WIN_FRAME_INSET,
+    WIN_SEPARATOR_WIDTH,
+    WIN_TITLEBAR_HEIGHT,
+    chrome_canvas,
+)
 
 
 def _make_sprite() -> Image.Image:
@@ -49,68 +50,11 @@ def _make_result(n_horses: int, n_ticks: int = 60) -> RaceResult:
     )
 
 
-class TestVcenter:
-    def test_centers_item_in_row(self) -> None:
-        assert _vcenter(10, 100, 20) == 50
-
-    def test_integer_division_rounds_down(self) -> None:
-        # (11 - 4) // 2 = 3
-        assert _vcenter(0, 11, 4) == 3
-
-    def test_zero_offset(self) -> None:
-        assert _vcenter(0, 24, 16) == 4
-
-    def test_item_equals_row(self) -> None:
-        assert _vcenter(5, 20, 20) == 5
-
-
-class TestChromeCanvasChecker:
-    def test_dimensions_single_section(self) -> None:
-        cc = _chrome_canvas(100, [50], checker=True)
-        assert cc.img.size == (100 + WIN_FRAME_INSET * 2, 50 + WIN_FRAME_INSET * 2)
-        assert cc.content_x == WIN_FRAME_INSET
-        assert cc.section_tops == [WIN_FRAME_INSET]
-
-    def test_mode_is_rgba(self) -> None:
-        cc = _chrome_canvas(100, [50], checker=True)
-        assert cc.img.mode == "RGBA"
-
-
 class TestChromeCanvasTitled:
-    def test_dimensions_single_section(self) -> None:
-        cc = _chrome_canvas(100, [50], title="Test")
-        expected_h = (
-            WIN_BORDER_TOTAL
-            + WIN_TITLEBAR_HEIGHT
-            + WIN_SEPARATOR_WIDTH
-            + 50
-            + WIN_BORDER_TOTAL
-        )
-        assert cc.img.size == (100 + WIN_BORDER_TOTAL * 2, expected_h)
-        assert cc.content_x == WIN_BORDER_TOTAL
-        assert cc.section_tops == [
-            WIN_BORDER_TOTAL + WIN_TITLEBAR_HEIGHT + WIN_SEPARATOR_WIDTH
-        ]
-
-    def test_dimensions_multi_section(self) -> None:
-        cc = _chrome_canvas(100, [24, 80], title="Test")
-        expected_h = (
-            WIN_BORDER_TOTAL
-            + WIN_TITLEBAR_HEIGHT
-            + WIN_SEPARATOR_WIDTH
-            + 24
-            + WIN_SEPARATOR_WIDTH
-            + 80
-            + WIN_BORDER_TOTAL
-        )
-        assert cc.img.size == (100 + WIN_BORDER_TOTAL * 2, expected_h)
-        chrome_top = WIN_BORDER_TOTAL + WIN_TITLEBAR_HEIGHT + WIN_SEPARATOR_WIDTH
-        assert cc.section_tops == [chrome_top, chrome_top + 24 + WIN_SEPARATOR_WIDTH]
-
     def test_announcement_dimensions(self) -> None:
-        """Verify _chrome_canvas matches render_announcement's old manual layout."""
+        """Verify chrome_canvas matches render_announcement's old manual layout."""
         n = 3
-        cc = _chrome_canvas(
+        cc = chrome_canvas(
             CANVAS_WIDTH - WIN_BORDER_TOTAL * 2,
             [WIN_INFOBAR_HEIGHT, n * 80],
             title="Race #1",
