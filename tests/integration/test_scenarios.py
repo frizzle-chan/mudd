@@ -696,16 +696,32 @@ async def test_spawning_pool_respawn(test_db, clean_user_state):
     pools = await SpawningPool.get_all_with_counts(test_db)
     smashable_pool = next(p for p in pools if p.id == "test_smashable_pool")
 
-    # Pool should detect the vacancy
+    # Pool should detect the vacancy (world instance has no spawning_pool_id)
     assert smashable_pool.current_count == 0
     now = datetime.now(UTC)
     assert smashable_pool.can_spawn(now)
 
-    # Spawn a replacement
+    # Spawn a replacement via the pool
     instance = await smashable_pool.try_spawn(now)
     assert instance is not None
     assert instance.entity.name == "Test Smashable"
     assert instance.room_id == "store-room"
+
+    # Destroy the pool-spawned instance — timer should reset
+    await instance.destroy()
+
+    # Re-fetch pool state
+    pools = await SpawningPool.get_all_with_counts(test_db)
+    smashable_pool = next(p for p in pools if p.id == "test_smashable_pool")
+    assert smashable_pool.current_count == 0
+
+    # Timer was just reset, so immediate respawn should be blocked
+    now = datetime.now(UTC)
+    assert not smashable_pool.can_spawn(now)
+
+    # After the respawn interval elapses, spawning should be allowed
+    future = now + timedelta(minutes=smashable_pool.respawn_interval_minutes)
+    assert smashable_pool.can_spawn(future)
 
 
 async def test_focus_timeout_clears_stale_focus(test_db, clean_user_state):

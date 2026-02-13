@@ -695,6 +695,10 @@ class EntityInstance:
         """
         await self._pool.execute(
             """
+            WITH reset AS (
+                UPDATE spawning_pools SET last_spawn_at = NOW()
+                WHERE id = (SELECT spawning_pool_id FROM entity_instances WHERE id = $1)
+            )
             UPDATE entity_instances
             SET room = NULL, owner_id = $2, container_entity_id = NULL,
                 spawning_pool_id = NULL
@@ -763,7 +767,13 @@ class EntityInstance:
         for observer in self._observers:
             observer.notify(EntityDestroyedEvent(instance=self, thread_id=thread_id))
         await self._pool.execute(
-            "DELETE FROM entity_instances WHERE id = $1",
+            """
+            WITH reset AS (
+                UPDATE spawning_pools SET last_spawn_at = NOW()
+                WHERE id = (SELECT spawning_pool_id FROM entity_instances WHERE id = $1)
+            )
+            DELETE FROM entity_instances WHERE id = $1
+            """,
             self.instance_id,
         )
 
