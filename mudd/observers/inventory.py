@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from io import BytesIO
 
 import asyncpg
 import discord
@@ -16,6 +17,7 @@ from mudd.events import (
     InventorySyncEvent,
     UserLeftEvent,
 )
+from mudd.map.rendering import MapRoom, generate_map_image
 from mudd.models.entity import EntityInstance
 from mudd.models.inventory_forum import UserInventoryForum
 from mudd.models.room import InventoryThread, Room
@@ -339,6 +341,7 @@ class InventoryReconciler:
                     logger.error(f"Failed to fix permissions for forum {forum.id}: {e}")
 
             await self._ensure_wallet_thread(guild, user_id, forum)
+            await self._ensure_map_thread(guild, user_id, forum)
 
             await self._sync_inventory_threads(guild, user_id, forum)
 
@@ -522,6 +525,82 @@ class InventoryReconciler:
         except discord.HTTPException as e:
             logger.error(f"Failed to create wallet thread: {e}")
 
+    async def _ensure_map_thread(
+        self, guild: discord.Guild, user_id: int, forum: discord.ForumChannel
+    ) -> None:
+        """Ensure user has a map with a thread.
+
+        Not pinned — Discord forums allow only 1 pinned thread and the
+        wallet already occupies that slot.
+        """
+        user = await User.get_or_create(self.pool, user_id)
+
+        map_instance = await user.get_map()
+        if map_instance is None:
+            map_instance = await EntityInstance.create(
+                self.pool,
+                "map",
+                owner_id=user_id,
+            )
+
+            if map_instance is None:
+                logger.warning(f"Map entity not found, skipping for {user_id}")
+                return
+
+            await User.update_map_instance(
+                self.pool, user_id, str(map_instance.instance_id)
+            )
+
+            # Record current room as first visit
+            await User.record_room_visit(self.pool, user_id, user.current_room)
+            logger.info(f"Created map for user {user_id}")
+
+        map_thread_id = await EntityInstance.get_thread_id(
+            self.pool, map_instance.instance_id
+        )
+        if map_thread_id:
+            thread = await fetch_thread(guild, map_thread_id)
+            if thread:
+                expected_name = ViewEntity(map_instance).display_name
+                if thread.name != expected_name:
+                    try:
+                        await thread.edit(name=expected_name)
+                    except discord.HTTPException as e:
+                        logger.error(f"Failed to rename map thread: {e}")
+                return
+
+        # Create new map thread
+        room = await Room.get(self.pool, user.current_room)
+        room_description = room.description if room else "Unknown location."
+
+        # Generate initial map image
+        all_rooms = await Room.get_all(self.pool)
+        visited = await User.get_visited_rooms(self.pool, user_id)
+        map_rooms = [
+            MapRoom(id=r.id, name=r.name, zone_id=r.zone_id) for r in all_rooms
+        ]
+        image_bytes = generate_map_image(map_rooms, visited, user.current_room)
+
+        view = ViewEntity(map_instance)
+        try:
+            thread, description_msg = await forum.create_thread(
+                name=view.display_name,
+                content=room_description,
+            )
+
+            await EntityInstance.update_thread_ids(
+                self.pool, map_instance.instance_id, thread.id, description_msg.id
+            )
+
+            # Send map image as second message
+            image_file = discord.File(BytesIO(image_bytes), filename="map.png")
+            image_msg = await thread.send(file=image_file)
+            await User.update_map_image_msg_id(self.pool, user_id, image_msg.id)
+
+            logger.info(f"Created map thread for user {user_id}")
+        except discord.HTTPException as e:
+            logger.error(f"Failed to create map thread: {e}")
+
     async def _post_transaction_notification(
         self, guild: discord.Guild, event: BalanceChangedEvent
     ) -> None:
@@ -563,6 +642,10 @@ class InventoryReconciler:
 
             instance = await EntityInstance.get(self.pool, instance_id)
             if instance is None:
+                continue
+
+            # Map thread content is managed by MapReconciler
+            if instance.entity.id == "map":
                 continue
 
             if thread_id:

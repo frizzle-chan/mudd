@@ -295,6 +295,31 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 - Index on `account_id` for balance history queries
 - Index on `transaction_id` for transaction details
 
+### Room Visits Table
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `user_id` | BIGINT (PK, FK to users.id) | Discord user snowflake ID |
+| `room_id` | TEXT (PK, FK to rooms.id) | Room identifier |
+| `visited_at` | TIMESTAMPTZ NOT NULL | When the room was first visited |
+
+**Purpose:**
+- Tracks which rooms each user has visited for progressive map reveal
+- Composite primary key `(user_id, room_id)` prevents duplicates
+
+**Constraints:**
+- PK on `(user_id, room_id)`
+- FK to users(id) with ON DELETE CASCADE
+- FK to rooms(id) with ON DELETE CASCADE
+
+**Indexes:**
+- Primary key on `(user_id, room_id)`
+- Index on `user_id` for fast lookups of all visited rooms
+
+**Users Table Extensions (Map):**
+- `map_instance_id UUID` (FK to entity_instances.id, ON DELETE SET NULL) — player's map entity instance
+- `map_image_msg_id BIGINT` — Discord message ID for the map image in the map thread
+
 ### User Skills Table
 
 | Column | Type | Description |
