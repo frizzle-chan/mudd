@@ -20,10 +20,10 @@ All horse image assets must be hand-drawn. AI-generated artwork will not be acce
 
 Each horse has four stats (integers from 1–100) that determine how it performs during a race:
 
+- **Luck** — Dominant at the start of the race. High-luck horses get an outsized early boost and often outperform their odds in practice.
 - **Speed** — Dominant in the middle stretch of the race. High-speed horses pull ahead during the main straightaway but pay for it elsewhere.
 - **Stamina** — Dominant in the final stretch. High-stamina horses close strong and overtake faders near the finish line.
 - **Consistency** — Controls variance. A high-consistency horse finishes near its expected position reliably; a low-consistency horse is volatile and can wildly over- or under-perform.
-- **Luck** — Dominant at the start of the race. High-luck horses get an outsized early boost and often outperform their odds in practice.
 
 ### How stats affect odds
 
@@ -36,7 +36,7 @@ The betting odds formula weights the stats unevenly:
 | Luck | 0.25 |
 | Consistency | 0.05 |
 
-This creates hidden value for bettors. High-Consistency horses look weak on the odds board but finish predictably — good value for place bets. High-Luck horses routinely outperform their listed odds. High-Speed/Stamina horses are favorites but priced accordingly with no hidden edge.
+This creates hidden value for bettors. High-Consistency horses look weak on the odds board but finish predictably, good value for place bets. High-Luck horses routinely outperform their listed odds. High-Speed/Stamina horses are favorites but priced accordingly with no hidden edge.
 
 ## Adding a horse
 
