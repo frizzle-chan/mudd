@@ -449,6 +449,25 @@ class EntityInstance:
         return row["discord_thread_id"] if row else None
 
     @classmethod
+    async def get_description_msg_id(
+        cls, pool: asyncpg.Pool, instance_id: UUID
+    ) -> int | None:
+        """Get the Discord description message ID for an entity instance.
+
+        Args:
+            pool: Database connection pool
+            instance_id: Entity instance UUID
+
+        Returns:
+            Discord message ID, or None if no message exists
+        """
+        row = await pool.fetchrow(
+            "SELECT discord_description_msg_id FROM entity_instances WHERE id = $1",
+            instance_id,
+        )
+        return row["discord_description_msg_id"] if row else None
+
+    @classmethod
     async def update_thread_ids(
         cls,
         pool: asyncpg.Pool,
