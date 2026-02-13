@@ -2018,7 +2018,7 @@ ContentsVisible: no
 DescriptionShort: Several {{ e.name }} are arranged around the room.
 DescriptionLong: Plush armchairs upholstered in faded floral fabric. They look well-loved. You could __search__ between the cushions.
 OnUse: You settle into one of the armchairs near the fire. The warmth and comfort wash over you. You feel your health regenerating.
-OnOpen: {{ effects.set_focus() }}You dig around between the cushions.{% if e.contents %} You find:
+OnOpen: {{ effects.set_focus() }}You dig around between the cushions.{% if e.contents %} You see:
 + {{ e.contents }}{% else %} Nothing but lint and crumbs.{% endif %}
 OnClose: {{ effects.clear_focus() }}You stop rummaging through the cushions.
 
