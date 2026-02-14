@@ -362,9 +362,11 @@ def _build_message_queue(
     """Construct the full list of RaceMessageInputs with timings and commentary.
 
     All timestamps are anchored to ``announcement_time`` (when the announcement
-    posts) and ``race_start_time`` (when GIFs begin).  A ``RACE_START`` sentinel
-    message is inserted 30 s before ``race_start_time`` to trigger the
-    ``announcing`` -> ``running`` status transition.
+    posts) and ``race_start_time`` (when GIFs begin).  An ``EVENT_START``
+    sentinel fires 10 minutes before ``race_start_time`` to start the Discord
+    scheduled event (notifying users to bet), and a ``RACE_START`` sentinel
+    fires 30 s before ``race_start_time`` to close betting by transitioning
+    the race from ``announcing`` to ``running``.
     """
     horse_names = [h.name for h in horses]
     winner_idx = result.finishing_order[0]
@@ -470,10 +472,28 @@ def _build_message_queue(
         )
     )
 
-    # Seq 2: RACE_START sentinel — triggers announcing -> running + event start
+    # Seq 2: EVENT_START sentinel — starts Discord event 10 min before race
+    # so users get notified and can place bets.  Clamped to announcement_time
+    # for ad-hoc races where the pre-race window is shorter than 10 minutes.
+    event_start_at = max(
+        announcement_time,
+        race_start_time - dt.timedelta(minutes=10),
+    )
     messages.append(
         RaceMessageInput(
             sequence=2,
+            message_type=MessageType.EVENT_START,
+            content=None,
+            image_data=None,
+            image_name=None,
+            post_at=event_start_at,
+        )
+    )
+
+    # Seq 3: RACE_START sentinel — triggers announcing -> running
+    messages.append(
+        RaceMessageInput(
+            sequence=3,
             message_type=MessageType.RACE_START,
             content=None,
             image_data=None,
@@ -482,10 +502,10 @@ def _build_message_queue(
         )
     )
 
-    # Seq 3: Betting instructions (between POLL and RACE_START)
+    # Seq 4: Betting instructions (between POLL and RACE_START)
     messages.append(
         RaceMessageInput(
-            sequence=3,
+            sequence=4,
             message_type=MessageType.THREAD,
             content=(
                 "## Place your bets!\n"
@@ -501,10 +521,10 @@ def _build_message_queue(
         )
     )
 
-    # Seq 4: "Betting is closed!" — 2 seconds after RACE_START
+    # Seq 5: "Betting is closed!" — 2 seconds after RACE_START
     messages.append(
         RaceMessageInput(
-            sequence=4,
+            sequence=5,
             message_type=MessageType.THREAD,
             content="### Betting is closed!\nGood luck!",
             image_data=None,
@@ -513,10 +533,10 @@ def _build_message_queue(
         )
     )
 
-    # Seq 5-7: Starting sequence
+    # Seq 6-8: Starting sequence
     messages.append(
         RaceMessageInput(
-            sequence=5,
+            sequence=6,
             message_type=MessageType.THREAD,
             content="Riders up!",
             image_data=None,
@@ -526,7 +546,7 @@ def _build_message_queue(
     )
     messages.append(
         RaceMessageInput(
-            sequence=6,
+            sequence=7,
             message_type=MessageType.THREAD,
             content="They're approaching the starting gate...",
             image_data=None,
@@ -536,7 +556,7 @@ def _build_message_queue(
     )
     messages.append(
         RaceMessageInput(
-            sequence=7,
+            sequence=8,
             message_type=MessageType.THREAD,
             content="They're all in the gate...",
             image_data=images.starting_gate,
@@ -547,7 +567,7 @@ def _build_message_queue(
 
     # Race progress (GIFs + commentary)
     gif_interval = config.gif_interval_seconds
-    seq = 8
+    seq = 9
     race_frames = zip(images.gif_batches, commentaries, strict=True)
     for i, (gif_data, commentary) in enumerate(race_frames):
         content = f"## And they're off!\n\n{commentary}" if i == 0 else commentary
@@ -708,13 +728,16 @@ class Racing(commands.Cog):
         )
 
         # 6. Create Discord scheduled event (best-effort)
-        race_start = now + dt.timedelta(seconds=45)
+        # Start time is slightly in the future so Discord accepts it;
+        # the EVENT_START sentinel will start it on the next poster tick.
+        race_start_time = now + dt.timedelta(minutes=2)
+        event_start = now + dt.timedelta(seconds=15)
         race_duration = config.race_duration_minutes * 60
         await self._create_discord_event(
             race_id,
             f"Horse Race #{race_id}",
-            race_start,
-            race_start + dt.timedelta(seconds=race_duration + 30),
+            event_start,
+            race_start_time + dt.timedelta(seconds=race_duration + 30),
         )
 
     async def _prepare_scheduled_race(self) -> None:
@@ -780,7 +803,7 @@ class Racing(commands.Cog):
         # 7. Persist (default status is ANNOUNCING)
         winner_idx = result.finishing_order[0]
         winner_info = (horses[winner_idx].victory_image, horses[winner_idx].name)
-        await self._persist_race(
+        race_id = await self._persist_race(
             pool,
             result,
             odds,
@@ -789,6 +812,17 @@ class Racing(commands.Cog):
             forms,
             channel_id,
             winner_info,
+        )
+
+        # 8. Create Discord scheduled event (best-effort)
+        # Event starts 10 min before race so users get a notification to bet.
+        event_start = race_start_time - dt.timedelta(minutes=10)
+        race_duration = config.race_duration_minutes * 60
+        await self._create_discord_event(
+            race_id,
+            DAILY_RACE_EVENT_NAME,
+            event_start,
+            race_start_time + dt.timedelta(seconds=race_duration + 30),
         )
 
     async def _persist_race(
@@ -1014,10 +1048,15 @@ class Racing(commands.Cog):
             successfully (and should be deleted from the queue). thread_id
             is set when an announcement created a new thread.
         """
+        # EVENT_START sentinel — start the Discord scheduled event (no message)
+        if msg.message_type == MessageType.EVENT_START:
+            await self._start_discord_event(msg.race_id)
+            logger.info("Race #%d Discord event started (betting open)", msg.race_id)
+            return True, None
+
         # RACE_START sentinel — no Discord message, just state transition
         if msg.message_type == MessageType.RACE_START:
             await transition_to_running(self._pool, msg.race_id)
-            await self._start_discord_event(msg.race_id)
             logger.info("Race #%d transitioned to running", msg.race_id)
             return True, None
 

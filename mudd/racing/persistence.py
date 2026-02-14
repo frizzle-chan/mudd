@@ -24,6 +24,7 @@ class MessageType(StrEnum):
     THREAD = "thread"
     RACE_START = "race_start"
     POLL = "poll"
+    EVENT_START = "event_start"
 
 
 @dataclass(frozen=True, slots=True)
