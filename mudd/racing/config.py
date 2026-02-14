@@ -17,6 +17,7 @@ class RaceConfig:
     race_minute: int = 20
     race_timezone: str = "America/Chicago"
     pre_race_minutes: int = 60  # announcement posted this many minutes before
+    discord_event_lead_minutes: int = 10  # Discord event starts this early before race
 
     # Simulation
     house_edge: float = 0.10
