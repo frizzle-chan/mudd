@@ -16,6 +16,28 @@ Each horse is a [GNU recutils](https://www.gnu.org/software/recutils/) record wi
 
 All horse image assets must be hand-drawn. AI-generated artwork will not be accepted.
 
+## Attributes
+
+Each horse has four stats (integers from 1–100) that determine how it performs during a race:
+
+- **Luck** — Dominant at the start of the race. High-luck horses get an outsized early boost and often outperform their odds in practice.
+- **Speed** — Dominant in the middle stretch of the race. High-speed horses pull ahead during the main straightaway but pay for it elsewhere.
+- **Stamina** — Dominant in the final stretch. High-stamina horses close strong and overtake faders near the finish line.
+- **Consistency** — Controls variance. A high-consistency horse finishes near its expected position reliably; a low-consistency horse is volatile and can wildly over- or under-perform.
+
+### How stats affect odds
+
+The betting odds formula weights the stats unevenly:
+
+| Stat | Odds weight |
+|------|-------------|
+| Speed | 0.35 |
+| Stamina | 0.35 |
+| Luck | 0.25 |
+| Consistency | 0.05 |
+
+This creates hidden value for bettors. High-Consistency horses look weak on the odds board but finish predictably, good value for place bets. High-Luck horses routinely outperform their listed odds. High-Speed/Stamina horses are favorites but priced accordingly with no hidden edge.
+
 ## Adding a horse
 
 1. Create `<id>.rec`:
