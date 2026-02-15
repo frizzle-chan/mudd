@@ -320,22 +320,17 @@ class Sync(commands.Cog):
     ) -> None:
         """Ensure a recurring daily Discord event exists for the daily horse race.
 
-        Checks existing scheduled events for one matching DAILY_RACE_EVENT_NAME.
-        If none exists, creates a new recurring event via the raw HTTP API
-        (discord.py's create_scheduled_event doesn't support recurrence_rule).
+        The Discord event starts discord_event_lead_minutes before the actual
+        race to give players a heads-up notification. If an existing event has
+        the wrong start time, it is edited to match.
         """
         from mudd.racing.config import DEFAULT_CONFIG
 
-        events = await guild.fetch_scheduled_events()
-        for event in events:
-            if event.name == DAILY_RACE_EVENT_NAME:
-                logger.debug("Recurring race event already exists (id=%d)", event.id)
-                return
-
-        # Compute next 4:20 PM Central
         config = DEFAULT_CONFIG
         tz = ZoneInfo(config.race_timezone)
         now_local = datetime.now(tz)
+
+        # Compute next race time
         race_today = now_local.replace(
             hour=config.race_hour,
             minute=config.race_minute,
@@ -345,13 +340,75 @@ class Sync(commands.Cog):
         if race_today <= now_local:
             race_today += timedelta(days=1)
 
-        start_utc = race_today.astimezone(UTC)
+        # Discord event starts early so players get a notification before race
+        event_start = race_today - timedelta(minutes=config.discord_event_lead_minutes)
+        start_utc = event_start.astimezone(UTC)
         race_duration_secs = config.race_duration_minutes * 60
-        end_utc = start_utc + timedelta(seconds=race_duration_secs + 300)
+        end_utc = race_today.astimezone(UTC) + timedelta(
+            seconds=race_duration_secs + 300
+        )
 
         start_iso = start_utc.isoformat()
         end_iso = end_utc.isoformat()
 
+        # Check for existing event
+        events = await guild.fetch_scheduled_events()
+        existing: discord.ScheduledEvent | None = None
+        for event in events:
+            if event.name == DAILY_RACE_EVENT_NAME:
+                existing = event
+                break
+
+        if existing is not None:
+            # Compare time-of-day in race timezone to detect drift
+            existing_local = existing.start_time.astimezone(tz)
+            desired_hour = event_start.hour
+            desired_minute = event_start.minute
+
+            if (
+                existing_local.hour == desired_hour
+                and existing_local.minute == desired_minute
+            ):
+                logger.debug(
+                    "Recurring race event already correct (id=%d)", existing.id
+                )
+                return
+
+            # Time mismatch — edit the event
+            logger.info(
+                "Race event time %02d:%02d != desired %02d:%02d, updating",
+                existing_local.hour,
+                existing_local.minute,
+                desired_hour,
+                desired_minute,
+            )
+            patch_payload = {
+                "scheduled_start_time": start_iso,
+                "scheduled_end_time": end_iso,
+                "recurrence_rule": {
+                    "start": start_iso,
+                    "frequency": 3,  # DAILY
+                    "interval": 1,
+                },
+            }
+            try:
+                route = discord.http.Route(
+                    "PATCH",
+                    "/guilds/{guild_id}/scheduled-events/{event_id}",
+                    guild_id=guild.id,
+                    event_id=existing.id,
+                )
+                await guild._state.http.request(route, json=patch_payload)
+                logger.info("Updated recurring race event for %s", guild.name)
+            except Exception:
+                logger.exception(
+                    "Failed to update recurring race event for %s", guild.name
+                )
+                if fail_fast:
+                    raise
+            return
+
+        # No existing event — create one
         payload = {
             "name": DAILY_RACE_EVENT_NAME,
             "description": RACE_EVENT_DESCRIPTION,
