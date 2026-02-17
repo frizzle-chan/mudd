@@ -44,6 +44,7 @@ Name: Sitting Room
 Zone: floor-1
 Description: A cozy sitting room.
 +
++ to your north is the #gallery
 + to your east is the #foyer
 
 Id: hallway
