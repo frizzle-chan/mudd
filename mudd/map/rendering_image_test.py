@@ -41,33 +41,33 @@ def test_no_rooms_visited(
     image_regression: ImageRegressionFixture,
 ) -> None:
     """Only the base layer, no rooms revealed."""
-    image_bytes = generate_map_image(set(), None, layers_dir=_LAYERS_DIR)
+    image_bytes = generate_map_image(set(), layers_dir=_LAYERS_DIR)
     image_regression.check(image_bytes)
 
 
 def test_single_room_visited(
     image_regression: ImageRegressionFixture,
 ) -> None:
-    """One room visited and highlighted as current."""
-    image_bytes = generate_map_image({"foyer"}, "foyer", layers_dir=_LAYERS_DIR)
+    """One room visited."""
+    image_bytes = generate_map_image({"foyer"}, layers_dir=_LAYERS_DIR)
     image_regression.check(image_bytes)
 
 
 def test_multiple_rooms_visited(
     image_regression: ImageRegressionFixture,
 ) -> None:
-    """Several rooms visited, one highlighted as current."""
+    """Several rooms visited."""
     visited = {"foyer", "hallway", "library", "kitchen"}
-    image_bytes = generate_map_image(visited, "library", layers_dir=_LAYERS_DIR)
+    image_bytes = generate_map_image(visited, layers_dir=_LAYERS_DIR)
     image_regression.check(image_bytes)
 
 
 def test_all_rooms_visited(
     image_regression: ImageRegressionFixture,
 ) -> None:
-    """All rooms visited, current room highlighted."""
+    """All rooms visited."""
     visited = set(_ROOM_IDS)
-    image_bytes = generate_map_image(visited, "courtyard", layers_dir=_LAYERS_DIR)
+    image_bytes = generate_map_image(visited, layers_dir=_LAYERS_DIR)
     image_regression.check(image_bytes)
 
 
@@ -76,5 +76,5 @@ def test_offline_fallback(
 ) -> None:
     """No layers directory — renders 'map offline' placeholder."""
     with TemporaryDirectory() as tmp:
-        image_bytes = generate_map_image({"foyer"}, "foyer", layers_dir=Path(tmp))
+        image_bytes = generate_map_image({"foyer"}, layers_dir=Path(tmp))
     image_regression.check(image_bytes)

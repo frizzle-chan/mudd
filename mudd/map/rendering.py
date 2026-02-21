@@ -26,9 +26,6 @@ _DEFAULT_LAYERS_DIR = (
     Path(__file__).resolve().parent.parent.parent / "data" / "worlds" / "mansion_map"
 )
 
-# Semi-transparent blue tint for current-room highlight
-_CURRENT_ROOM_TINT = (80, 160, 220, 100)
-
 
 # ---------------------------------------------------------------------------
 # Layered rendering
@@ -44,13 +41,11 @@ def _load_layer(path: Path) -> Image.Image:
 def _render_layered(
     layers_dir: Path,
     visited_room_ids: set[str],
-    current_room_id: str | None,
 ) -> bytes:
     """Composite room layers onto the base image.
 
     1. Start with base.png
     2. Alpha-composite each visited room's layer
-    3. Apply a semi-transparent blue tint to the current room layer
     """
     base = _load_layer(layers_dir / "base.png")
     result = base.copy()
@@ -61,17 +56,6 @@ def _render_layered(
             continue
         layer = _load_layer(layer_path)
         result = Image.alpha_composite(result, layer)
-
-    # Highlight current room with a blue tint
-    if current_room_id and current_room_id in visited_room_ids:
-        current_path = layers_dir / f"{current_room_id}.png"
-        if current_path.is_file():
-            current_layer = _load_layer(current_path)
-            # Build a tint image masked by the layer's alpha channel
-            tint = Image.new("RGBA", result.size, _CURRENT_ROOM_TINT)
-            mask = current_layer.split()[3]  # alpha channel
-            tint.putalpha(mask)
-            result = Image.alpha_composite(result, tint)
 
     # Wrap in chrome
     cc = chrome_canvas(result.width, [result.height], title="MAP")
@@ -113,7 +97,6 @@ def _render_offline() -> bytes:
 
 def generate_map_image(
     visited_room_ids: set[str],
-    current_room_id: str | None,
     *,
     layers_dir: Path = _DEFAULT_LAYERS_DIR,
 ) -> bytes:
@@ -125,12 +108,11 @@ def generate_map_image(
 
     Args:
         visited_room_ids: Room IDs the user has visited.
-        current_room_id: The user's current room ID (highlighted).
         layers_dir: Directory containing ``base.png`` and per-room PNGs.
 
     Returns:
         PNG image bytes.
     """
     if (layers_dir / "base.png").is_file():
-        return _render_layered(layers_dir, visited_room_ids, current_room_id)
+        return _render_layered(layers_dir, visited_room_ids)
     return _render_offline()

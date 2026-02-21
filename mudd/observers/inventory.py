@@ -577,7 +577,7 @@ class InventoryReconciler:
 
         # Generate initial map image
         visited = await User.get_visited_rooms(self.pool, user_id)
-        image_bytes = generate_map_image(visited, user.current_room)
+        image_bytes = generate_map_image(visited)
 
         view = ViewEntity(map_instance)
         try:
