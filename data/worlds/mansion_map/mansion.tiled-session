@@ -1,0 +1,66 @@
+{
+    "Map/SizeTest": {
+        "height": 4300,
+        "width": 2
+    },
+    "activeFile": "mansion.tmx",
+    "expandedProjectPaths": [
+        "tiles",
+        "."
+    ],
+    "file.lastUsedOpenFilter": "All Files (*)",
+    "fileStates": {
+        "mansion.tmx": {
+            "scale": 0.33,
+            "selectedLayer": 0,
+            "viewCenter": {
+                "x": 695.4545454545454,
+                "y": 546.969696969697
+            }
+        },
+        "mansion.tsx": {
+            "dynamicWrapping": true,
+            "scaleInDock": 2,
+            "scaleInEditor": 2
+        },
+        "tiles/mansion.tsx": {
+            "dynamicWrapping": false,
+            "scaleInDock": 2,
+            "scaleInEditor": 1
+        },
+        "tiles/mansion_outer.tsx": {
+            "scaleInDock": 1.5,
+            "scaleInEditor": 1
+        },
+        "tiles/mansion_walls.tsx": {
+            "scaleInDock": 1.5,
+            "scaleInEditor": 1
+        }
+    },
+    "last.externalTilesetPath": "/home/austin/proj/mudd/data/worlds/tiles",
+    "last.imagePath": "/home/austin/proj/mudd/data/worlds/tiles",
+    "map.fixedSize": false,
+    "map.lastUsedFormat": "tmx",
+    "map.tileHeight": 16,
+    "map.tileWidth": 16,
+    "openFiles": [
+        "tiles/mansion_outer.tsx",
+        "tiles/mansion_walls.tsx",
+        "mansion.tmx"
+    ],
+    "project": "mansion.tiled-project",
+    "recentFiles": [
+        "mansion.tmx",
+        "tiles/mansion_outer.tsx",
+        "tiles/mansion_walls.tsx",
+        "tiles/mansion.tsx",
+        "mansion.tsx"
+    ],
+    "tileset.lastUsedFilter": "Tiled tileset files (*.tsx *.xml)",
+    "tileset.lastUsedFormat": "tsx",
+    "tileset.tileSize": {
+        "height": 16,
+        "width": 16
+    },
+    "tileset.type": 0
+}
