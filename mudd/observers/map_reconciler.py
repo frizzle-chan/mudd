@@ -78,10 +78,7 @@ class MapReconciler:
         )
 
         # Get the map thread's description message
-        description_msg_id = await EntityInstance.get_description_msg_id(
-            self.pool, map_instance.instance_id
-        )
-        thread_id = await EntityInstance.get_thread_id(
+        thread_id, description_msg_id = await EntityInstance.get_thread_and_msg_ids(
             self.pool, map_instance.instance_id
         )
         if thread_id is None:
@@ -114,7 +111,7 @@ class MapReconciler:
             return
 
         visited = await User.get_visited_rooms(self.pool, event.user_id)
-        image_bytes = generate_map_image(visited, event.to_room)
+        image_bytes = generate_map_image(visited)
 
         image_msg_id = await User.get_map_image_msg_id(self.pool, event.user_id)
         image_file = discord.File(BytesIO(image_bytes), filename="map.png")

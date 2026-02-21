@@ -678,9 +678,7 @@ class User:
             "SELECT map_image_msg_id FROM users WHERE id = $1",
             user_id,
         )
-        if row is None:
-            return None
-        return row["map_image_msg_id"]
+        return row["map_image_msg_id"] if row else None
 
     @classmethod
     async def update_map_image_msg_id(

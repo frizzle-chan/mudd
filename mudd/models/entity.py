@@ -432,6 +432,28 @@ class EntityInstance:
         return instances
 
     @classmethod
+    async def get_thread_and_msg_ids(
+        cls, pool: asyncpg.Pool, instance_id: UUID
+    ) -> tuple[int | None, int | None]:
+        """Get the Discord thread ID and description message ID for an instance.
+
+        Args:
+            pool: Database connection pool
+            instance_id: Entity instance UUID
+
+        Returns:
+            Tuple of (thread_id, description_msg_id), either may be None
+        """
+        row = await pool.fetchrow(
+            "SELECT discord_thread_id, discord_description_msg_id "
+            "FROM entity_instances WHERE id = $1",
+            instance_id,
+        )
+        if row is None:
+            return (None, None)
+        return (row["discord_thread_id"], row["discord_description_msg_id"])
+
+    @classmethod
     async def get_thread_id(cls, pool: asyncpg.Pool, instance_id: UUID) -> int | None:
         """Get the Discord thread ID for an entity instance.
 

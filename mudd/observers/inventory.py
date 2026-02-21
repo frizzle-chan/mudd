@@ -29,6 +29,7 @@ from mudd.views import ViewEntity
 logger = logging.getLogger(__name__)
 
 INVENTORY_CATEGORY_NAME = "Inventory"
+MAP_ENTITY_ID = "map"
 
 
 def _get_inventory_forum_name(username: str) -> str:
@@ -340,8 +341,9 @@ class InventoryReconciler:
                 except discord.HTTPException as e:
                     logger.error(f"Failed to fix permissions for forum {forum.id}: {e}")
 
-            await self._ensure_wallet_thread(guild, user_id, forum)
-            await self._ensure_map_thread(guild, user_id, forum)
+            user = await User.get_or_create(self.pool, user_id)
+            await self._ensure_wallet_thread(guild, user, forum)
+            await self._ensure_map_thread(guild, user, forum)
 
             await self._sync_inventory_threads(guild, user_id, forum)
 
@@ -447,10 +449,10 @@ class InventoryReconciler:
         )
 
     async def _ensure_wallet_thread(
-        self, guild: discord.Guild, user_id: int, forum: discord.ForumChannel
+        self, guild: discord.Guild, user: User, forum: discord.ForumChannel
     ) -> None:
         """Ensure user has a wallet with a pinned thread."""
-        user = await User.get_or_create(self.pool, user_id)
+        user_id = user.id
 
         wallet = await user.get_wallet()
         if wallet is None:
@@ -526,20 +528,20 @@ class InventoryReconciler:
             logger.error(f"Failed to create wallet thread: {e}")
 
     async def _ensure_map_thread(
-        self, guild: discord.Guild, user_id: int, forum: discord.ForumChannel
+        self, guild: discord.Guild, user: User, forum: discord.ForumChannel
     ) -> None:
         """Ensure user has a map with a thread.
 
         Not pinned — Discord forums allow only 1 pinned thread and the
         wallet already occupies that slot.
         """
-        user = await User.get_or_create(self.pool, user_id)
+        user_id = user.id
 
         map_instance = await user.get_map()
         if map_instance is None:
             map_instance = await EntityInstance.create(
                 self.pool,
-                "map",
+                MAP_ENTITY_ID,
                 owner_id=user_id,
             )
 
@@ -643,7 +645,7 @@ class InventoryReconciler:
                 continue
 
             # Map thread content is managed by MapReconciler
-            if instance.entity.id == "map":
+            if instance.entity.id == MAP_ENTITY_ID:
                 continue
 
             if thread_id:
