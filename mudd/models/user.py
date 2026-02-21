@@ -605,6 +605,99 @@ class User:
         )
 
     @classmethod
+    async def update_map_instance(
+        cls, pool: asyncpg.Pool, user_id: int, instance_id: str
+    ) -> None:
+        """Set the map entity instance ID on a user.
+
+        Args:
+            pool: Database connection pool
+            user_id: Discord user ID
+            instance_id: UUID string of the map EntityInstance
+        """
+        await pool.execute(
+            "UPDATE users SET map_instance_id = $2 WHERE id = $1",
+            user_id,
+            instance_id,
+        )
+
+    @classmethod
+    async def record_room_visit(
+        cls, pool: asyncpg.Pool, user_id: int, room_id: str
+    ) -> bool:
+        """Record that a user visited a room.
+
+        Args:
+            pool: Database connection pool
+            user_id: Discord user ID
+            room_id: Room ID visited
+
+        Returns:
+            True if this is a new visit, False if already visited
+        """
+        result = await pool.execute(
+            """
+            INSERT INTO room_visits (user_id, room_id)
+            VALUES ($1, $2)
+            ON CONFLICT (user_id, room_id) DO NOTHING
+            """,
+            user_id,
+            room_id,
+        )
+        return result == "INSERT 0 1"
+
+    @classmethod
+    async def get_visited_rooms(cls, pool: asyncpg.Pool, user_id: int) -> set[str]:
+        """Get all room IDs a user has visited.
+
+        Args:
+            pool: Database connection pool
+            user_id: Discord user ID
+
+        Returns:
+            Set of room ID strings
+        """
+        rows = await pool.fetch(
+            "SELECT room_id FROM room_visits WHERE user_id = $1",
+            user_id,
+        )
+        return {row["room_id"] for row in rows}
+
+    @classmethod
+    async def get_map_image_msg_id(cls, pool: asyncpg.Pool, user_id: int) -> int | None:
+        """Get the Discord message ID for a user's map image.
+
+        Args:
+            pool: Database connection pool
+            user_id: Discord user ID
+
+        Returns:
+            Message ID or None
+        """
+        row = await pool.fetchrow(
+            "SELECT map_image_msg_id FROM users WHERE id = $1",
+            user_id,
+        )
+        return row["map_image_msg_id"] if row else None
+
+    @classmethod
+    async def update_map_image_msg_id(
+        cls, pool: asyncpg.Pool, user_id: int, msg_id: int
+    ) -> None:
+        """Set the Discord message ID for a user's map image.
+
+        Args:
+            pool: Database connection pool
+            user_id: Discord user ID
+            msg_id: Discord message ID
+        """
+        await pool.execute(
+            "UPDATE users SET map_image_msg_id = $2 WHERE id = $1",
+            user_id,
+            msg_id,
+        )
+
+    @classmethod
     async def get_players_in_room(cls, pool: asyncpg.Pool, room_id: str) -> list[User]:
         """Get all players in a room.
 
@@ -685,6 +778,25 @@ class User:
             return None
 
         return await EntityInstance.get(self._pool, row["wallet_instance_id"])
+
+    async def get_map(self) -> EntityInstance | None:
+        """Get user's map instance, if any.
+
+        Returns:
+            EntityInstance for the map, or None if no map exists
+        """
+        row = await self._pool.fetchrow(
+            """
+            SELECT map_instance_id FROM users
+            WHERE id = $1 AND map_instance_id IS NOT NULL
+            """,
+            self.id,
+        )
+
+        if row is None:
+            return None
+
+        return await EntityInstance.get(self._pool, row["map_instance_id"])
 
     async def transfer_currency_to(
         self, recipient: User, amount: int, memo: str

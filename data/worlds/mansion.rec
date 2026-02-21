@@ -257,6 +257,16 @@ OnLook: Your wallet contains **{{ user.balance|money }}**.
 OnUse: You whip out your wallet, it has **{{ user.balance|money }}**.
 OnOpen: You open up your wallet, inside it has **{{ user.balance|money }}**.
 
+Id: map
+Name: Map
+Prototype: item
+Rarity: none
+DescriptionShort: shows rooms you have discovered
+OnTake: You already have your map.
+OnDrop: You can't drop your map.
+OnLook: You unfold your map and study it carefully.
+OnUse: You pull out your map and check your surroundings.
+
 # ----------------------------------------------------------------------------
 # Currency pickups (grant currency on take, don't go to inventory)
 # Used by spawning pools, slot machines, NPC rewards, etc.
