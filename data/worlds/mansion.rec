@@ -261,6 +261,7 @@ Id: map
 Name: Map
 Prototype: item
 Rarity: none
+DescriptionShort: shows rooms you have discovered
 OnTake: You already have your map.
 OnDrop: You can't drop your map.
 OnLook: You unfold your map and study it carefully.

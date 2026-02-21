@@ -93,7 +93,10 @@ class MapReconciler:
         if room and description_msg_id:
             try:
                 msg = await thread.fetch_message(description_msg_id)
-                room_content = f"## {room.name}\n{room.description}"
+                room_content = (
+                    f"Shows rooms you have discovered.\n"
+                    f"## {room.name}\n{room.description}"
+                )
                 if msg.content != room_content:
                     await msg.edit(content=room_content)
             except discord.NotFound:

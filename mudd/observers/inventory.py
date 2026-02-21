@@ -574,7 +574,9 @@ class InventoryReconciler:
         # Create new map thread
         room = await Room.get(self.pool, user.current_room)
         room_content = (
-            f"## {room.name}\n{room.description}" if room else "Unknown location."
+            f"Shows rooms you have discovered.\n## {room.name}\n{room.description}"
+            if room
+            else "Unknown location."
         )
 
         # Generate initial map image
