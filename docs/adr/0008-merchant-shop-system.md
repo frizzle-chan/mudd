@@ -14,6 +14,7 @@ Key requirements:
 - **Merchant specialization**: Merchants that deal in specific goods offer better prices
 - **Threaded interaction**: Trading happens in Discord threads with dedicated commands
 - **Multiple access points**: Different entities (NPCs, terminals, machines) can connect to the same shop
+- **Skill integration**: Speech skill (ADR 0006) should provide a tangible economic advantage
 
 ## Decisions
 
@@ -127,6 +128,35 @@ In the context of **merchant currency flow**, facing **the existing double-entry
 - Player sells: currency transfers from house account to player account
 - Uses existing `transfer_currency()` with full audit trail
 
+### Speech Skill Haggling
+
+In the context of **giving the Speech skill a concrete gameplay benefit**, facing **the need to reward players who invest in Speech beyond XP milestones**, we decided to **scale trade prices based on the player's Speech level**, to achieve **a meaningful economic advantage that makes Speech feel valuable and rewarding to level**, accepting **that high-Speech players earn more per trade, creating a soft power curve**.
+
+**Bonus formula:**
+- Speech provides a linear bonus from level 1 (0%) to level 99 (25%)
+- The bonus improves the effective spread on sell transactions (what the merchant pays the player)
+- At level 1: merchant pays base spread (e.g., 50%)
+- At level 99: merchant pays base spread + 25 percentage points (e.g., 75%)
+
+**Stacking with other bonuses:**
+- Speech bonus is additive with the base spread, then the preferred tag multiplier applies on top
+- Example at a 50% spread shop with preferred tag item: level 99 Speech player gets (50% + 25%) × 1.5 = 112.5% of dynamic price — exceeding the sell price and creating profit potential for specialists
+
+**Buy discount:**
+- Speech also reduces the price when buying from merchants
+- Linear discount from 0% at level 1 to 15% at level 99
+- Applied as a multiplier on the sell price: `sell_price × (1 - discount)`
+
+**Display:**
+- Autocomplete prices reflect the player's Speech-adjusted rates
+- The shop overview message shows personalized prices
+- No explicit "your Speech bonus is X%" display — players discover the benefit organically as their skill improves
+
+**Speech XP from trading:**
+- Each completed /buy or /sell transaction grants Speech XP
+- Uses the existing `GrantXPSignal` through the observer pipeline
+- Trading is a new way to train Speech alongside sending messages
+
 ## Consequences
 
 ### Positive
@@ -138,6 +168,8 @@ In the context of **merchant currency flow**, facing **the existing double-entry
 - Shop/entity separation allows creative access points (NPCs, terminals, vending machines)
 - Builds on existing systems: currency ledger, entity tags, rarity, spawning pool algorithm, effects pattern
 - House account integration provides full audit trail for all trades
+- Speech skill gains a tangible gameplay reward, incentivizing social play
+- Trading as a Speech XP source gives non-combat players a progression path
 
 ### Negative
 
@@ -146,6 +178,7 @@ In the context of **merchant currency flow**, facing **the existing double-entry
 - Dynamic pricing requires careful tuning to avoid degenerate cases
 - Players may find price floors frustrating when trying to sell bulk items
 - Two new slash commands to maintain with context-dependent autocomplete
+- High-Speech players can exceed 100% spread with preferred tag stacking, requiring the house account to absorb losses
 
 ### Future Considerations
 
@@ -157,3 +190,5 @@ In the context of **merchant currency flow**, facing **the existing double-entry
 - Price charts or market data visibility
 - Shop reputation or loyalty discounts
 - Merchant dialogue and personality via thread messages
+- Speech skill unlocking exclusive merchant dialogue or hidden stock at high levels
+- Other skills affecting trade (e.g., Fishing skill bonus when selling fish)
