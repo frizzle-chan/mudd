@@ -80,6 +80,11 @@ class ResolvedEntity:
             and "effects.set_focus" in self.on_open
         )
 
+    @property
+    def is_shop(self) -> bool:
+        """Whether this entity opens a trading session when used."""
+        return self.on_use is not None and "effects.shop(" in self.on_use
+
     @classmethod
     def _from_row(cls, row: asyncpg.Record) -> ResolvedEntity:
         """Construct ResolvedEntity from asyncpg.Record."""

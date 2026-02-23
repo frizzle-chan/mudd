@@ -34,6 +34,8 @@ class ViewEntity:
         name = f"{self._entity.name} {emoji}" if emoji else self._entity.name
         if self._entity.entity.is_searchable:
             return f"\U0001f50d {name}"
+        if self._entity.entity.is_shop:
+            return f"\U0001f3ea {name}"
         return name
 
     @property
