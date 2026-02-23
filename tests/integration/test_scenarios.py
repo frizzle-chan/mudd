@@ -27,6 +27,7 @@ from mudd.events import (
     EntityDestroyedEvent,
     EntityDroppedEvent,
     EntityPickedUpEvent,
+    TradingSessionEndedEvent,
     TradingSessionStartedEvent,
     UserLocationSyncEvent,
     UserMovedEvent,
@@ -1209,3 +1210,26 @@ async def test_shop_buy_and_sell(test_db, clean_user_state):
     final_balance = await fresh_user.get_balance()
     assert final_balance == 450
     assert final_balance < 500  # net loss from spread
+
+
+async def test_move_ends_trading_session(test_db, clean_user_state):
+    """Moving to another room emits TradingSessionEndedEvent with thread_id."""
+    user = await create_test_user(test_db, room_id="store-room")
+
+    # Create an active trading session
+    thread_id = 55555
+    await TradingSession.create(test_db, user.id, "test-shop", thread_id=thread_id)
+
+    # Move away — should end the trading session
+    result = await move(test_db, user.id, "foyer", guild_id=GUILD_ID)
+
+    ended_events = [
+        e for e in result.reconciler.events if isinstance(e, TradingSessionEndedEvent)
+    ]
+    assert len(ended_events) == 1
+    assert ended_events[0].thread_id == thread_id
+    assert ended_events[0].user_id == user.id
+
+    # Session should be gone from DB
+    session = await TradingSession.get(test_db, user.id)
+    assert session is None
