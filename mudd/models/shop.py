@@ -10,12 +10,12 @@ from uuid import UUID
 
 import asyncpg
 
+from mudd.models.entity import EntityInstance, ResolvedEntity
 from mudd.models.zone import SyncStats
 from mudd.utils.text import Rarity
 
 if TYPE_CHECKING:
     from mudd.loaders.zone_loader import ShopData
-    from mudd.models.entity import EntityInstance
 
 logger = logging.getLogger(__name__)
 
@@ -156,8 +156,6 @@ class Shop:
 
     async def try_restock(self, now: datetime) -> EntityInstance | None:
         """Attempt to restock one item. Returns instance or None."""
-        from mudd.models.entity import EntityInstance, ResolvedEntity
-
         if self._pool is None:
             return None
 
@@ -235,26 +233,30 @@ class Shop:
                 deleted = int(result.split()[1])
 
             # Upsert shops (preserve last_restock_at)
-            for s in shops:
-                await conn.execute(
-                    """INSERT INTO shops (
-                        id, name, preferred_tag, sell_spread,
-                        restock_tag, restock_interval_minutes
-                    ) VALUES ($1, $2, $3, $4, $5, $6)
-                    ON CONFLICT (id) DO UPDATE SET
-                        name = $2,
-                        preferred_tag = $3,
-                        sell_spread = $4,
-                        restock_tag = $5,
-                        restock_interval_minutes = $6
-                    """,
-                    s.id,
-                    s.name,
-                    s.preferred_tag,
-                    s.sell_spread,
-                    s.restock_tag,
-                    s.restock_interval_minutes,
-                )
+            await conn.executemany(
+                """INSERT INTO shops (
+                    id, name, preferred_tag, sell_spread,
+                    restock_tag, restock_interval_minutes
+                ) VALUES ($1, $2, $3, $4, $5, $6)
+                ON CONFLICT (id) DO UPDATE SET
+                    name = $2,
+                    preferred_tag = $3,
+                    sell_spread = $4,
+                    restock_tag = $5,
+                    restock_interval_minutes = $6
+                """,
+                [
+                    (
+                        s.id,
+                        s.name,
+                        s.preferred_tag,
+                        s.sell_spread,
+                        s.restock_tag,
+                        s.restock_interval_minutes,
+                    )
+                    for s in shops
+                ],
+            )
 
         logger.info(f"Synced {len(shops)} shops")
         return SyncStats(synced=len(shops), deleted=deleted)

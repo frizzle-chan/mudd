@@ -1,5 +1,7 @@
 """Unit tests for shop pricing logic and restock helpers."""
 
+from __future__ import annotations
+
 from datetime import UTC, datetime, timedelta
 
 import pytest
