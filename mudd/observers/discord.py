@@ -186,7 +186,7 @@ class DiscordReconciler:
     async def flush(self) -> list[GameEvent]:
         """Process queued notifications. Call after response sent.
 
-        Preserves ordering: zones/rooms -> inventory -> permissions -> skills.
+        Preserves ordering: zones/rooms -> inventory -> shop -> permissions -> skills.
         Skills flush last so level-up announcements are deferred to
         post_flush() where they appear after movement messages.
 
@@ -196,8 +196,8 @@ class DiscordReconciler:
         await self._zone_room.flush()
         await self._inventory.flush()
         await self._map.flush()
-        await self._permissions.flush()
         await self._shop.flush()
+        await self._permissions.flush()
         await self._skills.flush()
         return []
 
