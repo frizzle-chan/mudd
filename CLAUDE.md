@@ -108,6 +108,8 @@ The codebase uses an MVC + events architecture:
 
 **MUD concept**: Channel topics = room descriptions. Movement hides/shows channels via Discord permissions.
 
+**Currency symbol**: The in-game currency symbol is `¤` (U+00A4). Use it in player-facing strings (e.g., `¤500`) instead of writing "coins" or "gold".
+
 **Design docs**: See `DESIGN.md` for PostgreSQL schema and data persistence details. **Always update DESIGN.md when modifying the database schema.**
 
 **Entity resolution**: When querying entity fields that support prototype inheritance (like `on_close`, `contents_visible`, etc.), use the `resolve_entity()` SQL function instead of joining directly to the `entities` table. Direct joins return NULL for inherited values, while `resolve_entity()` follows the prototype chain and applies defaults.
