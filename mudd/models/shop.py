@@ -98,7 +98,9 @@ class Shop:
     _pool: asyncpg.Pool | None = field(repr=False, compare=False, default=None)
 
     @classmethod
-    def _from_row(cls, row: asyncpg.Record) -> Shop:
+    def _from_row(
+        cls, row: asyncpg.Record, *, pool: asyncpg.Pool | None = None
+    ) -> Shop:
         """Construct Shop from asyncpg.Record."""
         return cls(
             id=row["id"],
@@ -108,6 +110,7 @@ class Shop:
             restock_tag=row["restock_tag"],
             restock_interval_minutes=row["restock_interval_minutes"],
             last_restock_at=row["last_restock_at"],
+            _pool=pool,
         )
 
     @property
@@ -147,19 +150,7 @@ class Shop:
             """,
             now,
         )
-        return [
-            cls(
-                id=r["id"],
-                name=r["name"],
-                preferred_tag=r["preferred_tag"],
-                sell_spread=r["sell_spread"],
-                restock_tag=r["restock_tag"],
-                restock_interval_minutes=r["restock_interval_minutes"],
-                last_restock_at=r["last_restock_at"],
-                _pool=pool,
-            )
-            for r in rows
-        ]
+        return [cls._from_row(r, pool=pool) for r in rows]
 
     async def try_restock(self, now: datetime) -> EntityInstance | None:
         """Attempt to restock one item. Returns instance or None."""
@@ -304,6 +295,16 @@ class TradingSession:
     created_at: datetime
 
     @classmethod
+    def _from_row(cls, row: asyncpg.Record) -> TradingSession:
+        """Construct TradingSession from asyncpg.Record."""
+        return cls(
+            user_id=row["user_id"],
+            shop_id=row["shop_id"],
+            thread_id=row["thread_id"],
+            created_at=row["created_at"],
+        )
+
+    @classmethod
     async def get(cls, pool: asyncpg.Pool, user_id: int) -> TradingSession | None:
         """Fetch the active trading session for a user.
 
@@ -320,12 +321,7 @@ class TradingSession:
         )
         if row is None:
             return None
-        return cls(
-            user_id=row["user_id"],
-            shop_id=row["shop_id"],
-            thread_id=row["thread_id"],
-            created_at=row["created_at"],
-        )
+        return cls._from_row(row)
 
     @classmethod
     async def create(
@@ -359,12 +355,7 @@ class TradingSession:
             thread_id,
         )
         assert row is not None
-        return cls(
-            user_id=row["user_id"],
-            shop_id=row["shop_id"],
-            thread_id=row["thread_id"],
-            created_at=row["created_at"],
-        )
+        return cls._from_row(row)
 
     @classmethod
     async def delete(cls, pool: asyncpg.Pool, user_id: int) -> TradingSession | None:
@@ -387,9 +378,4 @@ class TradingSession:
         )
         if row is None:
             return None
-        return cls(
-            user_id=row["user_id"],
-            shop_id=row["shop_id"],
-            thread_id=row["thread_id"],
-            created_at=row["created_at"],
-        )
+        return cls._from_row(row)
