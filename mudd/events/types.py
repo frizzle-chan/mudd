@@ -97,6 +97,13 @@ class ClearFocusSignal:
 
 
 @dataclass(frozen=True, slots=True)
+class ShopSignal:
+    """Signal that a trading session should open with a shop."""
+
+    shop_id: str
+
+
+@dataclass(frozen=True, slots=True)
 class EntityPickedUpEvent:
     """Fact: entity was picked up by a user."""
 
@@ -279,6 +286,7 @@ type GameEvent = (
     | DispenseSignal
     | SetFocusSignal
     | ClearFocusSignal
+    | ShopSignal
     | EntityPickedUpEvent
     | EntityDroppedEvent
     | EntityDestroyedEvent

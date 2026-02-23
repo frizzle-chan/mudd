@@ -20,6 +20,7 @@ from mudd.events.types import (
     GrantXPSignal,
     PickupSignal,
     SetFocusSignal,
+    ShopSignal,
 )
 from mudd.skills.registry import Skill
 
@@ -61,6 +62,7 @@ class EffectsObserver:
     _dispense_signaled: bool = False
     _set_focus_signaled: bool = False
     _clear_focus_signaled: bool = False
+    _shop_id: str | None = None
 
     def notify(self, event: GameEvent) -> None:
         """Receive an event notification.
@@ -93,6 +95,8 @@ class EffectsObserver:
                 self._set_focus_signaled = True
             case ClearFocusSignal():
                 self._clear_focus_signaled = True
+            case ShopSignal(shop_id=shop_id):
+                self._shop_id = shop_id
             case EntityPickedUpEvent() | EntityDroppedEvent() | EntityDestroyedEvent():
                 pass  # Model events - handled by DiscordReconciler
 
@@ -178,3 +182,13 @@ class EffectsObserver:
     def has_clear_focus(self) -> bool:
         """Whether clear_focus() was called during template rendering."""
         return self._clear_focus_signaled
+
+    @property
+    def has_shop(self) -> bool:
+        """Whether shop() was called during template rendering."""
+        return self._shop_id is not None
+
+    @property
+    def shop_id(self) -> str | None:
+        """The shop ID to open a trading session with, or None."""
+        return self._shop_id
