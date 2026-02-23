@@ -9,7 +9,6 @@ from mudd.events import EffectsCollector
 from mudd.models import IReadableEntity, IUser
 from mudd.skills.registry import Skill
 from mudd.utils import async_cached_property
-from mudd.utils.text import RARITY_EMOJI
 
 
 class ViewEntity:
@@ -30,7 +29,7 @@ class ViewEntity:
     @property
     def display_name(self) -> str:
         """Entity name formatted with rarity emoji and search indicator."""
-        emoji = RARITY_EMOJI[self._entity.rarity]
+        emoji = self._entity.rarity.emoji
         name = f"{self._entity.name} {emoji}" if emoji else self._entity.name
         if self._entity.entity.is_searchable:
             return f"\U0001f50d {name}"

@@ -17,7 +17,6 @@ from mudd.events.types import (
 from mudd.models.shop import Shop, StockItem, TradingSession, purchase_price
 from mudd.models.skills import UserSkill
 from mudd.utils.discord import fetch_thread
-from mudd.utils.text import RARITY_EMOJI
 
 if TYPE_CHECKING:
     from mudd.observers.discord import RoomChannelCache
@@ -64,7 +63,7 @@ def format_shop_overview(shop: Shop, stock: list[StockItem], speech_level: int) 
     lines.append("**For Sale:**")
     for entity_id, item in first_seen.items():
         count = counts[entity_id]
-        emoji = RARITY_EMOJI.get(item.rarity, "")
+        emoji = item.rarity.emoji
         price = purchase_price(item.rarity, count, speech_level)
         qty = f" x{count}" if count > 1 else ""
         price_str = f"\u00a4{price:,}"

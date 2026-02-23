@@ -19,23 +19,10 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Rarity base prices benchmarked against existing currency bundles.
-# "none" and "quest" items are non-tradeable (price 0).
-RARITY_BASE_PRICES: dict[Rarity, int] = {
-    "none": 0,
-    "common": 100,
-    "uncommon": 1_000,
-    "rare": 5_000,
-    "epic": 25_000,
-    "legendary": 100_000,
-    "mythic": 500_000,
-    "quest": 0,
-}
-
 
 def base_price(rarity: Rarity) -> int:
     """Return the base price for a rarity tier."""
-    return RARITY_BASE_PRICES[rarity]
+    return rarity.base_price
 
 
 def supply_adjustment(stock_count: int) -> float:
@@ -365,7 +352,7 @@ class StockItem:
             entity_instance_id=row["entity_instance_id"],
             entity_id=row["entity_id"],
             name=row["name"],
-            rarity=row["rarity"],
+            rarity=Rarity(row["rarity"]),
             tags=tuple(row["tags"]),
             stocked_at=row["stocked_at"],
         )

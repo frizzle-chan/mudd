@@ -7,7 +7,6 @@ import subprocess
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import cast, get_args
 
 import asyncpg
 
@@ -15,8 +14,8 @@ from mudd.utils.text import Rarity
 
 logger = logging.getLogger(__name__)
 
-# Valid rarity values - derived from the Rarity type to maintain single source of truth
-VALID_RARITIES: set[str] = set(get_args(Rarity))
+# Valid rarity values - derived from the Rarity enum to maintain single source of truth
+VALID_RARITIES: set[str] = set(Rarity)
 
 
 @dataclass
@@ -50,7 +49,7 @@ class EntityData:
     container_id: str | None = None
     room: str | None = None
     contents_visible: bool | None = None
-    rarity: Rarity = "none"
+    rarity: Rarity = Rarity.NONE
     tags: list[str] | None = None  # Space-separated in rec files
     description_short: str | None = None
     description_long: str | None = None
@@ -178,7 +177,7 @@ def _parse_entity_row(row: dict[str, str]) -> EntityData:
             f"Entity '{row['Id']}' has invalid Rarity '{rarity_raw}'. "
             f"Valid values: {', '.join(sorted(VALID_RARITIES))}"
         )
-    rarity = cast(Rarity, rarity_raw)
+    rarity = Rarity(rarity_raw)
 
     # Parse tags (space-separated string)
     tags_str = row.get("Tags", "").strip()

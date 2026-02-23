@@ -38,6 +38,7 @@ from mudd.models.shop import purchase_price, sale_price
 from mudd.models.spawning_pool import SpawningPool
 from mudd.models.user import InsufficientFundsError, TransferError
 from mudd.scene import Scene
+from mudd.utils.text import Rarity
 from tests.helpers import (
     NullReconciler,
     act,
@@ -1139,7 +1140,7 @@ async def test_shop_buy_and_sell(test_db, clean_user_state):
     assert any(s.entity_instance_id == item.instance_id for s in stock)
 
     # === BUY: player pays house, item moves to inventory ===
-    price = purchase_price("common", 1, 1)
+    price = purchase_price(Rarity.COMMON, 1, 1)
     assert price == 100  # base=100, supply_adj=1.0, speech discount=0
 
     async with test_db.acquire() as conn, conn.transaction():
@@ -1175,7 +1176,7 @@ async def test_shop_buy_and_sell(test_db, clean_user_state):
     # sale_price(common, count=0, speech=1, spread=0.5, preferred=False)
     # = dynamic_price(common, 0) * 0.5 = 100 * 1.0 * 0.5 = 50
     # floor = 100 * 0.25 = 25 → max(50, 25) = 50
-    sell = sale_price("common", 0, 1, 0.5, False)
+    sell = sale_price(Rarity.COMMON, 0, 1, 0.5, False)
     assert sell == 50
 
     async with test_db.acquire() as conn, conn.transaction():

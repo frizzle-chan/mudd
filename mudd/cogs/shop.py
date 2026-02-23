@@ -41,7 +41,7 @@ from mudd.observers import (
 )
 from mudd.skills.registry import Skill
 from mudd.utils.discord import fetch_thread
-from mudd.utils.text import RARITY_EMOJI
+from mudd.utils.text import Rarity
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +74,7 @@ def format_buy_choices(
     choices: list[tuple[str, str]] = []
     for entity_id, item in first_seen.items():
         count = counts[entity_id]
-        emoji = RARITY_EMOJI.get(item.rarity, "")
+        emoji = item.rarity.emoji
         price = purchase_price(item.rarity, count, speech_level)
         qty = f" x{count}" if count > 1 else ""
         label = f"{item.name}{emoji}{qty} - \u00a4{price:,}"
@@ -108,7 +108,7 @@ def format_sell_choices(
     """
     choices: list[tuple[str, str]] = []
     for item in inventory:
-        if item.rarity in ("none", "quest"):
+        if item.rarity in (Rarity.NONE, Rarity.QUEST):
             continue
         item_tags = tags_map.get(item.entity.id, set())
         has_preferred = preferred_tag is not None and preferred_tag in item_tags
@@ -116,7 +116,7 @@ def format_sell_choices(
         price = sale_price(item.rarity, count, speech_level, sell_spread, has_preferred)
         if price == 0:
             continue
-        emoji = RARITY_EMOJI.get(item.rarity, "")
+        emoji = item.rarity.emoji
         star = " \u2b50" if has_preferred else ""
         label = f"{item.name}{emoji}{star} - \u00a4{price:,}"
         choices.append((label, str(item.instance_id)))
@@ -308,7 +308,7 @@ class Shop(commands.Cog):
             )
 
         # Send ephemeral confirmation
-        emoji = RARITY_EMOJI.get(stock_item.rarity, "")
+        emoji = stock_item.rarity.emoji
         name_display = f"{stock_item.name} {emoji}" if emoji else stock_item.name
         await interaction.response.send_message(
             f"Purchased **{name_display}** for \u00a4{price:,}.\n"
@@ -349,7 +349,8 @@ class Shop(commands.Cog):
             return []
 
         inventory = await EntityInstance.get_by_owner(self._pool, user_id)
-        tradeable = [i for i in inventory if i.rarity not in ("none", "quest")]
+        non_tradeable = (Rarity.NONE, Rarity.QUEST)
+        tradeable = [i for i in inventory if i.rarity not in non_tradeable]
         if not tradeable:
             return [app_commands.Choice(name="Nothing to sell", value="invalid")]
 
@@ -437,7 +438,7 @@ class Shop(commands.Cog):
             return
 
         # Reject non-tradeable items
-        if entity.rarity in ("none", "quest"):
+        if entity.rarity in (Rarity.NONE, Rarity.QUEST):
             await interaction.response.send_message(
                 "That item cannot be sold.", ephemeral=True
             )
@@ -525,7 +526,7 @@ class Shop(commands.Cog):
             )
 
         # Send ephemeral confirmation
-        emoji = RARITY_EMOJI.get(entity.rarity, "")
+        emoji = entity.rarity.emoji
         name_display = f"{entity.name} {emoji}" if emoji else entity.name
         await interaction.response.send_message(
             f"Sold **{name_display}** for \u00a4{price:,}.\n"

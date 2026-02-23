@@ -30,18 +30,6 @@ SELECT ei.id AS instance_id, ei.room, ei.owner_id,
 FROM entity_instances ei
 CROSS JOIN LATERAL resolve_entity(ei.entity_id) r"""
 
-# Rarity weights for spawning (sum to 1000 for standard rarities)
-RARITY_WEIGHTS: dict[Rarity, int] = {
-    "none": 0,  # Static world items never spawn
-    "common": 600,
-    "uncommon": 250,
-    "rare": 100,
-    "epic": 40,
-    "legendary": 9,
-    "mythic": 1,
-    "quest": 600,  # Same as common; use unique tags for dedicated spawning pools
-}
-
 
 @dataclass(frozen=True)
 class ResolvedEntity:
@@ -108,7 +96,7 @@ class ResolvedEntity:
             on_drop=row["on_drop"],
             on_fish=row["on_fish"],
             contents_visible=contents_visible,
-            rarity=row["rarity"],
+            rarity=Rarity(row["rarity"]),
         )
 
     @classmethod
@@ -170,7 +158,7 @@ class ResolvedEntity:
             return None
 
         items = [
-            (candidate["id"], RARITY_WEIGHTS.get(candidate["rarity"], 0))
+            (candidate["id"], Rarity(candidate["rarity"]).spawn_weight)
             for candidate in candidates
         ]
 

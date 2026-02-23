@@ -17,7 +17,7 @@ from mudd.observers.cache import CacheInvalidationObserver
 from mudd.utils.text import Rarity
 
 
-def _make_entity(name: str, rarity: Rarity = "common") -> ResolvedEntity:
+def _make_entity(name: str, rarity: Rarity = Rarity.COMMON) -> ResolvedEntity:
     return ResolvedEntity(
         id=f"test::{name}",
         name=name,
@@ -38,7 +38,7 @@ def _make_entity(name: str, rarity: Rarity = "common") -> ResolvedEntity:
 
 
 def _make_instance(
-    name: str, rarity: Rarity = "common", instance_id: UUID | None = None
+    name: str, rarity: Rarity = Rarity.COMMON, instance_id: UUID | None = None
 ) -> EntityInstance:
     return EntityInstance(
         instance_id=instance_id or uuid4(),
@@ -85,13 +85,13 @@ class TestMakeChoice:
 
     def test_rare_entity_has_emoji(self):
         """Rare entities get their rarity emoji."""
-        instance = _make_instance("Diamond", rarity="rare")
+        instance = _make_instance("Diamond", rarity=Rarity.RARE)
         choice = _make_choice(instance)
         assert "Diamond" in choice.name
 
     def test_no_rarity_entity_no_emoji(self):
         """Entities with 'none' rarity get no emoji suffix."""
-        instance = _make_instance("Room Thing", rarity="none")
+        instance = _make_instance("Room Thing", rarity=Rarity.NONE)
         choice = _make_choice(instance)
         assert choice.name == "Room Thing"
 

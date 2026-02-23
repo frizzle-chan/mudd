@@ -8,14 +8,14 @@ from uuid import UUID
 from mudd.cogs.shop import format_buy_choices, format_sell_choices
 from mudd.models.entity import EntityInstance, ResolvedEntity
 from mudd.models.shop import StockItem, sale_price
-from mudd.utils.text import RARITY_EMOJI, Rarity
+from mudd.utils.text import Rarity
 
 
 def _stock_item(
     *,
     entity_id: str = "sword",
     name: str = "Sword",
-    rarity: Rarity = "common",
+    rarity: Rarity = Rarity.COMMON,
     instance_id: str | None = None,
 ) -> StockItem:
     """Build a StockItem for testing."""
@@ -76,7 +76,7 @@ class TestFormatBuyChoices:
         assert any("Shield" in name for name in labels)
 
     def test_speech_level_affects_price(self) -> None:
-        stock = [_stock_item(rarity="uncommon")]
+        stock = [_stock_item(rarity=Rarity.UNCOMMON)]
         choices_low = format_buy_choices(stock, speech_level=1)
         choices_high = format_buy_choices(stock, speech_level=99)
         # Higher speech level should give a lower price
@@ -85,14 +85,14 @@ class TestFormatBuyChoices:
         assert label_low != label_high
 
     def test_price_formatting_with_commas(self) -> None:
-        stock = [_stock_item(rarity="rare")]
+        stock = [_stock_item(rarity=Rarity.RARE)]
         choices = format_buy_choices(stock, speech_level=1)
         label, _ = choices[0]
         # rare base price is 5000 → "¤5,000"
         assert "\u00a45,000" in label
 
     def test_rarity_emoji_included(self) -> None:
-        stock = [_stock_item(rarity="rare")]
+        stock = [_stock_item(rarity=Rarity.RARE)]
         choices = format_buy_choices(stock, speech_level=1)
         label, _ = choices[0]
         # Blue circle emoji for rare
@@ -103,7 +103,7 @@ def _inventory_item(
     *,
     entity_id: str = "sword",
     name: str = "Sword",
-    rarity: Rarity = "common",
+    rarity: Rarity = Rarity.COMMON,
     instance_id: str | None = None,
     owner_id: int = 1,
 ) -> EntityInstance:
@@ -161,12 +161,12 @@ class TestFormatSellChoices:
         assert len(choices) == 1
         label, value = choices[0]
         assert "Sword" in label
-        price = sale_price("common", 0, 1, 0.5, False)
+        price = sale_price(Rarity.COMMON, 0, 1, 0.5, False)
         assert f"\u00a4{price:,}" in label
         assert value == "00000000-0000-0000-0000-000000000001"
 
     def test_non_tradeable_none_filtered(self) -> None:
-        inv = [_inventory_item(rarity="none")]
+        inv = [_inventory_item(rarity=Rarity.NONE)]
         choices = format_sell_choices(
             inv,
             speech_level=1,
@@ -178,7 +178,7 @@ class TestFormatSellChoices:
         assert choices == []
 
     def test_non_tradeable_quest_filtered(self) -> None:
-        inv = [_inventory_item(rarity="quest")]
+        inv = [_inventory_item(rarity=Rarity.QUEST)]
         choices = format_sell_choices(
             inv,
             speech_level=1,
@@ -218,7 +218,7 @@ class TestFormatSellChoices:
         assert "\u2b50" not in label
 
     def test_speech_level_affects_price(self) -> None:
-        inv = [_inventory_item(rarity="uncommon")]
+        inv = [_inventory_item(rarity=Rarity.UNCOMMON)]
         choices_low = format_sell_choices(
             inv,
             speech_level=1,
@@ -241,7 +241,7 @@ class TestFormatSellChoices:
         assert label_low != label_high
 
     def test_stock_count_affects_price(self) -> None:
-        inv = [_inventory_item(rarity="rare")]
+        inv = [_inventory_item(rarity=Rarity.RARE)]
         choices_low_stock = format_sell_choices(
             inv,
             speech_level=1,
@@ -284,7 +284,7 @@ class TestFormatSellChoices:
         assert len(choices) == 2
 
     def test_rarity_emoji_included(self) -> None:
-        inv = [_inventory_item(rarity="rare")]
+        inv = [_inventory_item(rarity=Rarity.RARE)]
         choices = format_sell_choices(
             inv,
             speech_level=1,
@@ -294,4 +294,4 @@ class TestFormatSellChoices:
             stock_counts={},
         )
         label, _ = choices[0]
-        assert RARITY_EMOJI["rare"] in label
+        assert Rarity.RARE.emoji in label

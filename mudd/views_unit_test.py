@@ -24,7 +24,7 @@ class _StubEntity:
     description_short: str | None = None
     description_long: str | None = None
     contents_visible: bool = True
-    rarity: Rarity = "none"
+    rarity: Rarity = Rarity.NONE
     is_focusable: bool = True
     can_pickup: bool = True
     can_drop: bool = True
@@ -42,7 +42,7 @@ def _make_resolved(
     on_use: str | None = None,
     on_open: str | None = None,
     contents_visible: bool = True,
-    rarity: Rarity = "none",
+    rarity: Rarity = Rarity.NONE,
     name: str = "Test Entity",
 ) -> ResolvedEntity:
     return ResolvedEntity(
@@ -69,7 +69,7 @@ def _make_view(
     on_use: str | None = None,
     on_open: str | None = None,
     contents_visible: bool = True,
-    rarity: Rarity = "none",
+    rarity: Rarity = Rarity.NONE,
     name: str = "Test Entity",
 ) -> ViewEntity:
     resolved = _make_resolved(
@@ -114,7 +114,7 @@ class TestViewEntity:
         view = _make_view(
             name="Rare Merchant",
             on_use='{{ effects.shop("rare") }}',
-            rarity="rare",
+            rarity=Rarity.RARE,
         )
         assert view.display_name == "🏪 Rare Merchant 🔵"
 

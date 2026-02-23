@@ -3,7 +3,7 @@
 import pytest
 
 from mudd.utils.text import (
-    RARITY_EMOJI,
+    Rarity,
     decode_braille,
     encode_braille,
     indefinite_article,
@@ -182,7 +182,7 @@ class TestStripRarityEmojis:
         result = strip_rarity_emojis("Test 🟢 Item 🔵")
         assert result == "Test  Item"
 
-    @pytest.mark.parametrize("rarity,emoji", list(RARITY_EMOJI.items()))
+    @pytest.mark.parametrize("rarity,emoji", [(r, r.emoji) for r in Rarity])
     def test_strips_all_defined_emojis(self, rarity, emoji):
         """Every defined rarity emoji is stripped."""
         if emoji:  # Skip "none" which has empty emoji
