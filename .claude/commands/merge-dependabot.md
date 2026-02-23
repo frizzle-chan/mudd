@@ -15,40 +15,49 @@ Open Dependabot PRs: !`gh pr list --author "app/dependabot" --state open --json 
 
 For each open Dependabot PR (oldest first):
 
-1. **Get current commit SHA** to detect when rebase completes:
+1. **Check if PR is already mergeable** before attempting a rebase:
+   ```
+   gh pr view <number> --json mergeStateStatus,mergeable,statusCheckRollup
+   ```
+   If `mergeStateStatus` is `CLEAN` and all checks pass, skip straight to step 5.
+
+2. **Get current commit SHA** to detect when rebase completes:
    ```
    gh pr view <number> --json headRefOid --jq '.headRefOid'
    ```
 
-2. **Comment to trigger rebase**:
+3. **Comment to trigger rebase**:
    ```
    gh pr comment <number> --body "@dependabot rebase"
    ```
 
-3. **Wait for rebase to complete** by polling until the commit SHA changes:
+4. **Wait for rebase to complete** by polling until the commit SHA changes (with a timeout):
    ```bash
    old_sha="<original_sha>"
-   while true; do
+   for i in $(seq 1 60); do
      new_sha=$(gh pr view <number> --json headRefOid --jq '.headRefOid')
      if [ "$new_sha" != "$old_sha" ]; then
-       echo "Rebase complete"
-       break
+       echo "Rebase complete. New SHA: $new_sha"
+       exit 0
      fi
+     echo "Attempt $i: waiting..."
      sleep 10
    done
+   echo "Timeout waiting for rebase"
    ```
+   If the poll times out, check the PR status — it may already be up-to-date (especially the first PR which is based on current master).
 
-4. **Wait for CI checks to pass**:
+5. **Wait for CI checks to pass**:
    ```
    gh pr checks <number> --watch
    ```
 
-5. **Merge the PR** (use --admin if branch protection requires it):
+6. **Merge the PR**:
    ```
-   gh pr merge <number> --squash --delete-branch --admin
+   gh pr merge <number> --squash --delete-branch
    ```
 
-6. Move to the next PR.
+7. Move to the next PR.
 
 ## Verification
 
