@@ -321,6 +321,30 @@ class Shop:
         )
 
 
+async def get_tags_for_entities(
+    pool: asyncpg.Pool, entity_ids: list[str]
+) -> dict[str, set[str]]:
+    """Batch-fetch tags for multiple entity IDs.
+
+    Args:
+        pool: Database connection pool
+        entity_ids: Entity definition IDs to look up
+
+    Returns:
+        Mapping of entity_id to set of tags (missing IDs have empty sets)
+    """
+    if not entity_ids:
+        return {}
+    rows = await pool.fetch(
+        "SELECT entity_id, tag FROM entity_tags WHERE entity_id = ANY($1::text[])",
+        entity_ids,
+    )
+    result: dict[str, set[str]] = {}
+    for row in rows:
+        result.setdefault(row["entity_id"], set()).add(row["tag"])
+    return result
+
+
 @dataclass(frozen=True, slots=True)
 class StockItem:
     """An entity instance stocked in a shop."""

@@ -759,6 +759,35 @@ class EntityInstance:
             observer.notify(EntityPickedUpEvent(instance=new_instance))
         return new_instance
 
+    async def detach_from_inventory(self) -> EntityInstance:
+        """Remove this instance from a user's inventory without placing it anywhere.
+
+        Used when selling an item to a shop. Sets room, owner_id, and
+        container_entity_id to NULL. Emits EntityDroppedEvent so the
+        InventoryReconciler cleans up the Discord thread.
+
+        Returns:
+            New EntityInstance with cleared location fields
+        """
+        await self._pool.execute(
+            """
+            UPDATE entity_instances
+            SET room = NULL, owner_id = NULL, container_entity_id = NULL
+            WHERE id = $1
+            """,
+            self.instance_id,
+        )
+
+        new_instance = replace(
+            self,
+            room_id=None,
+            owner_id=None,
+            container_entity_id=None,
+        )
+        for observer in new_instance._observers:
+            observer.notify(EntityDroppedEvent(instance=new_instance))
+        return new_instance
+
     async def drop_to_room(
         self,
         room: IRoom,

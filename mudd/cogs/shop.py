@@ -1,4 +1,4 @@
-"""Shop cog — /buy slash command for purchasing items from merchants."""
+"""Shop cog — /buy and /sell slash commands for trading with merchants."""
 
 from __future__ import annotations
 
@@ -24,7 +24,13 @@ from mudd.models.currency import (
 )
 from mudd.models.entity import EntityInstance
 from mudd.models.shop import Shop as ShopModel
-from mudd.models.shop import StockItem, TradingSession, purchase_price
+from mudd.models.shop import (
+    StockItem,
+    TradingSession,
+    get_tags_for_entities,
+    purchase_price,
+    sale_price,
+)
 from mudd.models.skills import UserSkill
 from mudd.models.user import User
 from mudd.observers import (
@@ -76,8 +82,49 @@ def format_buy_choices(
     return choices
 
 
+def format_sell_choices(
+    inventory: list[EntityInstance],
+    speech_level: int,
+    sell_spread: float,
+    preferred_tag: str | None,
+    tags_map: dict[str, set[str]],
+    stock_counts: dict[str, int],
+) -> list[tuple[str, str]]:
+    """Format inventory items as autocomplete choices for selling.
+
+    Each inventory item is a unique instance (no grouping, unlike buy).
+    Items with rarity "none" or "quest" or sale_price 0 are excluded.
+
+    Args:
+        inventory: Player's inventory instances
+        speech_level: Player's Speech skill level
+        sell_spread: Shop's sell spread
+        preferred_tag: Shop's preferred tag (or None)
+        tags_map: Mapping of entity_id to set of tags
+        stock_counts: Count of each entity_id currently in shop stock
+
+    Returns:
+        List of (label, value) tuples for autocomplete choices
+    """
+    choices: list[tuple[str, str]] = []
+    for item in inventory:
+        if item.rarity in ("none", "quest"):
+            continue
+        item_tags = tags_map.get(item.entity.id, set())
+        has_preferred = preferred_tag is not None and preferred_tag in item_tags
+        count = stock_counts.get(item.entity.id, 0)
+        price = sale_price(item.rarity, count, speech_level, sell_spread, has_preferred)
+        if price == 0:
+            continue
+        emoji = RARITY_EMOJI.get(item.rarity, "")
+        star = " \u2b50" if has_preferred else ""
+        label = f"{item.name}{emoji}{star} - \u00a4{price:,}"
+        choices.append((label, str(item.instance_id)))
+    return choices
+
+
 class Shop(commands.Cog):
-    """Shop commands for buying items from merchants."""
+    """Shop commands for buying and selling items with merchants."""
 
     bot: MuddBot
 
@@ -280,6 +327,223 @@ class Shop(commands.Cog):
         except Exception:
             logger.exception(
                 "Failed to post purchase message to trading thread %d",
+                session.thread_id,
+            )
+
+        # Flush observers (inventory sync, wallet update, XP grant, level-up)
+        await flush_all(observers)
+        await post_flush_all(observers)
+
+    async def sell_autocomplete(
+        self, interaction: Interaction, current: str
+    ) -> list[app_commands.Choice[str]]:
+        """Autocomplete callback for sell item selection."""
+        user_id = interaction.user.id
+
+        session = await TradingSession.get(self._pool, user_id)
+        if session is None:
+            return []
+
+        shop = await ShopModel.get(self._pool, session.shop_id)
+        if shop is None:
+            return []
+
+        inventory = await EntityInstance.get_by_owner(self._pool, user_id)
+        tradeable = [i for i in inventory if i.rarity not in ("none", "quest")]
+        if not tradeable:
+            return [app_commands.Choice(name="Nothing to sell", value="invalid")]
+
+        entity_ids = list({i.entity.id for i in tradeable})
+        tags_map = await get_tags_for_entities(self._pool, entity_ids)
+
+        stock = await ShopModel.get_stock(self._pool, session.shop_id)
+        stock_counts: Counter[str] = Counter()
+        for s in stock:
+            stock_counts[s.entity_id] += 1
+
+        user_skill = await UserSkill.get(self._pool, user_id, "speech")
+        speech_level = user_skill.level if user_skill else 1
+
+        choices = format_sell_choices(
+            tradeable,
+            speech_level,
+            shop.sell_spread,
+            shop.preferred_tag,
+            tags_map,
+            stock_counts,
+        )
+
+        current_lower = current.lower()
+        if current:
+            choices = [
+                (label, value)
+                for label, value in choices
+                if current_lower in label.lower()
+            ]
+
+        return [
+            app_commands.Choice(name=label, value=value)
+            for label, value in choices[:25]
+        ]
+
+    @app_commands.command(
+        name="sell",
+        description="Sell an item to the current shop",
+    )
+    @app_commands.describe(item="Item to sell")
+    @app_commands.autocomplete(item=sell_autocomplete)
+    async def sell(self, interaction: Interaction, item: str) -> None:
+        """Sell an inventory item to a shop."""
+        if not interaction.guild:
+            await interaction.response.send_message(
+                "This command must be used in a server.", ephemeral=True
+            )
+            return
+
+        # Handle invalid sentinel from autocomplete
+        if item == "invalid":
+            await interaction.response.send_message(
+                "No valid item selected.", ephemeral=True
+            )
+            return
+
+        user_id = interaction.user.id
+
+        # Validate active trading session
+        session = await TradingSession.get(self._pool, user_id)
+        if session is None:
+            await interaction.response.send_message(
+                "You're not trading with a merchant. "
+                "Use `/interact` on a merchant to start.",
+                ephemeral=True,
+            )
+            return
+
+        # Parse UUID from autocomplete value
+        try:
+            instance_id = UUID(item)
+        except ValueError:
+            await interaction.response.send_message(
+                "Invalid item selection.", ephemeral=True
+            )
+            return
+
+        # Validate item is in player's inventory
+        entity = await EntityInstance.get(self._pool, instance_id)
+        if entity is None or entity.owner_id != user_id:
+            await interaction.response.send_message(
+                "That item is not in your inventory.", ephemeral=True
+            )
+            return
+
+        # Reject non-tradeable items
+        if entity.rarity in ("none", "quest"):
+            await interaction.response.send_message(
+                "That item cannot be sold.", ephemeral=True
+            )
+            return
+
+        # Get shop for pricing params
+        shop = await ShopModel.get(self._pool, session.shop_id)
+        if shop is None:
+            await interaction.response.send_message("Shop not found.", ephemeral=True)
+            return
+
+        # Calculate sale price
+        stock = await ShopModel.get_stock(self._pool, session.shop_id)
+        stock_count = sum(1 for s in stock if s.entity_id == entity.entity.id)
+
+        user_skill = await UserSkill.get(self._pool, user_id, "speech")
+        speech_level = user_skill.level if user_skill else 1
+
+        tags_map = await get_tags_for_entities(self._pool, [entity.entity.id])
+        item_tags = tags_map.get(entity.entity.id, set())
+        has_preferred = (
+            shop.preferred_tag is not None and shop.preferred_tag in item_tags
+        )
+
+        price = sale_price(
+            entity.rarity, stock_count, speech_level, shop.sell_spread, has_preferred
+        )
+
+        if price == 0:
+            await interaction.response.send_message(
+                "That item has no sale value.", ephemeral=True
+            )
+            return
+
+        # Transfer currency: house -> player
+        memo = f"Sell {entity.name} to {shop.name}"
+        async with self._pool.acquire() as conn, conn.transaction():
+            outcome = await transfer_currency(
+                conn,
+                from_id=HOUSE_ACCOUNT_ID,
+                to_id=user_id,
+                amount=price,
+                memo=memo,
+                require_funds=False,
+            )
+
+        new_balance = outcome.to_balance
+
+        # Get user for observer context
+        user = await User.get(self._pool, user_id)
+        if user is None:
+            await interaction.response.send_message("User not found.", ephemeral=True)
+            return
+
+        # Build observers for inventory sync, XP, wallet update
+        observers = build_observers(
+            self._pool,
+            user_id=user_id,
+            room_id=user.current_room,
+            bot=self.bot,
+            guild_id=interaction.guild_id,
+            room_cache=self._room_cache,
+        )
+
+        # Detach from inventory (emits EntityDroppedEvent)
+        entity = entity.with_observers(*observers)
+        await entity.detach_from_inventory()
+
+        # Add to shop stock
+        await ShopModel.add_to_stock(self._pool, session.shop_id, instance_id)
+
+        # Grant speech XP
+        for obs in observers:
+            obs.notify(GrantXPSignal(skill=Skill.SPEECH, amount=SPEECH_XP_PER_TRADE))
+
+        # Notify balance change
+        for obs in observers:
+            obs.notify(
+                BalanceChangedEvent(
+                    user_id=user_id,
+                    new_balance=new_balance,
+                    delta=price,
+                    memo=memo,
+                )
+            )
+
+        # Send ephemeral confirmation
+        emoji = RARITY_EMOJI.get(entity.rarity, "")
+        name_display = f"{entity.name} {emoji}" if emoji else entity.name
+        await interaction.response.send_message(
+            f"Sold **{name_display}** for \u00a4{price:,}.\n"
+            f"Balance: \u00a4{new_balance:,}",
+            ephemeral=True,
+        )
+
+        # Post to trading thread (best-effort)
+        try:
+            thread = await fetch_thread(interaction.guild, session.thread_id)
+            if thread is not None:
+                await thread.send(
+                    f"**{interaction.user.display_name}** sold "
+                    f"**{name_display}** for \u00a4{price:,}."
+                )
+        except Exception:
+            logger.exception(
+                "Failed to post sale message to trading thread %d",
                 session.thread_id,
             )
 
