@@ -2,13 +2,20 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import logging
+from dataclasses import dataclass, field
 from datetime import datetime
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 import asyncpg
 
 from mudd.utils.text import Rarity
+
+if TYPE_CHECKING:
+    from mudd.models.entity import EntityInstance
+
+logger = logging.getLogger(__name__)
 
 # Rarity base prices benchmarked against existing currency bundles.
 # "none" and "quest" items are non-tradeable (price 0).
@@ -88,6 +95,7 @@ class Shop:
     restock_tag: str | None
     restock_interval_minutes: int
     last_restock_at: datetime | None
+    _pool: asyncpg.Pool | None = field(repr=False, compare=False, default=None)
 
     @classmethod
     def _from_row(cls, row: asyncpg.Record) -> Shop:
@@ -101,6 +109,88 @@ class Shop:
             restock_interval_minutes=row["restock_interval_minutes"],
             last_restock_at=row["last_restock_at"],
         )
+
+    @property
+    def effective_restock_tag(self) -> str | None:
+        """Restock tag with fallback to preferred_tag."""
+        return self.restock_tag or self.preferred_tag
+
+    def can_restock(self, now: datetime) -> bool:
+        """Check if shop is due for a restock (interval elapsed, has tag)."""
+        if not self.effective_restock_tag:
+            return False
+        if self.last_restock_at is None:
+            return True
+        elapsed = (now - self.last_restock_at).total_seconds() / 60
+        return elapsed >= self.restock_interval_minutes
+
+    @classmethod
+    async def get_all_due_for_restock(
+        cls, pool: asyncpg.Pool, now: datetime
+    ) -> list[Shop]:
+        """Fetch all shops that are due for restocking.
+
+        Args:
+            pool: Database connection pool
+            now: Current UTC timestamp
+
+        Returns:
+            List of Shop instances ready to restock
+        """
+        rows = await pool.fetch(
+            """
+            SELECT * FROM shops
+            WHERE COALESCE(restock_tag, preferred_tag) IS NOT NULL
+              AND (last_restock_at IS NULL
+                   OR last_restock_at
+                      + make_interval(mins => restock_interval_minutes) <= $1)
+            """,
+            now,
+        )
+        return [
+            cls(
+                id=r["id"],
+                name=r["name"],
+                preferred_tag=r["preferred_tag"],
+                sell_spread=r["sell_spread"],
+                restock_tag=r["restock_tag"],
+                restock_interval_minutes=r["restock_interval_minutes"],
+                last_restock_at=r["last_restock_at"],
+                _pool=pool,
+            )
+            for r in rows
+        ]
+
+    async def try_restock(self, now: datetime) -> EntityInstance | None:
+        """Attempt to restock one item. Returns instance or None."""
+        from mudd.models.entity import EntityInstance, ResolvedEntity
+
+        if self._pool is None:
+            return None
+
+        if not self.can_restock(now):
+            return None
+
+        tag = self.effective_restock_tag
+        assert tag is not None  # guaranteed by can_restock
+
+        entity = await ResolvedEntity.get_weighted_random_by_tag(self._pool, tag)
+        if entity is None:
+            return None
+
+        instance = await EntityInstance.create(self._pool, entity.id)
+        if instance is None:
+            return None
+
+        await Shop.add_to_stock(self._pool, self.id, instance.instance_id)
+
+        await self._pool.execute(
+            "UPDATE shops SET last_restock_at = $1 WHERE id = $2",
+            now,
+            self.id,
+        )
+
+        return instance
 
     @classmethod
     async def get(cls, pool: asyncpg.Pool, shop_id: str) -> Shop | None:

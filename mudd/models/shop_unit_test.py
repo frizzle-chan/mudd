@@ -1,9 +1,12 @@
-"""Unit tests for shop pricing logic."""
+"""Unit tests for shop pricing logic and restock helpers."""
+
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
 from mudd.models.shop import (
     RARITY_BASE_PRICES,
+    Shop,
     base_price,
     dynamic_price,
     purchase_price,
@@ -11,6 +14,25 @@ from mudd.models.shop import (
     supply_adjustment,
 )
 from mudd.utils.text import Rarity
+
+
+def _make_shop(
+    *,
+    restock_tag: str | None = None,
+    preferred_tag: str | None = None,
+    last_restock_at: datetime | None = None,
+    restock_interval_minutes: int = 60,
+) -> Shop:
+    """Build a Shop instance for testing (no DB pool)."""
+    return Shop(
+        id="test-shop",
+        name="Test Shop",
+        preferred_tag=preferred_tag,
+        sell_spread=0.5,
+        restock_tag=restock_tag,
+        restock_interval_minutes=restock_interval_minutes,
+        last_restock_at=last_restock_at,
+    )
 
 
 class TestBasePrice:
@@ -152,3 +174,66 @@ class TestSalePrice:
         result = sale_price("epic", 1, 99, 0.5, has_preferred_tag=True)
         expected = int(dp * 0.5 * 1.25 * 1.5)
         assert result == expected
+
+
+class TestEffectiveRestockTag:
+    """Tests for Shop.effective_restock_tag property."""
+
+    def test_restock_tag_takes_precedence(self):
+        shop = _make_shop(restock_tag="weapons", preferred_tag="armor")
+        assert shop.effective_restock_tag == "weapons"
+
+    def test_falls_back_to_preferred_tag(self):
+        shop = _make_shop(restock_tag=None, preferred_tag="fish")
+        assert shop.effective_restock_tag == "fish"
+
+    def test_none_when_both_none(self):
+        shop = _make_shop(restock_tag=None, preferred_tag=None)
+        assert shop.effective_restock_tag is None
+
+
+class TestCanRestock:
+    """Tests for Shop.can_restock()."""
+
+    def test_true_when_never_restocked(self):
+        shop = _make_shop(restock_tag="loot", last_restock_at=None)
+        assert shop.can_restock(datetime.now(UTC)) is True
+
+    def test_false_when_interval_not_elapsed(self):
+        now = datetime.now(UTC)
+        shop = _make_shop(
+            restock_tag="loot",
+            last_restock_at=now - timedelta(minutes=30),
+            restock_interval_minutes=60,
+        )
+        assert shop.can_restock(now) is False
+
+    def test_true_when_interval_elapsed(self):
+        now = datetime.now(UTC)
+        shop = _make_shop(
+            restock_tag="loot",
+            last_restock_at=now - timedelta(minutes=90),
+            restock_interval_minutes=60,
+        )
+        assert shop.can_restock(now) is True
+
+    def test_true_at_exact_interval_boundary(self):
+        now = datetime.now(UTC)
+        shop = _make_shop(
+            restock_tag="loot",
+            last_restock_at=now - timedelta(minutes=60),
+            restock_interval_minutes=60,
+        )
+        assert shop.can_restock(now) is True
+
+    def test_false_when_no_restock_tag(self):
+        shop = _make_shop(restock_tag=None, preferred_tag=None)
+        assert shop.can_restock(datetime.now(UTC)) is False
+
+    def test_true_with_preferred_tag_fallback(self):
+        shop = _make_shop(
+            restock_tag=None,
+            preferred_tag="fish",
+            last_restock_at=None,
+        )
+        assert shop.can_restock(datetime.now(UTC)) is True
