@@ -116,8 +116,8 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 |--------|------|-------------|
 | `id` | UUID (PK) | Auto-generated unique instance identifier |
 | `entity_id` | TEXT NOT NULL (FK to entities.id) | Reference to entity definition |
-| `room` | TEXT (FK to rooms.id) | Logical room name (NULL when in inventory or container) |
-| `owner_id` | BIGINT (FK to users.id) | Player who owns this instance (NULL when in room) |
+| `room` | TEXT (FK to rooms.id) | Logical room name (NULL when in inventory, container, or shop stock) |
+| `owner_id` | BIGINT (FK to users.id) | Player who owns this instance (NULL when in room or shop stock) |
 | `discord_thread_id` | BIGINT | Discord thread ID when item is in inventory (NULL when in room) |
 | `discord_description_msg_id` | BIGINT | Message ID of the description post in thread (for sync updates) |
 | `created_at` | TIMESTAMPTZ NOT NULL | Instance creation timestamp |
@@ -127,7 +127,7 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 | `is_world_instance` | BOOLEAN NOT NULL DEFAULT false | Marks canonical world instances that should be restored on sync |
 
 **Constraints:**
-- Mutual exclusivity: `(room IS NOT NULL AND owner_id IS NULL) OR (room IS NULL AND owner_id IS NOT NULL)`
+- Location constraint: `(room IS NOT NULL AND owner_id IS NULL) OR (room IS NULL AND owner_id IS NOT NULL) OR (room IS NULL AND owner_id IS NULL)` — items are in a room, in a player's inventory, or in shop stock (both NULL, tracked via `shop_stock` table)
 - Unique constraint on `(entity_id, room)` WHERE `is_world_instance = TRUE` (enables idempotent sync for world instances)
 - FK to entities.id with ON DELETE CASCADE (deleting an entity cascades to all its instances)
 - FK to users.id with ON DELETE CASCADE (deleting a user cascades to their inventory items)
@@ -319,6 +319,47 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 **Users Table Extensions (Map):**
 - `map_instance_id UUID` (FK to entity_instances.id, ON DELETE SET NULL) — player's map entity instance
 - `map_image_msg_id BIGINT` — Discord message ID for the map image in the map thread
+
+### Shops Table
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | TEXT (PK) | Unique shop identifier |
+| `name` | TEXT NOT NULL | Display name for the shop |
+| `preferred_tag` | TEXT | Tag used for buy-price lookup (e.g., "weapon") |
+| `sell_spread` | REAL NOT NULL DEFAULT 0.5 | Multiplier applied to base price when players sell to the shop |
+| `restock_tag` | TEXT | Tag expression for automatic restocking |
+| `restock_interval_minutes` | INT NOT NULL DEFAULT 1440 | Minimum time between automatic restocks |
+| `last_restock_at` | TIMESTAMPTZ | When the shop last restocked |
+
+**Purpose:**
+- Defines merchant shops that players can buy from and sell to
+- Part of the merchant shop system (ADR 0008)
+
+**Constraints:**
+- PK on `id`
+
+### Shop Stock Table
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | UUID (PK) | Auto-generated stock entry identifier |
+| `shop_id` | TEXT NOT NULL (FK to shops.id) | Shop this stock belongs to |
+| `entity_instance_id` | UUID NOT NULL (FK to entity_instances.id) | Entity instance in stock |
+| `stocked_at` | TIMESTAMPTZ NOT NULL | When the item was added to stock |
+
+**Purpose:**
+- Tracks which entity instances are currently stocked in a shop
+- Items in shop stock have `room IS NULL AND owner_id IS NULL` in entity_instances
+
+**Constraints:**
+- PK on `id`
+- FK to shops(id) with ON DELETE CASCADE
+- FK to entity_instances(id) with ON DELETE CASCADE
+- UNIQUE on `entity_instance_id` (an item can be in at most one shop)
+
+**Indexes:**
+- Index on `shop_id` for shop inventory queries
 
 ### User Skills Table
 
