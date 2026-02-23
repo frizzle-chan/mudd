@@ -20,6 +20,7 @@ from mudd.scene import Scene
 if TYPE_CHECKING:
     from mudd.caches.entity_autocomplete import EntityAutocompleteCache
     from mudd.caches.user import UserCache
+    from mudd.observers.discord import RoomChannelCache
 
 logger = logging.getLogger(__name__)
 
@@ -31,11 +32,13 @@ class Interact(commands.Cog):
         pool: asyncpg.Pool,
         autocomplete_cache: EntityAutocompleteCache | None = None,
         user_cache: UserCache | None = None,
+        room_cache: RoomChannelCache | None = None,
     ) -> None:
         self.bot = bot
         self._pool = pool
         self._autocomplete_cache = autocomplete_cache
         self._user_cache = user_cache
+        self._room_cache = room_cache
 
     async def target_autocomplete(
         self, interaction: Interaction, current: str
@@ -71,7 +74,9 @@ class Interact(commands.Cog):
             return
 
         # 2. Build scene with observers (including cache invalidators)
-        scene = await Scene.build(self._pool, interaction, self.bot)
+        scene = await Scene.build(
+            self._pool, interaction, self.bot, room_cache=self._room_cache
+        )
         extra_observers = []
         if self._autocomplete_cache is not None:
             extra_observers.append(

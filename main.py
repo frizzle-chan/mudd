@@ -73,7 +73,7 @@ async def setup_hook():
 
     # Create cogs with explicit dependencies
     await bot.add_cog(Look(bot, pool, autocomplete_cache, user_cache))
-    await bot.add_cog(Interact(bot, pool, autocomplete_cache, user_cache))
+    await bot.add_cog(Interact(bot, pool, autocomplete_cache, user_cache, room_cache))
     await bot.add_cog(Ping(bot))
     await bot.add_cog(Movement(bot, pool, room_cache, user_cache))
     await bot.add_cog(Sync(bot, pool, room_cache, autocomplete_cache, user_cache))

@@ -586,7 +586,7 @@ Prototype: merchant
 Room: store-room
 DescriptionShort: a {{ e.name }} stands behind a counter
 DescriptionLong: A test merchant for shop mechanic testing.
-OnUse: {{ effects.shop("test-shop") }}{{ effects.broadcast("**" ~ user ~ "** begins talking to the **" ~ e.name ~ "**.") }}You approach the {{ e.name }}.
+OnUse: {{ effects.shop("test-shop") }}You approach the {{ e.name }}.
 
 Id: test_shop_item
 Name: Test Shop Item

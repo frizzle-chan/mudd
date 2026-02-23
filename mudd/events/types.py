@@ -110,6 +110,7 @@ class TradingSessionStartedEvent:
     user_id: int
     shop_id: str
     old_thread_id: int | None  # thread to archive from replaced session
+    room_id: str
 
 
 @dataclass(frozen=True, slots=True)

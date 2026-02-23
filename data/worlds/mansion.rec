@@ -806,7 +806,7 @@ Prototype: merchant
 Room: banquet-hall
 DescriptionShort: a friendly {{ e.name }} stands behind a makeshift counter
 DescriptionLong: A cheerful shopkeeper in a worn apron, standing behind a folding table piled with odds and ends. A hand-painted sign reads "GENERAL STORE: Buy & Sell" You could __talk__ to them to browse their wares.
-OnUse: {{ effects.shop("general-store") }}{{ effects.broadcast("**" ~ user ~ "** begins talking to the **" ~ e.name ~ "**.") }}You approach the {{ e.name }}.
+OnUse: {{ effects.shop("general-store") }}You approach the {{ e.name }}.
 
 # ----------------------------------------------------------------------------
 # Restroom entities
@@ -892,7 +892,7 @@ Prototype: merchant
 Room: courtyard
 DescriptionShort: a {{ e.name }} sits by the pond with a weighing scale
 DescriptionLong: A fishmonger sitting on a crate next to the pond, a weighing scale on the barrel beside them. A small sign reads "FISH MARKET." __Talk__ to them to buy or sell fish.
-OnUse: {{ effects.shop("fish-market") }}{{ effects.broadcast("**" ~ user ~ "** begins talking to the **" ~ e.name ~ "**.") }}You approach the {{ e.name }}.
+OnUse: {{ effects.shop("fish-market") }}You approach the {{ e.name }}.
 
 # ----------------------------------------------------------------------------
 # Office entities
