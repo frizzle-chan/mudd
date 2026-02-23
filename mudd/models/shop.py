@@ -292,3 +292,104 @@ class StockItem:
             tags=tuple(row["tags"]),
             stocked_at=row["stocked_at"],
         )
+
+
+@dataclass(frozen=True, slots=True)
+class TradingSession:
+    """An active trading session between a user and a shop."""
+
+    user_id: int
+    shop_id: str
+    thread_id: int
+    created_at: datetime
+
+    @classmethod
+    async def get(cls, pool: asyncpg.Pool, user_id: int) -> TradingSession | None:
+        """Fetch the active trading session for a user.
+
+        Args:
+            pool: Database connection pool
+            user_id: The user to look up
+
+        Returns:
+            TradingSession instance, or None if no active session
+        """
+        row = await pool.fetchrow(
+            "SELECT * FROM user_trading_sessions WHERE user_id = $1",
+            user_id,
+        )
+        if row is None:
+            return None
+        return cls(
+            user_id=row["user_id"],
+            shop_id=row["shop_id"],
+            thread_id=row["thread_id"],
+            created_at=row["created_at"],
+        )
+
+    @classmethod
+    async def create(
+        cls,
+        pool: asyncpg.Pool,
+        user_id: int,
+        shop_id: str,
+        thread_id: int,
+    ) -> TradingSession:
+        """Create a new trading session.
+
+        Callers must end any existing session first.
+
+        Args:
+            pool: Database connection pool
+            user_id: The user starting the session
+            shop_id: The shop being traded with
+            thread_id: Discord thread for this session
+
+        Returns:
+            The newly created TradingSession
+        """
+        row = await pool.fetchrow(
+            """
+            INSERT INTO user_trading_sessions (user_id, shop_id, thread_id)
+            VALUES ($1, $2, $3)
+            RETURNING *
+            """,
+            user_id,
+            shop_id,
+            thread_id,
+        )
+        assert row is not None
+        return cls(
+            user_id=row["user_id"],
+            shop_id=row["shop_id"],
+            thread_id=row["thread_id"],
+            created_at=row["created_at"],
+        )
+
+    @classmethod
+    async def delete(cls, pool: asyncpg.Pool, user_id: int) -> TradingSession | None:
+        """Delete the active trading session for a user.
+
+        Returns the deleted session so callers can emit
+        TradingSessionEndedEvent with the thread_id. No-op if no
+        session exists.
+
+        Args:
+            pool: Database connection pool
+            user_id: The user whose session to end
+
+        Returns:
+            The deleted TradingSession, or None if no session existed
+        """
+        row = await pool.fetchrow(
+            "DELETE FROM user_trading_sessions WHERE user_id = $1 RETURNING *",
+            user_id,
+        )
+        if row is None:
+            return None
+        return cls(
+            user_id=row["user_id"],
+            shop_id=row["shop_id"],
+            thread_id=row["thread_id"],
+            created_at=row["created_at"],
+        )

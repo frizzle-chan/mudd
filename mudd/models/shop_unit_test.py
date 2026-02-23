@@ -7,6 +7,7 @@ import pytest
 from mudd.models.shop import (
     RARITY_BASE_PRICES,
     Shop,
+    TradingSession,
     base_price,
     dynamic_price,
     purchase_price,
@@ -237,3 +238,42 @@ class TestCanRestock:
             last_restock_at=None,
         )
         assert shop.can_restock(datetime.now(UTC)) is True
+
+
+class TestTradingSession:
+    """Tests for TradingSession dataclass construction."""
+
+    def test_construction(self):
+        now = datetime.now(UTC)
+        session = TradingSession(
+            user_id=123,
+            shop_id="fish-market",
+            thread_id=456,
+            created_at=now,
+        )
+        assert session.user_id == 123
+        assert session.shop_id == "fish-market"
+        assert session.thread_id == 456
+        assert session.created_at == now
+
+    def test_immutability(self):
+        session = TradingSession(
+            user_id=123,
+            shop_id="fish-market",
+            thread_id=456,
+            created_at=datetime.now(UTC),
+        )
+        with pytest.raises(AttributeError):
+            session.user_id = 999  # type: ignore[misc]
+        with pytest.raises(AttributeError):
+            session.shop_id = "other"  # type: ignore[misc]
+
+    def test_slots(self):
+        session = TradingSession(
+            user_id=123,
+            shop_id="fish-market",
+            thread_id=456,
+            created_at=datetime.now(UTC),
+        )
+        with pytest.raises((AttributeError, TypeError)):
+            session.extra_field = "nope"  # type: ignore[attr-defined]

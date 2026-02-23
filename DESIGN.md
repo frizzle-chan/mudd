@@ -361,6 +361,25 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 **Indexes:**
 - Index on `shop_id` for shop inventory queries
 
+### User Trading Sessions Table
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `user_id` | BIGINT (PK, FK to users.id) | One active session per user |
+| `shop_id` | TEXT NOT NULL (FK to shops.id) | Shop being traded with |
+| `thread_id` | BIGINT NOT NULL | Discord thread for this session |
+| `created_at` | TIMESTAMPTZ NOT NULL | Session start time |
+
+**Purpose:**
+- Tracks which shop a player is actively trading with
+- Used by `/buy` and `/sell` commands to determine the active shop
+- Cleaned up when the player moves rooms or re-interacts with a merchant
+
+**Constraints:**
+- PK on `user_id` (enforces one session per user)
+- FK to users(id) with ON DELETE CASCADE
+- FK to shops(id) with ON DELETE CASCADE
+
 ### Shop Pricing
 
 Prices are derived from rarity base prices, supply curves, and player skill.

@@ -16,7 +16,7 @@ from mudd.models.interfaces import IEntityInstance, IReadableEntity, IRoom, IUse
 from mudd.models.inventory_forum import UserInventoryForum
 from mudd.models.race import ActiveRace, RaceHorseInfo, RaceStatus
 from mudd.models.room import EntityModal, InventoryThread, Room, RoomEntityInstance
-from mudd.models.shop import Shop, StockItem
+from mudd.models.shop import Shop, StockItem, TradingSession
 from mudd.models.skills import UserSkill, XPResult
 from mudd.models.spawning_pool import SpawningPool
 from mudd.models.user import FocusContext, TransferError, TransferResult, User
@@ -60,6 +60,7 @@ __all__ = [
     # Shop model
     "Shop",
     "StockItem",
+    "TradingSession",
     # Skills model
     "UserSkill",
     "XPResult",

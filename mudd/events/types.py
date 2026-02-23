@@ -104,6 +104,23 @@ class ShopSignal:
 
 
 @dataclass(frozen=True, slots=True)
+class TradingSessionStartedEvent:
+    """Fact: a trading session was opened with a shop."""
+
+    user_id: int
+    shop_id: str
+    old_thread_id: int | None  # thread to archive from replaced session
+
+
+@dataclass(frozen=True, slots=True)
+class TradingSessionEndedEvent:
+    """Fact: a trading session ended (movement or explicit close)."""
+
+    user_id: int
+    thread_id: int
+
+
+@dataclass(frozen=True, slots=True)
 class EntityPickedUpEvent:
     """Fact: entity was picked up by a user."""
 
@@ -287,6 +304,8 @@ type GameEvent = (
     | SetFocusSignal
     | ClearFocusSignal
     | ShopSignal
+    | TradingSessionStartedEvent
+    | TradingSessionEndedEvent
     | EntityPickedUpEvent
     | EntityDroppedEvent
     | EntityDestroyedEvent
