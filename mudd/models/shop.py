@@ -10,9 +10,11 @@ from uuid import UUID
 
 import asyncpg
 
+from mudd.models.zone import SyncStats
 from mudd.utils.text import Rarity
 
 if TYPE_CHECKING:
+    from mudd.loaders.zone_loader import ShopData
     from mudd.models.entity import EntityInstance
 
 logger = logging.getLogger(__name__)
@@ -198,6 +200,64 @@ class Shop:
         if row is None:
             return None
         return cls._from_row(row)
+
+    @classmethod
+    async def sync_all(cls, pool: asyncpg.Pool, shops: list[ShopData]) -> SyncStats:
+        """Bulk sync shops from rec file data.
+
+        Preserves last_restock_at timestamps for existing shops.
+
+        Args:
+            pool: Database connection pool
+            shops: List of ShopData from rec files
+
+        Returns:
+            SyncStats with synced and deleted counts
+        """
+        deleted = 0
+
+        if not shops:
+            async with pool.acquire() as conn:
+                result = await conn.execute("DELETE FROM shops")
+                if result.startswith("DELETE "):
+                    deleted = int(result.split()[1])
+            return SyncStats(synced=0, deleted=deleted)
+
+        shop_ids = [s.id for s in shops]
+
+        async with pool.acquire() as conn, conn.transaction():
+            # Delete shops not in current files
+            result = await conn.execute(
+                "DELETE FROM shops WHERE id != ALL($1::text[])",
+                shop_ids,
+            )
+            if result.startswith("DELETE "):
+                deleted = int(result.split()[1])
+
+            # Upsert shops (preserve last_restock_at)
+            for s in shops:
+                await conn.execute(
+                    """INSERT INTO shops (
+                        id, name, preferred_tag, sell_spread,
+                        restock_tag, restock_interval_minutes
+                    ) VALUES ($1, $2, $3, $4, $5, $6)
+                    ON CONFLICT (id) DO UPDATE SET
+                        name = $2,
+                        preferred_tag = $3,
+                        sell_spread = $4,
+                        restock_tag = $5,
+                        restock_interval_minutes = $6
+                    """,
+                    s.id,
+                    s.name,
+                    s.preferred_tag,
+                    s.sell_spread,
+                    s.restock_tag,
+                    s.restock_interval_minutes,
+                )
+
+        logger.info(f"Synced {len(shops)} shops")
+        return SyncStats(synced=len(shops), deleted=deleted)
 
     @classmethod
     async def get_stock(cls, pool: asyncpg.Pool, shop_id: str) -> list[StockItem]:

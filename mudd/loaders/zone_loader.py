@@ -66,6 +66,18 @@ class EntityData:
 
 
 @dataclass
+class ShopData:
+    """Shop data from rec file."""
+
+    id: str
+    name: str
+    preferred_tag: str | None = None
+    sell_spread: float = 0.5
+    restock_tag: str | None = None
+    restock_interval_minutes: int = 1440
+
+
+@dataclass
 class SpawningPoolData:
     """Spawning pool data from rec file."""
 
@@ -248,6 +260,50 @@ def load_spawning_pools_from_rec(world_file: Path) -> list[SpawningPoolData]:
         )
     except subprocess.CalledProcessError:
         # No SpawningPool records in file is OK
+        return []
+
+
+def _parse_shop_row(row: dict[str, str]) -> ShopData:
+    """Parse a CSV row into a ShopData object."""
+    # Parse sell_spread with default
+    sell_spread_str = row.get("SellSpread", "0.5")
+    try:
+        sell_spread = float(sell_spread_str)
+    except ValueError as e:
+        raise ValueError(
+            f"Shop '{row['Id']}' has invalid SellSpread '{sell_spread_str}'. "
+            f"Must be a number."
+        ) from e
+
+    # Parse restock_interval_minutes with default (1440 = daily)
+    interval_str = row.get("RestockIntervalMinutes", "1440")
+    try:
+        restock_interval_minutes = int(interval_str)
+    except ValueError as e:
+        raise ValueError(
+            f"Shop '{row['Id']}' has invalid RestockIntervalMinutes "
+            f"'{interval_str}'. Must be an integer."
+        ) from e
+
+    return ShopData(
+        id=row["Id"],
+        name=row["Name"],
+        preferred_tag=row.get("PreferredTag") or None,
+        sell_spread=sell_spread,
+        restock_tag=row.get("RestockTag") or None,
+        restock_interval_minutes=restock_interval_minutes,
+    )
+
+
+def load_shops_from_rec(world_file: Path) -> list[ShopData]:
+    """Load Shop records from a world rec file using rec2csv.
+
+    Returns empty list if no Shop records exist (graceful handling).
+    """
+    try:
+        return _load_records_from_rec(world_file, "Shop", _parse_shop_row)
+    except subprocess.CalledProcessError:
+        # No Shop records in file is OK
         return []
 
 

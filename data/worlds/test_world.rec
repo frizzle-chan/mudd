@@ -128,6 +128,13 @@ DescriptionShort: {{ e.name }}
 OnLook: {{ e.description_long or "ERROR: FILE NOT FOUND" }}
 OnUse: {{ e.description_long or "ERROR: FILE NOT FOUND" }}
 
+Id: merchant
+Name: merchant
+Prototype: furniture
+DescriptionShort: {{ e.name }} is here, ready to trade.
+OnTouch: The {{ e.name }} raises an eyebrow at you.
+OnAttack: The {{ e.name }} dodges nimbly. "Hey! I'm a merchant, not a monster!"
+
 Id: painting
 Name: painting
 Prototype: item
@@ -569,6 +576,26 @@ Tags: test_charge_prize_spawn
 DescriptionShort: a {{ e.name }}
 DescriptionLong: A test prize from the charge machine.
 
+# ----------------------------------------------------------------------------
+# Shop test fixtures
+# ----------------------------------------------------------------------------
+
+Id: test_merchant
+Name: Test Merchant
+Prototype: merchant
+Room: store-room
+DescriptionShort: a {{ e.name }} stands behind a counter
+DescriptionLong: A test merchant for shop mechanic testing.
+OnUse: {{ effects.shop("test-shop") }}{{ effects.broadcast("**" ~ user ~ "** begins talking to the **" ~ e.name ~ "**.") }}You approach the {{ e.name }}.
+
+Id: test_shop_item
+Name: Test Shop Item
+Prototype: item
+Rarity: common
+Tags: test_shop_restock
+DescriptionShort: a {{ e.name }}
+DescriptionLong: A test item for shop restock testing.
+
 # ============================================================================
 # Spawning Pool record type
 # ============================================================================
@@ -617,3 +644,17 @@ Container: test_water_basin
 TagQuery: test_basin_fish
 MaxCount: 1
 RespawnIntervalMinutes: 1
+
+# ============================================================================
+# Shop record type
+# ============================================================================
+%rec: Shop
+%key: Id
+%mandatory: Id Name
+%allowed: Id Name PreferredTag SellSpread RestockTag RestockIntervalMinutes
+
+Id: test-shop
+Name: Test Shop
+SellSpread: 0.5
+RestockTag: test_shop_restock
+RestockIntervalMinutes: 1

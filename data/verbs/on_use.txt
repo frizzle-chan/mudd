@@ -1,5 +1,6 @@
 activate
 apply
+barter
 bet
 bite
 chew
@@ -27,6 +28,7 @@ flush
 gamble
 gulp
 guzzle
+haggle
 hoist
 imbibe
 ingest
@@ -35,6 +37,7 @@ lever
 listen
 manipulate
 munch
+negotiate
 nibble
 operate
 pee
@@ -58,6 +61,7 @@ run
 sample
 savor
 shit
+shop
 sip
 sit
 snack
@@ -65,9 +69,11 @@ spin
 start
 swallow
 switch
+talk
 taste
 tinkle
 toggle
+trade
 trigger
 trip
 tug
