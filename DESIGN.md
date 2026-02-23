@@ -361,6 +361,41 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 **Indexes:**
 - Index on `shop_id` for shop inventory queries
 
+### Shop Pricing
+
+Prices are derived from rarity base prices, supply curves, and player skill.
+
+**Rarity Base Prices** (`RARITY_BASE_PRICES` in `mudd/models/shop.py`):
+
+| Rarity | Base Price | Notes |
+|--------|-----------|-------|
+| none | 0 | Non-tradeable |
+| common | 100 | Benchmarked to loose coins ¤100 |
+| uncommon | 1,000 | Benchmarked to bundle of bills ¤1,000 |
+| rare | 5,000 | Benchmarked to money clip ¤5,000 |
+| epic | 25,000 | Benchmarked to cash envelope ¤25,000 |
+| legendary | 100,000 | Benchmarked to briefcase of cash ¤100,000 |
+| mythic | 500,000 | Benchmarked to gold brick ¤500,000 |
+| quest | 0 | Non-tradeable |
+
+**Supply Adjustment** — hyperbolic decay on duplicate count:
+```
+supply_adjustment(count) = 1.0 / (1.0 + 0.1 * max(0, count - 1))
+```
+Where `count` is the number of items with the same entity definition in the shop's stock.
+
+**Dynamic Price** = `base_price(rarity) * supply_adjustment(count)`, truncated to int.
+
+**Purchase Price** (player buys from shop):
+- Speech discount: `0.15 * (level - 1) / 98` — 0% at lv1, 15% at lv99
+- `purchase_price = int(dynamic_price * (1.0 - discount))`
+
+**Sale Price** (player sells to shop):
+- Speech bonus: `0.25 * (level - 1) / 98` — 0% at lv1, 25% at lv99
+- Preferred tag multiplier: 1.5x when item has the shop's `preferred_tag`
+- Floor: `max(result, base_price * 0.25)` — never below 25% of base
+- `sale_price = int(max(dynamic_price * sell_spread * (1 + bonus) * tag_mult, floor))`
+
 ### User Skills Table
 
 | Column | Type | Description |
