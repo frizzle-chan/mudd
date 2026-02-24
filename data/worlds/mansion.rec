@@ -252,7 +252,7 @@ Name: merchant
 Prototype: furniture
 DescriptionShort: {{ e.name }} is here, ready to trade.
 OnTouch: The {{ e.name }} raises an eyebrow at you.
-OnAttack: The {{ e.name }} dodges nimbly. "Hey! I'm a merchant, not a monster!"
+OnAttack: The {{ e.name }} dodges nimbly.
 
 Id: wallet
 Name: Wallet
