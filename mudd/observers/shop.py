@@ -53,11 +53,11 @@ def format_shop_overview(shop: Shop, stock: list[StockItem], speech_level: int) 
         return "\n".join(lines)
 
     lines.append("**For Sale:**")
-    for idx, (item, count) in enumerate(group_stock(stock), start=1):
+    for item, count in group_stock(stock):
         price = purchase_price(item.rarity, count, speech_level)
         price_str = f"\u00a4{price:,}"
 
-        line = f"- {idx} {item.name} | {price_str}/ea"
+        line = f"- {count} {item.name} | {price_str}/ea"
         lines.append(line)
 
     lines.append("")

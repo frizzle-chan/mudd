@@ -66,7 +66,7 @@ class TestFormatShopOverview:
         assert "# General Store" in result
         assert "**For Sale:**" in result
         price = purchase_price(Rarity.COMMON, 1, 1)
-        assert f"- 1 Iron Sword | \u00a4{price:,}/ea" in result
+        assert f"- 1 Iron Sword | ¤{price:,}/ea" in result
         assert "Use `/buy` to purchase or `/sell` to sell items." in result
 
     def test_grouped_duplicates(self):
@@ -79,7 +79,7 @@ class TestFormatShopOverview:
         result = format_shop_overview(shop, stock, speech_level=1)
 
         price = purchase_price(Rarity.COMMON, 3, 1)
-        assert f"- 1 Goldfish | \u00a4{price:,}/ea" in result
+        assert f"- 3 Goldfish | ¤{price:,}/ea" in result
 
     def test_multiple_items_different_rarity(self):
         shop = _make_shop(name="Mixed Shop")
