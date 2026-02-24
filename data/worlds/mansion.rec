@@ -1378,7 +1378,7 @@ Tags: slot_prize
 Rarity: common
 DescriptionShort: a {{ e.name }}
 DescriptionLong: A bright red Ring Pop. The gem-shaped candy sits on a plastic ring.
-OnUse: You lick the Ring Pop. Sour cherry.
+OnUse: {{ effects.grant_xp("vitality", 25) }}{{ effects.destroy() }}{{ effects.broadcast(user ~ " eats " ~ e ~ ".") }}You bite into the {{ e.name }}. Sour cherry. It restores health.
 
 Id: ringpop_lemonade
 Name: Sour Lemonade Ring Pop
@@ -1387,7 +1387,7 @@ Tags: slot_prize
 Rarity: common
 DescriptionShort: a {{ e.name }}
 DescriptionLong: A pale yellow Ring Pop coated in sour crystals.
-OnUse: You lick the Ring Pop. Your face puckers.
+OnUse: {{ effects.grant_xp("vitality", 25) }}{{ effects.destroy() }}{{ effects.broadcast(user ~ " eats " ~ e ~ ".") }}You bite into the {{ e.name }}. Your face puckers. It restores health.
 
 Id: ringpop_green_apple
 Name: Sour Green Apple Ring Pop
@@ -1396,7 +1396,7 @@ Tags: slot_prize
 Rarity: uncommon
 DescriptionShort: a {{ e.name }}
 DescriptionLong: A green Ring Pop that smells like Granny Smith apples.
-OnUse: You lick the Ring Pop. Tart and sweet.
+OnUse: {{ effects.grant_xp("vitality", 50) }}{{ effects.destroy() }}{{ effects.broadcast(user ~ " eats " ~ e ~ ".") }}You bite into the {{ e.name }}. Tart and sweet. It restores health.
 
 Id: ringpop_cherry_berry
 Name: Sour Cherry Berry Ring Pop
@@ -1405,7 +1405,7 @@ Tags: slot_prize
 Rarity: uncommon
 DescriptionShort: a {{ e.name }}
 DescriptionLong: A deep purple Ring Pop combining cherry and mixed berry.
-OnUse: You lick the Ring Pop. Berry medley.
+OnUse: {{ effects.grant_xp("vitality", 50) }}{{ effects.destroy() }}{{ effects.broadcast(user ~ " eats " ~ e ~ ".") }}You bite into the {{ e.name }}. Berry medley. It restores health.
 
 Id: ringpop_raspberry_lemonade
 Name: Sour Raspberry Lemonade Ring Pop
@@ -1414,7 +1414,7 @@ Tags: slot_prize
 Rarity: rare
 DescriptionShort: a {{ e.name }}
 DescriptionLong: A pink and yellow swirled Ring Pop.
-OnUse: You lick the Ring Pop. Raspberry lemonade.
+OnUse: {{ effects.grant_xp("vitality", 100) }}{{ effects.destroy() }}{{ effects.broadcast(user ~ " eats " ~ e ~ ".") }}You bite into the {{ e.name }}. Raspberry lemonade. It restores health.
 
 Id: ringpop_watermelon
 Name: Sour Watermelon Ring Pop
@@ -1423,7 +1423,7 @@ Tags: slot_prize
 Rarity: legendary
 DescriptionShort: a {{ e.name }}
 DescriptionLong: A pink-green Ring Pop. Watermelon flavor. Hard to find.
-OnUse: You lick the Ring Pop. Watermelon.
+OnUse: {{ effects.grant_xp("vitality", 400) }}{{ effects.destroy() }}{{ effects.broadcast(user ~ " eats " ~ e ~ ".") }}You bite into the {{ e.name }}. Watermelon. It restores health.
 
 # Lounge beverages (spawned by lounge_fridge_pool)
 
