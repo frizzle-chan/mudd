@@ -146,27 +146,36 @@ class Shop:
         if self._pool is None:
             return None
 
-        if not self.can_restock(now):
-            return None
+        async with self._pool.acquire() as conn, conn.transaction():
+            row = await conn.fetchrow(
+                "SELECT * FROM shops WHERE id = $1 FOR UPDATE",
+                self.id,
+            )
+            if row is None:
+                return None
 
-        tag = self.effective_restock_tag
-        assert tag is not None  # guaranteed by can_restock
+            locked_shop = Shop._from_row(row)
+            if not locked_shop.can_restock(now):
+                return None
 
-        entity = await ResolvedEntity.get_weighted_random_by_tag(self._pool, tag)
-        if entity is None:
-            return None
+            tag = locked_shop.effective_restock_tag
+            assert tag is not None  # guaranteed by can_restock
 
-        instance = await EntityInstance.create(self._pool, entity.id)
-        if instance is None:
-            return None
+            entity = await ResolvedEntity.get_weighted_random_by_tag(self._pool, tag)
+            if entity is None:
+                return None
 
-        await Shop.add_to_stock(self._pool, self.id, instance.instance_id)
+            instance = await EntityInstance.create(self._pool, entity.id)
+            if instance is None:
+                return None
 
-        await self._pool.execute(
-            "UPDATE shops SET last_restock_at = $1 WHERE id = $2",
-            now,
-            self.id,
-        )
+            await Shop.add_to_stock(self._pool, self.id, instance.instance_id)
+
+            await conn.execute(
+                "UPDATE shops SET last_restock_at = $1 WHERE id = $2",
+                now,
+                self.id,
+            )
 
         return instance
 
