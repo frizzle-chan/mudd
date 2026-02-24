@@ -1354,9 +1354,9 @@ Prototype: furniture
 Room: lounge
 ContentsVisible: no
 DescriptionShort: A vintage {{ e.name }} stands against the wall.
-DescriptionLong: A classic one-armed bandit with three spinning reels. The chrome handle gleams invitingly. __Pull__ the handle to try your luck! ¤5 per pull.
+DescriptionLong: A classic one-armed bandit with three spinning reels. The chrome handle gleams invitingly. __Pull__ the handle to try your luck! ¤100 per pull.
 OnTouch: The cold metal handle vibrates slightly.
-OnUse: {% if not e.contents %}The slot machine sits empty, waiting to be refilled.{% elif user.balance < 5 %}The slot machine costs ¤5 per pull. You only have {{ user.balance | money }}.{% else %}{{ effects.charge(5) }}{{ effects.dispense() }}{{ effects.broadcast("**" ~ user ~ "** puts ¤5 in the slot machine and pulls the lever...") }}You drop a ¤5 coin into the slot and pull the lever... The wheels spin... click click click...{% endif %}
+OnUse: {% if not e.contents %}The slot machine sits empty, waiting to be refilled.{% elif user.balance < 100 %}The slot machine costs ¤100 per pull. You only have {{ user.balance | money }}.{% else %}{{ effects.charge(100) }}{{ effects.dispense() }}{{ effects.broadcast("**" ~ user ~ "** feeds ¤100 into the slot machine and pulls the lever...") }}You feed ¤100 into the slot and pull the lever... The wheels spin... click click click...{% endif %}
 OnAttack: You kick the machine in frustration. It remains unmoved.
 
 # Slot machine prizes (spawned by lounge_slot_machine_pool)
