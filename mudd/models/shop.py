@@ -169,7 +169,7 @@ class Shop:
             if instance is None:
                 return None
 
-            await Shop.add_to_stock(self._pool, self.id, instance.instance_id)
+            await Shop.add_to_stock(conn, self.id, instance.instance_id)
 
             await conn.execute(
                 "UPDATE shops SET last_restock_at = $1 WHERE id = $2",
@@ -288,12 +288,15 @@ class Shop:
 
     @classmethod
     async def add_to_stock(
-        cls, pool: asyncpg.Pool, shop_id: str, entity_instance_id: UUID
+        cls,
+        pool: asyncpg.Pool | asyncpg.Connection,
+        shop_id: str,
+        entity_instance_id: UUID,
     ) -> None:
         """Add an entity instance to a shop's stock.
 
         Args:
-            pool: Database connection pool
+            pool: Database connection pool or transaction connection
             shop_id: The shop to add stock to
             entity_instance_id: The entity instance to stock
         """
