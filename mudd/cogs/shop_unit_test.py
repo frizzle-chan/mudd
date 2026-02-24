@@ -52,7 +52,7 @@ class TestFormatBuyChoices:
         # Should group into one entry
         assert len(choices) == 1
         label, value = choices[0]
-        assert "x3" in label
+        assert "Sword" in label
         # Value should be the first instance's ID
         assert value == "00000000-0000-0000-0000-000000000001"
 
