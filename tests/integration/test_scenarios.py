@@ -1127,7 +1127,7 @@ async def test_shop_buy_and_sell(test_db, clean_user_state):
 
     # === CREATE TRADING SESSION (prod: ShopReconciler; tests: manual) ===
     session = await TradingSession.create(
-        test_db, user.id, "test-shop", thread_id=99999
+        test_db, user.id, "test-shop", thread_id=99999, overview_message_id=88888
     )
     assert session.shop_id == "test-shop"
 
@@ -1219,7 +1219,9 @@ async def test_move_ends_trading_session(test_db, clean_user_state):
 
     # Create an active trading session
     thread_id = 55555
-    await TradingSession.create(test_db, user.id, "test-shop", thread_id=thread_id)
+    await TradingSession.create(
+        test_db, user.id, "test-shop", thread_id=thread_id, overview_message_id=88888
+    )
 
     # Move away — should end the trading session
     result = await move(test_db, user.id, "foyer", guild_id=GUILD_ID)

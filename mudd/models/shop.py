@@ -374,6 +374,7 @@ class TradingSession:
     user_id: int
     shop_id: str
     thread_id: int
+    overview_message_id: int
     created_at: datetime
 
     @classmethod
@@ -383,6 +384,7 @@ class TradingSession:
             user_id=row["user_id"],
             shop_id=row["shop_id"],
             thread_id=row["thread_id"],
+            overview_message_id=row["overview_message_id"],
             created_at=row["created_at"],
         )
 
@@ -412,6 +414,7 @@ class TradingSession:
         user_id: int,
         shop_id: str,
         thread_id: int,
+        overview_message_id: int,
     ) -> TradingSession:
         """Create a new trading session.
 
@@ -422,19 +425,22 @@ class TradingSession:
             user_id: The user starting the session
             shop_id: The shop being traded with
             thread_id: Discord thread for this session
+            overview_message_id: Discord message ID of the shop overview
 
         Returns:
             The newly created TradingSession
         """
         row = await pool.fetchrow(
             """
-            INSERT INTO user_trading_sessions (user_id, shop_id, thread_id)
-            VALUES ($1, $2, $3)
+            INSERT INTO user_trading_sessions
+                (user_id, shop_id, thread_id, overview_message_id)
+            VALUES ($1, $2, $3, $4)
             RETURNING *
             """,
             user_id,
             shop_id,
             thread_id,
+            overview_message_id,
         )
         assert row is not None
         return cls._from_row(row)

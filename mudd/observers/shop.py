@@ -80,6 +80,46 @@ def format_shop_overview(shop: Shop, stock: list[StockItem], speech_level: int) 
     return "\n".join(lines)
 
 
+async def refresh_shop_overview(
+    guild: discord.Guild,
+    pool: asyncpg.Pool,
+    session: TradingSession,
+    speech_level: int,
+) -> None:
+    """Edit the shop overview message in-place to reflect current stock.
+
+    Best-effort: logs warnings on failure rather than raising.
+
+    Args:
+        guild: Discord guild
+        pool: Database connection pool
+        session: Active trading session
+        speech_level: Player's Speech skill level for price display
+    """
+    shop = await Shop.get(pool, session.shop_id)
+    if shop is None:
+        logger.warning("refresh_shop_overview: shop %s not found", session.shop_id)
+        return
+
+    stock = await Shop.get_stock(pool, session.shop_id)
+    overview = format_shop_overview(shop, stock, speech_level)
+
+    thread = await fetch_thread(guild, session.thread_id)
+    if thread is None:
+        logger.warning("refresh_shop_overview: thread %d not found", session.thread_id)
+        return
+
+    try:
+        msg = await thread.fetch_message(session.overview_message_id)
+        await msg.edit(content=overview)
+    except discord.HTTPException as e:
+        logger.warning(
+            "refresh_shop_overview: failed to edit message %d: %s",
+            session.overview_message_id,
+            e,
+        )
+
+
 class ShopReconciler:
     """Reconciles Discord state for trading sessions.
 
@@ -209,10 +249,12 @@ class ShopReconciler:
         # 7. Post shop overview in thread, @mentioning the user
         overview = format_shop_overview(shop, stock, speech_level)
         mention = member.mention if member else f"<@{evt.user_id}>"
-        await thread.send(f"{mention}\n{overview}")
+        overview_msg = await thread.send(f"{mention}\n{overview}")
 
-        # 8. Create DB session with the new thread_id
-        await TradingSession.create(self._pool, evt.user_id, evt.shop_id, thread.id)
+        # 8. Create DB session with the new thread_id and overview message ID
+        await TradingSession.create(
+            self._pool, evt.user_id, evt.shop_id, thread.id, overview_msg.id
+        )
         logger.info(
             "Created trading session for user %d at shop %s (thread %d)",
             evt.user_id,

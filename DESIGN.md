@@ -368,6 +368,7 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 | `user_id` | BIGINT (PK, FK to users.id) | One active session per user |
 | `shop_id` | TEXT NOT NULL (FK to shops.id) | Shop being traded with |
 | `thread_id` | BIGINT NOT NULL | Discord thread for this session |
+| `overview_message_id` | BIGINT NOT NULL | Discord message ID of the shop overview (edited after each trade) |
 | `created_at` | TIMESTAMPTZ NOT NULL | Session start time |
 
 **Purpose:**

@@ -39,6 +39,7 @@ from mudd.observers import (
     flush_all,
     post_flush_all,
 )
+from mudd.observers.shop import refresh_shop_overview
 from mudd.skills.registry import Skill
 from mudd.utils.discord import fetch_thread
 from mudd.utils.text import Rarity
@@ -330,6 +331,17 @@ class Shop(commands.Cog):
                 session.thread_id,
             )
 
+        # Refresh the shop overview message with updated stock (best-effort)
+        try:
+            await refresh_shop_overview(
+                interaction.guild, self._pool, session, speech_level
+            )
+        except Exception:
+            logger.exception(
+                "Failed to refresh shop overview in thread %d",
+                session.thread_id,
+            )
+
         # Flush observers (inventory sync, wallet update, XP grant, level-up)
         await flush_all(observers)
         await post_flush_all(observers)
@@ -545,6 +557,17 @@ class Shop(commands.Cog):
         except Exception:
             logger.exception(
                 "Failed to post sale message to trading thread %d",
+                session.thread_id,
+            )
+
+        # Refresh the shop overview message with updated stock (best-effort)
+        try:
+            await refresh_shop_overview(
+                interaction.guild, self._pool, session, speech_level
+            )
+        except Exception:
+            logger.exception(
+                "Failed to refresh shop overview in thread %d",
                 session.thread_id,
             )
 

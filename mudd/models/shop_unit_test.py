@@ -240,11 +240,13 @@ class TestTradingSession:
             user_id=123,
             shop_id="fish-market",
             thread_id=456,
+            overview_message_id=789,
             created_at=now,
         )
         assert session.user_id == 123
         assert session.shop_id == "fish-market"
         assert session.thread_id == 456
+        assert session.overview_message_id == 789
         assert session.created_at == now
 
     def test_immutability(self):
@@ -252,6 +254,7 @@ class TestTradingSession:
             user_id=123,
             shop_id="fish-market",
             thread_id=456,
+            overview_message_id=789,
             created_at=datetime.now(UTC),
         )
         with pytest.raises(AttributeError):
@@ -264,6 +267,7 @@ class TestTradingSession:
             user_id=123,
             shop_id="fish-market",
             thread_id=456,
+            overview_message_id=789,
             created_at=datetime.now(UTC),
         )
         with pytest.raises((AttributeError, TypeError)):
