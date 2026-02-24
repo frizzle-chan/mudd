@@ -72,6 +72,22 @@ def find_exit_in_input(
     return None
 
 
+def _resolve_topic(
+    channel: discord.abc.GuildChannel
+    | discord.Thread
+    | discord.abc.PrivateChannel
+    | None,
+    guild: discord.Guild,
+) -> str | None:
+    """Get the channel topic, falling back to the parent channel for threads."""
+    if channel is None:
+        return None
+    if isinstance(channel, discord.Thread):
+        parent = guild.get_channel(channel.parent_id) if channel.parent_id else None
+        return getattr(parent, "topic", None)
+    return getattr(channel, "topic", None)
+
+
 class Movement(commands.Cog):
     """Commands for moving between locations."""
 
@@ -95,7 +111,7 @@ class Movement(commands.Cog):
             return []
 
         channel = interaction.channel
-        topic = getattr(channel, "topic", None)
+        topic = _resolve_topic(channel, interaction.guild)
         valid_exits = extract_exits_from_topic(
             topic, interaction.guild, self.room_cache
         )
@@ -130,7 +146,7 @@ class Movement(commands.Cog):
             return
 
         channel = interaction.channel
-        topic = getattr(channel, "topic", None)
+        topic = _resolve_topic(channel, interaction.guild)
         valid_exits = extract_exits_from_topic(
             topic, interaction.guild, self.room_cache
         )
