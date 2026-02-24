@@ -70,8 +70,7 @@ def format_buy_choices(
     for item, count in group_stock(stock):
         emoji = item.rarity.emoji
         price = purchase_price(item.rarity, count, speech_level)
-        qty = f" x{count}" if count > 1 else ""
-        label = f"{item.name}{emoji}{qty} - \u00a4{price:,}"
+        label = f"{item.name} {emoji} | \u00a4{price:,}"
         choices.append((label, str(item.entity_instance_id)))
     return choices
 
@@ -111,7 +110,7 @@ def format_sell_choices(
         if price == 0:
             continue
         emoji = item.rarity.emoji
-        label = f"{item.name}{emoji} - \u00a4{price:,}"
+        label = f"{item.name} {emoji} | \u00a4{price:,}"
         choices.append((label, str(item.instance_id)))
     return choices
 
