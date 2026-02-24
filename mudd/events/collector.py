@@ -16,6 +16,7 @@ from mudd.events.types import (
     GrantXPSignal,
     PickupSignal,
     SetFocusSignal,
+    ShopSignal,
 )
 from mudd.skills.registry import Skill
 
@@ -177,4 +178,17 @@ class EffectsCollector:
             Empty string (allows inline use in templates)
         """
         self._observer.notify(ClearFocusSignal())
+        return ""
+
+    def shop(self, shop_id: str) -> str:
+        """Signal that a trading session should open with a shop.
+
+        Args:
+            shop_id: ID of the shop to open
+
+        Returns:
+            Empty string (allows inline use in templates)
+        """
+        if shop_id:
+            self._observer.notify(ShopSignal(shop_id=shop_id))
         return ""

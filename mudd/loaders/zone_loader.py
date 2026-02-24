@@ -7,7 +7,6 @@ import subprocess
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import cast, get_args
 
 import asyncpg
 
@@ -15,8 +14,8 @@ from mudd.utils.text import Rarity
 
 logger = logging.getLogger(__name__)
 
-# Valid rarity values - derived from the Rarity type to maintain single source of truth
-VALID_RARITIES: set[str] = set(get_args(Rarity))
+# Valid rarity values - derived from the Rarity enum to maintain single source of truth
+VALID_RARITIES: set[str] = set(Rarity)
 
 
 @dataclass
@@ -50,7 +49,7 @@ class EntityData:
     container_id: str | None = None
     room: str | None = None
     contents_visible: bool | None = None
-    rarity: Rarity = "none"
+    rarity: Rarity = Rarity.NONE
     tags: list[str] | None = None  # Space-separated in rec files
     description_short: str | None = None
     description_long: str | None = None
@@ -63,6 +62,18 @@ class EntityData:
     on_close: str | None = None
     on_drop: str | None = None
     on_fish: str | None = None
+
+
+@dataclass
+class ShopData:
+    """Shop data from rec file."""
+
+    id: str
+    name: str
+    preferred_tag: str | None = None
+    sell_spread: float = 0.5
+    restock_tag: str | None = None
+    restock_interval_minutes: int = 1440
 
 
 @dataclass
@@ -166,7 +177,7 @@ def _parse_entity_row(row: dict[str, str]) -> EntityData:
             f"Entity '{row['Id']}' has invalid Rarity '{rarity_raw}'. "
             f"Valid values: {', '.join(sorted(VALID_RARITIES))}"
         )
-    rarity = cast(Rarity, rarity_raw)
+    rarity = Rarity(rarity_raw)
 
     # Parse tags (space-separated string)
     tags_str = row.get("Tags", "").strip()
@@ -248,6 +259,50 @@ def load_spawning_pools_from_rec(world_file: Path) -> list[SpawningPoolData]:
         )
     except subprocess.CalledProcessError:
         # No SpawningPool records in file is OK
+        return []
+
+
+def _parse_shop_row(row: dict[str, str]) -> ShopData:
+    """Parse a CSV row into a ShopData object."""
+    # Parse sell_spread with default
+    sell_spread_str = row.get("SellSpread", "0.5")
+    try:
+        sell_spread = float(sell_spread_str)
+    except ValueError as e:
+        raise ValueError(
+            f"Shop '{row['Id']}' has invalid SellSpread '{sell_spread_str}'. "
+            f"Must be a number."
+        ) from e
+
+    # Parse restock_interval_minutes with default (1440 = daily)
+    interval_str = row.get("RestockIntervalMinutes", "1440")
+    try:
+        restock_interval_minutes = int(interval_str)
+    except ValueError as e:
+        raise ValueError(
+            f"Shop '{row['Id']}' has invalid RestockIntervalMinutes "
+            f"'{interval_str}'. Must be an integer."
+        ) from e
+
+    return ShopData(
+        id=row["Id"],
+        name=row["Name"],
+        preferred_tag=row.get("PreferredTag") or None,
+        sell_spread=sell_spread,
+        restock_tag=row.get("RestockTag") or None,
+        restock_interval_minutes=restock_interval_minutes,
+    )
+
+
+def load_shops_from_rec(world_file: Path) -> list[ShopData]:
+    """Load Shop records from a world rec file using rec2csv.
+
+    Returns empty list if no Shop records exist (graceful handling).
+    """
+    try:
+        return _load_records_from_rec(world_file, "Shop", _parse_shop_row)
+    except subprocess.CalledProcessError:
+        # No Shop records in file is OK
         return []
 
 

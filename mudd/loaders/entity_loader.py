@@ -8,9 +8,10 @@ import asyncpg
 from mudd.loaders.zone_loader import (
     load_entities_from_rec,
     load_rooms_from_rec,
+    load_shops_from_rec,
     load_spawning_pools_from_rec,
 )
-from mudd.models import EntityDefinition, EntityInstance, SpawningPool
+from mudd.models import EntityDefinition, EntityInstance, Shop, SpawningPool
 
 logger = logging.getLogger(__name__)
 
@@ -52,5 +53,9 @@ async def sync_entities(pool: asyncpg.Pool, world_file: Path) -> int:
     # Sync spawning pools via model
     entity_ids = {e.id for e in entities}
     await SpawningPool.sync_all(pool, spawning_pools, room_ids, entity_ids)
+
+    # Sync shops via model
+    shops = load_shops_from_rec(world_file)
+    await Shop.sync_all(pool, shops)
 
     return entity_stats.synced

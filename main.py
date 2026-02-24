@@ -16,6 +16,7 @@ from mudd.cogs.look import Look
 from mudd.cogs.movement import Movement
 from mudd.cogs.ping import Ping
 from mudd.cogs.racing import Racing
+from mudd.cogs.shop import Shop
 from mudd.cogs.speech import Speech
 from mudd.cogs.sync import Sync
 from mudd.database import get_pool, init_database
@@ -73,7 +74,7 @@ async def setup_hook():
 
     # Create cogs with explicit dependencies
     await bot.add_cog(Look(bot, pool, autocomplete_cache, user_cache))
-    await bot.add_cog(Interact(bot, pool, autocomplete_cache, user_cache))
+    await bot.add_cog(Interact(bot, pool, autocomplete_cache, user_cache, room_cache))
     await bot.add_cog(Ping(bot))
     await bot.add_cog(Movement(bot, pool, room_cache, user_cache))
     await bot.add_cog(Sync(bot, pool, room_cache, autocomplete_cache, user_cache))
@@ -81,6 +82,7 @@ async def setup_hook():
     await bot.add_cog(Speech(bot, pool, room_cache))
     await bot.add_cog(Racing(bot, pool, room_cache))
     await bot.add_cog(Betting(bot, pool, room_cache))
+    await bot.add_cog(Shop(bot, pool, room_cache))
 
 
 @bot.event

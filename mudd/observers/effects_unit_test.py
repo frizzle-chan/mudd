@@ -14,6 +14,7 @@ from mudd.events import (
     GrantRandomEvent,
     GrantXPSignal,
     PickupSignal,
+    ShopSignal,
 )
 from mudd.observers import EffectsObserver
 from mudd.skills.registry import Skill
@@ -93,6 +94,22 @@ class TestEffectsObserverNotify:
         assert observer.has_dispense is False
         observer.notify(DispenseSignal())
         assert observer.has_dispense is True
+
+    def test_shop_signal_stores_id(self):
+        """ShopSignal stores shop_id and sets has_shop."""
+        observer = EffectsObserver()
+        assert observer.has_shop is False
+        assert observer.shop_id is None
+        observer.notify(ShopSignal(shop_id="blacksmith"))
+        assert observer.has_shop is True
+        assert observer.shop_id == "blacksmith"
+
+    def test_shop_signal_last_write_wins(self):
+        """Second ShopSignal overwrites the first."""
+        observer = EffectsObserver()
+        observer.notify(ShopSignal(shop_id="blacksmith"))
+        observer.notify(ShopSignal(shop_id="apothecary"))
+        assert observer.shop_id == "apothecary"
 
     def test_grant_xp_signal_collected(self):
         """GrantXPSignal is collected in xp_grants list."""
@@ -267,6 +284,23 @@ class TestEffectsCollector:
         collector = EffectsCollector(observer)
         collector.grant_xp("", 100)
         assert observer.xp_grants == []
+
+    def test_shop_returns_empty_string(self):
+        """shop() returns empty string and sets observer state."""
+        observer = EffectsObserver()
+        collector = EffectsCollector(observer)
+        result = collector.shop("blacksmith")
+        assert result == ""
+        assert observer.has_shop is True
+        assert observer.shop_id == "blacksmith"
+
+    def test_shop_ignores_empty_id(self):
+        """shop() ignores empty shop_id."""
+        observer = EffectsObserver()
+        collector = EffectsCollector(observer)
+        collector.shop("")
+        assert observer.has_shop is False
+        assert observer.shop_id is None
 
     def test_grant_xp_ignores_invalid_skill(self):
         """grant_xp() ignores invalid skill names and logs a warning."""

@@ -118,7 +118,7 @@ class Room:
             on_drop=on_look,
             on_fish=on_look,
             contents_visible=True,
-            rarity="none",
+            rarity=Rarity.NONE,
         )
 
     async def get_entities(self) -> list[EntityInstance]:
@@ -400,7 +400,7 @@ class RoomEntityInstance:
     @property
     def rarity(self) -> Rarity:
         """Item rarity tier - rooms have no rarity."""
-        return "none"
+        return Rarity.NONE
 
     # Capability properties - virtual room entities don't support mutations
     @property

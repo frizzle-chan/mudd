@@ -15,6 +15,7 @@ from mudd.events import (
     BroadcastEvent,
     FocusChangedEvent,
     Observer,
+    TradingSessionEndedEvent,
     UserLocationSyncEvent,
     UserMovedEvent,
 )
@@ -27,6 +28,7 @@ from mudd.models.currency import (
 )
 from mudd.models.entity import EntityInstance
 from mudd.models.room import Room
+from mudd.models.shop import TradingSession
 from mudd.models.skills import UserSkill
 
 FOCUS_TIMEOUT_MINUTES = 5
@@ -725,7 +727,8 @@ class User:
     async def move_to(self, room_id: str, *, guild_id: int) -> User:
         """Move the user to a different room.
 
-        Updates the database, clears focus, and returns a new User instance.
+        Updates the database, clears focus, ends any active trading session,
+        and returns a new User instance.
         Emits UserMovedEvent (game logic) and UserLocationSyncEvent (Discord sync).
 
         Args:
@@ -739,6 +742,14 @@ class User:
 
         # Clear focus when moving rooms (per ADR 0003)
         await self.clear_focus()
+
+        # End any active trading session
+        ended_session = await TradingSession.delete(self._pool, self.id)
+        if ended_session is not None:
+            for observer in self._observers:
+                observer.notify(
+                    TradingSessionEndedEvent(self.id, ended_session.thread_id)
+                )
 
         await self._pool.execute(
             "UPDATE users SET current_room = $2 WHERE id = $1",

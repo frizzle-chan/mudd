@@ -1,23 +1,84 @@
 """Text encoding utilities."""
 
-from typing import Literal
+from __future__ import annotations
 
-# Rarity type literal (must match entity.py's Rarity type)
-Rarity = Literal[
-    "none", "common", "uncommon", "rare", "epic", "legendary", "mythic", "quest"
-]
+from enum import StrEnum
 
-# Rarity emoji for display names
-RARITY_EMOJI: dict[Rarity, str] = {
-    "none": "",  # No emoji for static world items
-    "common": "\u26aa",  # White circle
-    "uncommon": "\U0001f7e2",  # Green circle
-    "rare": "\U0001f535",  # Blue circle
-    "epic": "\U0001f7e3",  # Purple circle
-    "legendary": "\U0001f7e0",  # Orange circle
-    "mythic": "\u3299\ufe0f",  # Japanese "secret" symbol
-    "quest": "\U0001f537",  # Blue diamond
-}
+
+class Rarity(StrEnum):
+    """Item rarity tiers with colocated display data."""
+
+    NONE = "none"
+    COMMON = "common"
+    UNCOMMON = "uncommon"
+    RARE = "rare"
+    EPIC = "epic"
+    LEGENDARY = "legendary"
+    MYTHIC = "mythic"
+    QUEST = "quest"
+
+    @property
+    def emoji(self) -> str:
+        """Emoji icon for this rarity tier."""
+        match self:
+            case Rarity.NONE:
+                return ""
+            case Rarity.COMMON:
+                return "\u26aa"  # White circle
+            case Rarity.UNCOMMON:
+                return "\U0001f7e2"  # Green circle
+            case Rarity.RARE:
+                return "\U0001f535"  # Blue circle
+            case Rarity.EPIC:
+                return "\U0001f7e3"  # Purple circle
+            case Rarity.LEGENDARY:
+                return "\U0001f7e0"  # Orange circle
+            case Rarity.MYTHIC:
+                return "\u3299\ufe0f"  # Japanese "secret" symbol
+            case Rarity.QUEST:
+                return "\U0001f537"  # Blue diamond
+
+    @property
+    def spawn_weight(self) -> int:
+        """Weight for spawning pool random selection."""
+        match self:
+            case Rarity.NONE:
+                return 0  # Static world items never spawn
+            case Rarity.COMMON:
+                return 600
+            case Rarity.UNCOMMON:
+                return 250
+            case Rarity.RARE:
+                return 100
+            case Rarity.EPIC:
+                return 40
+            case Rarity.LEGENDARY:
+                return 9
+            case Rarity.MYTHIC:
+                return 1
+            case Rarity.QUEST:
+                return 600  # Same as common; use tags for dedicated pools
+
+    @property
+    def base_price(self) -> int:
+        """Base price for shop trading. Non-tradeable rarities return 0."""
+        match self:
+            case Rarity.NONE:
+                return 0
+            case Rarity.COMMON:
+                return 100
+            case Rarity.UNCOMMON:
+                return 1_000
+            case Rarity.RARE:
+                return 5_000
+            case Rarity.EPIC:
+                return 25_000
+            case Rarity.LEGENDARY:
+                return 100_000
+            case Rarity.MYTHIC:
+                return 500_000
+            case Rarity.QUEST:
+                return 0
 
 
 def strip_rarity_emojis(text: str) -> str:
@@ -29,9 +90,9 @@ def strip_rarity_emojis(text: str) -> str:
     Returns:
         Text with all rarity emojis removed and stripped of trailing whitespace
     """
-    for emoji in RARITY_EMOJI.values():
-        if emoji:
-            text = text.replace(emoji, "")
+    for rarity in Rarity:
+        if rarity.emoji:
+            text = text.replace(rarity.emoji, "")
     return text.strip()
 
 
