@@ -1,14 +1,20 @@
 activate
 apply
+appraise
+bargain
 barter
 bet
 bite
+bribe
+buy
 chew
 chug
+commission
 consume
 crank
 crap
 cue
+deal
 defecate
 depress
 devour
@@ -29,6 +35,7 @@ gamble
 gulp
 guzzle
 haggle
+hawk
 hoist
 imbibe
 ingest
@@ -36,10 +43,13 @@ launch
 lever
 listen
 manipulate
+market
+merchant
 munch
 negotiate
 nibble
 operate
+peddle
 pee
 piss
 play
@@ -49,6 +59,7 @@ press
 prime
 pull
 pump
+purchase
 push
 quaff
 queue
@@ -60,6 +71,7 @@ rotate
 run
 sample
 savor
+sell
 shit
 shop
 sip
@@ -81,6 +93,7 @@ turn
 uncover
 urinate
 use
+vend
 wager
 wind
 work
