@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from collections import Counter
 from typing import TYPE_CHECKING
 
 import asyncpg
@@ -14,11 +13,12 @@ from mudd.events.types import (
     TradingSessionEndedEvent,
     TradingSessionStartedEvent,
 )
-from mudd.models.shop import Shop, StockItem, TradingSession, purchase_price
+from mudd.models.shop import Shop, TradingSession, group_stock, purchase_price
 from mudd.models.skills import UserSkill
 from mudd.utils.discord import fetch_thread
 
 if TYPE_CHECKING:
+    from mudd.models.shop import StockItem
     from mudd.observers.discord import RoomChannelCache
 
 logger = logging.getLogger(__name__)
@@ -52,19 +52,8 @@ def format_shop_overview(shop: Shop, stock: list[StockItem], speech_level: int) 
         lines.append("Use `/sell` to sell items.")
         return "\n".join(lines)
 
-    # Group by entity_id
-    counts: Counter[str] = Counter()
-    first_seen: dict[str, StockItem] = {}
-    for item in stock:
-        counts[item.entity_id] += 1
-        if item.entity_id not in first_seen:
-            first_seen[item.entity_id] = item
-
     lines.append("**For Sale:**")
-    for entity_id, item in sorted(
-        first_seen.items(), key=lambda kv: (kv[1].rarity.sort_order, kv[1].name)
-    ):
-        count = counts[entity_id]
+    for item, count in group_stock(stock):
         emoji = item.rarity.emoji
         price = purchase_price(item.rarity, count, speech_level)
         qty = f" x{count}" if count > 1 else ""

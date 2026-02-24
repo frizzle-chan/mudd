@@ -28,6 +28,7 @@ from mudd.models.shop import (
     StockItem,
     TradingSession,
     get_tags_for_entities,
+    group_stock,
     purchase_price,
     sale_price,
 )
@@ -65,18 +66,8 @@ def format_buy_choices(
     Returns:
         List of (label, value) tuples for autocomplete choices
     """
-    counts: Counter[str] = Counter()
-    first_seen: dict[str, StockItem] = {}
-    for item in stock:
-        counts[item.entity_id] += 1
-        if item.entity_id not in first_seen:
-            first_seen[item.entity_id] = item
-
     choices: list[tuple[str, str]] = []
-    for entity_id, item in sorted(
-        first_seen.items(), key=lambda kv: (kv[1].rarity.sort_order, kv[1].name)
-    ):
-        count = counts[entity_id]
+    for item, count in group_stock(stock):
         emoji = item.rarity.emoji
         price = purchase_price(item.rarity, count, speech_level)
         qty = f" x{count}" if count > 1 else ""

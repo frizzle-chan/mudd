@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import TYPE_CHECKING
@@ -368,6 +369,25 @@ class StockItem:
             tags=tuple(row["tags"]),
             stocked_at=row["stocked_at"],
         )
+
+
+def group_stock(stock: list[StockItem]) -> list[tuple[StockItem, int]]:
+    """Group stock items by entity_id and sort by rarity then name.
+
+    Returns one representative StockItem per unique entity_id paired with
+    the total count, sorted by ascending rarity then alphabetical name.
+    """
+    counts: Counter[str] = Counter()
+    first_seen: dict[str, StockItem] = {}
+    for item in stock:
+        counts[item.entity_id] += 1
+        if item.entity_id not in first_seen:
+            first_seen[item.entity_id] = item
+
+    return sorted(
+        [(item, counts[eid]) for eid, item in first_seen.items()],
+        key=lambda pair: (pair[0].rarity.sort_order, pair[0].name),
+    )
 
 
 @dataclass(frozen=True, slots=True)
