@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import logging
-from collections import Counter
 from typing import TYPE_CHECKING
 
 import asyncpg
@@ -14,11 +13,12 @@ from mudd.events.types import (
     TradingSessionEndedEvent,
     TradingSessionStartedEvent,
 )
-from mudd.models.shop import Shop, StockItem, TradingSession, purchase_price
+from mudd.models.shop import Shop, TradingSession, group_stock, purchase_price
 from mudd.models.skills import UserSkill
 from mudd.utils.discord import fetch_thread
 
 if TYPE_CHECKING:
+    from mudd.models.shop import StockItem
     from mudd.observers.discord import RoomChannelCache
 
 logger = logging.getLogger(__name__)
@@ -52,27 +52,14 @@ def format_shop_overview(shop: Shop, stock: list[StockItem], speech_level: int) 
         lines.append("Use `/sell` to sell items.")
         return "\n".join(lines)
 
-    # Group by entity_id, preserving order of first occurrence
-    counts: Counter[str] = Counter()
-    first_seen: dict[str, StockItem] = {}
-    for item in stock:
-        counts[item.entity_id] += 1
-        if item.entity_id not in first_seen:
-            first_seen[item.entity_id] = item
-
     lines.append("**For Sale:**")
-    for entity_id, item in first_seen.items():
-        count = counts[entity_id]
-        emoji = item.rarity.emoji
+    for item, count in group_stock(stock):
         price = purchase_price(item.rarity, count, speech_level)
-        qty = f" x{count}" if count > 1 else ""
         price_str = f"\u00a4{price:,}"
 
-        preferred = ""
-        if shop.preferred_tag and shop.preferred_tag in item.tags:
-            preferred = " \u2b50"
-
-        line = f"- {item.name} {emoji}{qty} -- {price_str}{preferred}"
+        emoji = item.rarity.emoji
+        display = f"{item.name} {emoji}" if emoji else item.name
+        line = f"- {count} **{display}** | {price_str}/ea"
         lines.append(line)
 
     lines.append("")

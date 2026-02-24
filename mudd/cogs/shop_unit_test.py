@@ -189,34 +189,6 @@ class TestFormatSellChoices:
         )
         assert choices == []
 
-    def test_preferred_tag_star_present(self) -> None:
-        inv = [_inventory_item(entity_id="fish", name="Goldfish")]
-        choices = format_sell_choices(
-            inv,
-            speech_level=1,
-            sell_spread=0.5,
-            preferred_tag="fish",
-            tags_map={"fish": {"fish", "aquatic"}},
-            stock_counts={},
-        )
-        assert len(choices) == 1
-        label, _ = choices[0]
-        assert "\u2b50" in label
-
-    def test_preferred_tag_star_absent_when_no_match(self) -> None:
-        inv = [_inventory_item(entity_id="sword", name="Sword")]
-        choices = format_sell_choices(
-            inv,
-            speech_level=1,
-            sell_spread=0.5,
-            preferred_tag="fish",
-            tags_map={"sword": {"weapon"}},
-            stock_counts={},
-        )
-        assert len(choices) == 1
-        label, _ = choices[0]
-        assert "\u2b50" not in label
-
     def test_speech_level_affects_price(self) -> None:
         inv = [_inventory_item(rarity=Rarity.UNCOMMON)]
         choices_low = format_sell_choices(
