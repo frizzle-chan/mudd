@@ -57,7 +57,9 @@ def format_shop_overview(shop: Shop, stock: list[StockItem], speech_level: int) 
         price = purchase_price(item.rarity, count, speech_level)
         price_str = f"\u00a4{price:,}"
 
-        line = f"- {count} {item.name} | {price_str}/ea"
+        emoji = item.rarity.emoji
+        display = f"{item.name} {emoji}" if emoji else item.name
+        line = f"- {count} **{display}** | {price_str}/ea"
         lines.append(line)
 
     lines.append("")
