@@ -65,9 +65,8 @@ class TestFormatShopOverview:
 
         assert "# General Store" in result
         assert "**For Sale:**" in result
-        emoji = Rarity.COMMON.emoji
         price = purchase_price(Rarity.COMMON, 1, 1)
-        assert f"- Iron Sword {emoji} -- \u00a4{price:,}" in result
+        assert f"- 1 Iron Sword | \u00a4{price:,}/ea" in result
         assert "Use `/buy` to purchase or `/sell` to sell items." in result
 
     def test_grouped_duplicates(self):
@@ -79,9 +78,8 @@ class TestFormatShopOverview:
         ]
         result = format_shop_overview(shop, stock, speech_level=1)
 
-        emoji = Rarity.COMMON.emoji
         price = purchase_price(Rarity.COMMON, 3, 1)
-        assert f"- Goldfish {emoji} x3 -- \u00a4{price:,}" in result
+        assert f"- 1 Goldfish | \u00a4{price:,}/ea" in result
 
     def test_multiple_items_different_rarity(self):
         shop = _make_shop(name="Mixed Shop")
@@ -93,8 +91,6 @@ class TestFormatShopOverview:
 
         assert "Common Item" in result
         assert "Rare Item" in result
-        assert Rarity.COMMON.emoji in result
-        assert Rarity.RARE.emoji in result
 
     def test_preferred_tag_display(self):
         shop = _make_shop(name="Fish Market", preferred_tag="fish")
@@ -105,12 +101,6 @@ class TestFormatShopOverview:
         result = format_shop_overview(shop, stock, speech_level=1)
 
         assert "*Specializes in **fish** items*" in result
-        # Fish item should have star emoji
-        lines = result.split("\n")
-        goldfish_line = next(line for line in lines if "Goldfish" in line)
-        sword_line = next(line for line in lines if "Sword" in line)
-        assert "\u2b50" in goldfish_line
-        assert "\u2b50" not in sword_line
 
     def test_speech_level_affects_prices(self):
         shop = _make_shop()
