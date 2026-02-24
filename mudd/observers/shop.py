@@ -52,7 +52,7 @@ def format_shop_overview(shop: Shop, stock: list[StockItem], speech_level: int) 
         lines.append("Use `/sell` to sell items.")
         return "\n".join(lines)
 
-    # Group by entity_id, preserving order of first occurrence
+    # Group by entity_id
     counts: Counter[str] = Counter()
     first_seen: dict[str, StockItem] = {}
     for item in stock:
@@ -61,7 +61,9 @@ def format_shop_overview(shop: Shop, stock: list[StockItem], speech_level: int) 
             first_seen[item.entity_id] = item
 
     lines.append("**For Sale:**")
-    for entity_id, item in first_seen.items():
+    for entity_id, item in sorted(
+        first_seen.items(), key=lambda kv: (kv[1].rarity.sort_order, kv[1].name)
+    ):
         count = counts[entity_id]
         emoji = item.rarity.emoji
         price = purchase_price(item.rarity, count, speech_level)

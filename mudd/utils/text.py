@@ -80,6 +80,27 @@ class Rarity(StrEnum):
             case Rarity.QUEST:
                 return 0
 
+    @property
+    def sort_order(self) -> int:
+        """Numeric sort order for rarity tiers (lowest rarity first)."""
+        match self:
+            case Rarity.NONE:
+                return 0
+            case Rarity.COMMON:
+                return 1
+            case Rarity.UNCOMMON:
+                return 2
+            case Rarity.RARE:
+                return 3
+            case Rarity.EPIC:
+                return 4
+            case Rarity.LEGENDARY:
+                return 5
+            case Rarity.MYTHIC:
+                return 6
+            case Rarity.QUEST:
+                return 7
+
 
 def strip_rarity_emojis(text: str) -> str:
     """Strip rarity emoji suffixes from text.

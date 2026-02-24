@@ -73,7 +73,9 @@ def format_buy_choices(
             first_seen[item.entity_id] = item
 
     choices: list[tuple[str, str]] = []
-    for entity_id, item in first_seen.items():
+    for entity_id, item in sorted(
+        first_seen.items(), key=lambda kv: (kv[1].rarity.sort_order, kv[1].name)
+    ):
         count = counts[entity_id]
         emoji = item.rarity.emoji
         price = purchase_price(item.rarity, count, speech_level)
