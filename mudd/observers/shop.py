@@ -84,8 +84,8 @@ class ShopReconciler:
     """Reconciles Discord state for trading sessions.
 
     Handles:
-    - TradingSessionStartedEvent: Deletes old thread, creates new
-      broadcast + thread, posts shop overview, creates DB session
+    - TradingSessionStartedEvent: Ends any existing session (deletes
+      old thread + DB row), creates new broadcast + thread + DB session
     - TradingSessionEndedEvent: Deletes thread
 
     Sub-reconciler of DiscordReconciler.
@@ -153,10 +153,11 @@ class ShopReconciler:
     async def _handle_session_started(
         self, guild: discord.Guild, evt: TradingSessionStartedEvent
     ) -> None:
-        """Handle a new trading session: archive old thread, create new one."""
-        # 1. Delete old thread if present
-        if evt.old_thread_id is not None:
-            await self._delete_thread(guild, evt.old_thread_id)
+        """Handle a new trading session: clean up old threads, create new one."""
+        # 1. Delete any existing session and its thread
+        old_session = await TradingSession.delete(self._pool, evt.user_id)
+        if old_session is not None:
+            await self._delete_thread(guild, old_session.thread_id)
 
         # 2. Look up room channel
         if self._room_cache is None:

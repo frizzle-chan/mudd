@@ -14,7 +14,6 @@ from mudd.events.types import TradingSessionStartedEvent
 from mudd.models.entity import EntityInstance, ResolvedEntity
 from mudd.models.interfaces import IReadableEntity, IRoom
 from mudd.models.room import EntityModal, InventoryThread, Room
-from mudd.models.shop import TradingSession
 from mudd.models.user import InsufficientFundsError, User
 from mudd.observers import EffectsObserver, build_observers, flush_all, post_flush_all
 from mudd.observers.discord import RoomChannelCache
@@ -295,17 +294,14 @@ class Scene:
         if effects.has_clear_focus:
             await self.user.clear_focus()
 
-        # Shop: end existing session, emit start event for ShopReconciler
+        # Shop: emit start event for ShopReconciler (reconciler owns cleanup)
         if effects.has_shop:
             assert effects.shop_id is not None
-            old_session = await TradingSession.delete(self._pool, self.user.id)
-            old_thread_id = old_session.thread_id if old_session else None
             for obs in self._observers:
                 obs.notify(
                     TradingSessionStartedEvent(
                         user_id=self.user.id,
                         shop_id=effects.shop_id,
-                        old_thread_id=old_thread_id,
                         room_id=self.user.current_room,
                     )
                 )
