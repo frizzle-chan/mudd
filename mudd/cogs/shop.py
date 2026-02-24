@@ -111,8 +111,7 @@ def format_sell_choices(
         if price == 0:
             continue
         emoji = item.rarity.emoji
-        star = " \u2b50" if has_preferred else ""
-        label = f"{item.name}{emoji}{star} - \u00a4{price:,}"
+        label = f"{item.name}{emoji} - \u00a4{price:,}"
         choices.append((label, str(item.instance_id)))
     return choices
 

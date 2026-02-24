@@ -59,11 +59,7 @@ def format_shop_overview(shop: Shop, stock: list[StockItem], speech_level: int) 
         qty = f" x{count}" if count > 1 else ""
         price_str = f"\u00a4{price:,}"
 
-        preferred = ""
-        if shop.preferred_tag and shop.preferred_tag in item.tags:
-            preferred = " \u2b50"
-
-        line = f"- {item.name} {emoji}{qty} -- {price_str}{preferred}"
+        line = f"- {item.name} {emoji}{qty} -- {price_str}"
         lines.append(line)
 
     lines.append("")
