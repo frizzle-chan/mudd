@@ -1,5 +1,6 @@
 """Movement commands for MUDD."""
 
+import contextlib
 import logging
 import re
 from typing import TYPE_CHECKING, cast
@@ -216,10 +217,12 @@ class Movement(commands.Cog):
             # announcements deferred to post_flush)
             await flush_all(observers)
 
-            # Send followup (user now has access to target channel)
-            await interaction.followup.send(
-                f"You moved! Click {target.mention} to enter.", ephemeral=True
-            )
+            # Send followup (user now has access to target channel).
+            # Suppressed: thread may have been deleted (e.g. shop cleanup).
+            with contextlib.suppress(discord.NotFound):
+                await interaction.followup.send(
+                    f"You moved! Click {target.mention} to enter.", ephemeral=True
+                )
 
             # Announce movement
             if old_channel and isinstance(old_channel, discord.TextChannel):
