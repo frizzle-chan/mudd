@@ -905,6 +905,7 @@ Prototype: object
 DescriptionShort: {{ e.name }}
 OnLook: {{ e.description_long or "ERROR: FILE NOT FOUND" }}
 OnUse: {{ e.description_long or "ERROR: FILE NOT FOUND" }}
+OnAttack: You attempt to delete the file but run into permissions issues.
 
 Id: office_terminal
 Name: MUDD-OS Terminal
