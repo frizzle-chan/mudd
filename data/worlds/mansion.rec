@@ -247,6 +247,13 @@ Prototype: beverage
 Rarity: legendary
 OnAttack: {{ effects.grant_xp("attack", 400) }}{{ effects.destroy() }}{{ effects.broadcast(user ~ " smashes " ~ e ~ "! It was really expensive.") }}You smash the {{ e.name }}. The liquid pools on the floor. That was really, really expensive.
 
+Id: merchant
+Name: merchant
+Prototype: furniture
+DescriptionShort: {{ e.name }} is here, ready to trade.
+OnTouch: The {{ e.name }} raises an eyebrow at you.
+OnAttack: The {{ e.name }} dodges nimbly.
+
 Id: wallet
 Name: Wallet
 Prototype: item
@@ -256,6 +263,16 @@ OnDrop: You can't drop your wallet.
 OnLook: Your wallet contains **{{ user.balance|money }}**.
 OnUse: You whip out your wallet, it has **{{ user.balance|money }}**.
 OnOpen: You open up your wallet, inside it has **{{ user.balance|money }}**.
+
+Id: map
+Name: Map
+Prototype: item
+Rarity: none
+DescriptionShort: shows rooms you have discovered
+OnTake: You already have your map.
+OnDrop: You can't drop your map.
+OnLook: You unfold your map and study it carefully.
+OnUse: You pull out your map and check your surroundings.
 
 # ----------------------------------------------------------------------------
 # Currency pickups (grant currency on take, don't go to inventory)
@@ -438,7 +455,7 @@ OnTake: {{ effects.destroy() }}You feel a tug, but it slips away! The fish got a
 Id: fish_crucian_carp
 Name: Crucian Carp
 Prototype: fish
-Tags: toilet_fish urinal_fish sink_fish kitchen_sink_fish pond_fish size_tiny location_river location_pond time_all_day
+Tags: fish toilet_fish urinal_fish sink_fish kitchen_sink_fish pond_fish size_tiny location_river location_pond time_all_day
 Rarity: common
 DescriptionShort: a small {{ e.name }}
 DescriptionLong: A tiny crucian carp.
@@ -446,7 +463,7 @@ DescriptionLong: A tiny crucian carp.
 Id: fish_bluegill
 Name: Bluegill
 Prototype: fish
-Tags: toilet_fish urinal_fish sink_fish pond_fish size_tiny location_river location_pond time_day
+Tags: fish toilet_fish urinal_fish sink_fish pond_fish size_tiny location_river location_pond time_day
 Rarity: common
 DescriptionShort: a little {{ e.name }}
 DescriptionLong: A tiny bluegill with iridescent scales.
@@ -454,7 +471,7 @@ DescriptionLong: A tiny bluegill with iridescent scales.
 Id: fish_barbel_steed
 Name: Barbel Steed
 Prototype: fish
-Tags: toilet_fish urinal_fish pond_fish size_medium location_river location_pond time_all_day
+Tags: fish toilet_fish urinal_fish pond_fish size_medium location_river location_pond time_all_day
 Rarity: common
 DescriptionShort: a {{ e.name }} swimming in circles
 DescriptionLong: A medium-sized barbel steed with twitching whisker-like barbels.
@@ -462,7 +479,7 @@ DescriptionLong: A medium-sized barbel steed with twitching whisker-like barbels
 Id: fish_dace
 Name: Dace
 Prototype: fish
-Tags: toilet_fish urinal_fish pond_fish size_medium location_river location_pond time_all_day
+Tags: fish toilet_fish urinal_fish pond_fish size_medium location_river location_pond time_all_day
 Rarity: common
 DescriptionShort: a silvery {{ e.name }}
 DescriptionLong: A medium-sized dace with silvery scales.
@@ -470,7 +487,7 @@ DescriptionLong: A medium-sized dace with silvery scales.
 Id: fish_catfish
 Name: Catfish
 Prototype: fish
-Tags: toilet_fish pond_fish size_large location_lake location_pond time_all_day
+Tags: fish toilet_fish pond_fish size_large location_lake location_pond time_all_day
 Rarity: common
 DescriptionShort: a whiskered {{ e.name }}
 DescriptionLong: A large catfish with long whiskers.
@@ -478,7 +495,7 @@ DescriptionLong: A large catfish with long whiskers.
 Id: fish_pale_chub
 Name: Pale Chub
 Prototype: fish
-Tags: toilet_fish urinal_fish sink_fish kitchen_sink_fish size_tiny location_river time_day
+Tags: fish toilet_fish urinal_fish sink_fish kitchen_sink_fish size_tiny location_river time_day
 Rarity: common
 DescriptionShort: a pale {{ e.name }}
 DescriptionLong: A tiny, almost translucent chub.
@@ -486,7 +503,7 @@ DescriptionLong: A tiny, almost translucent chub.
 Id: fish_small_bass
 Name: Small Bass
 Prototype: fish
-Tags: toilet_fish urinal_fish size_medium location_river time_all_day
+Tags: fish toilet_fish urinal_fish size_medium location_river time_all_day
 Rarity: common
 DescriptionShort: a {{ e.name }}
 DescriptionLong: A medium-sized bass.
@@ -494,7 +511,7 @@ DescriptionLong: A medium-sized bass.
 Id: fish_herabuna
 Name: Herabuna
 Prototype: fish
-Tags: toilet_fish urinal_fish pond_fish size_medium location_lake location_pond time_all_day
+Tags: fish toilet_fish urinal_fish pond_fish size_medium location_lake location_pond time_all_day
 Rarity: common
 DescriptionShort: a {{ e.name }}
 DescriptionLong: A medium-sized herabuna, a type of crucian carp.
@@ -502,7 +519,7 @@ DescriptionLong: A medium-sized herabuna, a type of crucian carp.
 Id: fish_carp
 Name: Carp
 Prototype: fish
-Tags: toilet_fish pond_fish size_large location_river location_pond time_all_day
+Tags: fish toilet_fish pond_fish size_large location_river location_pond time_all_day
 Rarity: common
 DescriptionShort: a big {{ e.name }}
 DescriptionLong: A large, hardy carp.
@@ -510,7 +527,7 @@ DescriptionLong: A large, hardy carp.
 Id: fish_loach
 Name: Loach
 Prototype: fish
-Tags: toilet_fish urinal_fish sink_fish kitchen_sink_fish pond_fish size_small location_river location_pond time_all_day
+Tags: fish toilet_fish urinal_fish sink_fish kitchen_sink_fish pond_fish size_small location_river location_pond time_all_day
 Rarity: common
 DescriptionShort: a wriggly {{ e.name }}
 DescriptionLong: A small, eel-like loach. Slippery.
@@ -518,7 +535,7 @@ DescriptionLong: A small, eel-like loach. Slippery.
 Id: fish_bass
 Name: Bass
 Prototype: fish
-Tags: toilet_fish pond_fish size_large location_river location_pond time_all_day
+Tags: fish toilet_fish pond_fish size_large location_river location_pond time_all_day
 Rarity: common
 DescriptionShort: a {{ e.name }}
 DescriptionLong: A large bass. Fights hard on the line.
@@ -526,7 +543,7 @@ DescriptionLong: A large bass. Fights hard on the line.
 Id: fish_freshwater_goby
 Name: Freshwater Goby
 Prototype: fish
-Tags: kitchen_sink_fish size_small location_river time_all_day
+Tags: fish kitchen_sink_fish size_small location_river time_all_day
 Rarity: common
 DescriptionShort: a tiny {{ e.name }}
 DescriptionLong: A small freshwater goby.
@@ -534,7 +551,7 @@ DescriptionLong: A small freshwater goby.
 Id: fish_pond_smelt
 Name: Pond Smelt
 Prototype: fish
-Tags: urinal_fish sink_fish size_small location_river time_all_day
+Tags: fish urinal_fish sink_fish size_small location_river time_all_day
 Rarity: common
 DescriptionShort: a delicate {{ e.name }}
 DescriptionLong: A small pond smelt. Smells faintly of cucumber.
@@ -542,7 +559,7 @@ DescriptionLong: A small pond smelt. Smells faintly of cucumber.
 Id: fish_rainbow_trout
 Name: Rainbow Trout
 Prototype: fish_uncommon
-Tags: toilet_fish size_large location_river time_all_day
+Tags: fish toilet_fish size_large location_river time_all_day
 Rarity: uncommon
 DescriptionShort: a colorful {{ e.name }}
 DescriptionLong: A large rainbow trout with iridescent scales.
@@ -550,7 +567,7 @@ DescriptionLong: A large rainbow trout with iridescent scales.
 Id: fish_salmon
 Name: Salmon
 Prototype: fish_uncommon
-Tags: toilet_fish size_large location_river_mouth time_all_day
+Tags: fish toilet_fish size_large location_river_mouth time_all_day
 Rarity: uncommon
 DescriptionShort: a powerful {{ e.name }}
 DescriptionLong: A large salmon. Must have swum a long way to get here.
@@ -558,7 +575,7 @@ DescriptionLong: A large salmon. Must have swum a long way to get here.
 Id: fish_bitterling
 Name: Bitterling
 Prototype: fish_uncommon
-Tags: toilet_fish urinal_fish sink_fish size_tiny location_river time_all_day
+Tags: fish toilet_fish urinal_fish sink_fish size_tiny location_river time_all_day
 Rarity: uncommon
 DescriptionShort: a shimmering {{ e.name }}
 DescriptionLong: A tiny bitterling with vibrant colors.
@@ -566,7 +583,7 @@ DescriptionLong: A tiny bitterling with vibrant colors.
 Id: fish_sweetfish
 Name: Sweetfish
 Prototype: fish_uncommon
-Tags: toilet_fish urinal_fish size_medium location_river time_all_day
+Tags: fish toilet_fish urinal_fish size_medium location_river time_all_day
 Rarity: uncommon
 DescriptionShort: a {{ e.name }}
 DescriptionLong: A medium-sized sweetfish, also known as ayu. Smells faintly of watermelon.
@@ -574,7 +591,7 @@ DescriptionLong: A medium-sized sweetfish, also known as ayu. Smells faintly of 
 Id: fish_cherry_salmon
 Name: Cherry Salmon
 Prototype: fish_uncommon
-Tags: urinal_fish size_medium location_river time_all_day
+Tags: fish urinal_fish size_medium location_river time_all_day
 Rarity: uncommon
 DescriptionShort: a spotted {{ e.name }}
 DescriptionLong: A medium-sized cherry salmon with pinkish spotted markings.
@@ -582,7 +599,7 @@ DescriptionLong: A medium-sized cherry salmon with pinkish spotted markings.
 Id: fish_goldfish
 Name: Goldfish
 Prototype: fish_uncommon
-Tags: urinal_fish sink_fish kitchen_sink_fish size_tiny location_river time_day
+Tags: fish urinal_fish sink_fish kitchen_sink_fish size_tiny location_river time_day
 Rarity: uncommon
 DescriptionShort: a bright {{ e.name }}
 DescriptionLong: A tiny, bright orange goldfish.
@@ -590,7 +607,7 @@ DescriptionLong: A tiny, bright orange goldfish.
 Id: fish_popeyed_goldfish
 Name: Popeyed Goldfish
 Prototype: fish_uncommon
-Tags: kitchen_sink_fish size_tiny location_river time_day
+Tags: fish kitchen_sink_fish size_tiny location_river time_day
 Rarity: uncommon
 DescriptionShort: a bug-eyed {{ e.name }}
 DescriptionLong: A tiny goldfish with enormous, protruding eyes.
@@ -598,7 +615,7 @@ DescriptionLong: A tiny goldfish with enormous, protruding eyes.
 Id: fish_guppy
 Name: Guppy
 Prototype: fish_uncommon
-Tags: urinal_fish sink_fish size_tiny location_river time_day
+Tags: fish urinal_fish sink_fish size_tiny location_river time_day
 Rarity: uncommon
 DescriptionShort: a colorful {{ e.name }}
 DescriptionLong: A tiny, vibrantly colored guppy with a fan-shaped tail.
@@ -606,7 +623,7 @@ DescriptionLong: A tiny, vibrantly colored guppy with a fan-shaped tail.
 Id: fish_koi
 Name: Koi
 Prototype: fish_rare
-Tags: toilet_fish urinal_fish size_medium location_river time_night
+Tags: fish toilet_fish urinal_fish size_medium location_river time_night
 Rarity: rare
 DescriptionShort: a {{ e.name }} with orange and white scales
 DescriptionLong: A medium-sized koi with orange and white scales.
@@ -614,7 +631,7 @@ DescriptionLong: A medium-sized koi with orange and white scales.
 Id: fish_eel
 Name: Eel
 Prototype: fish_rare
-Tags: toilet_fish size_large location_river time_night
+Tags: fish toilet_fish size_large location_river time_night
 Rarity: rare
 DescriptionShort: a slithery {{ e.name }}
 DescriptionLong: A long, sinuous eel.
@@ -622,7 +639,7 @@ DescriptionLong: A long, sinuous eel.
 Id: fish_giant_catfish
 Name: Giant Catfish
 Prototype: fish_rare
-Tags: toilet_fish size_very_large location_lake time_all_day
+Tags: fish toilet_fish size_very_large location_lake time_all_day
 Rarity: rare
 DescriptionShort: an enormous {{ e.name }}
 DescriptionLong: A very large catfish with whiskers as thick as fingers.
@@ -630,7 +647,7 @@ DescriptionLong: A very large catfish with whiskers as thick as fingers.
 Id: fish_large_bass
 Name: Large Bass
 Prototype: fish_rare
-Tags: toilet_fish size_very_large location_river time_all_day
+Tags: fish toilet_fish size_very_large location_river time_all_day
 Rarity: rare
 DescriptionShort: a massive {{ e.name }}
 DescriptionLong: A very large bass.
@@ -638,7 +655,7 @@ DescriptionLong: A very large bass.
 Id: fish_angelfish
 Name: Angelfish
 Prototype: fish_rare
-Tags: urinal_fish sink_fish size_small location_river time_night
+Tags: fish urinal_fish sink_fish size_small location_river time_night
 Rarity: rare
 DescriptionShort: a graceful {{ e.name }}
 DescriptionLong: A small angelfish with flowing fins.
@@ -646,7 +663,7 @@ DescriptionLong: A small angelfish with flowing fins.
 Id: fish_giant_snakehead
 Name: Giant Snakehead
 Prototype: fish_epic
-Tags: toilet_fish size_very_large location_lake time_day
+Tags: fish toilet_fish size_very_large location_lake time_day
 Rarity: epic
 DescriptionShort: a fearsome {{ e.name }}
 DescriptionLong: A very large giant snakehead with a mouthful of teeth. Known to breathe air and walk on land.
@@ -655,7 +672,7 @@ OnTouch: The {{ e.name }} snaps at your hand.
 Id: fish_piranha
 Name: Piranha
 Prototype: fish_epic
-Tags: toilet_fish urinal_fish size_small location_river time_day
+Tags: fish toilet_fish urinal_fish size_small location_river time_day
 Rarity: epic
 DescriptionShort: a razor-toothed {{ e.name }}
 DescriptionLong: A small piranha. Its teeth glint in the light.
@@ -664,7 +681,7 @@ OnTouch: The {{ e.name }} bites your finger.
 Id: fish_large_char
 Name: Large Char
 Prototype: fish_legendary
-Tags: toilet_fish size_large location_waterfall time_all_day
+Tags: fish toilet_fish size_large location_waterfall time_all_day
 Rarity: legendary
 DescriptionShort: a spotted {{ e.name }}
 DescriptionLong: A large char with spotted markings. Usually found in mountain streams.
@@ -672,7 +689,7 @@ DescriptionLong: A large char with spotted markings. Usually found in mountain s
 Id: fish_arowana
 Name: Arowana
 Prototype: fish_legendary
-Tags: toilet_fish size_large location_river time_night
+Tags: fish toilet_fish size_large location_river time_night
 Rarity: legendary
 DescriptionShort: a {{ e.name }} gleaming like polished metal
 DescriptionLong: A large arowana with metallic scales. Known as the "dragon fish."
@@ -680,7 +697,7 @@ DescriptionLong: A large arowana with metallic scales. Known as the "dragon fish
 Id: fish_stringfish
 Name: Stringfish
 Prototype: fish_mythic
-Tags: toilet_fish size_very_large location_river time_night
+Tags: fish toilet_fish size_very_large location_river time_night
 Rarity: mythic
 DescriptionShort: a {{ e.name }}
 DescriptionLong: A very large stringfish. One of the rarest freshwater fish in existence.
@@ -688,7 +705,7 @@ DescriptionLong: A very large stringfish. One of the rarest freshwater fish in e
 Id: fish_coelacanth
 Name: Coelacanth
 Prototype: fish_mythic
-Tags: toilet_fish size_very_large location_sea time_night
+Tags: fish toilet_fish size_very_large location_sea time_night
 Rarity: mythic
 DescriptionShort: an ancient {{ e.name }}
 DescriptionLong: A very large coelacanth. A living fossil, thought extinct for 65 million years.
@@ -780,6 +797,18 @@ DescriptionLong: A hand-drawn map of the mansion in a simple wooden frame. The s
 + • Screening Room: through the library, in the northern corner
 
 # ----------------------------------------------------------------------------
+# Banquet Hall entities
+# ----------------------------------------------------------------------------
+
+Id: banquet_shopkeeper
+Name: Shopkeeper
+Prototype: merchant
+Room: banquet-hall
+DescriptionShort: a friendly {{ e.name }} stands behind a makeshift counter
+DescriptionLong: A cheerful shopkeeper in a worn apron, standing behind a folding table piled with odds and ends. A hand-painted sign reads "GENERAL STORE: Buy & Sell" You could __talk__ to them to browse their wares.
+OnUse: {{ effects.shop("general-store") }}You approach the {{ e.name }}.
+
+# ----------------------------------------------------------------------------
 # Restroom entities
 # ----------------------------------------------------------------------------
 
@@ -856,6 +885,14 @@ DescriptionLong: A serene pond filled with clear water. Lily pads float lazily o
 OnTouch: You dip your fingers into the cool water. It's refreshing.
 OnLook: {{ e.description_long }}
 OnFish: {% if e.contents %}{{ effects.dispense() }}{{ effects.broadcast("**" ~ user ~ "** casts a line into the pond...") }}You cast your line into the pond and wait patiently. After a moment, you feel a tug!{% else %}You cast into the pond but nothing is biting.{% endif %}
+
+Id: courtyard_fishmonger
+Name: Fishmonger
+Prototype: merchant
+Room: courtyard
+DescriptionShort: a {{ e.name }} sits by the pond with a weighing scale
+DescriptionLong: A fishmonger sitting on a crate next to the pond, a weighing scale on the barrel beside them. A small sign reads "FISH MARKET." __Talk__ to them to buy or sell fish.
+OnUse: {{ effects.shop("fish-market") }}You approach the {{ e.name }}.
 
 # ----------------------------------------------------------------------------
 # Office entities
@@ -2153,3 +2190,23 @@ Container: kitchen_rack
 TagQuery: kitchen_rack_loot
 MaxCount: 1
 RespawnIntervalMinutes: 15
+
+# ============================================================================
+# Shop record type
+# ============================================================================
+%rec: Shop
+%key: Id
+%mandatory: Id Name
+%allowed: Id Name PreferredTag SellSpread RestockTag RestockIntervalMinutes
+
+Id: general-store
+Name: General Store
+SellSpread: 0.5
+RestockIntervalMinutes: 1440
+
+Id: fish-market
+Name: Fish Market
+PreferredTag: fish
+SellSpread: 0.5
+RestockTag: fish
+RestockIntervalMinutes: 1440

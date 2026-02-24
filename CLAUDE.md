@@ -100,6 +100,8 @@ The codebase uses an MVC + events architecture:
 
 **Database concurrency**: Use `SELECT ... FOR UPDATE` inside a transaction for read-then-write mutations on the same row. See `User.credit_from_house()` for the pattern.
 
+**Connection passing in transactions**: When a method holds a `FOR UPDATE` lock inside a transaction, any helper it calls that touches FK-related rows **must** receive the transaction `conn`, not `self._pool`. Using the pool acquires a separate connection, and FK checks (`FOR KEY SHARE`) will deadlock against the `FOR UPDATE` held by the original connection. Type helper parameters as `asyncpg.Pool | asyncpg.Connection` to accept either.
+
 **Batch operations**: Avoid loops that issue one query per iteration (N+1). Use `unnest()` array unpacking or multi-row `INSERT ... VALUES` for bulk operations.
 
 **Type safety at boundaries**: Validate and convert `str` inputs to rich types (e.g., `Skill` enum) at the entry point (e.g., `EffectsCollector`), then propagate the typed value through the entire pipeline. Never pass raw strings through internal layers when an enum or dataclass exists.
@@ -107,6 +109,8 @@ The codebase uses an MVC + events architecture:
 **Default room**: Use `Room.get_default(pool)` to find the default spawn room. Do not inline `SELECT ... WHERE is_default = TRUE` queries.
 
 **MUD concept**: Channel topics = room descriptions. Movement hides/shows channels via Discord permissions.
+
+**Currency symbol**: The in-game currency symbol is `¤` (U+00A4). Use it in player-facing strings (e.g., `¤500`) instead of writing "coins" or "gold".
 
 **Design docs**: See `DESIGN.md` for PostgreSQL schema and data persistence details. **Always update DESIGN.md when modifying the database schema.**
 

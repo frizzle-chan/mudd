@@ -506,13 +506,18 @@ class Sync(commands.Cog):
 
     @tasks.loop(minutes=1)
     async def respawn_task(self):
-        """Process spawning pools for item respawns.
+        """Process spawning pools and shop restocks.
 
-        Runs every minute. For each pool:
+        Runs every minute. For spawning pools:
         1. Check current instance count vs max_count
         2. Check if respawn_interval has elapsed
         3. If spawning needed, select weighted random entity by tag
         4. Create instance with spawning_pool_id
+
+        For shops:
+        1. Check if restock_interval has elapsed
+        2. Select weighted random entity by restock/preferred tag
+        3. Create instance and add to shop stock
         """
         # Skip respawns until the initial sync has completed
         if not self._first_sync_done:
@@ -522,6 +527,11 @@ class Sync(commands.Cog):
             await self._process_spawning_pools()
         except Exception:
             logger.exception("Failed to process spawning pools")
+
+        try:
+            await self._process_shop_restocks()
+        except Exception:
+            logger.exception("Failed to process shop restocks")
 
     @respawn_task.before_loop
     async def before_respawn_task(self):
@@ -560,6 +570,28 @@ class Sync(commands.Cog):
                 self._autocomplete_cache.invalidate_room(room_id)
             for room_id in affected_rooms:
                 await self._autocomplete_cache.rebuild_room(self._pool, room_id)
+
+    async def _process_shop_restocks(self) -> None:
+        """Process shop restocks using the same pattern as spawning pools."""
+        from mudd.models.shop import Shop
+
+        now = datetime.now(UTC)
+
+        shops = await Shop.get_all_due_for_restock(self._pool, now)
+
+        restocked = 0
+        for shop in shops:
+            instance = await shop.try_restock(now)
+            if instance is not None:
+                restocked += 1
+                logger.debug(
+                    "Restocked '%s' into shop '%s'",
+                    instance.entity.name,
+                    shop.id,
+                )
+
+        if restocked > 0:
+            logger.info(f"Restocked {restocked} items into shops")
 
     def _detect_orphan_channels(
         self,

@@ -25,13 +25,18 @@ async def clean_user_state(test_db, entity_cache, user_cache):
 
     async with test_db.acquire() as conn:
         await conn.execute("DELETE FROM user_focus")
+        await conn.execute("DELETE FROM user_trading_sessions")
         await conn.execute("DELETE FROM currency_ledger")
         await conn.execute("DELETE FROM currency_transactions")
         await conn.execute("DELETE FROM currency_accounts WHERE user_id != 0")
         await conn.execute("DELETE FROM user_skills")
         await conn.execute("DELETE FROM user_skills_channels")
         await conn.execute("DELETE FROM user_inventory_forums")
+        await conn.execute("DELETE FROM shop_stock")
         await conn.execute("DELETE FROM entity_instances WHERE owner_id IS NOT NULL")
+        await conn.execute(
+            "DELETE FROM entity_instances WHERE room IS NULL AND owner_id IS NULL"
+        )
         await conn.execute("DELETE FROM users")
 
     # Re-sync world instances to restore items destroyed during tests

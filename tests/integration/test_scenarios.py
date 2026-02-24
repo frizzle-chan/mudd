@@ -27,13 +27,18 @@ from mudd.events import (
     EntityDestroyedEvent,
     EntityDroppedEvent,
     EntityPickedUpEvent,
+    TradingSessionEndedEvent,
+    TradingSessionStartedEvent,
     UserLocationSyncEvent,
     UserMovedEvent,
 )
-from mudd.models import EntityInstance, RoomEntityInstance, User
+from mudd.models import EntityInstance, RoomEntityInstance, Shop, TradingSession, User
+from mudd.models.currency import HOUSE_ACCOUNT_ID, transfer_currency
+from mudd.models.shop import purchase_price, sale_price
 from mudd.models.spawning_pool import SpawningPool
 from mudd.models.user import InsufficientFundsError, TransferError
 from mudd.scene import Scene
+from mudd.utils.text import Rarity
 from tests.helpers import (
     NullReconciler,
     act,
@@ -1097,3 +1102,137 @@ async def test_debit_to_house_success(test_db, clean_user_state):
     assert balance_events[0].new_balance == 125
     assert balance_events[0].delta == -75
     assert balance_events[0].memo == "test debit"
+
+
+async def test_shop_buy_and_sell(test_db, clean_user_state):
+    """Player interacts with merchant, buys an item, then sells it back."""
+    # === SETUP ===
+    user = await create_test_user(test_db, room_id="store-room")
+    await User.create_currency_account(test_db, user.id, 500)
+
+    # === USE MERCHANT → triggers shop signal ===
+    merchant = next(
+        o
+        for o in await autocomplete(test_db, user.id, "Test Merchant")
+        if not isinstance(o, RoomEntityInstance)
+    )
+    result = await act(
+        test_db, user.id, UseCommand(), f"entity://{merchant.instance_id}"
+    )
+    assert result.effects.has_shop
+    assert result.effects.shop_id == "test-shop"
+    assert any(
+        isinstance(e, TradingSessionStartedEvent) for e in result.reconciler.events
+    )
+
+    # === CREATE TRADING SESSION (prod: ShopReconciler; tests: manual) ===
+    session = await TradingSession.create(
+        test_db, user.id, "test-shop", thread_id=99999, overview_message_id=88888
+    )
+    assert session.shop_id == "test-shop"
+
+    # === STOCK AN ITEM ===
+    item = await EntityInstance.create(test_db, "test_shop_item")
+    assert item is not None
+    await Shop.add_to_stock(test_db, "test-shop", item.instance_id)
+
+    stock = await Shop.get_stock(test_db, "test-shop")
+    assert any(s.entity_instance_id == item.instance_id for s in stock)
+
+    # === BUY: player pays house, item moves to inventory ===
+    price = purchase_price(Rarity.COMMON, 1, 1)
+    assert price == 100  # base=100, supply_adj=1.0, speech discount=0
+
+    async with test_db.acquire() as conn, conn.transaction():
+        await transfer_currency(
+            conn,
+            from_id=user.id,
+            to_id=HOUSE_ACCOUNT_ID,
+            amount=price,
+            memo="Buy Test Shop Item",
+        )
+
+    await Shop.remove_from_stock(test_db, item.instance_id)
+
+    # Re-fetch with observers to capture events
+    fresh_item = await EntityInstance.get(test_db, item.instance_id)
+    assert fresh_item is not None
+    reconciler = NullReconciler()
+    fresh_item = fresh_item.with_observers(reconciler)
+
+    fresh_user = await User.get(test_db, user.id)
+    assert fresh_user is not None
+    fresh_item = await fresh_item.move_to_inventory(fresh_user)
+
+    # Assert buy results
+    assert await fresh_user.get_balance() == 400
+    inv = await EntityInstance.get_by_owner(test_db, user.id)
+    assert any(i.instance_id == item.instance_id for i in inv)
+    stock = await Shop.get_stock(test_db, "test-shop")
+    assert not any(s.entity_instance_id == item.instance_id for s in stock)
+    assert any(isinstance(e, EntityPickedUpEvent) for e in reconciler.events)
+
+    # === SELL: player receives currency, item returns to stock ===
+    # sale_price(common, count=0, speech=1, spread=0.5, preferred=False)
+    # = dynamic_price(common, 0) * 0.5 = 100 * 1.0 * 0.5 = 50
+    # floor = 100 * 0.25 = 25 → max(50, 25) = 50
+    sell = sale_price(Rarity.COMMON, 0, 1, 0.5, False)
+    assert sell == 50
+
+    async with test_db.acquire() as conn, conn.transaction():
+        await transfer_currency(
+            conn,
+            from_id=HOUSE_ACCOUNT_ID,
+            to_id=user.id,
+            amount=sell,
+            memo="Sell Test Shop Item",
+            require_funds=False,
+        )
+
+    # Detach from inventory with fresh observers
+    sell_reconciler = NullReconciler()
+    owned_item = await EntityInstance.get(test_db, item.instance_id)
+    assert owned_item is not None
+    owned_item = owned_item.with_observers(sell_reconciler)
+    await owned_item.detach_from_inventory()
+    await Shop.add_to_stock(test_db, "test-shop", item.instance_id)
+
+    # Assert sell results
+    fresh_user = await User.get(test_db, user.id)
+    assert fresh_user is not None
+    assert await fresh_user.get_balance() == 450
+    inv = await EntityInstance.get_by_owner(test_db, user.id)
+    assert not any(i.instance_id == item.instance_id for i in inv)
+    stock = await Shop.get_stock(test_db, "test-shop")
+    assert any(s.entity_instance_id == item.instance_id for s in stock)
+    assert any(isinstance(e, EntityDroppedEvent) for e in sell_reconciler.events)
+
+    # === NET LOSS: spread acts as currency sink ===
+    final_balance = await fresh_user.get_balance()
+    assert final_balance == 450
+    assert final_balance < 500  # net loss from spread
+
+
+async def test_move_ends_trading_session(test_db, clean_user_state):
+    """Moving to another room emits TradingSessionEndedEvent with thread_id."""
+    user = await create_test_user(test_db, room_id="store-room")
+
+    # Create an active trading session
+    thread_id = 55555
+    await TradingSession.create(
+        test_db, user.id, "test-shop", thread_id=thread_id, overview_message_id=88888
+    )
+
+    # Move away — should end the trading session
+    result = await move(test_db, user.id, "foyer", guild_id=GUILD_ID)
+
+    ended_events = [
+        e for e in result.reconciler.events if isinstance(e, TradingSessionEndedEvent)
+    ]
+    assert len(ended_events) == 1
+    assert ended_events[0].thread_id == thread_id
+    assert ended_events[0].user_id == user.id
+
+    # Session should be gone from DB
+    session = await TradingSession.get(test_db, user.id)
+    assert session is None

@@ -1,5 +1,6 @@
 """Movement commands for MUDD."""
 
+import contextlib
 import logging
 import re
 from typing import TYPE_CHECKING, cast
@@ -72,6 +73,22 @@ def find_exit_in_input(
     return None
 
 
+def _resolve_topic(
+    channel: discord.abc.GuildChannel
+    | discord.Thread
+    | discord.abc.PrivateChannel
+    | None,
+    guild: discord.Guild,
+) -> str | None:
+    """Get the channel topic, falling back to the parent channel for threads."""
+    if channel is None:
+        return None
+    if isinstance(channel, discord.Thread):
+        parent = guild.get_channel(channel.parent_id) if channel.parent_id else None
+        return getattr(parent, "topic", None)
+    return getattr(channel, "topic", None)
+
+
 class Movement(commands.Cog):
     """Commands for moving between locations."""
 
@@ -95,7 +112,7 @@ class Movement(commands.Cog):
             return []
 
         channel = interaction.channel
-        topic = getattr(channel, "topic", None)
+        topic = _resolve_topic(channel, interaction.guild)
         valid_exits = extract_exits_from_topic(
             topic, interaction.guild, self.room_cache
         )
@@ -130,7 +147,7 @@ class Movement(commands.Cog):
             return
 
         channel = interaction.channel
-        topic = getattr(channel, "topic", None)
+        topic = _resolve_topic(channel, interaction.guild)
         valid_exits = extract_exits_from_topic(
             topic, interaction.guild, self.room_cache
         )
@@ -200,10 +217,12 @@ class Movement(commands.Cog):
             # announcements deferred to post_flush)
             await flush_all(observers)
 
-            # Send followup (user now has access to target channel)
-            await interaction.followup.send(
-                f"You moved! Click {target.mention} to enter.", ephemeral=True
-            )
+            # Send followup (user now has access to target channel).
+            # Suppressed: thread may have been deleted (e.g. shop cleanup).
+            with contextlib.suppress(discord.NotFound):
+                await interaction.followup.send(
+                    f"You moved! Click {target.mention} to enter.", ephemeral=True
+                )
 
             # Announce movement
             if old_channel and isinstance(old_channel, discord.TextChannel):
