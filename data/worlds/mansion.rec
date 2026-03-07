@@ -801,11 +801,11 @@ DescriptionLong: A hand-drawn map of the mansion in a simple wooden frame. The s
 # ----------------------------------------------------------------------------
 
 Id: banquet_shopkeeper
-Name: Shopkeeper
+Name: Mabel
 Prototype: merchant
 Room: banquet-hall
-DescriptionShort: a friendly {{ e.name }} stands behind a makeshift counter
-DescriptionLong: A cheerful shopkeeper in a worn apron, standing behind a folding table piled with odds and ends. A hand-painted sign reads "GENERAL STORE: Buy & Sell" You could __talk__ to them to browse their wares.
+DescriptionShort: {{ e.name }}, a friendly shopkeeper, stands behind a makeshift counter
+DescriptionLong: Mabel, a cheerful shopkeeper in a worn apron, stands behind a folding table piled with odds and ends. A hand-painted sign reads "GENERAL STORE: Buy & Sell" You could __talk__ to her to browse her wares.
 OnUse: {{ effects.shop("general-store") }}You approach the {{ e.name }}.
 
 # ----------------------------------------------------------------------------
@@ -887,11 +887,11 @@ OnLook: {{ e.description_long }}
 OnFish: {% if e.contents %}{{ effects.dispense() }}{{ effects.broadcast("**" ~ user ~ "** casts a line into the pond...") }}You cast your line into the pond and wait patiently. After a moment, you feel a tug!{% else %}You cast into the pond but nothing is biting.{% endif %}
 
 Id: courtyard_fishmonger
-Name: Fishmonger
+Name: Barnaby
 Prototype: merchant
 Room: courtyard
-DescriptionShort: a {{ e.name }} sits by the pond with a weighing scale
-DescriptionLong: A fishmonger sitting on a crate next to the pond, a weighing scale on the barrel beside them. A small sign reads "FISH MARKET." __Talk__ to them to buy or sell fish.
+DescriptionShort: {{ e.name }}, a weathered fishmonger, sits by the pond with a weighing scale
+DescriptionLong: Barnaby, a weathered fishmonger, sits on a crate next to the pond, a weighing scale on the barrel beside him. A small sign reads "FISH MARKET." __Talk__ to him to buy or sell fish.
 OnUse: {{ effects.shop("fish-market") }}You approach the {{ e.name }}.
 
 # ----------------------------------------------------------------------------
