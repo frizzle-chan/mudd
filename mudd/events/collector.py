@@ -8,6 +8,7 @@ from mudd.events.types import (
     ChargeCurrencySignal,
     ClearFocusSignal,
     DestroySignal,
+    DialogSignal,
     DispenseSignal,
     DropSignal,
     GrantCurrencyEvent,
@@ -191,4 +192,17 @@ class EffectsCollector:
         """
         if shop_id:
             self._observer.notify(ShopSignal(shop_id=shop_id))
+        return ""
+
+    def dialog(self, dialog_id: str) -> str:
+        """Signal that a dialog session should open with an NPC.
+
+        Args:
+            dialog_id: ID of the dialog tree to open
+
+        Returns:
+            Empty string (allows inline use in templates)
+        """
+        if dialog_id:
+            self._observer.notify(DialogSignal(dialog_id=dialog_id))
         return ""

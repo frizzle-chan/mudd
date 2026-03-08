@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 import os
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from typing import TYPE_CHECKING
 from zoneinfo import ZoneInfo
 
@@ -29,6 +30,7 @@ from mudd.events import (
     OrphanChannelDetectedEvent,
     UserSyncEvent,
 )
+from mudd.loaders.dialog_loader import load_all_dialogs
 from mudd.loaders.entity_loader import sync_entities
 from mudd.loaders.horse_loader import sync_horses
 from mudd.loaders.verb_loader import sync_verbs
@@ -169,6 +171,15 @@ class Sync(commands.Cog):
             await sync_entities(pool, world_file)
         except Exception:
             logger.exception("Failed to sync entities")
+            if fail_fast:
+                raise
+
+        # Load dialog trees from YAML
+        try:
+            dialogs_dir = Path("data/dialogs")
+            load_all_dialogs(dialogs_dir)
+        except Exception:
+            logger.exception("Failed to load dialog trees")
             if fail_fast:
                 raise
 

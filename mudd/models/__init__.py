@@ -9,6 +9,7 @@ methods for mutations. Mutations return new instances (immutable pattern).
 
 from mudd.models.bet import Bet, BetError, BetResult, PayoutRecord
 from mudd.models.currency import AccountMissing, InsufficientFunds, TransferOutcome
+from mudd.models.dialog import DialogSession
 from mudd.models.entity import EntityInstance, InstanceThreadInfo, ResolvedEntity
 from mudd.models.entity_definition import EntityDefinition
 from mudd.models.horse import Horse
@@ -32,6 +33,8 @@ __all__ = [
     "AccountMissing",
     "InsufficientFunds",
     "TransferOutcome",
+    # Dialog model
+    "DialogSession",
     # Entity models
     "ResolvedEntity",
     # Horse model

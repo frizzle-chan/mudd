@@ -10,7 +10,7 @@ from discord import Interaction
 
 from mudd.commands import ActionCommand, ActionResult, TakeCommand
 from mudd.events import Observer
-from mudd.events.types import TradingSessionStartedEvent
+from mudd.events.types import DialogStartedEvent, TradingSessionStartedEvent
 from mudd.models.entity import EntityInstance, ResolvedEntity
 from mudd.models.interfaces import IReadableEntity, IRoom
 from mudd.models.room import EntityModal, InventoryThread, Room
@@ -302,6 +302,18 @@ class Scene:
                     TradingSessionStartedEvent(
                         user_id=self.user.id,
                         shop_id=effects.shop_id,
+                        room_id=self.user.current_room,
+                    )
+                )
+
+        # Dialog: emit start event for DialogReconciler (reconciler owns cleanup)
+        if effects.has_dialog:
+            assert effects.dialog_id is not None
+            for obs in self._observers:
+                obs.notify(
+                    DialogStartedEvent(
+                        user_id=self.user.id,
+                        dialog_id=effects.dialog_id,
                         room_id=self.user.current_room,
                     )
                 )

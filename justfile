@@ -1,4 +1,4 @@
-default: lint format types entities horses verbs squawk vulture
+default: lint format types entities horses verbs dialogs squawk vulture
 
 test:
     uv run pytest
@@ -37,6 +37,9 @@ horses:
 
 verbs:
     uv run scripts/validate_verbs.py
+
+dialogs:
+    uv run python scripts/validate_dialogs.py
 
 squawk:
     uv run squawk migrations/*.sql

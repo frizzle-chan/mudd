@@ -1,0 +1,42 @@
+id: sample-greeter
+root: greeting
+
+nodes:
+  greeting:
+    text: |
+      Welcome to the mansion, traveler! I am the greeter.
+      How may I help you today?
+    options:
+      - label: Tell me about this place.
+        next: about
+      - label: Any tips for a newcomer?
+        next: tips
+      - label: Goodbye.
+        next: farewell
+
+  about:
+    text: |
+      This grand mansion has many rooms to explore. You'll find
+      shops, collectibles, and all sorts of surprises hidden away.
+      Is there anything else?
+    options:
+      - label: Any tips for a newcomer?
+        next: tips
+      - label: That's all, thanks.
+        next: farewell
+
+  tips:
+    text: |
+      Here's my advice: explore every room, interact with everything,
+      and don't forget to check your wallet! The `/look` command is
+      your best friend.
+    options:
+      - label: Tell me about this place.
+        next: about
+      - label: Thanks, goodbye!
+        next: farewell
+
+  farewell:
+    text: |
+      Safe travels! Come back anytime.
+    end: true

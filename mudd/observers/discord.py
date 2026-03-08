@@ -11,6 +11,7 @@ from mudd.events import GameEvent
 from mudd.models.room import Room
 from mudd.models.user import User
 from mudd.models.zone import Zone
+from mudd.observers.dialog import DialogReconciler
 from mudd.observers.inventory import InventoryReconciler
 from mudd.observers.map_reconciler import MapReconciler
 from mudd.observers.permissions import PermissionReconciler
@@ -172,6 +173,7 @@ class DiscordReconciler:
         self._inventory = InventoryReconciler(bot, pool, guild_id)
         self._map = MapReconciler(bot, pool, guild_id)
         self._shop = ShopReconciler(bot, pool, guild_id, room_cache)
+        self._dialog = DialogReconciler(bot, pool, guild_id, room_cache)
         self._skills = SkillsReconciler(bot, pool, guild_id, room_cache)
 
     def notify(self, event: GameEvent) -> None:
@@ -181,12 +183,14 @@ class DiscordReconciler:
         self._inventory.notify(event)
         self._map.notify(event)
         self._shop.notify(event)
+        self._dialog.notify(event)
         self._skills.notify(event)
 
     async def flush(self) -> list[GameEvent]:
         """Process queued notifications. Call after response sent.
 
-        Preserves ordering: zones/rooms -> inventory -> shop -> permissions -> skills.
+        Preserves ordering:
+        zones/rooms -> inventory -> shop -> dialog -> permissions -> skills.
         Skills flush last so level-up announcements are deferred to
         post_flush() where they appear after movement messages.
 
@@ -197,6 +201,7 @@ class DiscordReconciler:
         await self._inventory.flush()
         await self._map.flush()
         await self._shop.flush()
+        await self._dialog.flush()
         await self._permissions.flush()
         await self._skills.flush()
         return []

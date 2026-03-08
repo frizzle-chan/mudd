@@ -73,6 +73,11 @@ class ResolvedEntity:
         """Whether this entity opens a trading session when used."""
         return self.on_use is not None and "effects.shop(" in self.on_use
 
+    @property
+    def is_dialog(self) -> bool:
+        """Whether this entity starts a dialog session when used."""
+        return self.on_use is not None and "effects.dialog(" in self.on_use
+
     @classmethod
     def _from_row(cls, row: asyncpg.Record) -> ResolvedEntity:
         """Construct ResolvedEntity from asyncpg.Record."""

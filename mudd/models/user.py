@@ -13,6 +13,7 @@ import asyncpg
 from mudd.events import (
     BalanceChangedEvent,
     BroadcastEvent,
+    DialogSessionEndedEvent,
     FocusChangedEvent,
     Observer,
     TradingSessionEndedEvent,
@@ -26,6 +27,7 @@ from mudd.models.currency import (
     ensure_account,
     transfer_currency,
 )
+from mudd.models.dialog import DialogSession
 from mudd.models.entity import EntityInstance
 from mudd.models.room import Room
 from mudd.models.shop import TradingSession
@@ -727,8 +729,8 @@ class User:
     async def move_to(self, room_id: str, *, guild_id: int) -> User:
         """Move the user to a different room.
 
-        Updates the database, clears focus, ends any active trading session,
-        and returns a new User instance.
+        Updates the database, clears focus, ends any active trading or dialog
+        session, and returns a new User instance.
         Emits UserMovedEvent (game logic) and UserLocationSyncEvent (Discord sync).
 
         Args:
@@ -749,6 +751,14 @@ class User:
             for observer in self._observers:
                 observer.notify(
                     TradingSessionEndedEvent(self.id, ended_session.thread_id)
+                )
+
+        # End any active dialog session
+        ended_dialog = await DialogSession.delete(self._pool, self.id)
+        if ended_dialog is not None:
+            for observer in self._observers:
+                observer.notify(
+                    DialogSessionEndedEvent(self.id, ended_dialog.thread_id)
                 )
 
         await self._pool.execute(
