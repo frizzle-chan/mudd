@@ -11,6 +11,7 @@ import pytest
 
 from mudd.caches import EntityAutocompleteCache, UserCache
 from mudd.database import run_migrations
+from mudd.loaders.dialog_loader import load_all_dialogs
 from mudd.loaders.entity_loader import sync_entities
 from mudd.loaders.verb_loader import sync_verbs
 from mudd.loaders.zone_loader import (
@@ -50,6 +51,7 @@ async def test_db():
     await Room.sync_all(pool, rooms, default_room, observers=())
     await sync_entities(pool, WORLD_FILE)
     await sync_verbs(pool)
+    load_all_dialogs(Path("data/dialogs"))
 
     yield pool
 
