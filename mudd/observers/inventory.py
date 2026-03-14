@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import logging
 from io import BytesIO
 
@@ -56,6 +58,18 @@ class InventoryReconciler:
     - InventorySyncEvent: Full inventory sync for a user
     - UserLeftEvent: Cleans up inventory forum on departure
     """
+
+    # Serialize inventory work per-user across all reconciler instances
+    # to prevent duplicate thread creation from concurrent sync + commands.
+    _user_locks: dict[int, asyncio.Lock] = {}
+
+    @classmethod
+    def _get_user_lock(cls, user_id: int) -> asyncio.Lock:
+        lock = cls._user_locks.get(user_id)
+        if lock is None:
+            lock = asyncio.Lock()
+            cls._user_locks[user_id] = lock
+        return lock
 
     def __init__(
         self,
@@ -166,6 +180,7 @@ class InventoryReconciler:
         self, guild: discord.Guild, event: UserLeftEvent
     ) -> None:
         """Handle a user leaving: clean up their inventory forum."""
+        self._user_locks.pop(event.user_id, None)
         forum_id = await UserInventoryForum.get_forum_id(self.pool, event.user_id)
         if forum_id:
             forum = guild.get_channel(forum_id)
@@ -297,7 +312,17 @@ class InventoryReconciler:
         5. Ensure all inventory items have threads
         6. Update thread descriptions if content changed
         7. Prune orphan threads
+
+        Uses a per-user class-level lock to serialize concurrent calls
+        (e.g. sync cog + /buy command) and prevent duplicate thread creation.
         """
+        async with self._get_user_lock(user_id):
+            await self._ensure_user_inventory_locked(guild, user_id)
+
+    async def _ensure_user_inventory_locked(
+        self, guild: discord.Guild, user_id: int
+    ) -> None:
+        """Inner implementation of _ensure_user_inventory, called under lock."""
         member = guild.get_member(user_id)
         if member is None:
             logger.debug(f"User {user_id} not found in guild {guild.name}")
@@ -510,6 +535,13 @@ class InventoryReconciler:
                         logger.error(f"Failed to rename wallet thread: {e}")
                 return
 
+        # Re-check: another reconciler may have created the thread
+        wallet_thread_id = await EntityInstance.get_thread_id(
+            self.pool, wallet.instance_id
+        )
+        if wallet_thread_id:
+            return
+
         description = await self._render_on_look(wallet)
         view = ViewEntity(wallet)
         try:
@@ -518,12 +550,20 @@ class InventoryReconciler:
                 content=description or f"You have a {view.name}.",
             )
 
-            await EntityInstance.update_thread_ids(
+            claimed = await EntityInstance.claim_thread_ids(
                 self.pool, wallet.instance_id, thread.id, message.id
             )
 
-            await thread.edit(pinned=True)
-            logger.info(f"Created and pinned wallet thread for user {user_id}")
+            if claimed:
+                await thread.edit(pinned=True)
+                logger.info(f"Created and pinned wallet thread for user {user_id}")
+            else:
+                logger.warning(
+                    f"Lost wallet thread claim race for user {user_id}, "
+                    f"deleting orphan thread {thread.id}"
+                )
+                with contextlib.suppress(discord.HTTPException):
+                    await thread.delete()
         except discord.HTTPException as e:
             logger.error(f"Failed to create wallet thread: {e}")
 
@@ -571,6 +611,13 @@ class InventoryReconciler:
                         logger.error(f"Failed to rename map thread: {e}")
                 return
 
+        # Re-check: another reconciler may have created the thread
+        map_thread_id = await EntityInstance.get_thread_id(
+            self.pool, map_instance.instance_id
+        )
+        if map_thread_id:
+            return
+
         # Create new map thread
         room = await Room.get(self.pool, user.current_room)
         room_content = (
@@ -579,10 +626,6 @@ class InventoryReconciler:
             else "Unknown location."
         )
 
-        # Generate initial map image
-        visited = await User.get_visited_rooms(self.pool, user_id)
-        image_bytes = generate_map_image(visited)
-
         view = ViewEntity(map_instance)
         try:
             thread, description_msg = await forum.create_thread(
@@ -590,16 +633,26 @@ class InventoryReconciler:
                 content=room_content,
             )
 
-            await EntityInstance.update_thread_ids(
+            claimed = await EntityInstance.claim_thread_ids(
                 self.pool, map_instance.instance_id, thread.id, description_msg.id
             )
 
-            # Send map image as second message
-            image_file = discord.File(BytesIO(image_bytes), filename="map.png")
-            image_msg = await thread.send(file=image_file)
-            await User.update_map_image_msg_id(self.pool, user_id, image_msg.id)
+            if claimed:
+                # Generate and send map image as second message
+                visited = await User.get_visited_rooms(self.pool, user_id)
+                image_bytes = generate_map_image(visited)
+                image_file = discord.File(BytesIO(image_bytes), filename="map.png")
+                image_msg = await thread.send(file=image_file)
+                await User.update_map_image_msg_id(self.pool, user_id, image_msg.id)
 
-            logger.info(f"Created map thread for user {user_id}")
+                logger.info(f"Created map thread for user {user_id}")
+            else:
+                logger.warning(
+                    f"Lost map thread claim race for user {user_id}, "
+                    f"deleting orphan thread {thread.id}"
+                )
+                with contextlib.suppress(discord.HTTPException):
+                    await thread.delete()
         except discord.HTTPException as e:
             logger.error(f"Failed to create map thread: {e}")
 
@@ -693,7 +746,17 @@ class InventoryReconciler:
     async def _create_item_thread(
         self, forum: discord.ForumChannel, instance: EntityInstance
     ) -> None:
-        """Create a thread for an inventory item."""
+        """Create a thread for an inventory item.
+
+        Re-checks the DB before creating to guard against races where another
+        reconciler already created the thread. Uses claim_thread_ids() so that
+        if two callers slip past the lock, only the winner keeps its thread.
+        """
+        # Re-check: another reconciler may have created the thread
+        existing = await EntityInstance.get_thread_id(self.pool, instance.instance_id)
+        if existing is not None:
+            return
+
         description = await self._render_on_look(instance)
         view = ViewEntity(instance)
 
@@ -703,14 +766,23 @@ class InventoryReconciler:
                 content=description or f"You have a {view.name}.",
             )
 
-            await EntityInstance.update_thread_ids(
+            claimed = await EntityInstance.claim_thread_ids(
                 self.pool, instance.instance_id, thread.id, message.id
             )
 
-            logger.info(
-                f"Created thread '{view.display_name}' for instance "
-                f"{instance.instance_id}"
-            )
+            if claimed:
+                logger.info(
+                    f"Created thread '{view.display_name}' for instance "
+                    f"{instance.instance_id}"
+                )
+            else:
+                # Another caller won the race — delete the orphan thread
+                logger.warning(
+                    f"Lost thread claim race for instance {instance.instance_id}, "
+                    f"deleting orphan thread {thread.id}"
+                )
+                with contextlib.suppress(discord.HTTPException):
+                    await thread.delete()
         except discord.HTTPException as e:
             logger.error(f"Failed to create item thread: {e}")
         except asyncpg.PostgresError as e:

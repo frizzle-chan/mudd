@@ -214,7 +214,7 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 - `discord_description_msg_id BIGINT` stores the first message ID (item description)
 - Stores the Discord thread ID when an item is in a user's inventory
 - NULL when item is in a room (not in inventory)
-- Indexed for quick thread → instance lookups
+- UNIQUE partial index on `discord_thread_id WHERE discord_thread_id IS NOT NULL` prevents duplicate thread assignments
 - Thread first post contains rendered `on_look` description, edited during sync to stay current
 
 ### User Focus Table
