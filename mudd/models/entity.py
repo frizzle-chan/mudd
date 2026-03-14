@@ -508,6 +508,39 @@ class EntityInstance:
         )
 
     @classmethod
+    async def claim_thread_ids(
+        cls,
+        pool: asyncpg.Pool,
+        instance_id: UUID,
+        thread_id: int,
+        msg_id: int,
+    ) -> bool:
+        """Atomically set thread IDs only if no thread is already assigned.
+
+        Uses a conditional UPDATE to prevent race conditions where two
+        concurrent callers both create threads for the same entity instance.
+
+        Args:
+            pool: Database connection pool
+            instance_id: Entity instance UUID
+            thread_id: Discord thread ID to claim
+            msg_id: Discord message ID for the description
+
+        Returns:
+            True if this caller won (row updated), False if another caller
+            already set a thread ID.
+        """
+        result = await pool.execute(
+            """UPDATE entity_instances
+            SET discord_thread_id = $1, discord_description_msg_id = $2
+            WHERE id = $3 AND discord_thread_id IS NULL""",
+            thread_id,
+            msg_id,
+            instance_id,
+        )
+        return result == "UPDATE 1"
+
+    @classmethod
     async def clear_thread_ids(cls, pool: asyncpg.Pool, instance_id: UUID) -> None:
         """Clear the Discord thread and description message IDs for an instance.
 
