@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
 from enum import Enum, auto
@@ -745,16 +746,16 @@ class User:
         # Clear focus when moving rooms (per ADR 0003)
         await self.clear_focus()
 
-        # End any active trading session
-        ended_session = await TradingSession.delete(self._pool, self.id)
+        # End any active trading/dialog sessions (independent, run in parallel)
+        ended_session, ended_dialog = await asyncio.gather(
+            TradingSession.delete(self._pool, self.id),
+            DialogSession.delete(self._pool, self.id),
+        )
         if ended_session is not None:
             for observer in self._observers:
                 observer.notify(
                     TradingSessionEndedEvent(self.id, ended_session.thread_id)
                 )
-
-        # End any active dialog session
-        ended_dialog = await DialogSession.delete(self._pool, self.id)
         if ended_dialog is not None:
             for observer in self._observers:
                 observer.notify(

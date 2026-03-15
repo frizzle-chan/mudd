@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import TYPE_CHECKING
 
@@ -182,13 +183,13 @@ class ShopReconciler:
         self, guild: discord.Guild, evt: TradingSessionStartedEvent
     ) -> None:
         """Handle a new trading session: clean up old threads, create new one."""
-        # 1. Delete any existing trading session and its thread
-        old_session = await TradingSession.delete(self._pool, evt.user_id)
+        # 1. Delete any existing trading/dialog sessions (independent)
+        old_session, old_dialog = await asyncio.gather(
+            TradingSession.delete(self._pool, evt.user_id),
+            DialogSession.delete(self._pool, evt.user_id),
+        )
         if old_session is not None:
             await self._delete_thread(guild, old_session.thread_id)
-
-        # 2. Delete any existing dialog session and its thread
-        old_dialog = await DialogSession.delete(self._pool, evt.user_id)
         if old_dialog is not None:
             await self._delete_thread(guild, old_dialog.thread_id)
 

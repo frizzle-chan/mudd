@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import Sequence
 from typing import TYPE_CHECKING
@@ -35,9 +36,9 @@ class DialogView(discord.ui.View):
     def __init__(self, dialog_id: str, options: Sequence[DialogOption]) -> None:
         super().__init__(timeout=None)  # Persistent view
         for option in options:
-            # For now, show all options as enabled (condition evaluation
-            # will be added in Task 7). Disabled buttons are shown for
-            # options with hidden=False when conditions fail.
+            # Condition evaluation not yet implemented — all options
+            # shown as enabled. When added, options with hidden=False
+            # should show a disabled button with hint text.
             button = discord.ui.Button(
                 label=option.label,
                 custom_id=f"dialog:{dialog_id}:{option.next}",
@@ -119,13 +120,13 @@ class DialogReconciler:
         self, guild: discord.Guild, evt: DialogStartedEvent
     ) -> None:
         """Handle a new dialog session: clean up old threads, create new one."""
-        # 1. Delete any existing dialog session and its thread
-        old_dialog = await DialogSession.delete(self._pool, evt.user_id)
+        # 1. Delete any existing dialog/trading sessions (independent)
+        old_dialog, old_trade = await asyncio.gather(
+            DialogSession.delete(self._pool, evt.user_id),
+            TradingSession.delete(self._pool, evt.user_id),
+        )
         if old_dialog is not None:
             await self._delete_thread(guild, old_dialog.thread_id)
-
-        # 2. Delete any existing trading session and its thread
-        old_trade = await TradingSession.delete(self._pool, evt.user_id)
         if old_trade is not None:
             await self._delete_thread(guild, old_trade.thread_id)
 
@@ -180,8 +181,8 @@ class DialogReconciler:
         view = DialogView(evt.dialog_id, root_node.options)
 
         # 8. Post root node text with view to thread, mentioning the user.
-        # Node text is sent as-is for now; full Jinja2 rendering with
-        # effects context will be handled by the button cog in Task 7.
+        # Node text is sent as-is — Jinja2 rendering with effects context
+        # will be added when condition evaluation is implemented.
         await thread.send(f"{mention}\n{root_node.text}", view=view)
 
         # 9. Create DB session

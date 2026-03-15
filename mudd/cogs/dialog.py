@@ -96,16 +96,20 @@ class Dialog(commands.Cog):
         node_text = node.text.strip()
 
         if node.end:
-            # End node: send final text, clean up after delay
+            # End node: send final text, clean up session + thread in background
             await interaction.response.send_message(node_text)
             deleted = await DialogSession.delete(self._pool, interaction.user.id)
             channel = interaction.channel
             if deleted and isinstance(channel, discord.Thread):
-                await asyncio.sleep(3)
-                try:
-                    await channel.delete()
-                except discord.HTTPException:
-                    logger.warning("Failed to delete dialog thread")
+
+                async def cleanup_thread(thread: discord.Thread) -> None:
+                    await asyncio.sleep(3)
+                    try:
+                        await thread.delete()
+                    except discord.HTTPException:
+                        logger.warning("Failed to delete dialog thread")
+
+                asyncio.create_task(cleanup_thread(channel))
         else:
             # Build view with option buttons
             view = DialogView(dialog_id, node.options)
