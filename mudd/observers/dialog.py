@@ -157,10 +157,11 @@ class DialogReconciler:
             logger.warning("Dialog tree %s not found", evt.dialog_id)
             return
 
-        root_node = tree.nodes.get(tree.root)
+        root_id = evt.root or tree.root
+        root_node = tree.nodes.get(root_id)
         if root_node is None:
             logger.warning(
-                "Root node %s not found in dialog %s", tree.root, evt.dialog_id
+                "Root node %s not found in dialog %s", root_id, evt.dialog_id
             )
             return
 

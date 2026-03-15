@@ -2061,6 +2061,17 @@ OnOpen: {{ effects.set_focus() }}You dig around between the cushions.{% if e.con
 + {{ e.contents }}{% else %} Nothing but lint and crumbs.{% endif %}
 OnClose: {{ effects.clear_focus() }}You stop rummaging through the cushions.
 
+Id: npc_charles
+Name: Charles the Banker
+Prototype: furniture
+Room: sitting-room
+DescriptionShort: {{ e.name }} sits behind a mahogany desk in the corner.
+DescriptionLong: A fastidious man in a pinstriped waistcoat, hunched over a leather-bound ledger. A brass nameplate on the desk reads "CHARLES — FINANCIAL SERVICES." He peers at you over half-moon spectacles.
+OnUse: {% if user.balance >= 10000 %}{{ effects.dialog("charles", root="greeting-rich") }}{% elif user.balance >= 1000 %}{{ effects.dialog("charles", root="greeting-middle") }}{% else %}{{ effects.dialog("charles", root="greeting-poor") }}{% endif %}You approach {{ e.name }}.
+OnLook: {{ e.description_long }}
+OnTouch: {{ e.name }} flinches and adjusts his spectacles. "Please. This is a *professional* establishment."
+OnAttack: {{ e.name }} ducks behind his desk. "Security! *SECURITY!*" ...Nobody comes.
+
 Id: sitting_room_fireplace
 Name: Fireplace
 Prototype: object

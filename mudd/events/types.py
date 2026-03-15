@@ -108,6 +108,7 @@ class DialogSignal:
     """Signal that a dialog session should open with an NPC."""
 
     dialog_id: str
+    root: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -134,6 +135,7 @@ class DialogStartedEvent:
     user_id: int
     dialog_id: str
     room_id: str
+    root: str | None = None
 
 
 @dataclass(frozen=True, slots=True)

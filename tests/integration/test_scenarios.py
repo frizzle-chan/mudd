@@ -1261,14 +1261,10 @@ async def test_dialog_signal_emitted(test_db, clean_user_state):
     assert "You approach the" in result.output
     assert result.effects.has_dialog
     assert result.effects.dialog_id == "test-dialog"
-    assert any(
-        isinstance(e, DialogStartedEvent) for e in result.reconciler.events
-    )
+    assert any(isinstance(e, DialogStartedEvent) for e in result.reconciler.events)
 
     # Verify the event carries correct data
-    evt = next(
-        e for e in result.reconciler.events if isinstance(e, DialogStartedEvent)
-    )
+    evt = next(e for e in result.reconciler.events if isinstance(e, DialogStartedEvent))
     assert evt.user_id == user.id
     assert evt.dialog_id == "test-dialog"
     assert evt.room_id == "store-room"
@@ -1312,9 +1308,7 @@ async def test_dialog_replaces_trading_session(test_db, clean_user_state):
     assert result.effects.has_dialog
 
     # DialogStartedEvent was emitted
-    assert any(
-        isinstance(e, DialogStartedEvent) for e in result.reconciler.events
-    )
+    assert any(isinstance(e, DialogStartedEvent) for e in result.reconciler.events)
 
     # The reconciler also received a DialogStartedEvent (ShopReconciler
     # doesn't run in tests — the symmetric cleanup happens there —

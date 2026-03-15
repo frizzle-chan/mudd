@@ -65,6 +65,7 @@ class EffectsObserver:
     _clear_focus_signaled: bool = False
     _shop_id: str | None = None
     _dialog_id: str | None = None
+    _dialog_root: str | None = None
 
     def notify(self, event: GameEvent) -> None:
         """Receive an event notification.
@@ -99,8 +100,9 @@ class EffectsObserver:
                 self._clear_focus_signaled = True
             case ShopSignal(shop_id=shop_id):
                 self._shop_id = shop_id
-            case DialogSignal(dialog_id=dialog_id):
+            case DialogSignal(dialog_id=dialog_id, root=root):
                 self._dialog_id = dialog_id
+                self._dialog_root = root
             case EntityPickedUpEvent() | EntityDroppedEvent() | EntityDestroyedEvent():
                 pass  # Model events - handled by DiscordReconciler
 
@@ -206,3 +208,8 @@ class EffectsObserver:
     def dialog_id(self) -> str | None:
         """The dialog ID to open a dialog session with, or None."""
         return self._dialog_id
+
+    @property
+    def dialog_root(self) -> str | None:
+        """The starting node for the dialog, or None for the tree default."""
+        return self._dialog_root

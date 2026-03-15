@@ -1,0 +1,163 @@
+id: charles
+root: greeting-poor
+
+nodes:
+  # === Poor tier (balance < 1000) ===
+
+  greeting-poor:
+    text: |
+      Charles glances up from his ledger and squints at you.
+
+      "Hmm. You don't exactly look like you're here to open a trust fund. What do you want?"
+    options:
+      - label: I'd like to open an account.
+        next: account
+      - label: Could I get a loan?
+        next: loan
+      - label: Never mind.
+        next: farewell-poor
+
+  account:
+    text: |
+      Charles taps his quill against the desk.
+
+      "An account? With what, exactly? Come back when you've scraped together at least a thousand coins. I don't deal in pocket change."
+    options:
+      - label: How do I earn more money?
+        next: advice-poor
+      - label: Fine.
+        next: farewell-poor
+
+  loan:
+    text: |
+      Charles lets out a short, dry laugh.
+
+      "A loan. To *you*. That's rich — which is more than I can say for your wallet. No collateral, no credit history, no loan. That's policy."
+    options:
+      - label: How do I earn more money?
+        next: advice-poor
+      - label: I'll be back.
+        next: farewell-poor
+
+  advice-poor:
+    text: |
+      Charles sighs and leans back in his chair.
+
+      "Look, I'll throw you a bone. Explore the mansion. Open drawers, search cushions, smash things. There's loose change everywhere if you're not too proud to dig for it."
+    options:
+      - label: Thanks for the tip.
+        next: farewell-poor
+
+  farewell-poor:
+    text: |
+      Charles waves you off without looking up.
+
+      "Mm-hmm. Door's that way."
+    end: true
+
+  # === Middle tier (balance 1000-9999) ===
+
+  greeting-middle:
+    text: |
+      Charles looks up and adjusts his spectacles.
+
+      "Ah, good day. You look like someone with a sensible head on their shoulders. How can the bank help you?"
+    options:
+      - label: Any financial advice?
+        next: advice-middle
+      - label: What do you do here?
+        next: about
+      - label: Just browsing, thanks.
+        next: farewell-middle
+
+  about:
+    text: |
+      "I manage the mansion's finances. Investments, loans, appraisals — the usual. Been at it longer than most of these rooms have had wallpaper."
+
+      He pats a thick leather-bound ledger.
+
+      "Every coin that moves through this place, I know about it."
+    options:
+      - label: Any financial advice?
+        next: advice-middle
+      - label: Good to know. Goodbye.
+        next: farewell-middle
+
+  advice-middle:
+    text: |
+      Charles steeples his fingers.
+
+      "You're doing alright for yourself, but you could be doing better. The gallery rotates its paintings — some of those are worth a small fortune. And if you've got the stomach for it, the slot machine in the lounge has been known to pay out big."
+
+      He lowers his voice. "Between you and me, come back when you've got ten thousand or more. I might have something... special for you."
+    options:
+      - label: I'll keep that in mind.
+        next: farewell-middle
+
+  farewell-middle:
+    text: |
+      Charles gives you a polite nod.
+
+      "Pleasure doing business. You know where to find me."
+    end: true
+
+  # === Rich tier (balance >= 10000) ===
+
+  greeting-rich:
+    text: |
+      Charles leaps to his feet, nearly knocking over his inkwell.
+
+      "Well, well! If it isn't one of our most *distinguished* patrons. Please, have a seat. What can Charles do for you today?"
+    options:
+      - label: What investment opportunities do you have?
+        next: investments
+      - label: Tell me about VIP services.
+        next: vip
+      - label: Just stopped by to say hello.
+        next: hello
+
+  investments:
+    text: |
+      Charles produces a velvet-lined folder from beneath his desk.
+
+      "For someone of your... *caliber*, I have exclusive opportunities. The mansion's art collection is always appreciating. And I hear whispers of rare items appearing in the most unexpected places."
+
+      He taps the side of his nose. "The truly wealthy don't find fortune — fortune finds them. Keep doing what you're doing."
+    options:
+      - label: Tell me about VIP services.
+        next: vip
+      - label: Very good. Carry on.
+        next: farewell-rich
+
+  vip:
+    text: |
+      Charles beams.
+
+      "As a valued client, you have my personal attention at any hour. Should you ever need an appraisal, a discreet transaction, or simply someone to admire your portfolio — I'm your man."
+
+      He pauses thoughtfully. "They say money can't buy happiness. But it can buy *respectability*, and that's close enough."
+    options:
+      - label: What investment opportunities do you have?
+        next: investments
+      - label: I appreciate your dedication.
+        next: farewell-rich
+
+  hello:
+    text: |
+      Charles clasps his hands together, visibly delighted.
+
+      "And hello to you! It's always a pleasure to see someone who truly understands the value of a social visit. Most people only come to me when they want something."
+
+      He leans in conspiratorially. "You're one of the good ones."
+    options:
+      - label: What investment opportunities do you have?
+        next: investments
+      - label: Keep up the good work, Charles.
+        next: farewell-rich
+
+  farewell-rich:
+    text: |
+      Charles gives a deep, respectful bow.
+
+      "An honor, as always. My door is always open to you."
+    end: true

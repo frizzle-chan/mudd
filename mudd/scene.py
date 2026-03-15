@@ -315,6 +315,7 @@ class Scene:
                         user_id=self.user.id,
                         dialog_id=effects.dialog_id,
                         room_id=self.user.current_room,
+                        root=effects.dialog_root,
                     )
                 )
 
