@@ -6,6 +6,7 @@ from mudd.events import (
     BroadcastEvent,
     ChargeCurrencySignal,
     DestroySignal,
+    DialogSignal,
     DispenseSignal,
     DropSignal,
     EffectsCollector,
@@ -110,6 +111,22 @@ class TestEffectsObserverNotify:
         observer.notify(ShopSignal(shop_id="blacksmith"))
         observer.notify(ShopSignal(shop_id="apothecary"))
         assert observer.shop_id == "apothecary"
+
+    def test_dialog_signal_stores_id(self):
+        """DialogSignal stores dialog_id and sets has_dialog."""
+        observer = EffectsObserver()
+        assert observer.has_dialog is False
+        assert observer.dialog_id is None
+        observer.notify(DialogSignal(dialog_id="banker-dialog"))
+        assert observer.has_dialog is True
+        assert observer.dialog_id == "banker-dialog"
+
+    def test_dialog_signal_last_write_wins(self):
+        """Second DialogSignal overwrites the first."""
+        observer = EffectsObserver()
+        observer.notify(DialogSignal(dialog_id="banker-dialog"))
+        observer.notify(DialogSignal(dialog_id="guard-dialog"))
+        assert observer.dialog_id == "guard-dialog"
 
     def test_grant_xp_signal_collected(self):
         """GrantXPSignal is collected in xp_grants list."""
@@ -301,6 +318,23 @@ class TestEffectsCollector:
         collector.shop("")
         assert observer.has_shop is False
         assert observer.shop_id is None
+
+    def test_dialog_returns_empty_string(self):
+        """dialog() returns empty string and sets observer state."""
+        observer = EffectsObserver()
+        collector = EffectsCollector(observer)
+        result = collector.dialog("banker-dialog")
+        assert result == ""
+        assert observer.has_dialog is True
+        assert observer.dialog_id == "banker-dialog"
+
+    def test_dialog_ignores_empty_id(self):
+        """dialog() ignores empty dialog_id."""
+        observer = EffectsObserver()
+        collector = EffectsCollector(observer)
+        collector.dialog("")
+        assert observer.has_dialog is False
+        assert observer.dialog_id is None
 
     def test_grant_xp_ignores_invalid_skill(self):
         """grant_xp() ignores invalid skill names and logs a warning."""

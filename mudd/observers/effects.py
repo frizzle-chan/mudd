@@ -8,6 +8,7 @@ from mudd.events.types import (
     ChargeCurrencySignal,
     ClearFocusSignal,
     DestroySignal,
+    DialogSignal,
     DispenseSignal,
     DropSignal,
     EntityDestroyedEvent,
@@ -63,6 +64,8 @@ class EffectsObserver:
     _set_focus_signaled: bool = False
     _clear_focus_signaled: bool = False
     _shop_id: str | None = None
+    _dialog_id: str | None = None
+    _dialog_root: str | None = None
 
     def notify(self, event: GameEvent) -> None:
         """Receive an event notification.
@@ -97,6 +100,9 @@ class EffectsObserver:
                 self._clear_focus_signaled = True
             case ShopSignal(shop_id=shop_id):
                 self._shop_id = shop_id
+            case DialogSignal(dialog_id=dialog_id, root=root):
+                self._dialog_id = dialog_id
+                self._dialog_root = root
             case EntityPickedUpEvent() | EntityDroppedEvent() | EntityDestroyedEvent():
                 pass  # Model events - handled by DiscordReconciler
 
@@ -192,3 +198,18 @@ class EffectsObserver:
     def shop_id(self) -> str | None:
         """The shop ID to open a trading session with, or None."""
         return self._shop_id
+
+    @property
+    def has_dialog(self) -> bool:
+        """Whether dialog() was called during template rendering."""
+        return self._dialog_id is not None
+
+    @property
+    def dialog_id(self) -> str | None:
+        """The dialog ID to open a dialog session with, or None."""
+        return self._dialog_id
+
+    @property
+    def dialog_root(self) -> str | None:
+        """The starting node for the dialog, or None for the tree default."""
+        return self._dialog_root

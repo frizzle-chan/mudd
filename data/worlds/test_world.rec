@@ -596,6 +596,20 @@ Tags: test_shop_restock
 DescriptionShort: a {{ e.name }}
 DescriptionLong: A test item for shop restock testing.
 
+# ----------------------------------------------------------------------------
+# Dialog test fixtures
+# ----------------------------------------------------------------------------
+
+Id: test_npc
+Name: Test NPC
+Prototype: furniture
+Room: store-room
+DescriptionShort: a {{ e.name }} stands nearby
+DescriptionLong: A test NPC for dialog tree testing.
+OnUse: {{ effects.dialog("test-dialog") }}You approach the {{ e.name }}.
+OnTouch: The {{ e.name }} nods at you.
+OnAttack: The {{ e.name }} ducks.
+
 # ============================================================================
 # Spawning Pool record type
 # ============================================================================

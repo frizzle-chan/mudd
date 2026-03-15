@@ -1,0 +1,21 @@
+id: test-dialog
+root: greeting
+
+nodes:
+  greeting:
+    text: "Hello, traveler. What brings you here?"
+    options:
+      - label: Who are you?
+        next: who_are_you
+      - label: Goodbye.
+        next: goodbye
+
+  who_are_you:
+    text: "I'm a test NPC. Nice to meet you."
+    options:
+      - label: Nice to meet you too.
+        next: goodbye
+
+  goodbye:
+    text: "Farewell!"
+    end: true

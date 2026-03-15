@@ -104,6 +104,14 @@ class ShopSignal:
 
 
 @dataclass(frozen=True, slots=True)
+class DialogSignal:
+    """Signal that a dialog session should open with an NPC."""
+
+    dialog_id: str
+    root: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class TradingSessionStartedEvent:
     """Fact: a trading session was opened with a shop."""
 
@@ -113,11 +121,21 @@ class TradingSessionStartedEvent:
 
 
 @dataclass(frozen=True, slots=True)
-class TradingSessionEndedEvent:
-    """Fact: a trading session ended (movement or explicit close)."""
+class SessionEndedEvent:
+    """Fact: a modal session ended (movement or explicit close)."""
 
     user_id: int
     thread_id: int
+
+
+@dataclass(frozen=True, slots=True)
+class DialogStartedEvent:
+    """Fact: a dialog session was started with an NPC."""
+
+    user_id: int
+    dialog_id: str
+    room_id: str
+    root: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -304,8 +322,10 @@ type GameEvent = (
     | SetFocusSignal
     | ClearFocusSignal
     | ShopSignal
+    | DialogSignal
     | TradingSessionStartedEvent
-    | TradingSessionEndedEvent
+    | SessionEndedEvent
+    | DialogStartedEvent
     | EntityPickedUpEvent
     | EntityDroppedEvent
     | EntityDestroyedEvent

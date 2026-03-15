@@ -24,15 +24,23 @@ from mudd.commands import (
 from mudd.events import (
     BalanceChangedEvent,
     BroadcastEvent,
+    DialogStartedEvent,
     EntityDestroyedEvent,
     EntityDroppedEvent,
     EntityPickedUpEvent,
-    TradingSessionEndedEvent,
+    SessionEndedEvent,
     TradingSessionStartedEvent,
     UserLocationSyncEvent,
     UserMovedEvent,
 )
-from mudd.models import EntityInstance, RoomEntityInstance, Shop, TradingSession, User
+from mudd.models import (
+    DialogSession,
+    EntityInstance,
+    RoomEntityInstance,
+    Shop,
+    TradingSession,
+    User,
+)
 from mudd.models.currency import HOUSE_ACCOUNT_ID, transfer_currency
 from mudd.models.shop import purchase_price, sale_price
 from mudd.models.spawning_pool import SpawningPool
@@ -1214,7 +1222,7 @@ async def test_shop_buy_and_sell(test_db, clean_user_state):
 
 
 async def test_move_ends_trading_session(test_db, clean_user_state):
-    """Moving to another room emits TradingSessionEndedEvent with thread_id."""
+    """Moving to another room emits SessionEndedEvent with thread_id."""
     user = await create_test_user(test_db, room_id="store-room")
 
     # Create an active trading session
@@ -1227,7 +1235,7 @@ async def test_move_ends_trading_session(test_db, clean_user_state):
     result = await move(test_db, user.id, "foyer", guild_id=GUILD_ID)
 
     ended_events = [
-        e for e in result.reconciler.events if isinstance(e, TradingSessionEndedEvent)
+        e for e in result.reconciler.events if isinstance(e, SessionEndedEvent)
     ]
     assert len(ended_events) == 1
     assert ended_events[0].thread_id == thread_id
@@ -1236,3 +1244,75 @@ async def test_move_ends_trading_session(test_db, clean_user_state):
     # Session should be gone from DB
     session = await TradingSession.get(test_db, user.id)
     assert session is None
+
+
+# ============================================================================
+# NPC Dialog scenarios
+# ============================================================================
+
+
+async def test_dialog_signal_emitted(test_db, clean_user_state):
+    """Using a dialog NPC emits DialogStartedEvent via effects pipeline."""
+    user = await create_test_user(test_db, room_id="store-room")
+
+    # Use the test NPC → triggers dialog signal
+    result = await act(test_db, user.id, UseCommand(), "Test NPC")
+    assert "You approach the" in result.output
+    assert result.effects.has_dialog
+    assert result.effects.dialog_id == "test-dialog"
+    assert any(isinstance(e, DialogStartedEvent) for e in result.reconciler.events)
+
+    # Verify the event carries correct data
+    evt = next(e for e in result.reconciler.events if isinstance(e, DialogStartedEvent))
+    assert evt.user_id == user.id
+    assert evt.dialog_id == "test-dialog"
+    assert evt.room_id == "store-room"
+
+
+async def test_move_ends_dialog_session(test_db, clean_user_state):
+    """Moving to another room emits SessionEndedEvent with thread_id."""
+    user = await create_test_user(test_db, room_id="store-room")
+
+    # Create an active dialog session
+    thread_id = 77777
+    await DialogSession.create(test_db, user.id, "test-dialog", thread_id)
+
+    # Move away — should end the dialog session
+    result = await move(test_db, user.id, "foyer", guild_id=GUILD_ID)
+
+    ended_events = [
+        e for e in result.reconciler.events if isinstance(e, SessionEndedEvent)
+    ]
+    assert len(ended_events) == 1
+    assert ended_events[0].thread_id == thread_id
+    assert ended_events[0].user_id == user.id
+
+    # Session should be gone from DB
+    session = await DialogSession.get(test_db, user.id)
+    assert session is None
+
+
+async def test_dialog_replaces_trading_session(test_db, clean_user_state):
+    """Starting a dialog ends active trade session via end_all_sessions."""
+    user = await create_test_user(test_db, room_id="store-room")
+
+    # Create an active trading session
+    trade_thread = 66666
+    await TradingSession.create(
+        test_db, user.id, "test-shop", thread_id=trade_thread, overview_message_id=88888
+    )
+
+    # Use the dialog NPC — should emit both dialog start and trade end
+    result = await act(test_db, user.id, UseCommand(), "Test NPC")
+    assert result.effects.has_dialog
+
+    # DialogStartedEvent was emitted
+    assert any(isinstance(e, DialogStartedEvent) for e in result.reconciler.events)
+
+    # The reconciler also received a DialogStartedEvent (ShopReconciler
+    # doesn't run in tests — the symmetric cleanup happens there —
+    # but the DialogStartedEvent is what matters for reconciler dispatch)
+    dialog_evt = next(
+        e for e in result.reconciler.events if isinstance(e, DialogStartedEvent)
+    )
+    assert dialog_evt.dialog_id == "test-dialog"

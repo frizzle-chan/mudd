@@ -10,12 +10,12 @@ import discord
 
 from mudd.events.types import (
     GameEvent,
-    TradingSessionEndedEvent,
     TradingSessionStartedEvent,
 )
+from mudd.models.sessions import end_all_sessions
 from mudd.models.shop import Shop, TradingSession, group_stock, purchase_price
 from mudd.models.skills import UserSkill
-from mudd.utils.discord import fetch_thread
+from mudd.utils.discord import delete_thread, fetch_thread
 
 if TYPE_CHECKING:
     from mudd.models.shop import StockItem
@@ -113,7 +113,6 @@ class ShopReconciler:
     Handles:
     - TradingSessionStartedEvent: Ends any existing session (deletes
       old thread + DB row), creates new broadcast + thread + DB session
-    - TradingSessionEndedEvent: Deletes thread
 
     Sub-reconciler of DiscordReconciler.
     """
@@ -130,32 +129,22 @@ class ShopReconciler:
         self._guild_id = guild_id
         self._room_cache = room_cache
         self._started_events: list[TradingSessionStartedEvent] = []
-        self._ended_events: list[TradingSessionEndedEvent] = []
 
     def notify(self, event: GameEvent) -> None:
         """Queue trading session events for processing."""
         match event:
             case TradingSessionStartedEvent() as evt:
                 self._started_events.append(evt)
-            case TradingSessionEndedEvent() as evt:
-                self._ended_events.append(evt)
 
     async def flush(self) -> None:
         """Process queued events. Swap-and-clear for re-entrancy safety."""
         started = self._started_events
         self._started_events = []
-        ended = self._ended_events
-        self._ended_events = []
 
         guild = self._bot.get_guild(self._guild_id)
         if guild is None:
             return
 
-        # Process ended events first (delete threads)
-        for evt in ended:
-            await self._delete_thread(guild, evt.thread_id)
-
-        # Process started events
         for evt in started:
             try:
                 await self._handle_session_started(guild, evt)
@@ -166,27 +155,15 @@ class ShopReconciler:
                     evt.shop_id,
                 )
 
-    async def _delete_thread(self, guild: discord.Guild, thread_id: int) -> None:
-        """Best-effort delete a trading thread."""
-        thread = await fetch_thread(guild, thread_id)
-        if thread is None:
-            return
-        try:
-            await thread.delete()
-            logger.info("Deleted trading thread %d", thread_id)
-        except discord.HTTPException as e:
-            logger.warning("Failed to delete trading thread %d: %s", thread_id, e)
-
     async def _handle_session_started(
         self, guild: discord.Guild, evt: TradingSessionStartedEvent
     ) -> None:
         """Handle a new trading session: clean up old threads, create new one."""
-        # 1. Delete any existing session and its thread
-        old_session = await TradingSession.delete(self._pool, evt.user_id)
-        if old_session is not None:
-            await self._delete_thread(guild, old_session.thread_id)
+        # 1. End any existing modal sessions (trading, dialog, etc.)
+        for tid in await end_all_sessions(self._pool, evt.user_id):
+            await delete_thread(guild, tid)
 
-        # 2. Look up room channel
+        # 3. Look up room channel
         if self._room_cache is None:
             logger.warning("No room_cache available for shop reconciler")
             return
@@ -208,7 +185,7 @@ class ShopReconciler:
             )
             return
 
-        # 3. Fetch shop + stock + user's Speech level
+        # 4. Fetch shop + stock + user's Speech level
         shop = await Shop.get(self._pool, evt.shop_id)
         if shop is None:
             logger.warning("Shop %s not found", evt.shop_id)
@@ -219,26 +196,26 @@ class ShopReconciler:
         user_skill = await UserSkill.get(self._pool, evt.user_id, "speech")
         speech_level = user_skill.level if user_skill else 1
 
-        # 4. Resolve display name
+        # 5. Resolve display name
         member = guild.get_member(evt.user_id)
         display_name = member.display_name if member else str(evt.user_id)
 
-        # 5. Send broadcast message to room channel
+        # 6. Send broadcast message to room channel
         await channel.send(f"**{display_name}** begins trading at **{shop.name}**.")
 
-        # 6. Create private thread (only the trading player can see it)
+        # 7. Create private thread (only the trading player can see it)
         thread = await channel.create_thread(
             name=shop.name,
             type=discord.ChannelType.private_thread,
             invitable=False,
         )
 
-        # 7. Post shop overview in thread, @mentioning the user
+        # 8. Post shop overview in thread, @mentioning the user
         overview = format_shop_overview(shop, stock, speech_level)
         mention = member.mention if member else f"<@{evt.user_id}>"
         overview_msg = await thread.send(f"{mention}\n{overview}")
 
-        # 8. Create DB session with the new thread_id and overview message ID
+        # 9. Create DB session with the new thread_id and overview message ID
         await TradingSession.create(
             self._pool, evt.user_id, evt.shop_id, thread.id, overview_msg.id
         )

@@ -381,6 +381,24 @@ PostgreSQL is the source of truth for user locations. Discord channel permission
 - FK to users(id) with ON DELETE CASCADE
 - FK to shops(id) with ON DELETE CASCADE
 
+### User Dialog Sessions Table
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `user_id` | BIGINT (PK, FK to users.id) | One active session per user |
+| `dialog_id` | TEXT NOT NULL | Dialog tree being interacted with |
+| `thread_id` | BIGINT NOT NULL | Discord thread for this session |
+| `created_at` | TIMESTAMPTZ NOT NULL | Session start time |
+
+**Purpose:**
+- Tracks which NPC dialog tree a player is actively engaged with
+- Used for thread cleanup when a player moves rooms or starts a new interaction
+- No conversation state is persisted — button `custom_id` carries all needed context
+
+**Constraints:**
+- PK on `user_id` (enforces one session per user)
+- FK to users(id) with ON DELETE CASCADE
+
 ### Shop Pricing
 
 Prices are derived from rarity base prices, supply curves, and player skill.

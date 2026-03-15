@@ -35,6 +35,8 @@ class ViewEntity:
             return f"\U0001f50d {name}"
         if self._entity.entity.is_shop:
             return f"\U0001f3ea {name}"
+        if self._entity.entity.is_dialog:
+            return f"\U0001f4ac {name}"
         return name
 
     @property

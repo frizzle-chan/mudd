@@ -26,6 +26,7 @@ async def clean_user_state(test_db, entity_cache, user_cache):
     async with test_db.acquire() as conn:
         await conn.execute("DELETE FROM user_focus")
         await conn.execute("DELETE FROM user_trading_sessions")
+        await conn.execute("DELETE FROM user_dialog_sessions")
         await conn.execute("DELETE FROM currency_ledger")
         await conn.execute("DELETE FROM currency_transactions")
         await conn.execute("DELETE FROM currency_accounts WHERE user_id != 0")

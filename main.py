@@ -10,6 +10,7 @@ from mudd.bot import MuddBot
 from mudd.caches.entity_autocomplete import EntityAutocompleteCache
 from mudd.caches.user import UserCache
 from mudd.cogs.betting import Betting
+from mudd.cogs.dialog import Dialog
 from mudd.cogs.economy import Economy
 from mudd.cogs.interact import Interact
 from mudd.cogs.look import Look
@@ -85,6 +86,7 @@ async def setup_hook():
     await bot.add_cog(Racing(bot, pool, room_cache))
     await bot.add_cog(Betting(bot, pool, room_cache))
     await bot.add_cog(Shop(bot, pool, room_cache))
+    await bot.add_cog(Dialog(bot, pool))
 
 
 @bot.event
