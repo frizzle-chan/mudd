@@ -208,10 +208,11 @@ class DiscordReconciler:
         # Process session-ended events first (delete threads before sub-reconcilers)
         ended = self._ended_events
         self._ended_events = []
-        guild = self._bot.get_guild(self._guild_id) if ended else None
-        if guild is not None:
-            for evt in ended:
-                await delete_thread(guild, evt.thread_id)
+        if ended:
+            guild = self._bot.get_guild(self._guild_id)
+            if guild is not None:
+                for evt in ended:
+                    await delete_thread(guild, evt.thread_id)
 
         await self._zone_room.flush()
         await self._inventory.flush()
