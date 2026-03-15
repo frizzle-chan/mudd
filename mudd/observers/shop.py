@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from typing import TYPE_CHECKING
 
@@ -11,13 +10,12 @@ import discord
 
 from mudd.events.types import (
     GameEvent,
-    TradingSessionEndedEvent,
     TradingSessionStartedEvent,
 )
-from mudd.models.dialog import DialogSession
+from mudd.models.sessions import end_all_sessions
 from mudd.models.shop import Shop, TradingSession, group_stock, purchase_price
 from mudd.models.skills import UserSkill
-from mudd.utils.discord import fetch_thread
+from mudd.utils.discord import delete_thread, fetch_thread
 
 if TYPE_CHECKING:
     from mudd.models.shop import StockItem
@@ -115,7 +113,6 @@ class ShopReconciler:
     Handles:
     - TradingSessionStartedEvent: Ends any existing session (deletes
       old thread + DB row), creates new broadcast + thread + DB session
-    - TradingSessionEndedEvent: Deletes thread
 
     Sub-reconciler of DiscordReconciler.
     """
@@ -132,32 +129,22 @@ class ShopReconciler:
         self._guild_id = guild_id
         self._room_cache = room_cache
         self._started_events: list[TradingSessionStartedEvent] = []
-        self._ended_events: list[TradingSessionEndedEvent] = []
 
     def notify(self, event: GameEvent) -> None:
         """Queue trading session events for processing."""
         match event:
             case TradingSessionStartedEvent() as evt:
                 self._started_events.append(evt)
-            case TradingSessionEndedEvent() as evt:
-                self._ended_events.append(evt)
 
     async def flush(self) -> None:
         """Process queued events. Swap-and-clear for re-entrancy safety."""
         started = self._started_events
         self._started_events = []
-        ended = self._ended_events
-        self._ended_events = []
 
         guild = self._bot.get_guild(self._guild_id)
         if guild is None:
             return
 
-        # Process ended events first (delete threads)
-        for evt in ended:
-            await self._delete_thread(guild, evt.thread_id)
-
-        # Process started events
         for evt in started:
             try:
                 await self._handle_session_started(guild, evt)
@@ -168,30 +155,13 @@ class ShopReconciler:
                     evt.shop_id,
                 )
 
-    async def _delete_thread(self, guild: discord.Guild, thread_id: int) -> None:
-        """Best-effort delete a trading thread."""
-        thread = await fetch_thread(guild, thread_id)
-        if thread is None:
-            return
-        try:
-            await thread.delete()
-            logger.info("Deleted trading thread %d", thread_id)
-        except discord.HTTPException as e:
-            logger.warning("Failed to delete trading thread %d: %s", thread_id, e)
-
     async def _handle_session_started(
         self, guild: discord.Guild, evt: TradingSessionStartedEvent
     ) -> None:
         """Handle a new trading session: clean up old threads, create new one."""
-        # 1. Delete any existing trading/dialog sessions (independent)
-        old_session, old_dialog = await asyncio.gather(
-            TradingSession.delete(self._pool, evt.user_id),
-            DialogSession.delete(self._pool, evt.user_id),
-        )
-        if old_session is not None:
-            await self._delete_thread(guild, old_session.thread_id)
-        if old_dialog is not None:
-            await self._delete_thread(guild, old_dialog.thread_id)
+        # 1. End any existing modal sessions (trading, dialog, etc.)
+        for tid in await end_all_sessions(self._pool, evt.user_id):
+            await delete_thread(guild, tid)
 
         # 3. Look up room channel
         if self._room_cache is None:

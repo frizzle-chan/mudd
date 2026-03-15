@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from collections.abc import Sequence
 from typing import TYPE_CHECKING
@@ -11,14 +10,13 @@ import asyncpg
 import discord
 
 from mudd.events.types import (
-    DialogSessionEndedEvent,
     DialogStartedEvent,
     GameEvent,
 )
 from mudd.loaders.dialog_loader import DialogOption, get_dialog
 from mudd.models.dialog import DialogSession
-from mudd.models.shop import TradingSession
-from mudd.utils.discord import fetch_thread
+from mudd.models.sessions import end_all_sessions
+from mudd.utils.discord import delete_thread
 
 if TYPE_CHECKING:
     from mudd.observers.discord import RoomChannelCache
@@ -52,7 +50,6 @@ class DialogReconciler:
 
     Handles:
     - DialogStartedEvent: Ends any existing session, creates thread, posts root node
-    - DialogSessionEndedEvent: Deletes thread
 
     Sub-reconciler of DiscordReconciler.
     """
@@ -69,32 +66,22 @@ class DialogReconciler:
         self._guild_id = guild_id
         self._room_cache = room_cache
         self._started_events: list[DialogStartedEvent] = []
-        self._ended_events: list[DialogSessionEndedEvent] = []
 
     def notify(self, event: GameEvent) -> None:
         """Queue dialog session events for processing."""
         match event:
             case DialogStartedEvent() as evt:
                 self._started_events.append(evt)
-            case DialogSessionEndedEvent() as evt:
-                self._ended_events.append(evt)
 
     async def flush(self) -> None:
         """Process queued events. Swap-and-clear for re-entrancy safety."""
         started = self._started_events
         self._started_events = []
-        ended = self._ended_events
-        self._ended_events = []
 
         guild = self._bot.get_guild(self._guild_id)
         if guild is None:
             return
 
-        # Process ended events first (delete threads)
-        for evt in ended:
-            await self._delete_thread(guild, evt.thread_id)
-
-        # Process started events
         for evt in started:
             try:
                 await self._handle_session_started(guild, evt)
@@ -105,30 +92,13 @@ class DialogReconciler:
                     evt.dialog_id,
                 )
 
-    async def _delete_thread(self, guild: discord.Guild, thread_id: int) -> None:
-        """Best-effort delete a dialog thread."""
-        thread = await fetch_thread(guild, thread_id)
-        if thread is None:
-            return
-        try:
-            await thread.delete()
-            logger.info("Deleted dialog thread %d", thread_id)
-        except discord.HTTPException as e:
-            logger.warning("Failed to delete dialog thread %d: %s", thread_id, e)
-
     async def _handle_session_started(
         self, guild: discord.Guild, evt: DialogStartedEvent
     ) -> None:
         """Handle a new dialog session: clean up old threads, create new one."""
-        # 1. Delete any existing dialog/trading sessions (independent)
-        old_dialog, old_trade = await asyncio.gather(
-            DialogSession.delete(self._pool, evt.user_id),
-            TradingSession.delete(self._pool, evt.user_id),
-        )
-        if old_dialog is not None:
-            await self._delete_thread(guild, old_dialog.thread_id)
-        if old_trade is not None:
-            await self._delete_thread(guild, old_trade.thread_id)
+        # 1. End any existing modal sessions (dialog, trading, etc.)
+        for tid in await end_all_sessions(self._pool, evt.user_id):
+            await delete_thread(guild, tid)
 
         # 3. Look up room channel
         if self._room_cache is None:

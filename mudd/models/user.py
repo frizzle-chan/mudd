@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime, timedelta
 from enum import Enum, auto
@@ -14,10 +13,9 @@ import asyncpg
 from mudd.events import (
     BalanceChangedEvent,
     BroadcastEvent,
-    DialogSessionEndedEvent,
     FocusChangedEvent,
     Observer,
-    TradingSessionEndedEvent,
+    SessionEndedEvent,
     UserLocationSyncEvent,
     UserMovedEvent,
 )
@@ -28,10 +26,9 @@ from mudd.models.currency import (
     ensure_account,
     transfer_currency,
 )
-from mudd.models.dialog import DialogSession
 from mudd.models.entity import EntityInstance
 from mudd.models.room import Room
-from mudd.models.shop import TradingSession
+from mudd.models.sessions import end_all_sessions
 from mudd.models.skills import UserSkill
 
 FOCUS_TIMEOUT_MINUTES = 5
@@ -746,21 +743,10 @@ class User:
         # Clear focus when moving rooms (per ADR 0003)
         await self.clear_focus()
 
-        # End any active trading/dialog sessions (independent, run in parallel)
-        ended_session, ended_dialog = await asyncio.gather(
-            TradingSession.delete(self._pool, self.id),
-            DialogSession.delete(self._pool, self.id),
-        )
-        if ended_session is not None:
+        # End any active modal sessions (trading, dialog, etc.)
+        for tid in await end_all_sessions(self._pool, self.id):
             for observer in self._observers:
-                observer.notify(
-                    TradingSessionEndedEvent(self.id, ended_session.thread_id)
-                )
-        if ended_dialog is not None:
-            for observer in self._observers:
-                observer.notify(
-                    DialogSessionEndedEvent(self.id, ended_dialog.thread_id)
-                )
+                observer.notify(SessionEndedEvent(self.id, tid))
 
         await self._pool.execute(
             "UPDATE users SET current_room = $2 WHERE id = $1",

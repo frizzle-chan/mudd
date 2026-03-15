@@ -121,8 +121,8 @@ class TradingSessionStartedEvent:
 
 
 @dataclass(frozen=True, slots=True)
-class TradingSessionEndedEvent:
-    """Fact: a trading session ended (movement or explicit close)."""
+class SessionEndedEvent:
+    """Fact: a modal session ended (movement or explicit close)."""
 
     user_id: int
     thread_id: int
@@ -136,14 +136,6 @@ class DialogStartedEvent:
     dialog_id: str
     room_id: str
     root: str | None = None
-
-
-@dataclass(frozen=True, slots=True)
-class DialogSessionEndedEvent:
-    """Fact: a dialog session ended (movement or explicit close)."""
-
-    user_id: int
-    thread_id: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -332,9 +324,8 @@ type GameEvent = (
     | ShopSignal
     | DialogSignal
     | TradingSessionStartedEvent
-    | TradingSessionEndedEvent
+    | SessionEndedEvent
     | DialogStartedEvent
-    | DialogSessionEndedEvent
     | EntityPickedUpEvent
     | EntityDroppedEvent
     | EntityDestroyedEvent

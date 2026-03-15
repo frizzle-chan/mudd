@@ -473,7 +473,7 @@ class TradingSession:
         """Delete the active trading session for a user.
 
         Returns the deleted session so callers can emit
-        TradingSessionEndedEvent with the thread_id. No-op if no
+        SessionEndedEvent with the thread_id. No-op if no
         session exists.
 
         Args:

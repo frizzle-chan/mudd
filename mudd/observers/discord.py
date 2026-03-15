@@ -8,6 +8,7 @@ import asyncpg
 import discord
 
 from mudd.events import GameEvent
+from mudd.events.types import SessionEndedEvent
 from mudd.models.room import Room
 from mudd.models.user import User
 from mudd.models.zone import Zone
@@ -18,6 +19,7 @@ from mudd.observers.permissions import PermissionReconciler
 from mudd.observers.shop import ShopReconciler
 from mudd.observers.skills_reconciler import SkillsReconciler
 from mudd.observers.zone_room import ZoneRoomReconciler
+from mudd.utils.discord import delete_thread
 
 logger = logging.getLogger(__name__)
 
@@ -166,6 +168,8 @@ class DiscordReconciler:
         console_channel: str = "console",
         seen_orphans: set[tuple[int, str, str]] | None = None,
     ) -> None:
+        self._bot = bot
+        self._guild_id = guild_id
         self._zone_room = ZoneRoomReconciler(
             bot, pool, guild_id, console_channel, seen_orphans
         )
@@ -175,9 +179,13 @@ class DiscordReconciler:
         self._shop = ShopReconciler(bot, pool, guild_id, room_cache)
         self._dialog = DialogReconciler(bot, pool, guild_id, room_cache)
         self._skills = SkillsReconciler(bot, pool, guild_id, room_cache)
+        self._ended_events: list[SessionEndedEvent] = []
 
     def notify(self, event: GameEvent) -> None:
         """Receive notification (sync). Delegate to sub-reconcilers."""
+        match event:
+            case SessionEndedEvent() as evt:
+                self._ended_events.append(evt)
         self._zone_room.notify(event)
         self._permissions.notify(event)
         self._inventory.notify(event)
@@ -197,6 +205,14 @@ class DiscordReconciler:
         Returns:
             Empty list (no new events produced).
         """
+        # Process session-ended events first (delete threads before sub-reconcilers)
+        ended = self._ended_events
+        self._ended_events = []
+        guild = self._bot.get_guild(self._guild_id) if ended else None
+        if guild is not None:
+            for evt in ended:
+                await delete_thread(guild, evt.thread_id)
+
         await self._zone_room.flush()
         await self._inventory.flush()
         await self._map.flush()

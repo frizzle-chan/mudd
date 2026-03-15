@@ -27,6 +27,18 @@ async def fetch_thread(guild: discord.Guild, thread_id: int) -> discord.Thread |
     return None
 
 
+async def delete_thread(guild: discord.Guild, thread_id: int) -> None:
+    """Best-effort delete a thread by ID."""
+    thread = await fetch_thread(guild, thread_id)
+    if thread is None:
+        return
+    try:
+        await thread.delete()
+        logger.info("Deleted thread %d", thread_id)
+    except discord.HTTPException as e:
+        logger.warning("Failed to delete thread %d: %s", thread_id, e)
+
+
 def normalize_channel_name(username: str, suffix: str) -> str:
     """Build a Discord channel name that matches Discord's normalization.
 

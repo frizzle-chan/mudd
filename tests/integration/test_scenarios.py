@@ -24,12 +24,11 @@ from mudd.commands import (
 from mudd.events import (
     BalanceChangedEvent,
     BroadcastEvent,
-    DialogSessionEndedEvent,
     DialogStartedEvent,
     EntityDestroyedEvent,
     EntityDroppedEvent,
     EntityPickedUpEvent,
-    TradingSessionEndedEvent,
+    SessionEndedEvent,
     TradingSessionStartedEvent,
     UserLocationSyncEvent,
     UserMovedEvent,
@@ -1223,7 +1222,7 @@ async def test_shop_buy_and_sell(test_db, clean_user_state):
 
 
 async def test_move_ends_trading_session(test_db, clean_user_state):
-    """Moving to another room emits TradingSessionEndedEvent with thread_id."""
+    """Moving to another room emits SessionEndedEvent with thread_id."""
     user = await create_test_user(test_db, room_id="store-room")
 
     # Create an active trading session
@@ -1236,7 +1235,7 @@ async def test_move_ends_trading_session(test_db, clean_user_state):
     result = await move(test_db, user.id, "foyer", guild_id=GUILD_ID)
 
     ended_events = [
-        e for e in result.reconciler.events if isinstance(e, TradingSessionEndedEvent)
+        e for e in result.reconciler.events if isinstance(e, SessionEndedEvent)
     ]
     assert len(ended_events) == 1
     assert ended_events[0].thread_id == thread_id
@@ -1271,7 +1270,7 @@ async def test_dialog_signal_emitted(test_db, clean_user_state):
 
 
 async def test_move_ends_dialog_session(test_db, clean_user_state):
-    """Moving to another room emits DialogSessionEndedEvent with thread_id."""
+    """Moving to another room emits SessionEndedEvent with thread_id."""
     user = await create_test_user(test_db, room_id="store-room")
 
     # Create an active dialog session
@@ -1282,7 +1281,7 @@ async def test_move_ends_dialog_session(test_db, clean_user_state):
     result = await move(test_db, user.id, "foyer", guild_id=GUILD_ID)
 
     ended_events = [
-        e for e in result.reconciler.events if isinstance(e, DialogSessionEndedEvent)
+        e for e in result.reconciler.events if isinstance(e, SessionEndedEvent)
     ]
     assert len(ended_events) == 1
     assert ended_events[0].thread_id == thread_id
@@ -1294,7 +1293,7 @@ async def test_move_ends_dialog_session(test_db, clean_user_state):
 
 
 async def test_dialog_replaces_trading_session(test_db, clean_user_state):
-    """Starting a dialog emits TradingSessionEndedEvent if trade was active."""
+    """Starting a dialog ends active trade session via end_all_sessions."""
     user = await create_test_user(test_db, room_id="store-room")
 
     # Create an active trading session
