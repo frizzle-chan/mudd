@@ -307,12 +307,13 @@ ALTER TABLE users DROP COLUMN IF EXISTS deprecated_col;
 ```python
 from alembic import op
 
+
 def upgrade():
     with op.get_context().autocommit_block():
         op.create_index(
-            'users_email_idx',
-            'users',
-            ['email'],
+            "users_email_idx",
+            "users",
+            ["email"],
             postgresql_concurrently=True,
         )
 ```
@@ -323,16 +324,18 @@ def upgrade():
 import sqlalchemy as sa
 from alembic import op
 
+
 def upgrade():
     op.create_check_constraint(
-        'positive_balance',
-        'accounts',
-        'balance >= 0',
+        "positive_balance",
+        "accounts",
+        "balance >= 0",
         postgresql_not_valid=True,
     )
 
+
 def upgrade_validate():
-    op.execute(sa.text('ALTER TABLE accounts VALIDATE CONSTRAINT positive_balance'))
+    op.execute(sa.text("ALTER TABLE accounts VALIDATE CONSTRAINT positive_balance"))
 ```
 
 ### Foreign Key with NOT VALID
@@ -340,14 +343,18 @@ def upgrade_validate():
 ```python
 from alembic import op
 
+
 def upgrade():
     op.create_foreign_key(
-        'orders_user_fk',
-        'orders', 'users',
-        ['user_id'], ['id'],
+        "orders_user_fk",
+        "orders",
+        "users",
+        ["user_id"],
+        ["id"],
         postgresql_not_valid=True,
     )
 
+
 def upgrade_validate():
-    op.execute(sa.text('ALTER TABLE orders VALIDATE CONSTRAINT orders_user_fk'))
+    op.execute(sa.text("ALTER TABLE orders VALIDATE CONSTRAINT orders_user_fk"))
 ```

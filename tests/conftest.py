@@ -76,7 +76,7 @@ async def user_cache(test_db) -> UserCache:
 
 @pytest.fixture(autouse=True, scope="session")
 async def _wire_caches_to_helpers(entity_cache, user_cache):
-    import tests.helpers as helpers
+    from tests import helpers
 
     helpers.entity_cache = entity_cache
     helpers.user_cache = user_cache
