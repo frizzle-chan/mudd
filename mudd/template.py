@@ -14,8 +14,6 @@ from jinja2 import (
 class TemplateRenderError(Exception):
     """Raised when a template fails to render."""
 
-    pass
-
 
 def _money_filter(value: int) -> str:
     """Format an integer as a currency string."""
