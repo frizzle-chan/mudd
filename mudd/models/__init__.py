@@ -22,7 +22,7 @@ from mudd.models.spawning_pool import SpawningPool
 from mudd.models.user import FocusContext, TransferError, TransferResult, User
 from mudd.models.zone import SyncStats, Zone
 
-__all__ = [
+__all__ = [  # noqa: RUF022 - grouped by model for readability, not sorted
     # Bet model
     "Bet",
     "BetError",

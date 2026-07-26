@@ -171,7 +171,7 @@ def main() -> int:
             else:
                 process_image(src_path, dest_path)
             processed += 1
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - report and continue the batch
             print(f"  Error: {e}", file=sys.stderr)
 
     print(f"\nProcessed {processed} image(s) to {DIST_DIR}")
