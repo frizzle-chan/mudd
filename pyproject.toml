@@ -54,8 +54,18 @@ min_confidence = 90
 ignore_names = ["clean_user_state"]
 exclude = ["*_unit_test.py", "*_image_test.py"]
 
+[tool.ruff]
+# Vendored skill scripts, not project code. Mirrors `[tool.ty.src] exclude`.
+extend-exclude = [".claude/skills/skill-creator/"]
+# lefthook passes staged files to ruff explicitly; without this, excludes are
+# ignored for those paths and the hook would disagree with CI.
+force-exclude = true
+
 [tool.ruff.lint]
-select = [
+# `select` is intentionally unset so the project tracks ruff's default ruleset
+# (413 rules as of v0.16.0). `extend-select` layers on the full categories we
+# want beyond the curated defaults.
+extend-select = [
     # pycodestyle
     "E",
     # Pyflakes
