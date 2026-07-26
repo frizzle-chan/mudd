@@ -47,7 +47,6 @@ class ActionCommand(ABC):
         Returns:
             Handler template text, or None if no handler defined
         """
-        pass
 
     async def execute(
         self,

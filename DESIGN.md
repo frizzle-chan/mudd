@@ -807,7 +807,7 @@ The observer pattern (`mudd/observers/`, `mudd/events/`) handles side effects fr
 ```python
 class Observer(Protocol):
     def notify(self, event: GameEvent) -> None: ...  # Sync, during rendering
-    async def flush(self) -> None: ...               # Async, after response sent
+    async def flush(self) -> None: ...  # Async, after response sent
 ```
 
 ### EffectsObserver
