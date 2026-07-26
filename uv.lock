@@ -376,15 +376,15 @@ wheels = [
 
 [[package]]
 name = "lefthook"
-version = "2.1.2"
+version = "2.1.4"
 source = { registry = "https://pypi.org/simple" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/4c/27/3bfee494992d5de229dcec5f8a196eb946e1252e784ba034ac2835dd0201/lefthook-2.1.2-py3-none-macosx_10_15_x86_64.whl", hash = "sha256:eff83082575e635827c12e8738a39c420c8621a6b81392399dbd90f4d8c28f09", size = 5369146, upload-time = "2026-03-01T20:29:52.161Z" },
-    { url = "https://files.pythonhosted.org/packages/2c/eb/78293dc162a42eb5a71b4fca2beaa3501233ab1eaf271c39ebb1e7f738fd/lefthook-2.1.2-py3-none-macosx_11_0_arm64.whl", hash = "sha256:65877aa9ed13cb517803759d96d8a18c3a1e7bfa01bacfe00de65f0118720449", size = 4922032, upload-time = "2026-03-01T20:29:49.313Z" },
-    { url = "https://files.pythonhosted.org/packages/d2/40/dc325cabb2072687de3672c18d01d0135f7bc1de1d9d36613e6b36692b56/lefthook-2.1.2-py3-none-manylinux_2_17_aarch64.whl", hash = "sha256:c2ecd7d1782cf8faa582e9a348f06d61c8722352133c499cd38d0dc2e1a81351", size = 4752709, upload-time = "2026-03-01T20:29:50.785Z" },
-    { url = "https://files.pythonhosted.org/packages/f2/73/ce5ccc0702486c8aa6a022882d15f9d7e9c52f195c70a6d3ff9978018b90/lefthook-2.1.2-py3-none-manylinux_2_17_x86_64.whl", hash = "sha256:acf7ac51a0d229e99d3934dab46d149fbb8037874c9b9e04624008763395d876", size = 5299290, upload-time = "2026-03-01T20:29:47.55Z" },
-    { url = "https://files.pythonhosted.org/packages/cb/2d/37a6b471efd35d42c28682720e8444bc65f418b110b50164d935be3b3fd5/lefthook-2.1.2-py3-none-win_amd64.whl", hash = "sha256:6d09a71b2f6495f984a6e922dfe70b8d28956aec1c65173e46e54db37c79b334", size = 5442397, upload-time = "2026-03-01T20:29:45.875Z" },
-    { url = "https://files.pythonhosted.org/packages/97/7b/130e43fc04fd9620d8685eb892cec38088ca787e3e573de5dc2f16d25f46/lefthook-2.1.2-py3-none-win_arm64.whl", hash = "sha256:be5b1dc8bfe68e2df50984fe7b4927e21acba7828b721a0a6537243cd4d599a4", size = 4826352, upload-time = "2026-03-01T20:29:53.964Z" },
+    { url = "https://files.pythonhosted.org/packages/3c/c1/0e76e13ff1cc52e6dcf295d6b1d9ea18eb7b48bda54075cbdcc0aa6df20c/lefthook-2.1.4-py3-none-macosx_10_15_x86_64.whl", hash = "sha256:f1dc03042222ee7f1ee7dbbae7ee3046beb9a12ebdfae09bca1107c19c1be988", size = 5432992, upload-time = "2026-03-12T07:25:17.326Z" },
+    { url = "https://files.pythonhosted.org/packages/53/73/93f1a67afac0fa97c38004c43eb14df97414b6d3b4b0069b6d2b96b9de10/lefthook-2.1.4-py3-none-macosx_11_0_arm64.whl", hash = "sha256:a8db48e35307394cf0277d199b3b5a541324308642a16c3b3a9de688d64e165d", size = 4957289, upload-time = "2026-03-12T07:25:26.561Z" },
+    { url = "https://files.pythonhosted.org/packages/03/70/2b5641a32f4ae7f31f38d67e987c4943d1f0ec401395e779c03dbca2484b/lefthook-2.1.4-py3-none-manylinux_2_17_aarch64.whl", hash = "sha256:31300ac6bde3512a62252da4c6e0685b5c5d0adefb5dfa1f7f5e1f0aea63ba8b", size = 4785792, upload-time = "2026-03-12T07:25:21.731Z" },
+    { url = "https://files.pythonhosted.org/packages/8d/58/b6253c7ba669ecb21300c03ba0342e30392d2a22d3d54a7dfa398beb5bcd/lefthook-2.1.4-py3-none-manylinux_2_17_x86_64.whl", hash = "sha256:9b4e34d5771bb4484e10df644ad0bb3e348ac026d8c2305b9a151e932fc3e2b8", size = 5359026, upload-time = "2026-03-12T07:25:23.372Z" },
+    { url = "https://files.pythonhosted.org/packages/a0/d2/a9ae9afe0b728b4eae171c5f95b1f57d213154533fbfb0cbb9281c3c60e9/lefthook-2.1.4-py3-none-win_amd64.whl", hash = "sha256:d8ae5640d4393e460d00f9b53cc60c9f8112b6194c1d85efd9cad9682e1e91ac", size = 5509363, upload-time = "2026-03-12T07:25:24.961Z" },
+    { url = "https://files.pythonhosted.org/packages/2a/44/ab9d096f758f8de7e45a80eb5b49a60dbb5b12de20df308489cc4738ed50/lefthook-2.1.4-py3-none-win_arm64.whl", hash = "sha256:8c7ae0094d8d946cab0fd7977a9cd935a4c2d302401a561ab64bb175c6b5eb9d", size = 4862370, upload-time = "2026-03-12T07:25:19.554Z" },
 ]
 
 [[package]]
