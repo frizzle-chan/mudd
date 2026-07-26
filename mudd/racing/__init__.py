@@ -21,10 +21,10 @@ from mudd.racing.rendering import (
 from mudd.racing.simulation import BurstEvent, BurstType, RaceResult, simulate_race
 
 __all__ = [
+    "DEFAULT_CONFIG",
     "AnnouncementHorse",
     "BurstEvent",
     "BurstType",
-    "DEFAULT_CONFIG",
     "HorseOdds",
     "HorseStats",
     "RaceConfig",
