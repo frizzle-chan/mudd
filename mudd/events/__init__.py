@@ -42,7 +42,7 @@ from mudd.events.types import (
     ZoneSyncedEvent,
 )
 
-__all__ = [
+__all__ = [  # noqa: RUF022 - grouped by category for readability, not sorted
     # Collector
     "EffectsCollector",
     # Observer protocols
