@@ -32,7 +32,7 @@ class async_cached_property[T]:
     def __init__(self, func: Callable[[Any], Coroutine[Any, Any, T]]) -> None:
         self._func = func
         self._name = getattr(func, "__name__", "<unknown>")
-        functools.update_wrapper(self, func)  # type: ignore[arg-type]
+        functools.update_wrapper(self, func)  # ty: ignore[invalid-argument-type]
 
     def __set_name__(self, owner: type, name: str) -> None:
         self._name = name

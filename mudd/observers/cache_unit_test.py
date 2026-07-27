@@ -25,6 +25,10 @@ class UnhandledEvent:
     pass
 
 
+async def _noop_rebuild(_key: str) -> None:
+    """Async no-op for tests that never reach a rebuild."""
+
+
 def _make_observer(
     invalidated: list[str],
     rebuilt: list[str],
@@ -51,7 +55,7 @@ class TestNotify:
         invalidated: list[str] = []
         observer = _make_observer(invalidated, [])
 
-        observer.notify(FakeEventA(key="room-1"))  # type: ignore[arg-type]
+        observer.notify(FakeEventA(key="room-1"))  # ty: ignore[invalid-argument-type]
 
         assert invalidated == ["room-1"]
 
@@ -59,7 +63,7 @@ class TestNotify:
         invalidated: list[str] = []
         observer = _make_observer(invalidated, [])
 
-        observer.notify(UnhandledEvent())  # type: ignore[arg-type]
+        observer.notify(UnhandledEvent())  # ty: ignore[invalid-argument-type]
 
         assert invalidated == []
 
@@ -69,10 +73,10 @@ class TestNotify:
         observer = CacheInvalidationObserver(
             extractors={FakeEventA: lambda _: None},
             on_invalidate=invalidated.append,
-            on_rebuild=lambda _: None,
+            on_rebuild=_noop_rebuild,
         )
 
-        observer.notify(FakeEventA(key="x"))  # type: ignore[arg-type]
+        observer.notify(FakeEventA(key="x"))  # ty: ignore[invalid-argument-type]
 
         assert invalidated == []
 
@@ -80,8 +84,8 @@ class TestNotify:
         invalidated: list[str] = []
         observer = _make_observer(invalidated, [])
 
-        observer.notify(FakeEventA(key="room-1"))  # type: ignore[arg-type]
-        observer.notify(FakeEventB(key="room-2"))  # type: ignore[arg-type]
+        observer.notify(FakeEventA(key="room-1"))  # ty: ignore[invalid-argument-type]
+        observer.notify(FakeEventB(key="room-2"))  # ty: ignore[invalid-argument-type]
 
         assert invalidated == ["room-1", "room-2"]
 
@@ -90,8 +94,8 @@ class TestNotify:
         invalidated: list[str] = []
         observer = _make_observer(invalidated, [])
 
-        observer.notify(FakeEventA(key="room-1"))  # type: ignore[arg-type]
-        observer.notify(FakeEventA(key="room-1"))  # type: ignore[arg-type]
+        observer.notify(FakeEventA(key="room-1"))  # ty: ignore[invalid-argument-type]
+        observer.notify(FakeEventA(key="room-1"))  # ty: ignore[invalid-argument-type]
 
         assert invalidated == ["room-1", "room-1"]
 
@@ -104,7 +108,7 @@ class TestFlush:
         rebuilt: list[str] = []
         observer = _make_observer([], rebuilt)
 
-        observer.notify(FakeEventA(key="room-1"))  # type: ignore[arg-type]
+        observer.notify(FakeEventA(key="room-1"))  # ty: ignore[invalid-argument-type]
         await observer.flush()
 
         assert rebuilt == ["room-1"]
@@ -115,8 +119,8 @@ class TestFlush:
         rebuilt: list[str] = []
         observer = _make_observer([], rebuilt)
 
-        observer.notify(FakeEventA(key="room-1"))  # type: ignore[arg-type]
-        observer.notify(FakeEventA(key="room-1"))  # type: ignore[arg-type]
+        observer.notify(FakeEventA(key="room-1"))  # ty: ignore[invalid-argument-type]
+        observer.notify(FakeEventA(key="room-1"))  # ty: ignore[invalid-argument-type]
         await observer.flush()
 
         assert rebuilt == ["room-1"]
@@ -126,7 +130,7 @@ class TestFlush:
         rebuilt: list[str] = []
         observer = _make_observer([], rebuilt)
 
-        observer.notify(FakeEventA(key="room-1"))  # type: ignore[arg-type]
+        observer.notify(FakeEventA(key="room-1"))  # ty: ignore[invalid-argument-type]
         await observer.flush()
         rebuilt.clear()
 
@@ -148,8 +152,8 @@ class TestFlush:
         rebuilt: list[str] = []
         observer = _make_observer([], rebuilt)
 
-        observer.notify(FakeEventA(key="room-1"))  # type: ignore[arg-type]
-        observer.notify(FakeEventB(key="room-2"))  # type: ignore[arg-type]
+        observer.notify(FakeEventA(key="room-1"))  # ty: ignore[invalid-argument-type]
+        observer.notify(FakeEventB(key="room-2"))  # ty: ignore[invalid-argument-type]
         await observer.flush()
 
         assert sorted(rebuilt) == ["room-1", "room-2"]

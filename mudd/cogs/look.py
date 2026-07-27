@@ -81,7 +81,7 @@ class Look(commands.Cog):
             self._pool,
             scene,
             entity_instance_query,
-            lambda _: partial(interaction.response.send_message, ephemeral=True),
+            partial(interaction.response.send_message, ephemeral=True),
         )
 
         if not entity_instance or not await scene.contains(entity_instance):
