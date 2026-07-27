@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 from mudd.models.skills import UserSkill
 from mudd.skills.formatting import (
     MILESTONE_ROLE_NAMES,
@@ -45,7 +47,7 @@ class TestFormatProgressBar:
 
 
 class TestFormatSkillsMessage:
-    _skills = [
+    _skills: ClassVar[list[UserSkill]] = [
         UserSkill(user_id=1, skill="agility", xp=0, level=1),
         UserSkill(user_id=1, skill="attack", xp=0, level=1),
         UserSkill(user_id=1, skill="speech", xp=0, level=1),
@@ -91,7 +93,7 @@ class TestFormatSkillsMessage:
 
 
 class TestFormatSkillsMessageDeltas:
-    _skills = [
+    _skills: ClassVar[list[UserSkill]] = [
         UserSkill(user_id=1, skill="agility", xp=0, level=1),
         UserSkill(user_id=1, skill="attack", xp=25, level=1),
         UserSkill(user_id=1, skill="speech", xp=0, level=1),
