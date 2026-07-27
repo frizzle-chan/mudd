@@ -54,7 +54,7 @@ def _make_room(room_id: str = "test-room", name: str = "Test Room") -> Room:
         name=name,
         description="A test room.",
         zone_id="test-zone",
-        _pool=None,  # type: ignore[arg-type]
+        _pool=None,  # ty: ignore[invalid-argument-type]
     )
 
 
@@ -199,7 +199,7 @@ class TestCreateInvalidatorFactory:
     def test_returns_cache_invalidation_observer(self):
         """create_invalidator returns a CacheInvalidationObserver."""
         cache = EntityAutocompleteCache()
-        result = cache.create_invalidator(None, "room")  # type: ignore[arg-type]
+        result = cache.create_invalidator(None, "room")  # ty: ignore[invalid-argument-type]
         assert isinstance(result, CacheInvalidationObserver)
 
     def test_invalidator_invalidates_cache_on_notify(self):
@@ -208,7 +208,7 @@ class TestCreateInvalidatorFactory:
         cache._room_choices["lobby"] = [app_commands.Choice(name="X", value="x")]
         cache._room_choices["garden"] = [app_commands.Choice(name="Y", value="y")]
 
-        invalidator = cache.create_invalidator(None, "lobby")  # type: ignore[arg-type]
+        invalidator = cache.create_invalidator(None, "lobby")  # ty: ignore[invalid-argument-type]
         entity = _make_instance("Sword")
         picked_up = replace(entity, room_id=None, owner_id=12345)
         invalidator.notify(EntityPickedUpEvent(instance=picked_up))

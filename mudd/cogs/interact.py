@@ -94,7 +94,7 @@ class Interact(commands.Cog):
             self._pool,
             scene,
             target,
-            lambda _: partial(interaction.response.send_message, ephemeral=True),
+            partial(interaction.response.send_message, ephemeral=True),
         )
 
         if not entity or not await scene.contains(entity):

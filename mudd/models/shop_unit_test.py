@@ -258,9 +258,9 @@ class TestTradingSession:
             created_at=datetime.now(UTC),
         )
         with pytest.raises(AttributeError):
-            session.user_id = 999  # type: ignore[misc]
+            session.user_id = 999  # ty: ignore[invalid-assignment]
         with pytest.raises(AttributeError):
-            session.shop_id = "other"  # type: ignore[misc]
+            session.shop_id = "other"  # ty: ignore[invalid-assignment]
 
     def test_slots(self):
         session = TradingSession(
@@ -271,4 +271,4 @@ class TestTradingSession:
             created_at=datetime.now(UTC),
         )
         with pytest.raises((AttributeError, TypeError)):
-            session.extra_field = "nope"  # type: ignore[attr-defined]
+            session.extra_field = "nope"  # ty: ignore[invalid-assignment]

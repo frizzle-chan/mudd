@@ -1071,7 +1071,7 @@ class Racing(commands.Cog):
             )
             return None
 
-        sent = await channel.send(**kwargs)  # type: ignore[arg-type]
+        sent = await channel.send(**kwargs)  # ty: ignore[no-matching-overload]
 
         thread = await sent.create_thread(name=f"Race #{msg.race_id}")
         await set_race_thread(self._pool, msg.race_id, thread.id)
@@ -1114,7 +1114,7 @@ class Racing(commands.Cog):
             )
             return True  # Don't retry — thread is gone
 
-        await thread.send(**kwargs)  # type: ignore[arg-type]
+        await thread.send(**kwargs)  # ty: ignore[no-matching-overload]
         return True
 
     async def _post_poll(

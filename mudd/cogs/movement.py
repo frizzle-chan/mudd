@@ -196,7 +196,7 @@ class Movement(commands.Cog):
 
         try:
             # Build standard observers
-            bot: MuddBot = self.bot  # type: ignore[assignment]
+            bot: MuddBot = self.bot  # ty: ignore[invalid-assignment]
             observers = build_observers(
                 self._pool,
                 user.id,
@@ -247,7 +247,7 @@ class Movement(commands.Cog):
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
         """Assign new members to the default location and create inventory forum."""
-        bot: MuddBot = self.bot  # type: ignore[assignment]
+        bot: MuddBot = self.bot  # ty: ignore[invalid-assignment]
         if member.guild.id != bot.guild_id:
             return
         if member.bot:
@@ -289,7 +289,7 @@ class Movement(commands.Cog):
     @commands.Cog.listener()
     async def on_member_remove(self, member: discord.Member):
         """Clean up user data when member leaves."""
-        bot: MuddBot = self.bot  # type: ignore[assignment]
+        bot: MuddBot = self.bot  # ty: ignore[invalid-assignment]
         if member.guild.id != bot.guild_id:
             return
         try:

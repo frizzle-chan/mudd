@@ -437,7 +437,9 @@ class InventoryReconciler:
         forum_name: str,
     ) -> discord.ForumChannel | None:
         """Create a new inventory forum for a user."""
-        overwrites = {
+        overwrites: dict[
+            discord.Role | discord.Member | discord.Object, discord.PermissionOverwrite
+        ] = {
             guild.default_role: discord.PermissionOverwrite(view_channel=False),
             member: discord.PermissionOverwrite(
                 view_channel=True,
