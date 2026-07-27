@@ -5,6 +5,7 @@ SET lock_timeout = '1s';
 SET statement_timeout = '5s';
 
 -- Add on_fish verb action
+-- squawk-ignore require-enum-value-ordering
 ALTER TYPE verb_action ADD VALUE 'on_fish';
 
 -- Add on_fish handler column to entities
