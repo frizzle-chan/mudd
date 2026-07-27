@@ -15,7 +15,9 @@ ALTER TABLE entities ADD COLUMN on_close TEXT;
 ALTER TABLE entities ADD COLUMN focus_mode focus_mode DEFAULT NULL;
 
 -- Add new verb actions
+-- squawk-ignore require-enum-value-ordering
 ALTER TYPE verb_action ADD VALUE 'on_open';
+-- squawk-ignore require-enum-value-ordering
 ALTER TYPE verb_action ADD VALUE 'on_close';
 
 -- User focus table: tracks which entity each user has "open"
