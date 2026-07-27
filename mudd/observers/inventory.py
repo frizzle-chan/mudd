@@ -6,6 +6,7 @@ import asyncio
 import contextlib
 import logging
 from io import BytesIO
+from typing import ClassVar
 
 import asyncpg
 import discord
@@ -61,7 +62,7 @@ class InventoryReconciler:
 
     # Serialize inventory work per-user across all reconciler instances
     # to prevent duplicate thread creation from concurrent sync + commands.
-    _user_locks: dict[int, asyncio.Lock] = {}
+    _user_locks: ClassVar[dict[int, asyncio.Lock]] = {}
 
     @classmethod
     def _get_user_lock(cls, user_id: int) -> asyncio.Lock:
