@@ -20,7 +20,7 @@ from mudd.skills.registry import Skill
 def _make_observer() -> SkillsObserver:
     """Create a SkillsObserver with a fake pool."""
     return SkillsObserver(
-        _pool=None,  # type: ignore[arg-type]
+        _pool=None,  # ty: ignore[invalid-argument-type]
         _user_id=123,
         _room_id="foyer",
     )

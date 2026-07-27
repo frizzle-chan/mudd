@@ -57,7 +57,7 @@ class TestCreateInvalidator:
 
     def test_returns_cache_invalidation_observer(self):
         cache = UserCache()
-        result = cache.create_invalidator(None)  # type: ignore[arg-type]
+        result = cache.create_invalidator(None)  # ty: ignore[invalid-argument-type]
         assert isinstance(result, CacheInvalidationObserver)
 
     def test_invalidates_on_user_moved(self):
@@ -65,7 +65,7 @@ class TestCreateInvalidator:
         cache._entries[42] = UserState(current_room="lobby", focus_id=None)
         cache._entries[99] = UserState(current_room="garden", focus_id=None)
 
-        invalidator = cache.create_invalidator(None)  # type: ignore[arg-type]
+        invalidator = cache.create_invalidator(None)  # ty: ignore[invalid-argument-type]
         invalidator.notify(
             UserMovedEvent(user_id=42, from_room="lobby", to_room="garden", guild_id=1)
         )
@@ -77,7 +77,7 @@ class TestCreateInvalidator:
         cache = UserCache()
         cache._entries[42] = UserState(current_room="lobby", focus_id=uuid4())
 
-        invalidator = cache.create_invalidator(None)  # type: ignore[arg-type]
+        invalidator = cache.create_invalidator(None)  # ty: ignore[invalid-argument-type]
         invalidator.notify(FocusChangedEvent(user_id=42))
 
         assert cache.get(42) is None

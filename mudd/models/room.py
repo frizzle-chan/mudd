@@ -25,7 +25,7 @@ class _DefaultVisibleEntities:
     """Mixin: get_visible_entities defaults to get_entities."""
 
     async def get_visible_entities(self) -> list[EntityInstance]:
-        return await self.get_entities()  # type: ignore[attr-defined]
+        return await self.get_entities()  # ty: ignore[unresolved-attribute]
 
 
 @dataclass(frozen=True)

@@ -208,7 +208,7 @@ class EntityInstance:
     room_id: str | None
     owner_id: int | None
     container_entity_id: str | None = None
-    _pool: asyncpg.Pool = field(repr=False, compare=False, default=None)  # type: ignore[assignment]
+    _pool: asyncpg.Pool = field(repr=False, compare=False, default=None)  # ty: ignore[invalid-assignment]
     _observers: tuple[Observer, ...] = field(
         repr=False, compare=False, default_factory=tuple
     )

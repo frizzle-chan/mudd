@@ -48,7 +48,7 @@ class Speech(commands.Cog):
         if message.author.bot or message.guild is None:
             return
 
-        bot: MuddBot = self.bot  # type: ignore[assignment]
+        bot: MuddBot = self.bot  # ty: ignore[invalid-assignment]
         if message.guild.id != bot.guild_id:
             return
 
