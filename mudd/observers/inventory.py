@@ -235,9 +235,9 @@ class InventoryReconciler:
                 self._category_cache[guild.id] = category.id
                 return category
 
-        overwrites = {
-            guild.default_role: discord.PermissionOverwrite(view_channel=False)
-        }
+        overwrites: dict[
+            discord.Role | discord.Member | discord.Object, discord.PermissionOverwrite
+        ] = {guild.default_role: discord.PermissionOverwrite(view_channel=False)}
         category = await guild.create_category(
             INVENTORY_CATEGORY_NAME, overwrites=overwrites
         )

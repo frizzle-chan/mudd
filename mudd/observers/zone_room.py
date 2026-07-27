@@ -103,9 +103,10 @@ class ZoneRoomReconciler:
                 return category
 
         try:
-            overwrites = {
-                guild.default_role: discord.PermissionOverwrite(view_channel=False)
-            }
+            overwrites: dict[
+                discord.Role | discord.Member | discord.Object,
+                discord.PermissionOverwrite,
+            ] = {guild.default_role: discord.PermissionOverwrite(view_channel=False)}
             category = await guild.create_category(event.name, overwrites=overwrites)
             self._zone_categories[guild.id][event.zone_id] = category
             logger.info(f"Created category '{event.name}' for zone {event.zone_id}")
