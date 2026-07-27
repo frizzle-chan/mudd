@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import UUID
 
 from mudd.cogs.shop import format_buy_choices, format_sell_choices
@@ -25,7 +25,7 @@ def _stock_item(
         name=name,
         rarity=rarity,
         tags=(),
-        stocked_at=datetime(2024, 1, 1),
+        stocked_at=datetime(2024, 1, 1, tzinfo=UTC),
     )
 
 
