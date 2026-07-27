@@ -10,7 +10,7 @@ cache implementations.
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable, Hashable
+from collections.abc import Awaitable, Callable, Hashable, Mapping
 from typing import Any
 
 from mudd.events.types import GameEvent
@@ -30,7 +30,7 @@ class CacheInvalidationObserver[K: Hashable]:
 
     def __init__(
         self,
-        extractors: dict[type, Callable[[Any], K | None]],
+        extractors: Mapping[type, Callable[[Any], K | None]],
         on_invalidate: Callable[[K], None],
         on_rebuild: Callable[[K], Awaitable[None]],
     ) -> None:

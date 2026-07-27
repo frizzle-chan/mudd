@@ -16,6 +16,7 @@ cache rebuild and the live autocomplete slow path.
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 from functools import partial
 from uuid import UUID
 
@@ -47,7 +48,7 @@ def _make_choice(e: EntityInstance | RoomEntityInstance) -> app_commands.Choice[
 
 
 def entities_to_choices(
-    entities: list[EntityInstance | RoomEntityInstance],
+    entities: Sequence[EntityInstance | RoomEntityInstance],
 ) -> list[app_commands.Choice[str]]:
     """Convert entities to Discord autocomplete choices.
 

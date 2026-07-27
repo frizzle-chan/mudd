@@ -70,7 +70,9 @@ async def ensure_category(guild: discord.Guild) -> discord.CategoryChannel:
             return cat
 
     # Create hidden category
-    overwrites = {
+    overwrites: dict[
+        discord.Role | discord.Member | discord.Object, discord.PermissionOverwrite
+    ] = {
         guild.default_role: discord.PermissionOverwrite(view_channel=False),
         guild.me: discord.PermissionOverwrite(
             view_channel=True,
@@ -333,7 +335,9 @@ class SkillsReconciler:
             return recovered.id
 
         # Create new channel
-        overwrites = {
+        overwrites: dict[
+            discord.Role | discord.Member | discord.Object, discord.PermissionOverwrite
+        ] = {
             guild.default_role: discord.PermissionOverwrite(view_channel=False),
             member: discord.PermissionOverwrite(
                 view_channel=True,
