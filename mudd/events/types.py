@@ -43,21 +43,15 @@ class GrantCurrencyEvent:
 class PickupSignal:
     """Signal that the current item should be picked up."""
 
-    pass
-
 
 @dataclass(frozen=True, slots=True)
 class DropSignal:
     """Signal that the current item should be dropped."""
 
-    pass
-
 
 @dataclass(frozen=True, slots=True)
 class DestroySignal:
     """Signal that the current entity should be destroyed."""
-
-    pass
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,21 +73,15 @@ class ChargeCurrencySignal:
 class DispenseSignal:
     """Signal that an item should be dispensed from this container."""
 
-    pass
-
 
 @dataclass(frozen=True, slots=True)
 class SetFocusSignal:
     """Signal that focus should be set on the current entity."""
 
-    pass
-
 
 @dataclass(frozen=True, slots=True)
 class ClearFocusSignal:
     """Signal that user focus should be cleared."""
-
-    pass
 
 
 @dataclass(frozen=True, slots=True)
