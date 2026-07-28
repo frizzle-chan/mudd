@@ -37,7 +37,7 @@ runtime, and the annotation claims that can't happen.
 **Structural fix: annotate the attribute at its true type.** These cogs are
 only ever constructed with the real bot (`main.py:80,84`), and they read
 `MuddBot`-specific state (`guild_id`). `Racing` already does this correctly
-(`racing.py:598: bot: MuddBot`) and needs no ignore — so the fix is to make
+(`racing.py:597: bot: MuddBot`) and needs no ignore — so the fix is to make
 `Movement` and `Speech` consistent with the cog that already got it right:
 
 ```python
@@ -47,8 +47,8 @@ def __init__(self, bot: MuddBot, ...) -> None:
 if member.guild.id != self.bot.guild_id:
 ```
 
-**Bonus:** this also deletes four `cast(discord.Client, self.bot)` calls in
-`movement.py`. `MuddBot <: commands.Bot <: discord.Client`, so once the
+**Bonus:** this also deletes the three `cast(discord.Client, self.bot)` calls
+in `movement.py` (lines 204, 262, 298). `MuddBot <: commands.Bot <: discord.Client`, so once the
 attribute is typed honestly the casts are redundant. The `| None` on the
 parameter was vestigial — no test or caller passes `None`.
 
@@ -86,10 +86,19 @@ Zero production impact — all four internal construction sites
 objects without a pool and now must supply one:
 `mudd/caches/entity_autocomplete_unit_test.py:43` and
 `mudd/cogs/shop_unit_test.py:129`. The honest way to write that is
-`_pool=cast(asyncpg.Pool, None)` — the same pattern `Room`'s test already
-uses. That is the correct trade: one explicit cast in test scaffolding,
-where the object genuinely has no database, instead of a false type on a
-production dataclass that misleads every call site.
+`_pool=cast(asyncpg.Pool, None)`. That is the correct trade: one explicit
+cast in test scaffolding, where the object genuinely has no database,
+instead of a false type on a production dataclass that misleads every call
+site.
+
+The source-level precedent for a required `_pool` is `Room`
+(`room.py:47`), which already declares the field with no default. Its *test*
+double, however, writes `_pool=None,  # ty: ignore[invalid-argument-type]`
+(`entity_autocomplete_unit_test.py:60`), as does
+`observers/skills_unit_test.py:23`. Rather than leave two styles for the
+same problem — one of them ten lines from the other in the same file — both
+have been normalized to the `cast` form, removing 2 further ignores. This
+is a follow-through on the source fix, not an audit of test code.
 
 ## 3. `channel.send(**kwargs)` — 2 ignores
 
@@ -114,7 +123,7 @@ one place, where it is an explicit branch rather than a runtime dict shape:
 
 ```python
 @dataclass(frozen=True, slots=True)
-class RaceMessagePayload:
+class _RaceMessagePayload:
     """Content (and optional image) for a queued race message.
 
     `discord.File` is single-use — a payload must not be sent twice.
@@ -131,7 +140,7 @@ class RaceMessagePayload:
 ```
 
 Both `_post_announcement` and `_post_to_thread` take
-`payload: RaceMessagePayload` instead of `kwargs: dict[str, object]` and
+`payload: _RaceMessagePayload` instead of `kwargs: dict[str, object]` and
 call `await payload.send_to(...)`. `content` is `str | None` because
 `PendingMessage.content` is (`racing/persistence.py:74`); typing it that way
 keeps the payload faithful to its source rather than asserting non-null.
@@ -176,6 +185,16 @@ class-definition time instead of documented and hoped for, which is exactly
 the guarantee the `IRoom` protocol in `models/interfaces.py:90` already
 states for the same pair of methods.
 
+Because those two `get_entities` implementations now override a base-class
+method, CLAUDE.md's `@override` rule applies to them and both have been
+annotated accordingly.
+
+**Why `abc.ABC` and not a Protocol in `interfaces.py`.** CLAUDE.md
+prescribes protocols there specifically for breaking import cycles, and this
+mixin isn't a cycle problem — it *provides* a default implementation, which
+Protocol inheritance handles awkwardly. `mudd/commands.py` already
+establishes the ABC-for-behavior-contract precedent in this codebase.
+
 ## 5. `functools.update_wrapper(self, func)` — 1 ignore
 
 ```python
@@ -209,7 +228,7 @@ Applied all five fixes together on `claude/typeignore-audit-1uevgq`:
 
 - `uv run ty check` — **All checks passed** (baseline was also clean; the
   fixes hold with zero ignores rather than by suppression).
-- `uv run ruff check .` and `ruff format --check .` — pass.
+- `uv run ruff check .`, `ruff format --check .`, `uv run vulture` — pass.
 - `uv run pytest mudd/` — 366 passed, 12 failed. All 12 are image-regression
   tests (`*_image_test.py`); confirmed pre-existing by stashing the diff and
   re-running — identical 12 failures. They are font-rendering diffs in this
@@ -220,9 +239,31 @@ Applied all five fixes together on `claude/typeignore-audit-1uevgq`:
   unit tests that construct `EntityInstance`; a local `just test` run
   against the dev database is worth doing before merge.
 
-Net: **10 ignores removed, 4 redundant `cast()` calls removed, 1 unused
-import removed, 0 ignores added to source.** Two test files gain an explicit
-`cast(asyncpg.Pool, None)`, matching the pattern `Room`'s test already uses.
+Net: **10 source ignores removed, 3 redundant `cast()` calls removed, 2
+unused imports removed (`typing.cast`, `functools`), 0 ignores added to
+source.** On the test side, the two files forced to supply a pool gain an
+explicit `cast(asyncpg.Pool, None)`, and the 2 pre-existing
+`_pool=None  # ty: ignore` sites were normalized to the same form — so 12
+ignores are gone repo-wide and no `_pool=None` remains.
+
+## Production risk
+
+CLAUDE.md flags this as a live service, so to state it plainly rather than
+leave it implied: **the deployment risk here is near-zero.**
+
+- No schema change, so no migration and nothing to roll back in the database.
+- No slash-command or argument change, so no user-facing API surface moves.
+- Fixes #1, #3, #4 and #5 are runtime-equivalent — annotations, a dataclass
+  wrapper around calls that already happened, an abstract declaration both
+  subclasses already satisfy, and one metadata assignment nothing reads.
+- Fix #2 has the only runtime delta, and it is strictly safer: constructing
+  `EntityInstance` or `Scene` without `_pool` now raises `TypeError` at
+  construction instead of deferring an `AttributeError` to first database
+  use. No such construction site exists in production code.
+
+Rollback is a plain revert of the commit. The one pre-merge step worth
+taking is a local `just test` against the dev database, since the
+integration suite could not run in this environment.
 
 ## Related suppressions (not type ignores)
 

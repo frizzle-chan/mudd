@@ -57,7 +57,7 @@ def _make_room(room_id: str = "test-room", name: str = "Test Room") -> Room:
         name=name,
         description="A test room.",
         zone_id="test-zone",
-        _pool=None,  # ty: ignore[invalid-argument-type]
+        _pool=cast(asyncpg.Pool, None),
     )
 
 

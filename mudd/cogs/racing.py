@@ -261,7 +261,7 @@ def _generate_announcement_flavor(
 
 
 @dataclass(frozen=True, slots=True)
-class RaceMessagePayload:
+class _RaceMessagePayload:
     """Content (and optional image) for a queued race message.
 
     `discord.File` is single-use — a payload must not be sent twice.
@@ -1038,7 +1038,7 @@ class Racing(commands.Cog):
             logger.info("Race #%d transitioned to running", msg.race_id)
             return True, None
 
-        payload = RaceMessagePayload(
+        payload = _RaceMessagePayload(
             content=msg.content,
             file=(
                 discord.File(BytesIO(msg.image_data), filename=msg.image_name)
@@ -1069,7 +1069,7 @@ class Racing(commands.Cog):
     async def _post_announcement(
         self,
         msg: PendingMessage,
-        payload: RaceMessagePayload,
+        payload: _RaceMessagePayload,
         guild: discord.Guild,
     ) -> int | None:
         """Post announcement to channel and create thread.
@@ -1103,7 +1103,7 @@ class Racing(commands.Cog):
     async def _post_to_thread(
         self,
         msg: PendingMessage,
-        payload: RaceMessagePayload,
+        payload: _RaceMessagePayload,
         guild: discord.Guild,
         batch_threads: dict[int, int],
     ) -> bool:

@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from typing import cast
+
+import asyncpg
+
 from mudd.events.types import (
     BroadcastEvent,
     GrantXPSignal,
@@ -20,7 +24,7 @@ from mudd.skills.registry import Skill
 def _make_observer() -> SkillsObserver:
     """Create a SkillsObserver with a fake pool."""
     return SkillsObserver(
-        _pool=None,  # ty: ignore[invalid-argument-type]
+        _pool=cast(asyncpg.Pool, None),
         _user_id=123,
         _room_id="foyer",
     )

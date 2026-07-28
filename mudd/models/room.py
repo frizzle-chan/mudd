@@ -5,7 +5,7 @@ from __future__ import annotations
 import abc
 import logging
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Self
+from typing import TYPE_CHECKING, Self, override
 
 import asyncpg
 
@@ -448,6 +448,7 @@ class EntityModal(_DefaultVisibleEntities):
         """The container entity if this is a container context, else None."""
         return self.entity_instance if self.is_container else None
 
+    @override
     async def get_entities(self) -> list[EntityInstance]:
         """Get all entity instances in this room.
 
@@ -495,6 +496,7 @@ class InventoryThread(_DefaultVisibleEntities):
     def current_container(self) -> EntityInstance | None:
         return None  # Inventory items are not containers
 
+    @override
     async def get_entities(self) -> list[EntityInstance]:
         return [self.entity_instance]
 
