@@ -27,12 +27,18 @@ bot: MuddBot = self.bot  # ty: ignore[invalid-assignment]
 if member.guild.id != bot.guild_id:
 ```
 
-**Why the checker is right.** `Movement.__init__` declares
-`bot: commands.Bot | None`, so `self.bot` really is `commands.Bot | None` —
-a type that has no `guild_id`. The local re-annotation is a downcast *and* a
-silent `None`-strip. The ignore was suppressing a genuine unsoundness: if
-`self.bot` were ever `None`, `bot.guild_id` raises `AttributeError` at
-runtime, and the annotation claims that can't happen.
+**Why the checker is right.** In both cogs `self.bot` is annotated as a type
+that has no `guild_id`, so the local re-annotation is a downcast the checker
+cannot justify.
+
+The two differ in how bad that is, and the distinction is worth keeping
+straight. `Movement.__init__` declares `bot: commands.Bot | None`, so its
+re-annotation is a downcast *and* a silent `None`-strip — genuine
+unsoundness, since if `self.bot` were ever `None`, `bot.guild_id` raises
+`AttributeError` at runtime while the annotation claims that cannot happen.
+`Speech.__init__` declares plain `bot: commands.Bot` with no `| None`, so
+its ignore suppressed only the downcast. The fix is identical for both; only
+`Movement` carried the latent `None` hazard.
 
 **Structural fix: annotate the attribute at its true type.** These cogs are
 only ever constructed with the real bot (`main.py:80,84`), and they read
@@ -49,8 +55,8 @@ if member.guild.id != self.bot.guild_id:
 
 **Bonus:** this also deletes the three `cast(discord.Client, self.bot)` calls
 in `movement.py` (lines 204, 262, 298). `MuddBot <: commands.Bot <: discord.Client`, so once the
-attribute is typed honestly the casts are redundant. The `| None` on the
-parameter was vestigial — no test or caller passes `None`.
+attribute is typed honestly the casts are redundant. `Movement`'s `| None`
+was vestigial — no test or caller passes `None`.
 
 ## 2. `_pool: asyncpg.Pool = field(default=None)` — 2 ignores
 
@@ -77,10 +83,13 @@ disappears and the field can be genuinely required:
 _pool: asyncpg.Pool = field(repr=False, compare=False, kw_only=True)
 ```
 
-Zero production impact — all four internal construction sites
-(`entity.py:298,691`, `scene.py:128`) already pass `_pool=` by keyword, and
-`replace()` preserves it. This also matches `Room`, which already declares
-`_pool: asyncpg.Pool = field(repr=False, compare=False)` with no default.
+Zero production impact — all three internal construction sites for these
+two classes (`entity.py:298,691` for `EntityInstance`, `scene.py:128` for
+`Scene`) already pass `_pool=` by keyword, and `replace()` preserves it.
+(`entity.py:84` is a fourth `cls(...)` in the same file, but it builds
+`ResolvedEntity`, which is untouched here.) This also matches `Room`, which
+already declares `_pool: asyncpg.Pool = field(repr=False, compare=False)`
+with no default.
 
 **Test consequence (out of scope but real).** Two unit tests construct these
 objects without a pool and now must supply one:
@@ -94,8 +103,8 @@ site.
 The source-level precedent for a required `_pool` is `Room`
 (`room.py:47`), which already declares the field with no default. Its *test*
 double, however, writes `_pool=None,  # ty: ignore[invalid-argument-type]`
-(`entity_autocomplete_unit_test.py:60`), as does
-`observers/skills_unit_test.py:23`. Rather than leave two styles for the
+(`entity_autocomplete_unit_test.py:60` and `observers/skills_unit_test.py:23`,
+both at the pre-change commit). Rather than leave two styles for the
 same problem — one of them ten lines from the other in the same file — both
 have been normalized to the `cast` form, removing 2 further ignores. This
 is a follow-through on the source fix, not an audit of test code.
@@ -180,10 +189,11 @@ class _DefaultVisibleEntities(abc.ABC):
 
 Both current subclasses (`EntityModal:432`, `InventoryThread:473`) already
 implement `get_entities`, so nothing changes for them. `abc.ABC` composes
-fine with `@dataclass(frozen=True)`. The requirement is now enforced at
-class-definition time instead of documented and hoped for, which is exactly
-the guarantee the `IRoom` protocol in `models/interfaces.py:90` already
-states for the same pair of methods.
+fine with `@dataclass(frozen=True)`. The requirement is now enforced —
+`ty` flags a non-conforming subclass statically, and Python raises
+`TypeError` on instantiation — instead of documented and hoped for, which is
+exactly the guarantee the `IRoom` protocol in `models/interfaces.py:90`
+already states for the same pair of methods.
 
 Because those two `get_entities` implementations now override a base-class
 method, CLAUDE.md's `@override` rule applies to them and both have been
