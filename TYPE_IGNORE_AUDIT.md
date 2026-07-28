@@ -229,15 +229,28 @@ Applied all five fixes together on `claude/typeignore-audit-1uevgq`:
 - `uv run ty check` — **All checks passed** (baseline was also clean; the
   fixes hold with zero ignores rather than by suppression).
 - `uv run ruff check .`, `ruff format --check .`, `uv run vulture` — pass.
-- `uv run pytest mudd/` — 366 passed, 12 failed. All 12 are image-regression
-  tests (`*_image_test.py`); confirmed pre-existing by stashing the diff and
-  re-running — identical 12 failures. They are font-rendering diffs in this
-  container, unrelated to these changes.
-- Integration tests (`tests/integration/`) could not run here — no
-  PostgreSQL reachable (`socket.gaierror`). Fix #2 is the one with any
-  runtime surface (dataclass field ordering), and it is exercised by the
-  unit tests that construct `EntityInstance`; a local `just test` run
-  against the dev database is worth doing before merge.
+- `just` (the full gate: lint, format, types, entities, horses, verbs,
+  squawk, vulture) — passes end to end.
+- `just test` — **422 passed, 0 failed**, integration suite included.
+
+An earlier draft of this report recorded 12 image-regression failures and
+44 integration errors, and reasoned about them as environmental. That was
+the right diagnosis but an incomplete fix, so both gaps have since been
+closed rather than argued around:
+
+- The 12 `*_image_test.py` failures were caused by a missing UnifontEX font.
+  `mudd/rendering/chrome.py:24` falls back to `ImageFont.load_default()`
+  when `/usr/share/fonts/truetype/unifontex/unifontex.ttf` is absent, so
+  every rendered baseline diffed. The Dockerfile installs that font;
+  the environment simply lacked it. Installing it turns all 12 green — the
+  checked-in baselines were correct all along.
+- The 44 integration errors were `socket.gaierror` from no PostgreSQL at
+  host `db`. With a local server and the `mudd:mudd@db:5432/mudd`
+  role/database that `tests/conftest.py` expects, the whole suite runs.
+
+This matters for the audit's conclusions: Fix #2 is the one change with any
+runtime surface, and it is now covered by the integration tests rather than
+by unit tests alone plus a caveat.
 
 Net: **10 source ignores removed, 3 redundant `cast()` calls removed, 2
 unused imports removed (`typing.cast`, `functools`), 0 ignores added to
@@ -261,9 +274,9 @@ leave it implied: **the deployment risk here is near-zero.**
   construction instead of deferring an `AttributeError` to first database
   use. No such construction site exists in production code.
 
-Rollback is a plain revert of the commit. The one pre-merge step worth
-taking is a local `just test` against the dev database, since the
-integration suite could not run in this environment.
+Rollback is a plain revert of the commit. The integration suite now runs
+here and is green, so the pre-merge caveat an earlier draft carried is
+discharged.
 
 ## Related suppressions (not type ignores)
 
