@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import abc
 import logging
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Self
@@ -21,11 +22,15 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-class _DefaultVisibleEntities:
+class _DefaultVisibleEntities(abc.ABC):
     """Mixin: get_visible_entities defaults to get_entities."""
 
+    @abc.abstractmethod
+    async def get_entities(self) -> list[EntityInstance]:
+        """Get all entity instances in this context."""
+
     async def get_visible_entities(self) -> list[EntityInstance]:
-        return await self.get_entities()  # ty: ignore[unresolved-attribute]
+        return await self.get_entities()
 
 
 @dataclass(frozen=True)

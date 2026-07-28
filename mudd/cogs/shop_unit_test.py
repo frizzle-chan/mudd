@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import cast
 from uuid import UUID
+
+import asyncpg
 
 from mudd.cogs.shop import format_buy_choices, format_sell_choices
 from mudd.models.entity import EntityInstance, ResolvedEntity
@@ -131,6 +134,7 @@ def _inventory_item(
         entity=entity,
         room_id=None,
         owner_id=owner_id,
+        _pool=cast(asyncpg.Pool, None),
     )
 
 

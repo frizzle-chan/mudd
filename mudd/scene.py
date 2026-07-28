@@ -32,7 +32,7 @@ class Scene:
 
     user: User
     room: IRoom
-    _pool: asyncpg.Pool = field(repr=False, compare=False, default=None)  # ty:ignore[invalid-assignment]
+    _pool: asyncpg.Pool = field(repr=False, compare=False, kw_only=True)
     _observers: tuple[Observer, ...] = field(default=(), repr=False, compare=False)
 
     # room and inventory share an interface

@@ -261,6 +261,23 @@ def _generate_announcement_flavor(
 
 
 @dataclass(frozen=True, slots=True)
+class RaceMessagePayload:
+    """Content (and optional image) for a queued race message.
+
+    `discord.File` is single-use — a payload must not be sent twice.
+    """
+
+    content: str | None
+    file: discord.File | None
+
+    async def send_to(self, dest: discord.abc.Messageable) -> discord.Message:
+        """Send this payload, picking the matching `send()` overload."""
+        if self.file is not None:
+            return await dest.send(content=self.content, file=self.file)
+        return await dest.send(content=self.content)
+
+
+@dataclass(frozen=True, slots=True)
 class _RaceImages:
     """Pre-rendered image assets for a race."""
 
@@ -1021,13 +1038,14 @@ class Racing(commands.Cog):
             logger.info("Race #%d transitioned to running", msg.race_id)
             return True, None
 
-        # Build send kwargs — only include file if present so
-        # the type checker sees a matching overload.
-        kwargs: dict[str, object] = {"content": msg.content}
-        if msg.image_data and msg.image_name:
-            kwargs["file"] = discord.File(
-                BytesIO(msg.image_data), filename=msg.image_name
-            )
+        payload = RaceMessagePayload(
+            content=msg.content,
+            file=(
+                discord.File(BytesIO(msg.image_data), filename=msg.image_name)
+                if msg.image_data and msg.image_name
+                else None
+            ),
+        )
 
         guild = self.bot.get_guild(self.bot.guild_id)
         if guild is None:
@@ -1035,7 +1053,7 @@ class Racing(commands.Cog):
             return False, None
 
         if msg.message_type == MessageType.ANNOUNCEMENT:
-            thread_id = await self._post_announcement(msg, kwargs, guild)
+            thread_id = await self._post_announcement(msg, payload, guild)
             return True, thread_id
 
         if msg.message_type == MessageType.POLL:
@@ -1043,7 +1061,7 @@ class Racing(commands.Cog):
             return posted, None
 
         if msg.message_type == MessageType.THREAD:
-            posted = await self._post_to_thread(msg, kwargs, guild, batch_threads)
+            posted = await self._post_to_thread(msg, payload, guild, batch_threads)
             return posted, None
 
         return False, None
@@ -1051,7 +1069,7 @@ class Racing(commands.Cog):
     async def _post_announcement(
         self,
         msg: PendingMessage,
-        kwargs: dict[str, object],
+        payload: RaceMessagePayload,
         guild: discord.Guild,
     ) -> int | None:
         """Post announcement to channel and create thread.
@@ -1071,7 +1089,7 @@ class Racing(commands.Cog):
             )
             return None
 
-        sent = await channel.send(**kwargs)  # ty: ignore[no-matching-overload]
+        sent = await payload.send_to(channel)
 
         thread = await sent.create_thread(name=f"Race #{msg.race_id}")
         await set_race_thread(self._pool, msg.race_id, thread.id)
@@ -1085,7 +1103,7 @@ class Racing(commands.Cog):
     async def _post_to_thread(
         self,
         msg: PendingMessage,
-        kwargs: dict[str, object],
+        payload: RaceMessagePayload,
         guild: discord.Guild,
         batch_threads: dict[int, int],
     ) -> bool:
@@ -1114,7 +1132,7 @@ class Racing(commands.Cog):
             )
             return True  # Don't retry — thread is gone
 
-        await thread.send(**kwargs)  # ty: ignore[no-matching-overload]
+        await payload.send_to(thread)
         return True
 
     async def _post_poll(

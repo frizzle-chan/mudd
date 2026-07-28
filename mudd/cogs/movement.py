@@ -5,7 +5,7 @@ from __future__ import annotations
 import contextlib
 import logging
 import re
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 import asyncpg
 import discord
@@ -96,7 +96,7 @@ class Movement(commands.Cog):
 
     def __init__(
         self,
-        bot: commands.Bot | None,
+        bot: MuddBot,
         pool: asyncpg.Pool,
         room_cache: RoomChannelCache,
         user_cache: UserCache | None = None,
@@ -196,13 +196,12 @@ class Movement(commands.Cog):
 
         try:
             # Build standard observers
-            bot: MuddBot = self.bot  # ty: ignore[invalid-assignment]
             observers = build_observers(
                 self._pool,
                 user.id,
                 user.current_room,
-                bot=cast(discord.Client, self.bot),
-                guild_id=bot.guild_id,
+                bot=self.bot,
+                guild_id=self.bot.guild_id,
                 room_cache=self.room_cache,
             )
             if self._user_cache is not None:
@@ -247,8 +246,7 @@ class Movement(commands.Cog):
     @commands.Cog.listener()
     async def on_member_join(self, member: discord.Member):
         """Assign new members to the default location and create inventory forum."""
-        bot: MuddBot = self.bot  # ty: ignore[invalid-assignment]
-        if member.guild.id != bot.guild_id:
+        if member.guild.id != self.bot.guild_id:
             return
         if member.bot:
             return
@@ -259,9 +257,9 @@ class Movement(commands.Cog):
 
             # Create reconciler and emit events
             reconciler = DiscordReconciler(
-                cast(discord.Client, self.bot),
+                self.bot,
                 self._pool,
-                guild_id=bot.guild_id,
+                guild_id=self.bot.guild_id,
                 room_cache=self.room_cache,
             )
 
@@ -289,15 +287,14 @@ class Movement(commands.Cog):
     @commands.Cog.listener()
     async def on_member_remove(self, member: discord.Member):
         """Clean up user data when member leaves."""
-        bot: MuddBot = self.bot  # ty: ignore[invalid-assignment]
-        if member.guild.id != bot.guild_id:
+        if member.guild.id != self.bot.guild_id:
             return
         try:
             # Create reconciler and emit event
             reconciler = DiscordReconciler(
-                cast(discord.Client, self.bot),
+                self.bot,
                 self._pool,
-                guild_id=bot.guild_id,
+                guild_id=self.bot.guild_id,
                 room_cache=self.room_cache,
             )
 

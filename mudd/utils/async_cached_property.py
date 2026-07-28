@@ -4,7 +4,6 @@ Simplified from https://github.com/ryananguiano/async_property
 """
 
 import asyncio
-import functools
 from collections.abc import Callable, Coroutine
 from typing import Any, overload
 
@@ -32,7 +31,7 @@ class async_cached_property[T]:
     def __init__(self, func: Callable[[Any], Coroutine[Any, Any, T]]) -> None:
         self._func = func
         self._name = getattr(func, "__name__", "<unknown>")
-        functools.update_wrapper(self, func)  # ty: ignore[invalid-argument-type]
+        self.__doc__ = func.__doc__
 
     def __set_name__(self, owner: type, name: str) -> None:
         self._name = name

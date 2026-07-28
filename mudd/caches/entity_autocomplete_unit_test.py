@@ -1,8 +1,10 @@
 """Unit tests for EntityAutocompleteCache."""
 
 from dataclasses import replace
+from typing import cast
 from uuid import UUID, uuid4
 
+import asyncpg
 from discord import app_commands
 
 from mudd.caches.entity_autocomplete import (
@@ -45,6 +47,7 @@ def _make_instance(
         entity=_make_entity(name, rarity),
         room_id="test-room",
         owner_id=None,
+        _pool=cast(asyncpg.Pool, None),
     )
 
 

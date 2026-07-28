@@ -32,7 +32,7 @@ class Speech(commands.Cog):
 
     def __init__(
         self,
-        bot: commands.Bot,
+        bot: MuddBot,
         pool: asyncpg.Pool,
         room_cache: RoomChannelCache,
     ) -> None:
@@ -48,8 +48,7 @@ class Speech(commands.Cog):
         if message.author.bot or message.guild is None:
             return
 
-        bot: MuddBot = self.bot  # ty: ignore[invalid-assignment]
-        if message.guild.id != bot.guild_id:
+        if message.guild.id != self.bot.guild_id:
             return
 
         # Only grant XP in room channels
@@ -76,7 +75,7 @@ class Speech(commands.Cog):
             message.author.id,
             room_id,
             bot=self.bot,
-            guild_id=bot.guild_id,
+            guild_id=self.bot.guild_id,
             room_cache=self._room_cache,
         )
 
