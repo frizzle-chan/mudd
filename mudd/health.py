@@ -24,16 +24,13 @@ import math
 import os
 from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any
+from typing import Any, Protocol
 
 import asyncpg
 from aiohttp import web
 
 from mudd.models import Room
 from mudd.version import get_git_commit
-
-if TYPE_CHECKING:
-    from mudd.bot import MuddBot
 
 logger = logging.getLogger(__name__)
 
@@ -80,6 +77,39 @@ class HealthState:
         self.last_sync_error = f"{type(error).__name__}: {error}"
 
 
+class HealthGuild(Protocol):
+    """The guild attributes the probes read."""
+
+    id: int
+    name: str
+
+
+class BotHealthSource(Protocol):
+    """The bot surface the probes read.
+
+    Declared structurally so tests can substitute a gateway double —
+    Discord is the one dependency we cannot drive from a test — without
+    the probes depending on `MuddBot` itself.
+    """
+
+    guild_id: int
+    health: HealthState
+
+    # Read-only members: discord.py exposes these as properties, so declaring
+    # them as attributes would demand a setter the real client doesn't have.
+    @property
+    def user(self) -> object: ...
+
+    @property
+    def latency(self) -> float: ...
+
+    def is_ready(self) -> bool: ...
+
+    def is_closed(self) -> bool: ...
+
+    def get_guild(self, guild_id: int, /) -> HealthGuild | None: ...
+
+
 def build_payload(checks: Sequence[HealthCheck], commit: str) -> dict[str, Any]:
     """Build the `/healthz` JSON body from probe results."""
     return {
@@ -94,7 +124,7 @@ def status_code_for(payload: dict[str, Any]) -> int:
     return 200 if payload["status"] == HEALTHY_STATUS else 503
 
 
-def probe_discord(bot: MuddBot) -> HealthCheck:
+def probe_discord(bot: BotHealthSource) -> HealthCheck:
     """Check that the gateway connection is live and heartbeating."""
     if bot.is_closed():
         return HealthCheck("discord", False, "gateway connection is closed")
@@ -108,7 +138,7 @@ def probe_discord(bot: MuddBot) -> HealthCheck:
     )
 
 
-def probe_guild(bot: MuddBot) -> HealthCheck:
+def probe_guild(bot: BotHealthSource) -> HealthCheck:
     """Check that the whitelisted guild is reachable.
 
     Sync skips its Discord half when the guild is missing, so a bot that is
@@ -157,7 +187,7 @@ class HealthServer:
     """aiohttp server exposing `GET /healthz`."""
 
     def __init__(
-        self, bot: MuddBot, pool: asyncpg.Pool, *, host: str, port: int
+        self, bot: BotHealthSource, pool: asyncpg.Pool, *, host: str, port: int
     ) -> None:
         self._bot = bot
         self._pool = pool
@@ -166,7 +196,7 @@ class HealthServer:
         self._runner: web.AppRunner | None = None
 
     @classmethod
-    def from_env(cls, bot: MuddBot, pool: asyncpg.Pool) -> HealthServer:
+    def from_env(cls, bot: BotHealthSource, pool: asyncpg.Pool) -> HealthServer:
         """Build a server from `HEALTH_HOST` / `HEALTH_PORT`."""
         return cls(
             bot,
