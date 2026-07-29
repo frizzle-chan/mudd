@@ -77,10 +77,21 @@ jobs:
     permissions:
       contents: read
 
-    # A single test bot and guild are shared by every run; two concurrent
-    # boots would race each other creating the same channels.
+    # A single test bot and guild are shared by every run in the repository,
+    # so boots must be serialized — two at once would race each other
+    # creating the same channels. The group is a fixed string (no ref or
+    # workflow expression) so it spans every branch and PR.
+    #
+    # queue: max lets up to 100 runs wait their turn in FIFO order. Without
+    # it the default `queue: single` keeps only one run pending and cancels
+    # the rest, so a burst of pushes would silently skip the boot test on
+    # everything but the newest commit. cancel-in-progress stays false — and
+    # must, since `queue: max` with `cancel-in-progress: true` is a workflow
+    # validation error — which also means a boot mid-sync is never killed
+    # partway through mutating the test guild.
     concurrency:
       group: docker-smoke-test
+      queue: max
       cancel-in-progress: false
 
     services:
