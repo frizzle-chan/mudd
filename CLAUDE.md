@@ -127,6 +127,17 @@ The codebase uses an MVC + events architecture:
 
 **Docker**: The `.dockerignore` uses an allowlist pattern (starts with `*`, then `!` to include specific paths). **When adding new top-level directories needed at runtime, you must add them to `.dockerignore`.**
 
+**Health endpoint** (`mudd/health.py`): The bot serves `GET /healthz` on `HEALTH_PORT` (default 8080). It returns 200 only when all four probes pass — `discord` (gateway connected and heartbeating), `guild` (whitelisted guild in cache), `database` (pool answers a query), and `world` (initial sync finished *and* rooms exist in the database) — otherwise 503 with a JSON body naming the failing probe. It backs the container `HEALTHCHECK` and the CI boot smoke test.
+
+- Probes must never raise; they return a failing `HealthCheck` instead. An exception here would take down the endpoint that is supposed to diagnose the problem.
+- Prefer probing real state over trusting a flag. `world` re-queries `Room.count()` rather than only checking `first_sync_completed`, because sync can report success having loaded nothing.
+- `HealthState` lives on `MuddBot` and is updated by the Sync cog. It holds only what cannot be probed from outside; everything else is checked live per request.
+
+**Boot smoke test** (`smoke` job in `.github/workflows/docker.yaml`): Builds the `production` target, boots it against a real Postgres and the real Discord gateway, and polls `/healthz` until every probe is green. This catches what unit tests cannot — a bad dependency bump, a runtime file excluded by `.dockerignore`, a migration that fails on boot, or a sync that dies before the world loads.
+
+- Requires the `SMOKE_DISCORD_TOKEN` and `SMOKE_GUILD_ID` repository secrets. **These must be a throwaway bot and an empty guild** — booting runs the full Sync cog, which creates channels, roles, and scheduled events, and syncs slash commands. The job skips itself with a warning when the secrets are absent (fork PRs).
+- The job is serialized via a `concurrency` group; concurrent boots would race each other creating the same channels.
+
 ## Dependencies
 
 **Runtime:**
