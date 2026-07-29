@@ -176,9 +176,11 @@ jobs:
       # Guards against a stale cache serving an image built from other code.
       - name: Verify the image reports this commit
         if: steps.creds.outputs.available == 'true'
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
         run: |
-          jq -e --arg sha "${{ github.sha }}" '.commit == $sha' healthz.json > /dev/null \
-            || { echo "::error::/healthz reported commit $(jq -r .commit healthz.json), expected ${{ github.sha }}"; exit 1; }
+          jq -e --arg sha "$EXPECTED_SHA" '.commit == $sha' healthz.json > /dev/null \
+            || { echo "::error::/healthz reported commit $(jq -r .commit healthz.json), expected $EXPECTED_SHA"; exit 1; }
 
       - name: Container logs
         if: always() && steps.creds.outputs.available == 'true'
