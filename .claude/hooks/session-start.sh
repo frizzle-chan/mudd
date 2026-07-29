@@ -52,7 +52,10 @@ fi
 if [ ! -s "$FONT_DIR/unifontex.ttf" ]; then
   echo "==> Installing UnifontEX"
   $SUDO mkdir -p "$FONT_DIR"
-  $SUDO curl -fsSL --retry 3 -o "$FONT_DIR/unifontex.ttf" "$FONT_URL"
+  # Download to a temp path and move into place, so an interrupted run cannot
+  # leave a truncated font that later runs would accept as already installed.
+  $SUDO curl -fsSL --retry 3 -o "$FONT_DIR/.unifontex.ttf.part" "$FONT_URL"
+  $SUDO mv -f "$FONT_DIR/.unifontex.ttf.part" "$FONT_DIR/unifontex.ttf"
   $SUDO fc-cache -f >/dev/null 2>&1 || true
 fi
 
@@ -61,7 +64,11 @@ fi
 # need DB_HOST=localhost (see tests/conftest.py).
 if ! pg_isready -h localhost -q 2>/dev/null; then
   echo "==> Starting PostgreSQL"
-  read -r PG_VERSION PG_CLUSTER _ < <(pg_lsclusters -h | head -1)
+  read -r PG_VERSION PG_CLUSTER _ < <(pg_lsclusters -h | head -1) || true
+  if [ -z "${PG_VERSION:-}" ]; then
+    echo "No postgres cluster found (pg_lsclusters returned nothing)" >&2
+    exit 1
+  fi
   $SUDO pg_ctlcluster "$PG_VERSION" "$PG_CLUSTER" start
 
   for _ in $(seq 30); do
@@ -76,6 +83,10 @@ psql_super() { as_postgres psql -tAc "$1"; }
 if [ "$(psql_super "SELECT 1 FROM pg_roles WHERE rolname='mudd'")" != "1" ]; then
   echo "==> Creating role mudd"
   psql_super "CREATE ROLE mudd LOGIN SUPERUSER PASSWORD 'mudd'" >/dev/null
+else
+  # Converge attributes rather than trusting whatever a previous run left
+  # behind: a role with a stale password would fail every test connection.
+  psql_super "ALTER ROLE mudd LOGIN SUPERUSER PASSWORD 'mudd'" >/dev/null
 fi
 
 if [ "$(psql_super "SELECT 1 FROM pg_database WHERE datname='mudd'")" != "1" ]; then
@@ -88,11 +99,15 @@ echo "==> Syncing dependencies"
 uv sync --locked
 
 # --- Session environment -------------------------------------------------
+# SessionStart also fires on resume/clear/compact, so append each export only
+# once instead of growing the env file on every run.
 if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
-  {
-    echo 'export DB_HOST=localhost'
-    echo 'export DATABASE_URL=postgresql://mudd:mudd@localhost:5432/mudd'
-  } >> "$CLAUDE_ENV_FILE"
+  export_once() {
+    touch "$CLAUDE_ENV_FILE"
+    grep -qxF "$1" "$CLAUDE_ENV_FILE" || echo "$1" >> "$CLAUDE_ENV_FILE"
+  }
+  export_once 'export DB_HOST=localhost'
+  export_once 'export DATABASE_URL=postgresql://mudd:mudd@localhost:5432/mudd'
 fi
 
 echo "==> Ready: uv run pytest (DB_HOST=localhost)"
