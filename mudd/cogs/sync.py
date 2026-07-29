@@ -95,8 +95,14 @@ class Sync(commands.Cog):
         """
         pool = self._pool
         is_first = not self._first_sync_done
-        await self._sync(pool, fail_fast=is_first)
+        try:
+            await self._sync(pool, fail_fast=is_first)
+        except Exception as exc:
+            # Surface the cause on /healthz before the error handler runs.
+            self.bot.health.mark_sync_failed(exc)
+            raise
         self._first_sync_done = True
+        self.bot.health.mark_sync_succeeded()
 
     async def _sync(self, pool: asyncpg.Pool, *, fail_fast: bool) -> None:
         """Sync all data.

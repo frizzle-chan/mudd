@@ -64,3 +64,140 @@ jobs:
           cache-to: type=gha,mode=max
           build-args: |
             GIT_COMMIT=${{ github.sha }}
+
+  # Boots the production image for real — against a real Postgres and a real
+  # Discord gateway — and waits for GET /healthz to report every subsystem
+  # green. Catches the class of failure unit tests cannot: a bad dependency
+  # bump, a missing runtime file excluded by .dockerignore, a migration that
+  # fails on boot, or a sync that dies before the world loads.
+  smoke:
+    name: Smoke test (boot the built image)
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    # A single test bot and guild are shared by every run in the repository,
+    # so boots must be serialized — two at once would race each other
+    # creating the same channels. The group is a fixed string (no ref or
+    # workflow expression) so it spans every branch and PR.
+    #
+    # queue: max lets up to 100 runs wait their turn in FIFO order. Without
+    # it the default `queue: single` keeps only one run pending and cancels
+    # the rest, so a burst of pushes would silently skip the boot test on
+    # everything but the newest commit. cancel-in-progress stays false — and
+    # must, since `queue: max` with `cancel-in-progress: true` is a workflow
+    # validation error — which also means a boot mid-sync is never killed
+    # partway through mutating the test guild.
+    concurrency:
+      group: docker-smoke-test
+      queue: max
+      cancel-in-progress: false
+
+    services:
+      postgres:
+        image: docker.io/library/postgres:18.1
+        env:
+          POSTGRES_USER: mudd
+          POSTGRES_PASSWORD: mudd
+          POSTGRES_DB: mudd
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U mudd -d mudd"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      # Secrets are unavailable to fork PRs, so skip rather than fail there.
+      - name: Check smoke credentials
+        id: creds
+        env:
+          SMOKE_DISCORD_TOKEN: ${{ secrets.SMOKE_DISCORD_TOKEN }}
+          SMOKE_GUILD_ID: ${{ secrets.SMOKE_GUILD_ID }}
+        run: |
+          if [[ -n "$SMOKE_DISCORD_TOKEN" && -n "$SMOKE_GUILD_ID" ]]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::SMOKE_DISCORD_TOKEN/SMOKE_GUILD_ID not set — boot smoke test skipped."
+          fi
+
+      - name: Checkout repository
+        if: steps.creds.outputs.available == 'true'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Docker Buildx
+        if: steps.creds.outputs.available == 'true'
+        uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # v4.2.0
+
+      # Same Dockerfile, target, and build-args as the build job, restored
+      # from the cache it just populated — so this is that image, single-arch
+      # and loaded locally so we can actually run it.
+      - name: Build production image for local run
+        if: steps.creds.outputs.available == 'true'
+        uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7.0.0
+        with:
+          context: .
+          push: false
+          load: true
+          target: production
+          platforms: linux/amd64
+          tags: mudd:smoke
+          cache-from: type=gha
+          build-args: |
+            GIT_COMMIT=${{ github.sha }}
+
+      # --network host lets the container reach the Postgres service on the
+      # runner's published 5432 and publishes /healthz on the runner's 8080.
+      - name: Boot the bot
+        if: steps.creds.outputs.available == 'true'
+        env:
+          SMOKE_DISCORD_TOKEN: ${{ secrets.SMOKE_DISCORD_TOKEN }}
+          SMOKE_GUILD_ID: ${{ secrets.SMOKE_GUILD_ID }}
+        run: |
+          docker run -d --name mudd-smoke --network host \
+            -e DISCORD_TOKEN="$SMOKE_DISCORD_TOKEN" \
+            -e GUILD_ID="$SMOKE_GUILD_ID" \
+            -e DATABASE_URL="postgresql://mudd:mudd@localhost:5432/mudd" \
+            -e LOG_LEVEL=INFO \
+            mudd:smoke
+
+      - name: Wait for /healthz to report healthy
+        if: steps.creds.outputs.available == 'true'
+        run: |
+          for attempt in $(seq 1 60); do
+            if curl -fsS --max-time 10 http://localhost:8080/healthz -o healthz.json; then
+              echo "Healthy after ${attempt} attempt(s):"
+              jq . healthz.json
+              exit 0
+            fi
+            if [[ -z "$(docker ps -q --filter name=mudd-smoke --filter status=running)" ]]; then
+              echo "::error::Container exited before becoming healthy"
+              exit 1
+            fi
+            sleep 5
+          done
+          echo "::error::Timed out after 5 minutes waiting for /healthz"
+          echo "Last response (if any):"
+          curl -sS --max-time 10 http://localhost:8080/healthz | jq . || true
+          exit 1
+
+      # Guards against a stale cache serving an image built from other code.
+      - name: Verify the image reports this commit
+        if: steps.creds.outputs.available == 'true'
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          jq -e --arg sha "$EXPECTED_SHA" '.commit == $sha' healthz.json > /dev/null \
+            || { echo "::error::/healthz reported commit $(jq -r .commit healthz.json), expected $EXPECTED_SHA"; exit 1; }
+
+      - name: Container logs
+        if: always() && steps.creds.outputs.available == 'true'
+        run: docker logs mudd-smoke 2>&1 || true
+
+      # Exercises the shutdown path: health server teardown and pool close.
+      - name: Stop the bot
+        if: always() && steps.creds.outputs.available == 'true'
+        run: docker rm -f mudd-smoke || true
