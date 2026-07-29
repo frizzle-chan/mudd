@@ -223,6 +223,23 @@ async def test_world_with_rooms_loaded_is_healthy(test_db):
     assert "rooms loaded" in check.detail
 
 
+async def test_world_probe_survives_a_dead_database():
+    # A probe must degrade to a failing check, never raise — an exception
+    # here would take down the endpoint that reports the outage.
+    db_host = os.environ.get("DB_HOST", "db")
+    pool = await asyncpg.create_pool(
+        f"postgresql://mudd:mudd@{db_host}:5432/mudd", min_size=1, max_size=2
+    )
+    await pool.close()
+    state = HealthState()
+    state.mark_sync_succeeded()
+
+    check = await probe_world(pool, state)
+
+    assert check.ok is False
+    assert "closed" in check.detail.lower()
+
+
 async def test_sync_success_with_empty_world_is_unhealthy(empty_db):
     # The regression this endpoint exists to catch: _sync() returns normally
     # when the world file yields no rooms, so the flag alone lies.
@@ -275,6 +292,19 @@ async def test_server_close_is_idempotent_and_releases_the_port(test_db):
 
     with pytest.raises(aiohttp.ClientConnectorError):
         await get_healthz(port)
+
+
+async def test_bot_closes_cleanly_when_the_health_server_never_started():
+    # setup_hook can fail before start_health_server runs; close() must not
+    # trip over the absent server on the way down.
+    bot = MuddBot(
+        world_file=Path("data/worlds/test_world.rec"),
+        guild_id=4242,
+        command_prefix=(),
+        intents=discord.Intents.default(),
+    )
+
+    await bot.close()
 
 
 async def test_bot_starts_and_stops_its_health_server(test_db, monkeypatch):
