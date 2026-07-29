@@ -59,9 +59,21 @@ RUN echo "${GIT_COMMIT}" > /app/.commit_sha
 RUN --mount=type=cache,target=/home/mudd/.cache/uv,uid=1000,gid=1000 \
     uv sync --locked
 
+# Readiness endpoint served by mudd/health.py
+EXPOSE 8080
+
+# Generous start period: the first sync creates channels and can be slow on a
+# large guild. Once started, three consecutive failures mark the bot unhealthy.
+HEALTHCHECK --interval=30s --timeout=10s --start-period=180s --retries=3 \
+    CMD curl -fsS "http://localhost:${HEALTH_PORT:-8080}/healthz" || exit 1
+
 CMD [ "python", "main.py" ]
 
 FROM production AS devcontainer
+
+# The devcontainer runs `sleep infinity`, not the bot — inheriting the
+# production healthcheck would permanently report it unhealthy.
+HEALTHCHECK NONE
 
 ENV UV_NO_DEV=0 \
     UV_COMPILE_BYTECODE=0 \

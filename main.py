@@ -68,6 +68,9 @@ async def setup_hook():
     # Get database pool
     pool = await get_pool()
 
+    # Expose /healthz before cogs load so probes see startup progress
+    await bot.start_health_server(pool)
+
     # Create shared caches (rebuilt by Sync cog on startup)
     room_cache = RoomChannelCache(pool)
     autocomplete_cache = EntityAutocompleteCache()

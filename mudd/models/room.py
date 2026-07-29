@@ -208,6 +208,22 @@ class Room:
         ]
 
     @classmethod
+    async def count(cls, pool: asyncpg.Pool) -> int:
+        """Count rooms in the database.
+
+        Used by the health endpoint to confirm the world actually loaded,
+        rather than trusting that sync reported success.
+
+        Args:
+            pool: Database connection pool
+
+        Returns:
+            Number of rooms
+        """
+        count = await pool.fetchval("SELECT COUNT(*) FROM rooms")
+        return int(count or 0)
+
+    @classmethod
     async def get_all_zone_mappings(cls, pool: asyncpg.Pool) -> dict[str, str]:
         """Get a mapping of room IDs to their zone IDs.
 
