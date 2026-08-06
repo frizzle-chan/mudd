@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import logging
+from datetime import UTC, datetime, timedelta
 from io import BytesIO
 from typing import ClassVar, cast
 
@@ -32,13 +33,22 @@ from mudd.utils.categories import (
     create_with_overflow,
     matching_categories,
 )
-from mudd.utils.discord import fetch_forum, fetch_thread, normalize_channel_name
+from mudd.utils.discord import (
+    fetch_forum,
+    fetch_thread,
+    is_older_than,
+    normalize_channel_name,
+)
 from mudd.views import ViewEntity
 
 logger = logging.getLogger(__name__)
 
 INVENTORY_CATEGORY_NAME = "Inventory"
 MAP_ENTITY_ID = "map"
+
+# A forum younger than this is skipped by orphan pruning: create-then-register
+# is not instantaneous, so a forum created moments ago can briefly look orphaned.
+ORPHAN_MIN_AGE = timedelta(hours=1)
 
 
 def _new_forum_stats() -> dict[str, int]:
@@ -304,6 +314,62 @@ class InventoryReconciler:
             except discord.HTTPException as e:
                 logger.error(f"Failed to prune thread {thread.id}: {e}")
 
+        return pruned
+
+    async def prune_orphan_forums(self, guild: discord.Guild) -> int:
+        """Delete inventory forums not tracked in the database.
+
+        Scans every Inventory* category. Two guards keep this from being the
+        next data-loss path:
+
+        - **Empty only.** A forum with threads is logged and left alone.
+        - **Age.** A forum younger than ORPHAN_MIN_AGE is skipped, so the
+          pruner can never race channel creation.
+
+        Args:
+            guild: Discord guild
+
+        Returns:
+            Number of forums pruned
+        """
+        owners = await UserInventoryForum.get_owners_by_forum_id(self.pool)
+        category_ids = {
+            c.id for c in matching_categories(guild, INVENTORY_CATEGORY_NAME)
+        }
+        now = datetime.now(UTC)
+        pruned = 0
+
+        for forum in guild.forums:
+            if forum.category_id not in category_ids or forum.id in owners:
+                continue
+
+            if not is_older_than(forum.id, now, ORPHAN_MIN_AGE):
+                logger.debug(
+                    "Skipping recently created forum %d during orphan prune", forum.id
+                )
+                continue
+
+            if await self._thread_count(forum) > 0:
+                logger.error(
+                    "Orphan inventory forum '%s' (ID: %d) contains threads; "
+                    "leaving it in place for manual review",
+                    forum.name,
+                    forum.id,
+                )
+                continue
+
+            try:
+                await forum.delete(reason="Orphan inventory forum pruning")
+                pruned += 1
+                logger.info(
+                    "Pruned orphan inventory forum '%s' (ID: %d)",
+                    forum.name,
+                    forum.id,
+                )
+            except discord.HTTPException as e:
+                logger.error("Failed to prune inventory forum %d: %s", forum.id, e)
+
+        self._inventory_forum_stats["forums_pruned"] += pruned
         return pruned
 
     async def _ensure_user_inventory(self, guild: discord.Guild, user_id: int) -> None:

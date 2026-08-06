@@ -225,6 +225,10 @@ class DiscordReconciler:
         """Access the skills sub-reconciler directly."""
         return self._skills
 
+    async def prune_orphan_forums(self, guild: discord.Guild) -> int:
+        """Delete inventory forums not tracked in the database."""
+        return await self._inventory.prune_orphan_forums(guild)
+
     def get_inventory_forum_stats(self) -> dict[str, int]:
         """Get accumulated inventory forum sync stats."""
         return self._inventory.get_inventory_forum_stats()
