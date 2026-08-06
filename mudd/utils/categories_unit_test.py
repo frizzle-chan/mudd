@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from mudd.utils.categories import (
     CATEGORY_CHANNEL_CAP,
+    MIN_OVERFLOW_ATTEMPTS,
     CategorySlot,
+    attempt_budget,
     category_index,
     matches_category,
     next_category_name,
@@ -124,3 +126,21 @@ class TestNextCategoryName:
     def test_base_missing_but_overflow_present(self) -> None:
         slots = [slot("Inventory 2", 50)]
         assert next_category_name(slots, "Inventory") == "Inventory 3"
+
+
+class TestAttemptBudget:
+    def test_never_below_the_floor(self) -> None:
+        assert attempt_budget(0) == MIN_OVERFLOW_ATTEMPTS
+        assert attempt_budget(1) == MIN_OVERFLOW_ATTEMPTS
+
+    def test_always_exceeds_family_size(self) -> None:
+        """Every existing category can burn one attempt by looking like it has
+        room and then rejecting the create as full. The budget must still leave
+        an attempt to create and use the next overflow category."""
+        for family_size in range(60):
+            # family_size attempts proving each full, +1 to create the new one.
+            assert attempt_budget(family_size) > family_size + 1
+
+    def test_scales_with_family_size(self) -> None:
+        assert attempt_budget(10) == 12
+        assert attempt_budget(49) == 51

@@ -18,7 +18,10 @@ import discord
 logger = logging.getLogger(__name__)
 
 CATEGORY_CHANNEL_CAP = 50
-MAX_OVERFLOW_ATTEMPTS = 3
+
+# Floor for the per-call attempt budget. The real budget scales with the size
+# of the category family — see `_attempt_budget`.
+MIN_OVERFLOW_ATTEMPTS = 3
 
 # Discord's message when a category is at its channel limit. The error code
 # (50035, "Invalid Form Body") is far too generic to key off on its own.
@@ -82,6 +85,22 @@ def next_category_name(slots: Sequence[CategorySlot], base: str) -> str:
     return f"{base} {max(indices) + 1}"
 
 
+def attempt_budget(family_size: int) -> int:
+    """How many creation attempts `create_with_overflow` gets for one call.
+
+    Every existing category in the family can burn one attempt by looking like
+    it has room (stale channel cache) and then rejecting the create as full.
+    The budget therefore has to exceed the family size, or all attempts are
+    spent proving categories full and the call errors out *before* reaching the
+    branch that creates the next overflow category — reintroducing the exact
+    hard failure this module exists to prevent.
+
+    One attempt per existing category, plus one to create and use the new one,
+    plus one of margin.
+    """
+    return max(MIN_OVERFLOW_ATTEMPTS, family_size + 2)
+
+
 def _to_slot(category: discord.CategoryChannel) -> CategorySlot:
     return CategorySlot(
         id=category.id, name=category.name, channel_count=len(category.channels)
@@ -126,7 +145,9 @@ async def create_with_overflow[T: discord.abc.GuildChannel](
     event arrives, so within one sync pass ``len(category.channels)`` can
     undercount channels this same pass just created. When ``create_fn`` reports
     a full category, that category is marked full for the rest of this call and
-    resolution is retried, bounded at ``MAX_OVERFLOW_ATTEMPTS``.
+    resolution is retried. The attempt budget scales with the family size (see
+    :func:`attempt_budget`) so that every existing category can be proven full
+    and the next overflow category still gets created.
 
     ``created`` is local to one call, so two concurrent calls inside the same
     gateway-lag window can each create a category named ``"Base 2"``.
@@ -139,8 +160,9 @@ async def create_with_overflow[T: discord.abc.GuildChannel](
     """
     full: set[int] = set()
     created: list[discord.CategoryChannel] = []
+    attempts = attempt_budget(len(matching_categories(guild, base)))
 
-    for _ in range(MAX_OVERFLOW_ATTEMPTS):
+    for _ in range(attempts):
         cached_ids = {c.id for c in guild.categories}
         known = list(guild.categories) + [c for c in created if c.id not in cached_ids]
         chosen = select_category([_to_slot(c) for c in known if c.id not in full], base)
@@ -168,6 +190,6 @@ async def create_with_overflow[T: discord.abc.GuildChannel](
             full.add(category.id)
 
     raise RuntimeError(
-        f"Exhausted {MAX_OVERFLOW_ATTEMPTS} overflow attempts creating a channel "
+        f"Exhausted {attempts} overflow attempts creating a channel "
         f"under '{base}' in {guild.name}"
     )
