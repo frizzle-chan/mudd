@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import contextlib
 import logging
-from typing import TYPE_CHECKING
+from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING, cast
 
 import asyncpg
 import discord
@@ -24,11 +25,32 @@ from mudd.skills.formatting import (
     get_milestone_role,
 )
 from mudd.skills.registry import Skill
-from mudd.utils.discord import normalize_channel_name
+from mudd.utils.categories import (
+    CategoryOverwrites,
+    create_with_overflow,
+    matching_categories,
+)
+from mudd.utils.discord import is_older_than, normalize_channel_name
 
 logger = logging.getLogger(__name__)
 
 SKILLS_CATEGORY_NAME = "Skills"
+
+# Matches the inventory pruner: a channel younger than this is skipped, so
+# pruning can never race channel creation.
+ORPHAN_MIN_AGE = timedelta(hours=1)
+
+
+def _skills_category_overwrites(guild: discord.Guild) -> CategoryOverwrites:
+    """Overwrites for a Skills category: hidden from everyone, managed by bot."""
+    return {
+        guild.default_role: discord.PermissionOverwrite(view_channel=False),
+        guild.me: discord.PermissionOverwrite(
+            view_channel=True,
+            send_messages=True,
+            manage_channels=True,
+        ),
+    }
 
 
 def _get_skills_channel_name(username: str) -> str:
@@ -54,39 +76,6 @@ async def ensure_roles(guild: discord.Guild) -> None:
                 )
             except Exception:
                 logger.exception("Failed to create role '%s'", role_name)
-
-
-async def ensure_category(guild: discord.Guild) -> discord.CategoryChannel:
-    """Ensure the Skills category exists.
-
-    Args:
-        guild: Discord guild
-
-    Returns:
-        The Skills category channel
-    """
-    for cat in guild.categories:
-        if cat.name == SKILLS_CATEGORY_NAME:
-            return cat
-
-    # Create hidden category
-    overwrites: dict[
-        discord.Role | discord.Member | discord.Object, discord.PermissionOverwrite
-    ] = {
-        guild.default_role: discord.PermissionOverwrite(view_channel=False),
-        guild.me: discord.PermissionOverwrite(
-            view_channel=True,
-            send_messages=True,
-            manage_channels=True,
-        ),
-    }
-    category = await guild.create_category(
-        SKILLS_CATEGORY_NAME,
-        overwrites=overwrites,
-        reason="Skills progression system",
-    )
-    logger.info("Created Skills category in %s", guild.name)
-    return category
 
 
 class SkillsReconciler:
@@ -296,18 +285,29 @@ class SkillsReconciler:
             await UserSkillsChannel.delete_by_user(self._pool, user_id)
 
         # Look up member and expected name
-        category = await ensure_category(guild)
         member = guild.get_member(user_id)
         if member is None:
             raise ValueError(f"Member {user_id} not in guild")
 
         channel_name = _get_skills_channel_name(member.name)
 
-        # Try to recover existing channel by name (e.g. after DB reset)
+        # Try to recover existing channel by name (e.g. after DB reset).
+        # Scans every Skills* category, not just the resolved one — otherwise a
+        # user whose channel sits in an overflow category gets a second one.
+        category_ids = {c.id for c in matching_categories(guild, SKILLS_CATEGORY_NAME)}
+        # Exclude channels already registered to somebody. This user's own row
+        # was just deleted (or never existed) to reach this path, so anything
+        # still registered belongs to another user. Without this, a normalized
+        # name collision (#304) lets user A adopt matching[0] and delete the
+        # rest — including user B's live channel — leaving both DB rows
+        # pointing at one channel and a rename fight on every sync.
+        registered_ids = await UserSkillsChannel.get_all_channel_ids(self._pool)
         matching = [
             ch
-            for ch in category.channels
-            if isinstance(ch, discord.TextChannel) and ch.name == channel_name
+            for ch in guild.text_channels
+            if ch.category_id in category_ids
+            and ch.name == channel_name
+            and ch.id not in registered_ids
         ]
         matching.sort(key=lambda ch: ch.id)
 
@@ -324,7 +324,7 @@ class SkillsReconciler:
                     logger.error("Failed to delete duplicate channel %d: %s", dup.id, e)
 
             await UserSkillsChannel.create_or_update(
-                self._pool, user_id, recovered.id, category.id
+                self._pool, user_id, recovered.id, cast(int, recovered.category_id)
             )
             logger.info(
                 "Recovered skills channel '%s' (ID: %d) for user %d",
@@ -335,9 +335,7 @@ class SkillsReconciler:
             return recovered.id
 
         # Create new channel
-        overwrites: dict[
-            discord.Role | discord.Member | discord.Object, discord.PermissionOverwrite
-        ] = {
+        overwrites: CategoryOverwrites = {
             guild.default_role: discord.PermissionOverwrite(view_channel=False),
             member: discord.PermissionOverwrite(
                 view_channel=True,
@@ -353,19 +351,36 @@ class SkillsReconciler:
                 manage_channels=True,
             ),
         }
-        channel = await guild.create_text_channel(
-            channel_name,
-            category=category,
-            overwrites=overwrites,
-            reason="Per-user skills channel",
+        channel = await create_with_overflow(
+            guild,
+            SKILLS_CATEGORY_NAME,
+            _skills_category_overwrites(guild),
+            lambda category: guild.create_text_channel(
+                channel_name,
+                category=category,
+                overwrites=overwrites,
+                reason="Per-user skills channel",
+            ),
+            reason="Skills progression system",
         )
 
-        await UserSkillsChannel.create_or_update(
-            self._pool,
-            user_id,
-            channel.id,
-            category.id,
-        )
+        try:
+            await UserSkillsChannel.create_or_update(
+                self._pool,
+                user_id,
+                channel.id,
+                cast(int, channel.category_id),
+            )
+        except Exception:
+            logger.exception(
+                "Registration failed for user %d, rolling back skills channel %d",
+                user_id,
+                channel.id,
+            )
+            # Safe: created microseconds ago by this call, provably empty.
+            with contextlib.suppress(discord.HTTPException):
+                await channel.delete(reason="Rollback: DB registration failed")
+            raise
 
         logger.info(
             "Created skills channel for user %d in %s",
@@ -556,26 +571,33 @@ class SkillsReconciler:
     async def prune_orphan_channels(self, guild: discord.Guild) -> int:
         """Delete skills channels not tracked in the database.
 
+        Scans every Skills* category and skips channels younger than
+        ORPHAN_MIN_AGE, so pruning cannot race channel creation.
+
         Args:
             guild: Discord guild
 
         Returns:
             Number of channels pruned
         """
-        category = None
-        for cat in guild.categories:
-            if cat.name == SKILLS_CATEGORY_NAME:
-                category = cat
-                break
-
-        if category is None:
+        categories = matching_categories(guild, SKILLS_CATEGORY_NAME)
+        if not categories:
             return 0
 
         valid_ids = await UserSkillsChannel.get_all_channel_ids(self._pool)
+        now = datetime.now(UTC)
         pruned = 0
 
-        for channel in list(category.channels):
-            if channel.id not in valid_ids:
+        for category in categories:
+            for channel in list(category.channels):
+                if channel.id in valid_ids:
+                    continue
+                if not is_older_than(channel.id, now, ORPHAN_MIN_AGE):
+                    logger.debug(
+                        "Skipping recently created channel %d during orphan prune",
+                        channel.id,
+                    )
+                    continue
                 try:
                     await channel.delete(reason="Orphan skills channel pruning")
                     logger.info(
