@@ -6,7 +6,7 @@ import asyncio
 import contextlib
 import logging
 from io import BytesIO
-from typing import ClassVar
+from typing import ClassVar, cast
 
 import asyncpg
 import discord
@@ -26,13 +26,33 @@ from mudd.models.inventory_forum import UserInventoryForum
 from mudd.models.room import InventoryThread, Room
 from mudd.models.user import STARTING_BALANCE, User
 from mudd.observers.effects import EffectsObserver
-from mudd.utils.discord import fetch_thread, normalize_channel_name
+from mudd.observers.inventory_dedup import ForumCandidate, plan_dedup
+from mudd.utils.categories import (
+    CategoryOverwrites,
+    create_with_overflow,
+    matching_categories,
+)
+from mudd.utils.discord import fetch_forum, fetch_thread, normalize_channel_name
 from mudd.views import ViewEntity
 
 logger = logging.getLogger(__name__)
 
 INVENTORY_CATEGORY_NAME = "Inventory"
 MAP_ENTITY_ID = "map"
+
+
+def _new_forum_stats() -> dict[str, int]:
+    """Zeroed inventory forum sync counters."""
+    return {
+        "created": 0,
+        "recovered": 0,
+        "existing": 0,
+        "renamed": 0,
+        "fixed": 0,
+        "threads_pruned": 0,
+        "forums_pruned": 0,
+        "errors": 0,
+    }
 
 
 def _get_inventory_forum_name(username: str) -> str:
@@ -85,18 +105,8 @@ class InventoryReconciler:
         self._balance_changed_events: list[BalanceChangedEvent] = []
         self._user_left_events: list[UserLeftEvent] = []
         self._entity_drop_events: list[tuple[EntityInstance, int | None]] = []
-        # Cache category ID per guild to avoid repeated lookups
-        self._category_cache: dict[int, int] = {}
         # Stats for inventory forum sync
-        self._inventory_forum_stats: dict[str, int] = {
-            "created": 0,
-            "recovered": 0,
-            "existing": 0,
-            "renamed": 0,
-            "fixed": 0,
-            "threads_pruned": 0,
-            "errors": 0,
-        }
+        self._inventory_forum_stats: dict[str, int] = _new_forum_stats()
 
     def notify(self, event: GameEvent) -> None:
         """Queue inventory-related events for async processing."""
@@ -167,15 +177,7 @@ class InventoryReconciler:
 
     def reset_inventory_forum_stats(self) -> None:
         """Reset inventory forum sync stats to zero."""
-        self._inventory_forum_stats = {
-            "created": 0,
-            "recovered": 0,
-            "existing": 0,
-            "renamed": 0,
-            "fixed": 0,
-            "threads_pruned": 0,
-            "errors": 0,
-        }
+        self._inventory_forum_stats = _new_forum_stats()
 
     async def _handle_user_left(
         self, guild: discord.Guild, event: UserLeftEvent
@@ -220,30 +222,32 @@ class InventoryReconciler:
 
         return result.output
 
-    async def _ensure_inventory_category(
-        self, guild: discord.Guild
-    ) -> discord.CategoryChannel:
-        """Ensure the Inventory category exists, create if missing."""
-        if guild.id in self._category_cache:
-            category = guild.get_channel(self._category_cache[guild.id])
-            if category and isinstance(category, discord.CategoryChannel):
-                return category
-            del self._category_cache[guild.id]
+    async def _thread_count(self, forum: discord.ForumChannel) -> int:
+        """Count a forum's threads, for deletion-safety decisions.
 
-        for category in guild.categories:
-            if category.name == INVENTORY_CATEGORY_NAME:
-                self._category_cache[guild.id] = category.id
-                return category
+        ``forum.threads`` caches *active* threads only, so a forum whose
+        contents are all archived would otherwise read as empty and become
+        eligible for deletion. A single archived thread is enough to make the
+        count non-zero — the exact number does not matter once it is > 0.
 
-        overwrites: dict[
-            discord.Role | discord.Member | discord.Object, discord.PermissionOverwrite
-        ] = {guild.default_role: discord.PermissionOverwrite(view_channel=False)}
-        category = await guild.create_category(
-            INVENTORY_CATEGORY_NAME, overwrites=overwrites
-        )
-        self._category_cache[guild.id] = category.id
-        logger.info(f"Created Inventory category in {guild.name}")
-        return category
+        On any error, reports 1. Failing closed means an unreadable forum is
+        never deleted.
+        """
+        active = len(forum.threads)
+        if active:
+            return active
+        try:
+            async for _ in forum.archived_threads(limit=1):
+                return 1
+        except discord.HTTPException as e:
+            logger.error(
+                "Could not list archived threads for forum %d, "
+                "treating it as non-empty: %s",
+                forum.id,
+                e,
+            )
+            return 1
+        return 0
 
     async def _delete_inventory_thread(
         self,
@@ -332,12 +336,9 @@ class InventoryReconciler:
             return
 
         try:
-            category = await self._ensure_inventory_category(guild)
             forum_name = _get_inventory_forum_name(member.name)
 
-            forum = await self._find_or_create_forum(
-                guild, category, member, forum_name
-            )
+            forum = await self._find_or_create_forum(guild, member, forum_name)
             if forum is None:
                 self._inventory_forum_stats["errors"] += 1
                 return
@@ -376,70 +377,145 @@ class InventoryReconciler:
             pruned = await self._prune_orphan_threads(forum, user_id)
             self._inventory_forum_stats["threads_pruned"] += pruned
 
-        except discord.HTTPException as e:
-            logger.error(f"Failed to ensure inventory for user {user_id}: {e}")
+        except Exception:
+            # Widened from HTTPException: _register_forum_in_db raises
+            # RuntimeError and asyncpg errors, which previously escaped and
+            # aborted flush() for every remaining user in the pass.
+            logger.exception("Failed to ensure inventory for user %d", user_id)
             self._inventory_forum_stats["errors"] += 1
 
     async def _find_or_create_forum(
         self,
         guild: discord.Guild,
-        category: discord.CategoryChannel,
         member: discord.Member,
         forum_name: str,
     ) -> discord.ForumChannel | None:
-        """Find existing forum or create new one. Handles recovery from DB loss."""
+        """Find the user's forum, recover it, or create one.
+
+        Returns None when this user's forum cannot be resolved this pass; the
+        caller counts that as an error and tries again next sync.
+        """
         forum_id = await UserInventoryForum.get_forum_id(self.pool, member.id)
 
         if forum_id:
-            forum = guild.get_channel(forum_id)
-            if forum and isinstance(forum, discord.ForumChannel):
+            try:
+                forum = await fetch_forum(guild, forum_id)
+            except discord.HTTPException as e:
+                # Not a confirmed deletion. Leave the DB record alone and skip
+                # this user — falling through to recovery here is what made a
+                # transient cache miss destructive.
+                logger.error(
+                    "Could not resolve inventory forum %d for user %d, "
+                    "skipping this pass: %s",
+                    forum_id,
+                    member.id,
+                    e,
+                )
+                return None
+
+            if forum is not None:
                 self._inventory_forum_stats["existing"] += 1
                 return forum
+
             logger.info(
-                f"Forum {forum_id} was deleted from Discord, "
-                f"clearing DB record for user {member.id}"
+                "Forum %d confirmed deleted from Discord, "
+                "clearing DB record for user %d",
+                forum_id,
+                member.id,
             )
             await UserInventoryForum.delete_by_user(self.pool, member.id)
 
-        matching_forums = [
+        recovered = await self._recover_forum(guild, member, forum_name)
+        if recovered is not None:
+            return recovered
+
+        return await self._create_new_forum(guild, member, forum_name)
+
+    async def _recover_forum(
+        self,
+        guild: discord.Guild,
+        member: discord.Member,
+        forum_name: str,
+    ) -> discord.ForumChannel | None:
+        """Adopt an existing forum matching this user's name, deduping safely.
+
+        Scans every Inventory* category, not just the resolved one, so a user
+        whose forum sits in an overflow category is not given a second forum.
+        """
+        category_ids = {
+            c.id for c in matching_categories(guild, INVENTORY_CATEGORY_NAME)
+        }
+        owners = await UserInventoryForum.get_owners_by_forum_id(self.pool)
+
+        # Exclude forums registered to somebody else: normalized channel names
+        # collide (#304), and without this guard one user's recovery can adopt
+        # or delete another user's live forum.
+        forums = [
             f
             for f in guild.forums
-            if f.category_id == category.id and f.name == forum_name
+            if f.category_id in category_ids
+            and f.name == forum_name
+            and owners.get(f.id, member.id) == member.id
         ]
-        matching_forums.sort(key=lambda f: f.id)
+        if not forums:
+            return None
 
-        if matching_forums:
-            forum = matching_forums[0]
-            for dup in matching_forums[1:]:
-                try:
-                    await dup.delete(
-                        reason="Duplicate inventory forum cleanup during sync"
-                    )
-                    logger.info(f"Deleted duplicate inventory forum (ID: {dup.id})")
-                except discord.HTTPException as e:
-                    logger.error(f"Failed to delete duplicate forum {dup.id}: {e}")
-
-            await self._register_forum_in_db(member.id, forum.id, category.id)
-            self._inventory_forum_stats["recovered"] += 1
-            logger.info(
-                f"Recovered inventory forum '{forum.name}' (ID: {forum.id}) "
-                f"for user {member.id}"
+        candidates = [
+            ForumCandidate(
+                id=f.id,
+                thread_count=await self._thread_count(f),
+                registered=owners.get(f.id) == member.id,
             )
-            return forum
+            for f in forums
+        ]
+        plan = plan_dedup(candidates)
+        by_id = {f.id: f for f in forums}
+        survivor = by_id[plan.survivor_id]
 
-        return await self._create_new_forum(guild, category, member, forum_name)
+        for forum_id in plan.delete_ids:
+            try:
+                await by_id[forum_id].delete(
+                    reason="Duplicate inventory forum cleanup during sync"
+                )
+                logger.info("Deleted empty duplicate inventory forum %d", forum_id)
+            except discord.HTTPException as e:
+                logger.error("Failed to delete duplicate forum %d: %s", forum_id, e)
+
+        for forum_id in plan.keep_ids:
+            logger.error(
+                "Duplicate inventory forum %d for user %d contains threads; "
+                "leaving it in place for manual review",
+                forum_id,
+                member.id,
+            )
+
+        # category_id is non-None by construction: the forum was matched on it.
+        await self._register_forum_in_db(
+            member.id, survivor.id, cast(int, survivor.category_id)
+        )
+        self._inventory_forum_stats["recovered"] += 1
+        logger.info(
+            "Recovered inventory forum '%s' (ID: %d) for user %d",
+            survivor.name,
+            survivor.id,
+            member.id,
+        )
+        return survivor
 
     async def _create_new_forum(
         self,
         guild: discord.Guild,
-        category: discord.CategoryChannel,
         member: discord.Member,
         forum_name: str,
     ) -> discord.ForumChannel | None:
-        """Create a new inventory forum for a user."""
-        overwrites: dict[
-            discord.Role | discord.Member | discord.Object, discord.PermissionOverwrite
-        ] = {
+        """Create a new inventory forum, overflowing categories as needed.
+
+        Create and register are made atomic by a compensating delete: if
+        registration fails the forum would otherwise be orphaned and the next
+        pass would create another, which is how three duplicates accumulated
+        in production.
+        """
+        overwrites: CategoryOverwrites = {
             guild.default_role: discord.PermissionOverwrite(view_channel=False),
             member: discord.PermissionOverwrite(
                 view_channel=True,
@@ -448,21 +524,45 @@ class InventoryReconciler:
                 send_messages=False,
             ),
         }
+        category_overwrites: CategoryOverwrites = {
+            guild.default_role: discord.PermissionOverwrite(view_channel=False)
+        }
 
         try:
-            forum = await category.create_forum(
-                name=forum_name,
-                topic=f"Personal inventory for {member.display_name}",
-                overwrites=overwrites,
+            forum = await create_with_overflow(
+                guild,
+                INVENTORY_CATEGORY_NAME,
+                category_overwrites,
+                lambda category: category.create_forum(
+                    name=forum_name,
+                    topic=f"Personal inventory for {member.display_name}",
+                    overwrites=overwrites,
+                ),
+                reason="Inventory forums",
             )
-
-            await self._register_forum_in_db(member.id, forum.id, category.id)
-            self._inventory_forum_stats["created"] += 1
-            logger.info(f"Created inventory forum '{forum_name}' for user {member.id}")
-            return forum
-        except discord.HTTPException as e:
-            logger.error(f"Failed to create inventory forum for {member.id}: {e}")
+        except Exception:
+            logger.exception("Failed to create inventory forum for %d", member.id)
             return None
+
+        try:
+            await self._register_forum_in_db(
+                member.id, forum.id, cast(int, forum.category_id)
+            )
+        except Exception:
+            logger.exception(
+                "Registration failed for user %d, rolling back forum %d",
+                member.id,
+                forum.id,
+            )
+            # Safe under the deletion policy: this forum was created
+            # microseconds ago by this call and is provably empty.
+            with contextlib.suppress(discord.HTTPException):
+                await forum.delete(reason="Rollback: DB registration failed")
+            return None
+
+        self._inventory_forum_stats["created"] += 1
+        logger.info("Created inventory forum '%s' for user %d", forum_name, member.id)
+        return forum
 
     async def _register_forum_in_db(
         self, user_id: int, forum_id: int, category_id: int

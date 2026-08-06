@@ -51,7 +51,7 @@ exclude = [".claude/skills/skill-creator/", "vulture_whitelist.py"]
 [tool.vulture]
 paths = ["main.py", "mudd/", "scripts/", "tests/", "vulture_whitelist.py"]
 min_confidence = 90
-ignore_names = ["clean_user_state"]
+ignore_names = ["clean_user_state", "clean_forum_users"]
 exclude = ["*_unit_test.py", "*_image_test.py"]
 
 [tool.ruff]
