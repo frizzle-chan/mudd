@@ -267,7 +267,6 @@ class Sync(commands.Cog):
 
         try:
             await perm_reconciler.flush()
-            # After flush, so forums registered this pass are not seen as orphans.
             await perm_reconciler.prune_orphan_forums(guild)
             inv_stats = perm_reconciler.get_inventory_forum_stats()
             logger.info(
