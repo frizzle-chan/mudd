@@ -29,6 +29,23 @@ class UserInventoryForum:
         return row["forum_id"] if row else None
 
     @classmethod
+    async def get_owners_by_forum_id(cls, pool: asyncpg.Pool) -> dict[int, int]:
+        """Map every registered forum ID to the user who owns it.
+
+        Used to keep one user's recovery from touching another user's forum
+        (channel names collide after normalization — see #304) and to identify
+        orphan forums during pruning.
+
+        Args:
+            pool: Database connection pool
+
+        Returns:
+            Mapping of forum_id -> user_id
+        """
+        rows = await pool.fetch("SELECT forum_id, user_id FROM user_inventory_forums")
+        return {row["forum_id"]: row["user_id"] for row in rows}
+
+    @classmethod
     async def delete_by_user(cls, pool: asyncpg.Pool, user_id: int) -> None:
         """Delete the inventory forum record for a user.
 

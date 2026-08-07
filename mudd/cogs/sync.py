@@ -40,7 +40,7 @@ from mudd.loaders.zone_loader import (
 )
 from mudd.models import Room, Zone
 from mudd.observers import DiscordReconciler, RoomChannelCache
-from mudd.observers.skills_reconciler import ensure_category, ensure_roles
+from mudd.observers.skills_reconciler import ensure_roles
 
 logger = logging.getLogger(__name__)
 
@@ -267,6 +267,7 @@ class Sync(commands.Cog):
 
         try:
             await perm_reconciler.flush()
+            await perm_reconciler.prune_orphan_forums(guild)
             inv_stats = perm_reconciler.get_inventory_forum_stats()
             logger.info(
                 f"Inventory sync for {guild.name}: {member_count} users, {inv_stats}"
@@ -300,9 +301,9 @@ class Sync(commands.Cog):
         """
         reconciler = DiscordReconciler(self.bot, pool, guild_id=self.bot.guild_id)
 
-        # Ensure milestone roles and skills category exist
+        # Ensure milestone roles exist. The Skills category is created lazily
+        # by create_with_overflow when a member actually needs a channel.
         await ensure_roles(guild)
-        await ensure_category(guild)
 
         # Sync each non-bot member
         synced = 0
