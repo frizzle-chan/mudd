@@ -54,12 +54,19 @@ class ViewEntity:
 
     @async_cached_property
     async def contents(self) -> str:
-        """Get contents as a markdown bullet list."""
+        """Get contents as a markdown bullet list with nested container items."""
         contents = await self._entity.get_contents()
         if not contents:
             return ""
-        wrapped = [ViewEntity(item) for item in contents]
-        return "\n".join(f"- {item.name}" for item in wrapped)
+        lines: list[str] = []
+        for item in contents:
+            view = ViewEntity(item)
+            lines.append(f"- {view.name}")
+            if item.contents_visible:
+                children = await item.get_contents()
+                for child in children:
+                    lines.append(f"  - {ViewEntity(child).name}")
+        return "\n".join(lines)
 
 
 class ViewSkill:

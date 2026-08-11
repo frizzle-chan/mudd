@@ -436,8 +436,9 @@ class RoomEntityInstance:
         return False
 
     async def get_contents(self) -> list[EntityInstance]:
-        """Get visible entities in the room."""
-        return await self._room.get_visible_entities()
+        """Get top-level entities in the room (excludes contained items)."""
+        all_entities = await self._room.get_entities()
+        return [e for e in all_entities if e.container_entity_id is None]
 
     def with_observers(self, *observers: Observer) -> Self:
         """No-op: rooms don't emit events, so observers are ignored."""
