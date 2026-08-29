@@ -1,6 +1,7 @@
 # Mansion World
 # Rooms and entities for the mansion Discord server
 
+# @index:zones
 # ============================================================================
 # Zone record type
 # ============================================================================
@@ -17,6 +18,7 @@ Id: outside
 Name: Outside
 Description: The grounds surrounding the mansion
 
+# @index:rooms
 # ============================================================================
 # Room record type
 # ============================================================================
@@ -155,6 +157,7 @@ Description: A well-maintained oval dirt track with white-railed fences. A woode
 +
 + the path back to the #courtyard is to the west
 
+# @index:entities
 # ============================================================================
 # Entity record type
 # ============================================================================
@@ -170,6 +173,7 @@ Description: A well-maintained oval dirt track with white-railed fences. A woode
 %allowed: OnLook OnTouch OnAttack OnUse OnTake OnOpen OnClose OnDrop OnFish
 %allowed: Tags Rarity
 
+# @index:base-prototypes
 # ----------------------------------------------------------------------------
 # Base prototypes (no Room field - these are templates, not instances)
 # ----------------------------------------------------------------------------
@@ -274,6 +278,7 @@ OnDrop: You can't drop your map.
 OnLook: You unfold your map and study it carefully.
 OnUse: You pull out your map and check your surroundings.
 
+# @index:currency-pickups
 # ----------------------------------------------------------------------------
 # Currency pickups (grant currency on take, don't go to inventory)
 # Used by spawning pools, slot machines, NPC rewards, etc.
@@ -333,6 +338,7 @@ DescriptionShort: a gleaming gold brick
 OnLook: A solid gold brick stamped with official mint markings. Worth about ¤500,000.
 OnTake: {{ effects.grant_currency(500000) }}{{ effects.destroy() }}{{ effects.broadcast("**" ~ user ~ "** pockets " ~ e ~ " (+¤500,000)") }}You pick up the {{ e.name }}. (+¤500,000)
 
+# @index:generic-items
 # ----------------------------------------------------------------------------
 # Generic items (used by spawning pools across multiple locations)
 # ----------------------------------------------------------------------------
@@ -401,6 +407,7 @@ OnTake: {{ effects.pickup() }}{{ effects.broadcast("**" ~ user ~ "** picks up " 
 You feel you made a grave mistake.
 OnDrop: You cannot drop the sword, it's evil. It compels you to keep it in your inventory, taking up a ton of space.
 
+# @index:fish
 # ----------------------------------------------------------------------------
 # Fish (dispensed by toilet/urinal fishing)
 # The "nothing" fish destroys itself on take, simulating the fish getting away.
@@ -711,6 +718,7 @@ DescriptionShort: an ancient {{ e.name }}
 DescriptionLong: A very large coelacanth. A living fossil, thought extinct for 65 million years.
 
 
+# @index:foyer-entities
 # ----------------------------------------------------------------------------
 # Foyer entities
 # ----------------------------------------------------------------------------
@@ -782,6 +790,7 @@ OnOpen: You unfold the {{ e.name }} and flatten it out on the table. The creases
 OnClose: You carefully fold the {{ e.name }} back into a neat square. It's more compact now, though still readable. You've discovered that most items have consistent interactions - this note responds to almost everything! Try __taking__ it with you, or maybe __attack__ it if you're feeling destructive?
 OnDrop: {% if container %}You place the {{ e.name }} back on the *{{ container.name }}*.{% else %}You set the {{ e.name }} down on the table.{% endif %}{{ effects.drop() }}{{ effects.broadcast(user ~ " places " ~ e ~ " back down.") }}And that's the /interact command in action! You've successfully experimented with multiple verbs. Keep exploring the mansion - there's a lot to discover!
 
+# @index:hallway-entities
 # ----------------------------------------------------------------------------
 # Hallway
 # ----------------------------------------------------------------------------
@@ -796,6 +805,7 @@ DescriptionLong: A hand-drawn map of the mansion in a simple wooden frame. The s
 + • Library: west from here through the foyer, past the gallery
 + • Screening Room: through the library, in the northern corner
 
+# @index:banquet-hall-entities
 # ----------------------------------------------------------------------------
 # Banquet Hall entities
 # ----------------------------------------------------------------------------
@@ -808,6 +818,7 @@ DescriptionShort: a friendly {{ e.name }} stands behind a makeshift counter
 DescriptionLong: A cheerful shopkeeper in a worn apron, standing behind a folding table piled with odds and ends. A hand-painted sign reads "GENERAL STORE: Buy & Sell" You could __talk__ to them to browse their wares.
 OnUse: {{ effects.shop("general-store") }}You approach the {{ e.name }}.
 
+# @index:restroom-entities
 # ----------------------------------------------------------------------------
 # Restroom entities
 # ----------------------------------------------------------------------------
@@ -871,6 +882,7 @@ OnOpen: {{ effects.set_focus() }}You peer into the {{ e.name }}, pushing aside d
 OnClose: {{ effects.clear_focus() }}You let the lid swing shut.
 OnTouch: The metal is cold and slightly damp.
 
+# @index:courtyard-entities
 # ----------------------------------------------------------------------------
 # Courtyard entities
 # ----------------------------------------------------------------------------
@@ -894,6 +906,7 @@ DescriptionShort: a {{ e.name }} sits by the pond with a weighing scale
 DescriptionLong: A fishmonger sitting on a crate next to the pond, a weighing scale on the barrel beside them. A small sign reads "FISH MARKET." __Talk__ to them to buy or sell fish.
 OnUse: {{ effects.shop("fish-market") }}You approach the {{ e.name }}.
 
+# @index:office-entities
 # ----------------------------------------------------------------------------
 # Office entities
 # ----------------------------------------------------------------------------
@@ -1145,6 +1158,7 @@ DescriptionLong: ```
 + -Frizzle
 + ```
 
+# @index:gallery-entities
 # ----------------------------------------------------------------------------
 # Gallery entities
 # ----------------------------------------------------------------------------
@@ -1313,6 +1327,7 @@ Room: gallery
 DescriptionShort: A {{ e.name }} hangs on the wall near the entrance
 DescriptionLong: A formal notice from the management, printed on thick cardstock in an elegant serif font. It reads: "Dear Valued Guests, Please do NOT __attack__ or __steal__ the paintings. They are priceless works of art and should be treated with respect. Thank you for your cooperation. - The Management"
 
+# @index:lounge-entities
 # ----------------------------------------------------------------------------
 # Lounge entities
 # ----------------------------------------------------------------------------
@@ -1503,6 +1518,7 @@ DescriptionShort: a bottle of {{ e.name }}
 DescriptionLong: A bottle of Nikka Yoichi Limited Edition Final Version 20-Year-Old Single Malt Japanese Whisky. One of the last bottles ever produced before the age-statement line was discontinued. Peated barley, coastal air, decades of patience.
 OnUse: {{ effects.grant_xp("vitality", 100) }}{{ effects.destroy() }}{{ effects.broadcast(user ~ " drinks " ~ e ~ ".") }}You pour yourself a reverent measure of {{ e.name }}. Smoke, sea salt, dried fruit, and a finish that lasts forever. You feel blessed. It restores health.
 
+# @index:kitchen-entities
 # ----------------------------------------------------------------------------
 # Kitchen entities
 # ----------------------------------------------------------------------------
@@ -1531,6 +1547,7 @@ OnTouch: You dip your hand in. The water is tepid and slightly greasy.
 OnUse: You turn the faucet on full blast. The water sputters and coughs before flowing steadily.
 OnFish: {% if e.contents %}{{ effects.dispense() }}{{ effects.broadcast("**" ~ user ~ "** is fishing in the kitchen sink...") }}You cast into the basin and wait...{% else %}You swirl the greasy water around but nothing is biting.{% endif %}
 
+# @index:library-entities
 # ----------------------------------------------------------------------------
 # Library entities
 # ----------------------------------------------------------------------------
@@ -2045,6 +2062,7 @@ DescriptionShort: A vinyl copy of {{ e.name }}
 DescriptionLong: 2005. "I Will Follow You Into the Dark", "Soul Meets Body". Their Atlantic debut went platinum.
 OnUse: You place {{ e.name }} on the player.{{ effects.broadcast(user ~ " put on " ~ e.name ~ " on the record player. [Marching Bands Of Manhattan](https://youtu.be/be2LvYXOcSI) fills the room.") }}
 
+# @index:sitting-room-entities
 # ----------------------------------------------------------------------------
 # Sitting Room entities
 # ----------------------------------------------------------------------------
@@ -2070,6 +2088,7 @@ DescriptionLong: A stone fireplace with a carved wooden mantle. A small fire cra
 OnTouch: The warmth feels nice on your hands.
 OnAttack: You poke at the fire with the stoker. The logs shift and sparks fly up the chimney.
 
+# @index:spawning-pools
 # ============================================================================
 # Spawning Pool record type
 # ============================================================================
@@ -2192,6 +2211,7 @@ TagQuery: kitchen_rack_loot
 MaxCount: 1
 RespawnIntervalMinutes: 15
 
+# @index:shops
 # ============================================================================
 # Shop record type
 # ============================================================================
