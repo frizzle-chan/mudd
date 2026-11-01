@@ -30,6 +30,13 @@ dev = [
     "vulture>=2.16",
 ]
 
+[tool.uv]
+# Dependency cooldown: ignore releases newer than 7 days when resolving.
+# Matches the Dependabot cooldown and reduces exposure to compromised or
+# quickly-yanked releases. Relative values need uv >= 0.9.18.
+exclude-newer = "7 days"
+required-version = ">=0.9.18"
+
 [tool.pytest.ini_options]
 python_files = ["test_*.py", "*_unit_test.py", "*_image_test.py"]
 asyncio_mode = "auto"
