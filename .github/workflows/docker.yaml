@@ -50,6 +50,9 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=sha
+            # Immutable, sortable tag (<UTC commit time>-<short sha>) for Flux image
+            # automation in austinpray/yui.ski; only for the default branch.
+            type=raw,value={{commit_date 'YYYYMMDDHHmmss'}}-{{sha}},enable={{is_default_branch}}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
