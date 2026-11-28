@@ -68,3 +68,7 @@ race:
 images:
     uv run scripts/optimize_images.py
 
+# Print table of contents for mansion.rec with live line numbers
+toc:
+    grep -n '@index:' data/worlds/mansion.rec | sed 's/# @index://' | column -t -s:
+

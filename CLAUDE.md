@@ -114,6 +114,8 @@ The codebase uses an MVC + events architecture:
 
 **Design docs**: See `DESIGN.md` for PostgreSQL schema and data persistence details. **Always update DESIGN.md when modifying the database schema.**
 
+**Navigating mansion.rec**: Use `just toc` to print a table of contents with live line numbers. Each section has a `# @index:<slug>` anchor tag (e.g., `# @index:foyer-entities`). Use `grep -n '@index:foyer-entities' data/worlds/mansion.rec` to jump to a specific section.
+
 **Entity resolution**: When querying entity fields that support prototype inheritance (like `on_close`, `contents_visible`, etc.), use the `resolve_entity()` SQL function instead of joining directly to the `entities` table. Direct joins return NULL for inherited values, while `resolve_entity()` follows the prototype chain and applies defaults.
 
 **Entity display names**: When formatting entity names in user-facing text (memos, Discord messages, notifications), wrap with `ViewEntity(entity)` from `mudd/views.py`. Use `.name` for bold+emoji (`**Treasure Chest 🔵**`) or `.display_name` for emoji only. Never use `entity.name` directly in player-visible strings.
